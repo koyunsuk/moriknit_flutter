@@ -1,0 +1,28 @@
+targets:
+  $default:
+    builders:
+      freezed:
+        generate_for:
+          include:
+            - lib/features/auth/domain/user_model.dart
+            - lib/features/swatch/domain/swatch_model.dart
+            - lib/features/project/domain/project_model.dart
+            - lib/features/counter/domain/counter_model.dart
+            - lib/features/my/domain/needle_model.dart
+      json_serializable:
+        generate_for:
+          include:
+            - lib/features/auth/domain/user_model.dart
+            - lib/features/swatch/domain/swatch_model.dart
+            - lib/features/project/domain/project_model.dart
+            - lib/features/counter/domain/counter_model.dart
+            - lib/features/my/domain/needle_model.dart
+      riverpod_generator:
+        generate_for:
+          include:
+            - lib/providers/*.dart
+            - lib/features/*/data/*.dart
+      hive_generator:
+        generate_for:
+          include:
+            - lib/features/*/domain/*.dart

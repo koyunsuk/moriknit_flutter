@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "683285854424",
+    "project_id": "moriknit-ceea9",
+    "storage_bucket": "moriknit-ceea9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:683285854424:android:b491ac049c66f0b821bfad",
+        "android_client_info": {
+          "package_name": "com.moriknit.moriknit_flutter"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "683285854424-50tbsevbq7nl57up9f0q210jb02nrk02.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.moriknit.moriknit_flutter",
+            "certificate_hash": "d9208ab67b713db3154abc87d8600f902b04d89d"
+          }
+        },
+        {
+          "client_id": "683285854424-obadmfjoc5p3no1fijq7t2n9phk1s53j.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC9O6zO3XHRCKM7vIvPbUrSjhvjGiibm44"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "683285854424-obadmfjoc5p3no1fijq7t2n9phk1s53j.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "683285854424-pt9koaoptj7inqdp1u37c1nuscnp7dae.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.moriknit.moriknitFlutter"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
