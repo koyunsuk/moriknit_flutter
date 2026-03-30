@@ -50,11 +50,6 @@ class _BrandSearchSheetState extends ConsumerState<BrandSearchSheet> {
 
   String get _collectionName => widget.brandType == BrandType.yarn ? 'yarnBrands' : 'needleBrands';
 
-  List<_BrandItem> get _fallbackItems {
-    final values = widget.brandType == BrandType.yarn ? _defaultYarnBrands : _defaultNeedleBrands;
-    return values.map((name) => _BrandItem(id: 'default_${name.toLowerCase().replaceAll(' ', '_')}', name: name, isBuiltIn: true)).toList();
-  }
-
   @override
   void initState() {
     super.initState();
@@ -76,46 +71,39 @@ class _BrandSearchSheetState extends ConsumerState<BrandSearchSheet> {
       Query<Map<String, dynamic>> request = FirebaseFirestore.instance.collection(_collectionName);
 
       if (lower.isEmpty) {
-        request = request.orderBy('nameLower').limit(30);
+        request = request.orderBy('nameLower').limit(50);
       } else {
-        request = request.orderBy('nameLower').startAt([lower]).endAt(['$lower\uf8ff']).limit(30);
+        request = request.orderBy('nameLower').startAt([lower]).endAt(['$lower\uf8ff']).limit(50);
       }
 
       final snapshot = await request.get();
       if (!mounted || currentToken != _searchToken) return;
 
       final remote = snapshot.docs
+          .where((doc) {
+            // isActive 필드가 없거나 true인 항목만 표시
+            final data = doc.data();
+            final isActive = data['isActive'];
+            return isActive == null || isActive == true;
+          })
           .map((doc) => _BrandItem(
                 id: doc.id,
                 name: (doc.data()['name'] as String?)?.trim().isNotEmpty == true ? (doc.data()['name'] as String).trim() : doc.id,
               ))
           .toList();
 
-      final fallback = _filterFallback(lower);
-      final merged = <_BrandItem>[];
-      final seen = <String>{};
-
-      for (final item in [...remote, ...fallback]) {
-        final key = item.name.toLowerCase();
-        if (seen.add(key)) merged.add(item);
-      }
-
       setState(() {
-        _results = merged;
+        _results = remote;
         _loading = false;
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[BrandSearch] 검색 오류 ($_collectionName): $e');
       if (!mounted || currentToken != _searchToken) return;
       setState(() {
-        _results = _filterFallback(query.trim().toLowerCase());
+        _results = const [];
         _loading = false;
       });
     }
-  }
-
-  List<_BrandItem> _filterFallback(String lower) {
-    if (lower.isEmpty) return _fallbackItems;
-    return _fallbackItems.where((item) => item.name.toLowerCase().contains(lower)).toList();
   }
 
   void _selectBrand(_BrandItem item) {
@@ -172,7 +160,7 @@ class _BrandSearchSheetState extends ConsumerState<BrandSearchSheet> {
                 onChanged: _search,
                 decoration: InputDecoration(
                   hintText: hint,
-                  prefixIcon: const Icon(Icons.search_rounded, color: C.mu),
+                  prefixIcon: Icon(Icons.search_rounded, color: C.mu),
                   suffixIcon: query.isEmpty
                       ? null
                       : IconButton(
@@ -180,14 +168,14 @@ class _BrandSearchSheetState extends ConsumerState<BrandSearchSheet> {
                             _controller.clear();
                             _search('');
                           },
-                          icon: const Icon(Icons.close_rounded, color: C.mu),
+                          icon: Icon(Icons.close_rounded, color: C.mu),
                         ),
                 ),
               ),
             ),
             Expanded(
               child: _loading
-                  ? const Center(child: CircularProgressIndicator(color: C.lv))
+                  ? Center(child: CircularProgressIndicator(color: C.lv))
                   : _results.isEmpty
                       ? Center(
                           child: Padding(
@@ -218,14 +206,12 @@ class _BrandSearchSheetState extends ConsumerState<BrandSearchSheet> {
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(14),
                                 onTap: () => _selectBrand(brand),
-                                child: Padding(
+                                  child: Padding(
                                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                                   child: Row(
                                     children: [
                                       Expanded(child: Text(brand.name, style: T.bodyBold)),
-                                      if (brand.isBuiltIn) Text(isKorean ? '기본' : 'Default', style: T.caption.copyWith(color: C.lvD)),
-                                      const SizedBox(width: 8),
-                                      const Icon(Icons.chevron_right_rounded, color: C.mu),
+                                      Icon(Icons.chevron_right_rounded, color: C.mu),
                                     ],
                                   ),
                                 ),
@@ -254,33 +240,6 @@ class _BrandSearchSheetState extends ConsumerState<BrandSearchSheet> {
 class _BrandItem {
   final String id;
   final String name;
-  final bool isBuiltIn;
 
-  const _BrandItem({required this.id, required this.name, this.isBuiltIn = false});
+  const _BrandItem({required this.id, required this.name});
 }
-
-const List<String> _defaultYarnBrands = [
-  'Sandnes Garn',
-  'Malabrigo',
-  'La Bien Aimee',
-  'Rowan',
-  'Drops',
-  'Holst Garn',
-  'Isager',
-  'Mondim',
-  'Biches & Buches',
-  'Wool and the Gang',
-];
-
-const List<String> _defaultNeedleBrands = [
-  'ChiaoGoo',
-  'Seeknit',
-  'Tulip',
-  'Clover',
-  'KnitPro',
-  'Lykke',
-  'addi',
-  'HiyaHiya',
-  'Prym',
-  'Kollage',
-];

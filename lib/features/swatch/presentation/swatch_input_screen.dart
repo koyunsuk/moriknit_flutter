@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
@@ -6,11 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/localization/app_language.dart';
+import '../../../core/localization/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/swatch_provider.dart';
+import '../../my/data/mori_service.dart';
 import '../domain/swatch_model.dart';
 import 'brand_search_sheet.dart';
 
@@ -48,7 +50,7 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isKorean = ref.watch(appLanguageProvider).isKorean;
+    final t = ref.watch(appStringsProvider);
     final swatch = ref.watch(swatchInputProvider);
     final notifier = ref.read(swatchInputProvider.notifier);
 
@@ -65,10 +67,10 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
         backgroundColor: C.bg,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
+          icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(widget.swatchId == null ? (isKorean ? '새 스와치' : 'New Swatch') : (isKorean ? '스와치 수정' : 'Edit Swatch'), style: T.h3),
+        title: Text(widget.swatchId == null ? t.newSwatch : t.editSwatch, style: T.h3),
       ),
       bottomNavigationBar: SafeArea(
         top: false,
@@ -84,7 +86,7 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
-                  : Text(widget.swatchId == null ? (isKorean ? '스와치 저장' : 'Save Swatch') : (isKorean ? '스와치 업데이트' : 'Update Swatch')),
+                  : Text(widget.swatchId == null ? t.saveSwatch : t.updateSwatch),
             ),
           ),
         ),
@@ -97,25 +99,19 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                MoriBrandHeader(
-                  logoSize: 72,
-                  titleSize: 24,
-                  subtitle: isKorean
-                      ? '게이지와 실, 바늘, 사진을 한곳에 기록해두세요.'
-                      : 'Capture your gauge, yarn, needle, and photo in one place.',
-                ),
+                MoriBrandHeader(subtitle: t.swatchHeaderSubtitle),
                 const SizedBox(height: 18),
                 GlassCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SectionTitle(title: isKorean ? '세탁 전 게이지' : 'Gauge Before Wash'),
+                      SectionTitle(title: t.gaugeBeforeWash),
                       const SizedBox(height: 12),
                       Row(
                         children: [
                           Expanded(
                             child: GaugeInput(
-                              label: isKorean ? '코' : 'Stitches',
+                              label: t.stitches,
                               value: swatch.beforeStitchCount,
                               onMinus: () => notifier.updateBeforeStitchCount((swatch.beforeStitchCount - 1).clamp(0, 999)),
                               onPlus: () => notifier.updateBeforeStitchCount((swatch.beforeStitchCount + 1).clamp(0, 999)),
@@ -124,7 +120,7 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: GaugeInput(
-                              label: isKorean ? '단' : 'Rows',
+                              label: t.rows,
                               value: swatch.beforeRowCount,
                               onMinus: () => notifier.updateBeforeRowCount((swatch.beforeRowCount - 1).clamp(0, 999)),
                               onPlus: () => notifier.updateBeforeRowCount((swatch.beforeRowCount + 1).clamp(0, 999)),
@@ -141,7 +137,7 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       SectionTitle(
-                        title: isKorean ? '세탁 후 게이지' : 'Gauge After Wash',
+                        title: t.gaugeAfterWash,
                         trailing: Switch(
                           value: swatch.hasAfterWash,
                           activeThumbColor: C.lv,
@@ -154,7 +150,7 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
                           children: [
                             Expanded(
                               child: GaugeInput(
-                                label: isKorean ? '코' : 'Stitches',
+                                label: t.stitches,
                                 value: swatch.afterStitchCount,
                                 color: C.pk,
                                 onMinus: () => notifier.updateAfterStitchCount((swatch.afterStitchCount - 1).clamp(0, 999)),
@@ -164,7 +160,7 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: GaugeInput(
-                                label: isKorean ? '단' : 'Rows',
+                                label: t.rows,
                                 value: swatch.afterRowCount,
                                 color: C.pk,
                                 onMinus: () => notifier.updateAfterRowCount((swatch.afterRowCount - 1).clamp(0, 999)),
@@ -175,10 +171,16 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
                         ),
                         const SizedBox(height: 10),
                         MoriChip(
-                          label: isKorean
-                              ? '수축률 ${swatch.calculateShrinkageRate().toStringAsFixed(1)}%'
-                              : 'Shrinkage ${swatch.calculateShrinkageRate().toStringAsFixed(1)}%',
+                          label: t.shrinkageLabel(swatch.calculateShrinkageRate()),
                           type: ChipType.pink,
+                        ),
+                        const SizedBox(height: 14),
+                        _PhotoSection(
+                          title: t.afterWashPhoto,
+                          addLabel: t.addAfterWashPhoto,
+                          photoUrl: swatch.afterPhotoUrl,
+                          t: t,
+                          onPhotoSelected: notifier.updateAfterPhotoUrl,
                         ),
                       ],
                     ],
@@ -189,14 +191,14 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SectionTitle(title: isKorean ? '바늘 정보' : 'Needle'),
+                      SectionTitle(title: t.needleInfo),
                       const SizedBox(height: 12),
                       _NeedleSizeWrap(selectedSize: swatch.needleSize, onSelected: notifier.updateNeedleSize),
                       const SizedBox(height: 12),
                       _PickerField(
-                        label: isKorean ? '바늘 브랜드' : 'Needle Brand',
+                        label: t.needleBrand,
                         value: swatch.needleBrandName,
-                        hint: isKorean ? '바늘 브랜드 검색 또는 직접 입력' : 'Search or enter a needle brand',
+                        hint: t.needleBrandHint,
                         onTap: () => BrandSearchSheet.show(
                           context,
                           brandType: BrandType.needle,
@@ -211,12 +213,12 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SectionTitle(title: isKorean ? '실 정보' : 'Yarn'),
+                      SectionTitle(title: t.yarnInfo),
                       const SizedBox(height: 12),
                       _PickerField(
-                        label: isKorean ? '실 브랜드' : 'Yarn Brand',
+                        label: t.yarnBrand,
                         value: swatch.yarnBrandName,
-                        hint: isKorean ? '실 브랜드 검색 또는 직접 입력' : 'Search or enter a yarn brand',
+                        hint: t.yarnBrandHintSwatch,
                         onTap: () => BrandSearchSheet.show(
                           context,
                           brandType: BrandType.yarn,
@@ -228,8 +230,10 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
                 ),
                 const SizedBox(height: 14),
                 _PhotoSection(
+                  title: t.photo,
+                  addLabel: t.addSwatchPhoto,
                   photoUrl: swatch.beforePhotoUrl,
-                  isKorean: isKorean,
+                  t: t,
                   onPhotoSelected: notifier.updateBeforePhotoUrl,
                 ),
                 const SizedBox(height: 14),
@@ -237,15 +241,13 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SectionTitle(title: isKorean ? '메모' : 'Memo'),
+                      SectionTitle(title: t.memo),
                       const SizedBox(height: 10),
                       TextField(
                         controller: _memoController,
                         minLines: 3,
                         maxLines: 5,
-                        decoration: InputDecoration(
-                          hintText: isKorean ? '질감, 세탁, 블로킹, 다음 작업 참고 메모' : 'Notes about texture, blocking, yarn feel, or future reference',
-                        ),
+                        decoration: InputDecoration(hintText: t.memoHintSwatch),
                         onChanged: notifier.updateMemo,
                       ),
                     ],
@@ -260,80 +262,81 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
   }
 
   Future<void> _save(BuildContext context) async {
-    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final t = ref.read(appStringsProvider);
     final authUser = ref.read(authStateProvider).valueOrNull;
     if (authUser == null) {
-      _showLoginRequired(context, isKorean);
+      _showLoginRequired(context);
       return;
     }
 
     final gates = ref.read(featureGatesProvider);
     final count = ref.read(swatchCountProvider);
     if (!gates.canAddSwatch(count) && widget.swatchId == null) {
-      _showLimitDialog(context, gates.swatchLimitMessage(count), isKorean);
+      _showLimitDialog(context, gates.swatchLimitMessage(count));
       return;
     }
 
     final notifier = ref.read(swatchInputProvider.notifier);
     final error = notifier.validationError;
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error), backgroundColor: C.og));
+      final isKorean = ref.read(appLanguageProvider).isKorean;
+      await showMissingFieldsDialog(context, missing: [error], isKorean: isKorean);
       return;
     }
 
     setState(() => _isSaving = true);
-    final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
+    final ctx = context;
+    final navigator = Navigator.of(ctx);
 
     try {
       final repository = ref.read(swatchRepositoryProvider);
       final swatch = ref.read(swatchInputProvider).copyWith(uid: authUser.uid);
 
-      if (widget.swatchId != null) {
-        await repository.updateSwatch(swatch);
-      } else {
-        await repository.createSwatch(swatch);
-      }
-
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(widget.swatchId == null ? (isKorean ? '스와치를 저장했어요.' : 'Swatch saved.') : (isKorean ? '스와치를 업데이트했어요.' : 'Swatch updated.')),
-          backgroundColor: C.lv,
-        ),
+      await runWithMoriLoadingDialog<void>(
+        ctx,
+        message: widget.swatchId == null ? t.saveSwatch : t.updateSwatch,
+        subtitle: t.pleaseWaitMoment,
+        task: () async {
+          if (widget.swatchId != null) {
+            await repository.updateSwatch(swatch);
+          } else {
+            await repository.createSwatch(swatch);
+            MoriService.earn(authUser.uid, amount: 100, reason: 'swatch_save');
+          }
+        },
       );
+
+      if (!ctx.mounted) return;
+      showSavedSnackBar(ctx, message: widget.swatchId == null ? t.swatchSaved : t.swatchUpdated);
       navigator.pop();
     } catch (error) {
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(isKorean ? '스와치 저장에 실패했어요: $error' : 'Failed to save swatch: $error'),
-          backgroundColor: C.og,
-        ),
-      );
+      if (!ctx.mounted) return;
+      showSaveErrorSnackBar(ctx, message: t.failedToSaveSwatch(error.toString()));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
   }
 
-  void _showLoginRequired(BuildContext context, bool isKorean) {
+  void _showLoginRequired(BuildContext context) {
+    final t = ref.read(appStringsProvider);
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(isKorean ? '로그인이 필요해요' : 'Login required', style: T.h3),
-        content: Text(isKorean ? '스와치를 저장하려면 먼저 로그인해주세요.' : 'Please sign in before saving a swatch.', style: T.body),
-        actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(isKorean ? '닫기' : 'Close'))],
+        title: Text(t.loginRequiredDialogTitle, style: T.h3),
+        content: Text(t.saveSwatchLoginRequired, style: T.body),
+        actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(t.close))],
       ),
     );
   }
 
-  void _showLimitDialog(BuildContext context, String message, bool isKorean) {
+  void _showLimitDialog(BuildContext context, String message) {
+    final t = ref.read(appStringsProvider);
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(isKorean ? '스와치 한도 도달' : 'Swatch limit reached', style: T.h3),
+        title: Text(t.swatchLimitReached, style: T.h3),
         content: Text(message, style: T.body),
-        actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(isKorean ? '닫기' : 'Close'))],
+        actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(t.close))],
       ),
     );
   }
@@ -393,7 +396,7 @@ class _PickerField extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(child: Text(value.isEmpty ? hint : value, style: value.isEmpty ? T.body.copyWith(color: C.mu) : T.body)),
-                const Icon(Icons.search_rounded, color: C.mu, size: 18),
+                Icon(Icons.search_rounded, color: C.mu, size: 18),
               ],
             ),
           ),
@@ -404,11 +407,19 @@ class _PickerField extends StatelessWidget {
 }
 
 class _PhotoSection extends StatefulWidget {
+  final String title;
+  final String addLabel;
   final String photoUrl;
-  final bool isKorean;
+  final AppStrings t;
   final ValueChanged<String> onPhotoSelected;
 
-  const _PhotoSection({required this.photoUrl, required this.isKorean, required this.onPhotoSelected});
+  const _PhotoSection({
+    required this.title,
+    required this.addLabel,
+    required this.photoUrl,
+    required this.t,
+    required this.onPhotoSelected,
+  });
 
   @override
   State<_PhotoSection> createState() => _PhotoSectionState();
@@ -417,6 +428,8 @@ class _PhotoSection extends StatefulWidget {
 class _PhotoSectionState extends State<_PhotoSection> {
   bool _uploading = false;
   String? _localPath;
+
+  AppStrings get t => widget.t;
 
   Future<void> _pickImage(ImageSource source) async {
     final picker = ImagePicker();
@@ -438,7 +451,7 @@ class _PhotoSectionState extends State<_PhotoSection> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(widget.isKorean ? '이미지 업로드에 실패했어요: $error' : 'Failed to upload image: $error'),
+          content: Text(t.failedToUploadImage(error.toString())),
           backgroundColor: C.og,
         ),
       );
@@ -459,16 +472,16 @@ class _PhotoSectionState extends State<_PhotoSection> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.photo_library_outlined, color: C.lv),
-              title: Text(widget.isKorean ? '갤러리에서 선택' : 'Choose from gallery'),
+              leading: Icon(Icons.photo_library_outlined, color: C.lv),
+              title: Text(t.chooseFromGallery),
               onTap: () {
                 Navigator.pop(sheetContext);
                 _pickImage(ImageSource.gallery);
               },
             ),
             ListTile(
-              leading: const Icon(Icons.camera_alt_outlined, color: C.lv),
-              title: Text(widget.isKorean ? '카메라로 촬영' : 'Take photo'),
+              leading: Icon(Icons.camera_alt_outlined, color: C.lv),
+              title: Text(t.takePhoto),
               onTap: () {
                 Navigator.pop(sheetContext);
                 _pickImage(ImageSource.camera);
@@ -476,8 +489,8 @@ class _PhotoSectionState extends State<_PhotoSection> {
             ),
             if (widget.photoUrl.isNotEmpty)
               ListTile(
-                leading: const Icon(Icons.delete_outline, color: C.og),
-                title: Text(widget.isKorean ? '사진 제거' : 'Remove photo'),
+                leading: Icon(Icons.delete_outline, color: C.og),
+                title: Text(t.removePhoto),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   setState(() => _localPath = null);
@@ -498,12 +511,9 @@ class _PhotoSectionState extends State<_PhotoSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SectionTitle(title: widget.isKorean ? '사진' : 'Photo'),
+          SectionTitle(title: widget.title),
           const SizedBox(height: 8),
-          Text(
-            widget.isKorean ? '사진을 남겨두면 질감과 게이지를 나중에 비교하기 쉬워져요.' : 'A photo makes it easier to compare texture and gauge later.',
-            style: T.caption.copyWith(color: C.mu),
-          ),
+          Text(t.photoHelpText, style: T.caption.copyWith(color: C.mu)),
           const SizedBox(height: 10),
           GestureDetector(
             onTap: _showPickerMenu,
@@ -512,7 +522,7 @@ class _PhotoSectionState extends State<_PhotoSection> {
               width: double.infinity,
               decoration: BoxDecoration(color: C.gx, borderRadius: BorderRadius.circular(14), border: Border.all(color: C.bd2)),
               child: _uploading
-                  ? const Center(child: CircularProgressIndicator(color: C.lv))
+                  ? Center(child: CircularProgressIndicator(color: C.lv))
                   : hasPhoto
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(14),
@@ -523,9 +533,9 @@ class _PhotoSectionState extends State<_PhotoSection> {
                       : Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.add_photo_alternate_outlined, color: C.mu, size: 34),
+                            Icon(Icons.add_photo_alternate_outlined, color: C.mu, size: 34),
                             const SizedBox(height: 8),
-                            Text(widget.isKorean ? '스와치 사진 추가' : 'Add a swatch photo', style: T.caption.copyWith(color: C.mu)),
+                            Text(widget.addLabel, style: T.caption.copyWith(color: C.mu)),
                           ],
                         ),
             ),

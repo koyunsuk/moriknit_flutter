@@ -1,10 +1,17 @@
+import 'dart:io';
+
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/localization/app_language.dart';
+import '../../../core/localization/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/needle_provider.dart';
+import '../../swatch/presentation/brand_search_sheet.dart';
 import '../domain/needle_model.dart';
 
 class NeedleInputScreen extends ConsumerStatefulWidget {
@@ -18,14 +25,14 @@ class NeedleInputScreen extends ConsumerStatefulWidget {
 
 class _NeedleInputScreenState extends ConsumerState<NeedleInputScreen> {
   bool _isSaving = false;
-  late final TextEditingController _brandCtrl;
   late final TextEditingController _memoCtrl;
+  String? _localPhotoPath;
+  String? _photoUrl;
 
   @override
   void initState() {
     super.initState();
     final needle = widget.initialNeedle;
-    _brandCtrl = TextEditingController(text: needle?.brandName ?? '');
     _memoCtrl = TextEditingController(text: needle?.memo ?? '');
 
     if (needle != null) {
@@ -37,7 +44,6 @@ class _NeedleInputScreenState extends ConsumerState<NeedleInputScreen> {
 
   @override
   void dispose() {
-    _brandCtrl.dispose();
     _memoCtrl.dispose();
     super.dispose();
   }
@@ -47,141 +53,165 @@ class _NeedleInputScreenState extends ConsumerState<NeedleInputScreen> {
     final needle = ref.watch(needleInputProvider);
     final notifier = ref.read(needleInputProvider.notifier);
     final isKorean = ref.watch(appLanguageProvider).isKorean;
+    final t = ref.watch(appStringsProvider);
 
     return Scaffold(
       backgroundColor: C.bg,
-      appBar: AppBar(
-        backgroundColor: C.bg,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          widget.initialNeedle == null
-              ? (isKorean ? '바늘 추가' : 'Add Needle')
-              : (isKorean ? '바늘 수정' : 'Edit Needle'),
-          style: T.h3,
-        ),
-        actions: [
-          TextButton(
-            onPressed: _isSaving ? null : () => _save(context, isKorean),
-            child: _isSaving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: C.lv),
-                  )
-                : Text(isKorean ? '저장' : 'Save', style: T.bodyBold.copyWith(color: C.lv)),
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+      body: SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _SectionLabel(isKorean ? '바늘 사이즈 *' : 'Needle size *'),
-            const SizedBox(height: 10),
-            _NeedleSizeSelector(
-              selectedSize: needle.size,
-              onSelected: notifier.setSize,
-            ),
-            const SizedBox(height: 20),
-            _SectionLabel(isKorean ? '종류' : 'Type'),
-            const SizedBox(height: 10),
-            _SegmentedSelector(
-              options: [
-                ('straight', isKorean ? '일반바늘' : 'Straight'),
-                ('circular', isKorean ? '줄바늘' : 'Circular'),
-                ('dpn', isKorean ? '양두바늘' : 'Double-pointed'),
-                ('cable', isKorean ? '케이블 바늘' : 'Cable'),
-              ],
-              selected: needle.type,
-              color: C.lv,
-              onSelected: notifier.setType,
-            ),
-            const SizedBox(height: 20),
-            _SectionLabel(isKorean ? '소재' : 'Material'),
-            const SizedBox(height: 10),
-            _SegmentedSelector(
-              options: [
-                ('bamboo', isKorean ? '대나무' : 'Bamboo'),
-                ('metal', isKorean ? '금속' : 'Metal'),
-                ('wood', isKorean ? '나무' : 'Wood'),
-                ('plastic', isKorean ? '플라스틱' : 'Plastic'),
-              ],
-              selected: needle.material,
-              color: C.pk,
-              onSelected: notifier.setMaterial,
-            ),
-            const SizedBox(height: 20),
-            _SectionLabel(isKorean ? '브랜드 (선택)' : 'Brand (optional)'),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _brandCtrl,
-              onChanged: notifier.setBrand,
-              decoration: _inputDecoration(
-                isKorean ? '브랜드명' : 'Brand name',
-                isKorean: isKorean,
+            MoriPageHeaderShell(
+              child: MoriWideHeader(
+                title: widget.initialNeedle == null ? t.addNeedle : (isKorean ? '바늘 수정' : 'Edit needle'),
+                subtitle: t.manageNeedles,
+                trailing: [
+                  MoriChip(label: t.needleLibrary, type: ChipType.lavender),
+                ],
               ),
             ),
-            const SizedBox(height: 20),
-            _SectionLabel(isKorean ? '수량' : 'Quantity'),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                _QuantityButton(
-                  icon: Icons.remove,
-                  onTap: () {
-                    if (needle.quantity > 1) {
-                      notifier.setQuantity(needle.quantity - 1);
-                    }
-                  },
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SectionLabel(isKorean ? '바늘 사이즈 *' : 'Needle size *'),
+                    const SizedBox(height: 10),
+                    _NeedleSizeSelector(
+                      selectedSize: needle.size,
+                      onSelected: notifier.setSize,
+                    ),
+                    const SizedBox(height: 20),
+                    _SectionLabel(isKorean ? '종류' : 'Type'),
+                    const SizedBox(height: 10),
+                    _SegmentedSelector(
+                      options: [
+                        ('straight', isKorean ? '일반 바늘' : 'Straight'),
+                        ('circular', isKorean ? '줄바늘' : 'Circular'),
+                        ('dpn', isKorean ? '양두 바늘' : 'Double-pointed'),
+                        ('cable', isKorean ? '케이블 바늘' : 'Cable'),
+                      ],
+                      selected: needle.type,
+                      color: C.lv,
+                      onSelected: notifier.setType,
+                    ),
+                    const SizedBox(height: 20),
+                    _SectionLabel(isKorean ? '재질' : 'Material'),
+                    const SizedBox(height: 10),
+                    _SegmentedSelector(
+                      options: [
+                        ('bamboo', isKorean ? '대나무' : 'Bamboo'),
+                        ('metal', isKorean ? '금속' : 'Metal'),
+                        ('wood', isKorean ? '나무' : 'Wood'),
+                        ('plastic', isKorean ? '플라스틱' : 'Plastic'),
+                      ],
+                      selected: needle.material,
+                      color: C.pk,
+                      onSelected: notifier.setMaterial,
+                    ),
+                    const SizedBox(height: 20),
+                    _SectionLabel(isKorean ? '브랜드 (선택)' : 'Brand (optional)'),
+                    const SizedBox(height: 8),
+                    _PickerField(
+                      label: t.needleBrand,
+                      value: needle.brandName,
+                      hint: t.needleBrandHint,
+                      onTap: () => BrandSearchSheet.show(
+                        context,
+                        brandType: BrandType.needle,
+                        onSelected: (_, name) => notifier.setBrand(name),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    _SectionLabel(isKorean ? '수량' : 'Quantity'),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        _QuantityButton(
+                          icon: Icons.remove,
+                          onTap: () {
+                            if (needle.quantity > 1) {
+                              notifier.setQuantity(needle.quantity - 1);
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 16),
+                        Text(
+                          isKorean ? '${needle.quantity}개' : '${needle.quantity}',
+                          style: T.bodyBold,
+                        ),
+                        const SizedBox(width: 16),
+                        _QuantityButton(
+                          icon: Icons.add,
+                          filled: true,
+                          onTap: () => notifier.setQuantity(needle.quantity + 1),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    _SectionLabel(t.needlePhoto),
+                    const SizedBox(height: 8),
+                    _NeedlePhotoSection(
+                      t: t,
+                      localPhotoPath: _localPhotoPath,
+                      onTap: _pickNeedlePhoto,
+                    ),
+                    const SizedBox(height: 20),
+                    _SectionLabel(isKorean ? '메모 (선택)' : 'Memo (optional)'),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _memoCtrl,
+                      maxLines: 2,
+                      onChanged: notifier.setMemo,
+                      decoration: _inputDecoration(
+                        isKorean ? '색상, 길이, 특이사항...' : 'Color, length, notes...',
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _isSaving ? null : () => _save(context, t),
+                        icon: _isSaving
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.save_rounded),
+                        label: Text(t.save),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: C.lv,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                  ],
                 ),
-                const SizedBox(width: 16),
-                Text(
-                  isKorean ? '${needle.quantity}개' : '${needle.quantity}',
-                  style: T.bodyBold,
-                ),
-                const SizedBox(width: 16),
-                _QuantityButton(
-                  icon: Icons.add,
-                  filled: true,
-                  onTap: () => notifier.setQuantity(needle.quantity + 1),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            _SectionLabel(isKorean ? '메모 (선택)' : 'Memo (optional)'),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _memoCtrl,
-              maxLines: 2,
-              onChanged: notifier.setMemo,
-              decoration: _inputDecoration(
-                isKorean ? '색상, 길이, 특이사항...' : 'Color, length, notes...',
-                isKorean: isKorean,
               ),
             ),
-            const SizedBox(height: 40),
           ],
         ),
       ),
     );
   }
 
-  InputDecoration _inputDecoration(String hint, {required bool isKorean}) {
+  InputDecoration _inputDecoration(String hint) {
     return InputDecoration(
       hintText: hint,
       hintStyle: T.body.copyWith(color: C.mu),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: C.bd2),
+        borderSide: BorderSide(color: C.bd2),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: C.lv),
+        borderSide: BorderSide(color: C.lv),
       ),
       filled: true,
       fillColor: C.gx,
@@ -189,54 +219,55 @@ class _NeedleInputScreenState extends ConsumerState<NeedleInputScreen> {
     );
   }
 
-  Future<void> _save(BuildContext context, bool isKorean) async {
+  Future<void> _pickNeedlePhoto() async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 88);
+    if (picked == null) return;
+    setState(() {
+      _localPhotoPath = picked.path;
+    });
+  }
+
+  Future<void> _save(BuildContext context, AppStrings t) async {
     final notifier = ref.read(needleInputProvider.notifier);
     final error = notifier.validationError;
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error), backgroundColor: C.og),
-      );
+      final isKorean = ref.read(appLanguageProvider).isKorean;
+      await showMissingFieldsDialog(context, missing: [error], isKorean: isKorean);
       return;
     }
 
     setState(() => _isSaving = true);
-    final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
 
     try {
-      final needle = ref.read(needleInputProvider);
-      final repository = ref.read(needleRepositoryProvider);
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: t.save,
+        subtitle: t.pleaseWaitMoment,
+        task: () async {
+          if (_localPhotoPath != null) {
+            final file = File(_localPhotoPath!);
+            final refPath = FirebaseStorage.instance.ref().child('needles/${DateTime.now().millisecondsSinceEpoch}.jpg');
+            await refPath.putFile(file);
+            _photoUrl = await refPath.getDownloadURL();
+          }
 
-      if (widget.initialNeedle != null) {
-        await repository.updateNeedle(needle);
-      } else {
-        await repository.createNeedle(needle);
-      }
+          final needle = ref.read(needleInputProvider);
+          final repository = ref.read(needleRepositoryProvider);
 
-      if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(isKorean ? '저장되었습니다.' : 'Saved successfully.'),
-            backgroundColor: C.lv,
-          ),
-        );
-        navigator.pop();
-      }
-    } catch (error) {
-      if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              isKorean ? '저장에 실패했습니다: $error' : 'Failed to save: $error',
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+          if (widget.initialNeedle != null) {
+            await repository.updateNeedle(needle, photoUrl: _photoUrl);
+          } else {
+            await repository.createNeedle(needle, photoUrl: _photoUrl);
+          }
+        },
+      );
+
+      if (mounted) navigator.pop();
+    } catch (_) {
+      // runWithSaveFeedback handles error snackbar
     } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 }
@@ -295,7 +326,7 @@ class _NeedleSizeSelector extends StatelessWidget {
       runSpacing: 8,
       children: _sizes.map((size) {
         final isSelected = selectedSize == size;
-        final label = size % 1 == 0 ? '${size.toInt()}mm' : '${size}mm';
+        final label = '${size.toStringAsFixed(1)}mm';
         return GestureDetector(
           onTap: () => onSelected(size),
           child: Container(
@@ -387,6 +418,90 @@ class _QuantityButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon, color: filled ? Colors.white : C.lv, size: 20),
+      ),
+    );
+  }
+}
+
+class _PickerField extends StatelessWidget {
+  final String label;
+  final String value;
+  final String hint;
+  final VoidCallback onTap;
+
+  const _PickerField({
+    required this.label,
+    required this.value,
+    required this.hint,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: T.captionBold.copyWith(color: C.mu)),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              color: C.gx,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: C.bd),
+            ),
+            child: Row(
+              children: [
+                Expanded(child: Text(value.isEmpty ? hint : value, style: value.isEmpty ? T.body.copyWith(color: C.mu) : T.body)),
+                Icon(Icons.search_rounded, color: C.mu, size: 18),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _NeedlePhotoSection extends StatelessWidget {
+  final AppStrings t;
+  final String? localPhotoPath;
+  final VoidCallback onTap;
+
+  const _NeedlePhotoSection({
+    required this.t,
+    required this.localPhotoPath,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 170,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: C.gx,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: C.bd2),
+        ),
+        child: localPhotoPath != null
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image.file(File(localPhotoPath!), fit: BoxFit.cover, width: double.infinity),
+              )
+            : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.add_photo_alternate_outlined, color: C.mu, size: 34),
+                  const SizedBox(height: 8),
+                  Text(t.addNeedlePhoto, style: T.caption.copyWith(color: C.mu)),
+                ],
+              ),
       ),
     );
   }

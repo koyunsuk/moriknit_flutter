@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../providers/auth_provider.dart';
@@ -9,6 +10,8 @@ void showSignUpSheet(BuildContext context, WidgetRef ref, bool isMounted) {
   final emailCtrl = TextEditingController();
   final pwCtrl = TextEditingController();
   final pw2Ctrl = TextEditingController();
+  final t = ref.read(appStringsProvider);
+  final isKorean = ref.read(appLanguageProvider).isKorean;
   String? sheetError;
   bool sheetLoading = false;
 
@@ -33,24 +36,25 @@ void showSignUpSheet(BuildContext context, WidgetRef ref, bool isMounted) {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Create account', style: T.h2),
+                Text(t.createAccount, style: T.h2),
                 const SizedBox(height: 20),
                 TextField(
                   controller: emailCtrl,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(hintText: 'Email'),
+                  decoration: InputDecoration(hintText: t.email),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: pwCtrl,
                   obscureText: true,
-                  decoration: const InputDecoration(hintText: 'Password (6+ chars)'),
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(hintText: t.passwordHint),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: pw2Ctrl,
                   obscureText: true,
-                  decoration: const InputDecoration(hintText: 'Confirm password'),
+                  decoration: InputDecoration(hintText: t.confirmPassword),
                 ),
                 if (sheetError != null) ...[
                   const SizedBox(height: 8),
@@ -61,9 +65,18 @@ void showSignUpSheet(BuildContext context, WidgetRef ref, bool isMounted) {
                   onPressed: sheetLoading
                       ? null
                       : () async {
-                          if (pwCtrl.text != pw2Ctrl.text) {
+                          final pw = pwCtrl.text;
+                          if (!RegExp(r'^\d{6,}$').hasMatch(pw)) {
                             setSheetState(() {
-                              sheetError = 'Passwords do not match.';
+                              sheetError = isKorean
+                                  ? '비밀번호는 숫자 6자리 이상이어야 합니다.'
+                                  : 'Password must be 6 or more digits.';
+                            });
+                            return;
+                          }
+                          if (pw != pw2Ctrl.text) {
+                            setSheetState(() {
+                              sheetError = t.passwordsDoNotMatch;
                             });
                             return;
                           }
@@ -93,7 +106,7 @@ void showSignUpSheet(BuildContext context, WidgetRef ref, bool isMounted) {
                           height: 20,
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
-                      : const Text('Create account'),
+                      : Text(t.createAccount),
                 ),
               ],
             ),
@@ -103,4 +116,3 @@ void showSignUpSheet(BuildContext context, WidgetRef ref, bool isMounted) {
     },
   );
 }
-

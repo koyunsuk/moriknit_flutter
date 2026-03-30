@@ -27,6 +27,7 @@ _$UserModelImpl _$$UserModelImplFromJson(Map<String, dynamic> json) =>
       lastActiveAt: json['lastActiveAt'] == null
           ? null
           : DateTime.parse(json['lastActiveAt'] as String),
+      moriBalance: (json['moriBalance'] as num?)?.toInt() ?? 10000,
     );
 
 Map<String, dynamic> _$$UserModelImplToJson(_$UserModelImpl instance) =>
@@ -41,6 +42,7 @@ Map<String, dynamic> _$$UserModelImplToJson(_$UserModelImpl instance) =>
       'locale': instance.locale,
       'createdAt': instance.createdAt?.toIso8601String(),
       'lastActiveAt': instance.lastActiveAt?.toIso8601String(),
+      'moriBalance': instance.moriBalance,
     };
 
 _$UserSubscriptionImpl _$$UserSubscriptionImplFromJson(

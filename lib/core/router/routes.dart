@@ -1,0 +1,26 @@
+class Routes {
+  static const splash = '/';
+  static const landing = '/landing';
+  static const login = '/login';
+  static const home = '/home';
+  static const swatchList = '/swatch';
+  static const swatchInput = '/swatch/input';
+  static const projectList = '/project';
+  static const projectInput = '/project/input';
+  static const projectPatterns = '/project/patterns';
+  static const tools = '/tools';
+  static const toolsPatterns = '/tools/patterns';
+  static const toolsPattern = '/tools/pattern';
+  static const toolsGauge = '/tools/gauge';
+  static const toolsCourse = '/tools/course';
+  static const toolsEncyclopedia = '/tools/encyclopedia';
+  static const toolsMemo = '/tools/memo';
+  static const community = '/community';
+  static const market = '/market';
+  static const my = '/my';
+  static const needles = '/my/needles';
+  static const counterList = '/counters';
+  static const counter = '/counter/:id';
+  static const admin = '/admin';
+  static const messenger = '/messenger';
+}

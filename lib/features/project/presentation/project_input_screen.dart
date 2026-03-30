@@ -6,19 +6,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/localization/app_language.dart';
+import '../../../core/localization/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/project_provider.dart';
+import '../../../providers/project_step_provider.dart';
+import '../../my/data/mori_service.dart';
 import '../domain/project_model.dart';
 import '../../swatch/presentation/brand_search_sheet.dart';
 
 class ProjectInputScreen extends ConsumerStatefulWidget {
   final String? projectId;
   final ProjectModel? initialProject;
+  final String? templateType;
 
-  const ProjectInputScreen({super.key, this.projectId, this.initialProject});
+  const ProjectInputScreen({super.key, this.projectId, this.initialProject, this.templateType});
 
   @override
   ConsumerState<ProjectInputScreen> createState() => _ProjectInputScreenState();
@@ -64,6 +68,7 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
   @override
   Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
+    final t = ref.watch(appStringsProvider);
     final project = ref.watch(projectInputProvider);
     final notifier = ref.read(projectInputProvider.notifier);
 
@@ -73,22 +78,17 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
         backgroundColor: C.bg,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
+          icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(widget.projectId == null ? (isKorean ? '새 프로젝트' : 'New Project') : (isKorean ? '프로젝트 수정' : 'Edit Project'), style: T.h3),
-        actions: [
-          TextButton(
-            onPressed: _isSaving ? null : () => _save(context),
-            child: _isSaving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: C.lv),
-                  )
-                : Text(isKorean ? '저장' : 'Save', style: T.bodyBold.copyWith(color: C.lv)),
-          ),
-        ],
+        title: Text(
+          widget.projectId != null
+              ? t.editProject
+              : widget.templateType != null
+                  ? _templateName(widget.templateType!)
+                  : t.newProject,
+          style: T.h3,
+        ),
       ),
       body: Stack(
         children: [
@@ -102,35 +102,35 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                   photoUrl: project.coverPhotoUrl,
                   localPath: _localCoverPath,
                   uploading: _uploading,
-                  isKorean: isKorean,
+                  t: t,
                   onTap: () => _pickCover(notifier),
                 ),
                 const SizedBox(height: 20),
-                _SectionLabel(isKorean ? '프로젝트 이름 *' : 'Project title *'),
+                _SectionLabel(t.projectTitle),
                 const SizedBox(height: 8),
                 _StyledField(
                   controller: _titleController,
-                  hint: isKorean ? '작품 이름을 입력해주세요' : 'Enter a project title',
+                  hint: t.projectTitleHint,
                   onChanged: notifier.setTitle,
                 ),
                 const SizedBox(height: 16),
-                _SectionLabel(isKorean ? '설명' : 'Description'),
+                _SectionLabel(t.description),
                 const SizedBox(height: 8),
                 _StyledField(
                   controller: _descriptionController,
-                  hint: isKorean ? '어떤 작품인지 간단히 적어주세요' : 'Add a short project description',
+                  hint: t.projectDescriptionHint,
                   maxLines: 2,
                   onChanged: notifier.setDescription,
                 ),
                 const SizedBox(height: 20),
-                _SectionLabel(isKorean ? '상태' : 'Status'),
+                _SectionLabel(t.status),
                 const SizedBox(height: 10),
                 _StatusSelector(selected: project.status, isKorean: isKorean, onSelected: notifier.setStatus),
                 const SizedBox(height: 20),
-                _SectionLabel(isKorean ? '실 정보' : 'Yarn information'),
+                _SectionLabel(t.yarnInformation),
                 const SizedBox(height: 8),
                 _BrandSearchField(
-                  hint: isKorean ? '실 브랜드 검색 또는 직접 입력' : 'Search or enter a yarn brand',
+                  hint: t.yarnBrandHint,
                   value: project.yarnBrandName,
                   onTap: () => BrandSearchSheet.show(
                     context,
@@ -144,7 +144,7 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                     Expanded(
                       child: _StyledField(
                         controller: _yarnNameController,
-                        hint: isKorean ? '실 이름' : 'Yarn name',
+                        hint: t.yarnName,
                         onChanged: notifier.setYarnName,
                       ),
                     ),
@@ -152,7 +152,7 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                     Expanded(
                       child: _StyledField(
                         controller: _yarnColorController,
-                        hint: isKorean ? '색상' : 'Color',
+                        hint: t.color,
                         onChanged: notifier.setYarnColor,
                       ),
                     ),
@@ -161,17 +161,27 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                 const SizedBox(height: 8),
                 _YarnWeightSelector(selected: project.yarnWeight, isKorean: isKorean, onSelected: notifier.setYarnWeight),
                 const SizedBox(height: 20),
-                _SectionLabel(isKorean ? '바늘 사이즈' : 'Needle size'),
+                _SectionLabel(t.needleSizeLabel),
                 const SizedBox(height: 10),
                 _NeedleSizeSelector(selectedSize: project.needleSize, onSelected: notifier.setNeedleSize),
+                const SizedBox(height: 8),
+                _BrandSearchField(
+                  hint: t.needleBrandHint,
+                  value: project.needleBrandName,
+                  onTap: () => BrandSearchSheet.show(
+                    context,
+                    brandType: BrandType.needle,
+                    onSelected: (id, name) => notifier.setNeedleBrand(name),
+                  ),
+                ),
                 const SizedBox(height: 20),
-                _SectionLabel(isKorean ? '일정' : 'Timeline'),
+                _SectionLabel(t.timeline),
                 const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
                       child: _DateField(
-                        label: isKorean ? '시작일' : 'Start date',
+                        label: t.startDate,
                         date: project.startDate,
                         onSelected: notifier.setStartDate,
                       ),
@@ -179,7 +189,7 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: _DateField(
-                        label: isKorean ? '목표일' : 'Target date',
+                        label: t.targetDate,
                         date: project.targetDate,
                         onSelected: notifier.setTargetDate,
                       ),
@@ -187,13 +197,23 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                   ],
                 ),
                 const SizedBox(height: 20),
-                _SectionLabel(isKorean ? '메모' : 'Memo'),
+                _SectionLabel(t.memo),
                 const SizedBox(height: 8),
                 _StyledField(
                   controller: _memoController,
-                  hint: isKorean ? '패턴 출처, 수정 사항, 참고 메모를 남겨보세요' : 'Add pattern notes, revisions, or reminders',
+                  hint: t.memoHintProject,
                   maxLines: 3,
                   onChanged: notifier.setMemo,
+                ),
+                const SizedBox(height: 28),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _isSaving ? null : () => _save(context),
+                    child: _isSaving
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : Text(t.save),
+                  ),
                 ),
               ],
             ),
@@ -201,6 +221,17 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
         ],
       ),
     );
+  }
+
+  String _templateName(String type) {
+    const names = {
+      'topdown': '탑다운 스웨터',
+      'socks': '양말',
+      'scarf': '목도리',
+      'gloves': '장갑',
+      'hat': '모자',
+    };
+    return names[type] ?? '새 프로젝트';
   }
 
   Future<void> _pickCover(ProjectInputNotifier notifier) async {
@@ -223,10 +254,10 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
       notifier.setCoverPhoto(url);
     } catch (error) {
       if (!mounted) return;
-      final isKorean = ref.read(appLanguageProvider).isKorean;
+      final t = ref.read(appStringsProvider);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(isKorean ? '커버 이미지 업로드에 실패했어요: $error' : 'Failed to upload cover image: $error'),
+          content: Text(t.failedToUploadCoverImage(error.toString())),
           backgroundColor: C.og,
         ),
       );
@@ -236,7 +267,7 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
   }
 
   Future<ImageSource?> _showImageSourceDialog() async {
-    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final t = ref.read(appStringsProvider);
     return showModalBottomSheet<ImageSource>(
       context: context,
       backgroundColor: C.bg,
@@ -246,13 +277,13 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.photo_library_outlined, color: C.lv),
-              title: Text(isKorean ? '갤러리에서 선택' : 'Choose from gallery', style: T.body),
+              leading: Icon(Icons.photo_library_outlined, color: C.lv),
+              title: Text(t.chooseFromGallery, style: T.body),
               onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
             ),
             ListTile(
-              leading: const Icon(Icons.camera_alt_outlined, color: C.lv),
-              title: Text(isKorean ? '카메라로 촬영' : 'Take photo', style: T.body),
+              leading: Icon(Icons.camera_alt_outlined, color: C.lv),
+              title: Text(t.takePhoto, style: T.body),
               onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
             ),
           ],
@@ -262,7 +293,7 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
   }
 
   Future<void> _save(BuildContext context) async {
-    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final t = ref.read(appStringsProvider);
     final user = ref.read(currentUserProvider).valueOrNull;
     if (user == null) return;
 
@@ -278,40 +309,42 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
     final notifier = ref.read(projectInputProvider.notifier);
     final error = notifier.validationError;
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error), backgroundColor: C.og));
+      final isKorean = ref.read(appLanguageProvider).isKorean;
+      await showMissingFieldsDialog(context, missing: [error], isKorean: isKorean);
       return;
     }
 
     setState(() => _isSaving = true);
-    final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
 
     try {
       final project = ref.read(projectInputProvider);
       final repository = ref.read(projectRepositoryProvider);
 
-      if (widget.projectId != null) {
-        await repository.updateProject(project);
-      } else {
-        await repository.createProject(project.copyWith(uid: user.uid));
-      }
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: t.projectUpdateLoading,
+        subtitle: t.pleaseWaitMoment,
+        task: () async {
+          if (widget.projectId != null) {
+            await repository.updateProject(project);
+          } else {
+            final saved = await repository.createProject(project.copyWith(uid: user.uid));
+            MoriService.earn(user.uid, amount: 100, reason: 'project_save');
+            if (widget.templateType != null) {
+              await ref.read(projectStepRepositoryProvider).addTemplateSteps(saved.id, widget.templateType!);
+            }
+          }
+        },
+      );
 
       if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(isKorean ? '프로젝트를 저장했어요.' : 'Project saved.'),
-          backgroundColor: C.lv,
-        ),
-      );
+      showSavedSnackBar(messenger, message: t.projectSaved);
       navigator.pop();
     } catch (error) {
       if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(isKorean ? '저장에 실패했어요: $error' : 'Failed to save project: $error'),
-          backgroundColor: C.og,
-        ),
-      );
+      showSaveErrorSnackBar(messenger, message: t.failedToSaveProject(error.toString()));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -346,8 +379,8 @@ class _StyledField extends StatelessWidget {
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: T.body.copyWith(color: C.mu),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: C.bd2)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: C.lv)),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: C.bd2)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: C.lv)),
         filled: true,
         fillColor: C.gx,
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -373,7 +406,7 @@ class _BrandSearchField extends StatelessWidget {
         child: Row(
           children: [
             Expanded(child: Text(value.isEmpty ? hint : value, style: T.body.copyWith(color: value.isEmpty ? C.mu : C.tx))),
-            const Icon(Icons.search_rounded, color: C.mu, size: 18),
+            Icon(Icons.search_rounded, color: C.mu, size: 18),
           ],
         ),
       ),
@@ -385,10 +418,10 @@ class _CoverImagePicker extends StatelessWidget {
   final String photoUrl;
   final String? localPath;
   final bool uploading;
-  final bool isKorean;
+  final AppStrings t;
   final VoidCallback onTap;
 
-  const _CoverImagePicker({required this.photoUrl, this.localPath, required this.uploading, required this.isKorean, required this.onTap});
+  const _CoverImagePicker({required this.photoUrl, this.localPath, required this.uploading, required this.t, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -396,12 +429,14 @@ class _CoverImagePicker extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
-      child: AspectRatio(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 260),
+        child: AspectRatio(
         aspectRatio: 4 / 3,
         child: Container(
           decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(18), border: Border.all(color: C.bd2)),
           child: uploading
-              ? const Center(child: CircularProgressIndicator(color: C.lv))
+              ? Center(child: CircularProgressIndicator(color: C.lv))
               : hasPhoto
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(18),
@@ -412,14 +447,15 @@ class _CoverImagePicker extends StatelessWidget {
                   : Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.add_photo_alternate_outlined, color: C.lv, size: 40),
+                        Icon(Icons.add_photo_alternate_outlined, color: C.lv, size: 40),
                         const SizedBox(height: 10),
-                        Text(isKorean ? '커버 사진 추가' : 'Add cover image', style: T.bodyBold.copyWith(color: C.lvD)),
+                        Text(t.addCoverImage, style: T.bodyBold.copyWith(color: C.lvD)),
                         const SizedBox(height: 4),
-                        Text(isKorean ? '가로형 사진이 가장 자연스럽게 보여요.' : 'Landscape images look best here.', style: T.caption.copyWith(color: C.mu)),
+                        Text(t.coverImageHint, style: T.caption.copyWith(color: C.mu)),
                       ],
                     ),
         ),
+      ),
       ),
     );
   }
@@ -442,7 +478,7 @@ class _StatusSelector extends StatelessWidget {
         return GestureDetector(
           onTap: () => onSelected(status.value),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               color: isSelected ? C.lv : C.lvL,
               borderRadius: BorderRadius.circular(20),
@@ -450,7 +486,7 @@ class _StatusSelector extends StatelessWidget {
             ),
             child: Text(
               status.localizedLabel(isKorean),
-              style: TextStyle(fontSize: 13, color: isSelected ? Colors.white : C.lvD, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500),
+              style: TextStyle(fontSize: 12, color: isSelected ? Colors.white : C.lvD, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500),
             ),
           ),
         );
@@ -485,7 +521,7 @@ class _YarnWeightSelector extends StatelessWidget {
         return GestureDetector(
           onTap: () => onSelected(isSelected ? '' : weight.$1),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
             decoration: BoxDecoration(
               color: isSelected ? C.pk : C.pkL,
               borderRadius: BorderRadius.circular(20),
@@ -493,7 +529,7 @@ class _YarnWeightSelector extends StatelessWidget {
             ),
             child: Text(
               isKorean ? weight.$2 : weight.$3,
-              style: TextStyle(fontSize: 12, color: isSelected ? Colors.white : C.pkD, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500),
+              style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : C.pkD, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500),
             ),
           ),
         );
@@ -517,17 +553,17 @@ class _NeedleSizeSelector extends StatelessWidget {
       runSpacing: 8,
       children: _sizes.map((size) {
         final isSelected = selectedSize == size;
-        final label = size % 1 == 0 ? '${size.toInt()}mm' : '${size}mm';
+        final label = '${size.toStringAsFixed(1)}mm';
         return GestureDetector(
           onTap: () => onSelected(size),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
             decoration: BoxDecoration(
               color: isSelected ? C.lv : C.lvL,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: isSelected ? C.lv : C.lv.withValues(alpha: 0.20)),
             ),
-            child: Text(label, style: TextStyle(fontSize: 13, color: isSelected ? Colors.white : C.lvD, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500)),
+            child: Text(label, style: TextStyle(fontSize: 12, color: isSelected ? Colors.white : C.lvD, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500)),
           ),
         );
       }).toList(),
@@ -552,7 +588,7 @@ class _DateField extends StatelessWidget {
           firstDate: DateTime(2000),
           lastDate: DateTime(2100),
           builder: (dialogContext, child) => Theme(
-            data: Theme.of(dialogContext).copyWith(colorScheme: const ColorScheme.light(primary: C.lv)),
+            data: Theme.of(dialogContext).copyWith(colorScheme: ColorScheme.light(primary: C.lv)),
             child: child!,
           ),
         );
@@ -563,7 +599,7 @@ class _DateField extends StatelessWidget {
         decoration: BoxDecoration(color: C.gx, borderRadius: BorderRadius.circular(12), border: Border.all(color: C.bd2)),
         child: Row(
           children: [
-            const Icon(Icons.calendar_today_outlined, color: C.mu, size: 16),
+            Icon(Icons.calendar_today_outlined, color: C.mu, size: 16),
             const SizedBox(width: 8),
             Expanded(
               child: Text(

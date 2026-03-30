@@ -1,9 +1,7 @@
-﻿import 'base_app_strings.dart';
+﻿import 'app_strings_en.dart';
 
-class AppStringsAr extends BaseAppStrings {
+class AppStringsAr extends AppStringsEn {
   const AppStringsAr();
-
-  @override bool get isKorean => false;
   @override String get home => 'الرئيسية';
   @override String get projects => 'المشاريع';
   @override String get swatches => 'العينات';
@@ -74,3 +72,4 @@ class AppStringsAr extends BaseAppStrings {
   @override String get businessPlan => 'خطة الأعمال';
   @override String get close => 'إغلاق';
 }
+

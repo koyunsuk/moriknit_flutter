@@ -14,7 +14,12 @@ class MarketItem {
   final String imageType;
   final bool isSoldOut;
   final bool isOfficial;
+  final String imageUrl;
+  final String pdfUrl;
+  /// 'approved' | 'pending' | 'rejected'
+  final String status;
   final DateTime? createdAt;
+  final int viewCount;
 
   const MarketItem({
     required this.id,
@@ -28,7 +33,11 @@ class MarketItem {
     required this.imageType,
     required this.isSoldOut,
     this.isOfficial = false,
+    this.imageUrl = '',
+    this.pdfUrl = '',
+    this.status = 'approved',
     this.createdAt,
+    this.viewCount = 0,
   });
 
   factory MarketItem.fromFirestore(DocumentSnapshot doc) {
@@ -45,7 +54,11 @@ class MarketItem {
       imageType: data['imageType'] as String? ?? 'pattern',
       isSoldOut: data['isSoldOut'] as bool? ?? false,
       isOfficial: data['isOfficial'] as bool? ?? false,
+      imageUrl: data['imageUrl'] as String? ?? '',
+      pdfUrl: data['pdfUrl'] as String? ?? '',
+      status: data['status'] as String? ?? 'approved',
       createdAt: DateTime.tryParse(data['createdAt'] as String? ?? ''),
+      viewCount: (data['viewCount'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -61,7 +74,11 @@ class MarketItem {
       'imageType': imageType,
       'isSoldOut': isSoldOut,
       'isOfficial': isOfficial,
+      'imageUrl': imageUrl,
+      'pdfUrl': pdfUrl,
+      'status': status,
       'createdAt': createdAt?.toIso8601String(),
+      'viewCount': viewCount,
     };
   }
 }
@@ -72,9 +89,10 @@ class MarketPurchase {
   final String buyerUid;
   final String title;
   final int price;
+  final String category;
   final DateTime? purchasedAt;
 
-  const MarketPurchase({required this.id, required this.itemId, required this.buyerUid, required this.title, required this.price, this.purchasedAt});
+  const MarketPurchase({required this.id, required this.itemId, required this.buyerUid, required this.title, required this.price, this.category = 'pattern', this.purchasedAt});
 
   factory MarketPurchase.fromFirestore(DocumentSnapshot doc) {
     final data = normalizeFirestoreMap((doc.data() as Map<String, dynamic>?) ?? <String, dynamic>{});
@@ -84,6 +102,7 @@ class MarketPurchase {
       buyerUid: data['buyerUid'] as String? ?? '',
       title: data['title'] as String? ?? '',
       price: (data['price'] as num?)?.toInt() ?? 0,
+      category: data['category'] as String? ?? 'pattern',
       purchasedAt: DateTime.tryParse(data['purchasedAt'] as String? ?? ''),
     );
   }

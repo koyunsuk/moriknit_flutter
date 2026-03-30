@@ -1,1 +1,43 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"moriknit-ceea9","appId":"1:683285854424:android:b491ac049c66f0b821bfad","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"moriknit-ceea9","configurations":{"android":"1:683285854424:android:b491ac049c66f0b821bfad","ios":"1:683285854424:ios:4a3a398aa9f2758a21bfad","web":"1:683285854424:web:31cebe736d620b4d21bfad"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "moriknit-ceea9",
+          "appId": "1:683285854424:android:b491ac049c66f0b821bfad",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "moriknit-ceea9",
+          "configurations": {
+            "android": "1:683285854424:android:b491ac049c66f0b821bfad",
+            "ios": "1:683285854424:ios:4a3a398aa9f2758a21bfad",
+            "web": "1:683285854424:web:31cebe736d620b4d21bfad"
+          }
+        }
+      }
+    }
+  },
+  "hosting": [
+    {
+      "target": "app",
+      "public": "build/web",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "rewrites": [
+        { "source": "/privacy", "destination": "/privacy.html" },
+        { "source": "/terms", "destination": "/terms.html" },
+        { "source": "**", "destination": "/index.html" }
+      ]
+    },
+    {
+      "target": "admin",
+      "public": "build/web_admin",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "rewrites": [
+        { "source": "**", "destination": "/index.html" }
+      ]
+    }
+  ]
+}

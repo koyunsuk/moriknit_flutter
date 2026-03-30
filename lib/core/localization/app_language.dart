@@ -81,7 +81,13 @@ final supportedAppLocales = <Locale>[
 
 Locale resolveSupportedLocale(Locale? locale) {
   if (locale == null) return const Locale('ko');
-  return locale.languageCode == 'en' ? const Locale('en') : const Locale('ko');
+  switch (locale.languageCode) {
+    case 'en':
+      return const Locale('en');
+    case 'ko':
+    default:
+      return const Locale('ko');
+  }
 }
 
 AppStrings lookupAppStrings(AppLanguage language) {
@@ -96,4 +102,3 @@ AppStrings lookupAppStrings(AppLanguage language) {
 final appStringsProvider = Provider<AppStrings>((ref) {
   return lookupAppStrings(ref.watch(appLanguageProvider));
 });
-
