@@ -1,4 +1,8 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/localization/app_language.dart';
@@ -14,7 +18,9 @@ import 'widgets/chart_toolbar.dart';
 
 class PatternEditorScreen extends ConsumerStatefulWidget {
   final String? patternId;
-  const PatternEditorScreen({super.key, this.patternId});
+  final File? referenceImageFile;
+  final String? referencePdfPath;
+  const PatternEditorScreen({super.key, this.patternId, this.referenceImageFile, this.referencePdfPath});
 
   @override
   ConsumerState<PatternEditorScreen> createState() => _PatternEditorScreenState();
@@ -29,6 +35,7 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
   Color _activeColor = Colors.black;
   String? _activeSymbolId;
   bool _isSaving = false;
+  bool _showReference = false;
   late TextEditingController _narrativeController;
 
   // 이슈 #98: 전체 조망 — ValueNotifier로 ChartCanvas에 크기 전달
@@ -44,6 +51,9 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
     _narrativeController = TextEditingController(text: _chart.narrativeText);
     if (widget.patternId != null && widget.patternId!.isNotEmpty) {
       _loadChart(widget.patternId!);
+    }
+    if (widget.referenceImageFile != null || widget.referencePdfPath != null) {
+      _showReference = true;
     }
     // 첫 번째 기호 기본 선택
     final firstSymbol = KnitSymbolLibrary.byCategory(SymbolCategory.basic).firstOrNull;
@@ -273,6 +283,13 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
         elevation: 0,
         title: Text(_chart.title, style: T.h3),
         actions: [
+          // 참조 이미지/PDF 토글 버튼
+          if (widget.referenceImageFile != null || widget.referencePdfPath != null)
+            IconButton(
+              icon: Icon(_showReference ? Icons.image_rounded : Icons.image_outlined),
+              tooltip: isKorean ? '참조 이미지' : 'Reference',
+              onPressed: () => setState(() => _showReference = !_showReference),
+            ),
           // 이슈 #96: PDF 내보내기 버튼
           IconButton(
             icon: const Icon(Icons.picture_as_pdf_rounded),
@@ -305,6 +322,17 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
           const BgOrbs(),
           Column(
             children: [
+              // 참조 이미지 패널
+              if (_showReference && widget.referenceImageFile != null)
+                SizedBox(
+                  height: 220,
+                  child: Image.file(widget.referenceImageFile!, fit: BoxFit.contain),
+                ),
+              if (_showReference && widget.referencePdfPath != null && !kIsWeb)
+                SizedBox(
+                  height: 220,
+                  child: PDFView(filePath: widget.referencePdfPath!),
+                ),
               // 이슈 #97: ChartCanvas — _hitCell이 TransformationController 역행렬로
               // 좌표를 정확히 변환하므로 삭제 후 재클릭 시 좌표 어긋남 없음.
               // CellData.== 구현으로 동일 셀 중복 칠하기도 안전하게 처리됨.

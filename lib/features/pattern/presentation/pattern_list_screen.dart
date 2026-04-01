@@ -1,6 +1,11 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/localization/app_language.dart';
 import '../../../core/router/app_router.dart';
@@ -9,6 +14,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../data/pattern_repository.dart';
 import '../domain/pattern_chart.dart';
+import 'pattern_editor_screen.dart';
 
 class PatternListScreen extends ConsumerWidget {
   const PatternListScreen({super.key});
@@ -111,6 +117,61 @@ class PatternListScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _showImageSourceDialog(BuildContext context, bool isKorean) async {
+    if (kIsWeb) {
+      showSavedSnackBar(context, message: isKorean ? '모바일에서만 사용 가능해요.' : 'Available on mobile only.');
+      return;
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(2)),
+              ),
+              ListTile(
+                leading: Icon(Icons.camera_alt_rounded, color: C.lv),
+                title: Text(isKorean ? '카메라로 찍기' : 'Take a photo', style: T.body),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final picked = await ImagePicker().pickImage(source: ImageSource.camera);
+                  if (picked != null && context.mounted) {
+                    Navigator.push(context, MaterialPageRoute(
+                      builder: (_) => PatternEditorScreen(referenceImageFile: File(picked.path)),
+                    ));
+                  }
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.photo_library_rounded, color: C.lv),
+                title: Text(isKorean ? '갤러리에서 선택' : 'Choose from gallery', style: T.body),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+                  if (picked != null && context.mounted) {
+                    Navigator.push(context, MaterialPageRoute(
+                      builder: (_) => PatternEditorScreen(referenceImageFile: File(picked.path)),
+                    ));
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _showPatternStartSheet(BuildContext context, WidgetRef ref) async {
     final isKorean = ref.read(appLanguageProvider).isKorean;
     await showModalBottomSheet<void>(
@@ -141,10 +202,11 @@ class PatternListScreen extends ConsumerWidget {
               ),
               Text(isKorean ? '도안 만들기' : 'Create Pattern', style: T.h3),
               const SizedBox(height: 16),
+              // 1. 사진에서 만들기
               GlassCard(
                 onTap: () {
                   Navigator.pop(ctx);
-                  context.push(Routes.toolsPattern);
+                  _showImageSourceDialog(context, isKorean);
                 },
                 child: Row(children: [
                   Container(
@@ -177,13 +239,23 @@ class PatternListScreen extends ConsumerWidget {
                 ]),
               ),
               const SizedBox(height: 10),
+              // 2. PDF에서 만들기
               GlassCard(
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(ctx);
-                  showSavedSnackBar(
-                    context,
-                    message: isKorean ? '준비 중이에요.' : 'Coming soon.',
+                  if (kIsWeb) {
+                    showSavedSnackBar(context, message: isKorean ? '모바일에서만 사용 가능해요.' : 'Available on mobile only.');
+                    return;
+                  }
+                  final result = await FilePicker.platform.pickFiles(
+                    type: FileType.custom,
+                    allowedExtensions: ['pdf'],
                   );
+                  if (result != null && result.files.first.path != null && context.mounted) {
+                    Navigator.push(context, MaterialPageRoute(
+                      builder: (_) => PatternEditorScreen(referencePdfPath: result.files.first.path),
+                    ));
+                  }
                 },
                 child: Row(children: [
                   Container(
@@ -207,6 +279,43 @@ class PatternListScreen extends ConsumerWidget {
                         const SizedBox(height: 4),
                         Text(
                           isKorean ? 'PDF 파일에서 도안을 가져와요' : 'Import pattern from PDF',
+                          style: T.caption.copyWith(color: C.mu),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: C.mu),
+                ]),
+              ),
+              const SizedBox(height: 10),
+              // 3. 도안에디터로 만들기 (신규)
+              GlassCard(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push(Routes.toolsPattern);
+                },
+                child: Row(children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: C.lvD.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(Icons.grid_on_rounded, color: C.lvD),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isKorean ? '도안에디터로 만들기' : 'Use pattern editor',
+                          style: T.bodyBold,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          isKorean ? '모리앱 도안 에디터로 직접 만들어요' : 'Draw directly with MoriKnit editor',
                           style: T.caption.copyWith(color: C.mu),
                         ),
                       ],
