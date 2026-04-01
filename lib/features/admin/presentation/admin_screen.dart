@@ -285,8 +285,8 @@ class _AdminConsoleState extends State<_AdminConsole> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('MoriKnit', style: TextStyle(color: C.tx, fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 0.3)),
-                        const Text('Admin Console', style: TextStyle(color: Color(0xFFB47EEB), fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.8)),
+                        Text('MoriKnit', style: TextStyle(color: C.tx, fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: 0.3)),
+                        const Text('Admin Console', style: TextStyle(color: Color(0xFFB47EEB), fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.8)),
                       ],
                     ),
                     const Spacer(),
@@ -349,7 +349,7 @@ class _AdminConsoleState extends State<_AdminConsole> {
                   padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
                   child: Text(
                     currentGroup!.groupLabel!.toUpperCase(),
-                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: color, letterSpacing: 0.8),
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color, letterSpacing: 0.8),
                   ),
                 ),
               Row(
@@ -443,9 +443,9 @@ class _AdminSidebarUtil extends StatelessWidget {
         decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
         child: Row(
           children: [
-            Icon(icon, size: 14, color: C.tx2),
+            Icon(icon, size: 15, color: C.tx2),
             const SizedBox(width: 8),
-            Text(label, style: TextStyle(fontSize: 11, color: C.tx2)),
+            Text(label, style: TextStyle(fontSize: 13, color: C.tx2)),
           ],
         ),
       ),
@@ -1447,8 +1447,11 @@ class _CollectionDocRow extends StatelessWidget {
                       const SizedBox(width: 12),
                       DropdownButton<String>(
                         value: categories.contains(category) ? category : categories.first,
+                        isDense: true,
+                        menuMaxHeight: 280,
+                        style: TextStyle(fontSize: 13, color: C.tx),
                         items: categories
-                            .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                            .map((c) => DropdownMenuItem(value: c, child: Text(c, style: TextStyle(fontSize: 13, color: C.tx))))
                             .toList(),
                         onChanged: (v) => setState(() => category = v ?? category),
                       ),
@@ -2463,6 +2466,8 @@ class _MemberDetailDialogState extends ConsumerState<_MemberDetailDialog> {
               // 플랜 드롭다운
               DropdownButtonFormField<String>(
                 initialValue: _selectedPlan,
+                menuMaxHeight: 240,
+                style: const TextStyle(fontSize: 13),
                 decoration: InputDecoration(
                   labelText: isKorean ? '플랜' : 'Plan',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -3363,10 +3368,13 @@ class _SupportSettingsTabState extends ConsumerState<_SupportSettingsTab> {
                       const SizedBox(width: 12),
                       DropdownButton<String>(
                         value: _noticeType,
+                        isDense: true,
+                        menuMaxHeight: 240,
+                        style: TextStyle(fontSize: 13, color: C.tx),
                         items: [
-                          DropdownMenuItem(value: 'banner', child: Text(widget.isKorean ? '배너' : 'Banner')),
-                          DropdownMenuItem(value: 'popup', child: Text(widget.isKorean ? '팝업' : 'Popup')),
-                          DropdownMenuItem(value: 'push', child: Text(widget.isKorean ? '푸시알림' : 'Push')),
+                          DropdownMenuItem(value: 'banner', child: Text(widget.isKorean ? '배너' : 'Banner', style: TextStyle(fontSize: 13, color: C.tx))),
+                          DropdownMenuItem(value: 'popup', child: Text(widget.isKorean ? '팝업' : 'Popup', style: TextStyle(fontSize: 13, color: C.tx))),
+                          DropdownMenuItem(value: 'push', child: Text(widget.isKorean ? '푸시알림' : 'Push', style: TextStyle(fontSize: 13, color: C.tx))),
                         ],
                         onChanged: (v) => setState(() => _noticeType = v ?? _noticeType),
                       ),
