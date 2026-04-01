@@ -20,7 +20,6 @@ import '../../../providers/project_provider.dart';
 import '../../../providers/swatch_provider.dart';
 import '../../../providers/theme_provider.dart';
 import '../../auth/domain/user_model.dart';
-import '../../yarn/presentation/yarn_list_screen.dart';
 import 'bug_report_sheet.dart';
 
 class MyPageScreen extends ConsumerWidget {
@@ -388,20 +387,10 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                   children: [
                     Text(t.languageLabel, style: T.bodyBold),
                     const SizedBox(height: 12),
-                    DropdownButtonFormField<AppLanguage>(
-                      initialValue: language,
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: C.gx,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: C.bd)),
-                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: C.bd)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      ),
-                      style: T.body,
-                      items: AppLanguage.values.map((option) => DropdownMenuItem(value: option, child: Text(option.label, style: T.body))).toList(),
-                      onChanged: (value) {
-                        if (value != null) ref.read(appLanguageProvider.notifier).setLanguage(value);
-                      },
+                    MoriOptionChips<AppLanguage>(
+                      options: AppLanguage.values.map((l) => (value: l, label: l.label)).toList(),
+                      selected: language,
+                      onSelected: (value) => ref.read(appLanguageProvider.notifier).setLanguage(value),
                     ),
                     const SizedBox(height: 20),
                     Text(isKorean ? '테마 컬러' : 'Theme color', style: T.bodyBold),
@@ -513,20 +502,6 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
               const SizedBox(height: 20),
               GlassCard(
                 child: Column(children: [
-                  ListTile(
-                    leading: Icon(Icons.circle_outlined, color: C.lvD),
-                    title: Text(t.needles),
-                    subtitle: Text(t.manageNeedles),
-                    onTap: () => context.go('/my/needles'),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: Icon(Icons.collections_bookmark_outlined, color: C.lmD),
-                    title: Text(isKorean ? '나의 실 라이브러리' : 'My Yarn Library'),
-                    subtitle: Text(isKorean ? '보유 실 목록 관리' : 'Manage your yarn stash'),
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const YarnListScreen())),
-                  ),
-                  const Divider(height: 1),
                   ListTile(
                     leading: Icon(Icons.logout, color: C.og),
                     title: Text(t.logout),
