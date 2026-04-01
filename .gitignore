@@ -52,3 +52,12 @@ analyze_output.txt
 .claude/
 .metadata
 
+
+# Node / Firebase tools
+node_modules/
+package-lock.json
+.firebase/
+.firebaserc
+tmp/
+tools/
+.vscode/
