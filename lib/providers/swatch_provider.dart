@@ -31,6 +31,11 @@ final swatchLimitProgressProvider = Provider<double>((ref) {
   return count / 5.0;
 });
 
+final swatchesByProjectIdProvider = Provider.family<List<SwatchModel>, String>((ref, projectId) {
+  final swatches = ref.watch(swatchListProvider).valueOrNull ?? [];
+  return swatches.where((s) => s.projectId == projectId).toList();
+});
+
 final swatchByIdProvider = StreamProvider.family<SwatchModel?, String>((ref, id) {
   final isLoggedIn = ref.watch(isLoggedInProvider);
   if (!isLoggedIn) return Stream.value(null);
@@ -38,8 +43,9 @@ final swatchByIdProvider = StreamProvider.family<SwatchModel?, String>((ref, id)
 });
 
 class SwatchInputNotifier extends StateNotifier<SwatchModel> {
-  SwatchInputNotifier(String uid) : super(SwatchModel.empty(uid: uid));
+  SwatchInputNotifier(String uid) : super(SwatchModel.empty(uid: uid).copyWith(beforeStitchCount: 25, beforeRowCount: 20));
 
+  void updateSwatchName(String name) => state = state.copyWith(swatchName: name);
   void updateYarnBrand(String id, String name) => state = state.copyWith(yarnBrandId: id, yarnBrandName: name);
   void updateNeedleBrand(String id, String name) => state = state.copyWith(needleBrandId: id, needleBrandName: name);
   void updateNeedleSize(double size) => state = state.copyWith(needleSize: size);
@@ -57,6 +63,9 @@ class SwatchInputNotifier extends StateNotifier<SwatchModel> {
   void updateAfterRowCount(int count) => state = state.copyWith(afterRowCount: count);
   void updateMemo(String memo) => state = state.copyWith(memo: memo);
   void updateBeforePhotoUrl(String url) => state = state.copyWith(beforePhotoUrl: url);
+  void updateAfterPhotoUrl(String url) => state = state.copyWith(afterPhotoUrl: url);
+
+  void updateProjectId(String projectId) => state = state.copyWith(projectId: projectId);
 
   void setMyNeedle(String needleId, String brandName, double size) {
     state = state.copyWith(myNeedleId: needleId, needleBrandName: brandName, needleSize: size);

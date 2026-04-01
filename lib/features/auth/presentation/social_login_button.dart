@@ -5,7 +5,8 @@ class SocialLoginButton extends StatelessWidget {
   final Color textColor;
   final String label;
   final Widget leading;
-  final VoidCallback onTap;
+  final Widget? trailing;
+  final VoidCallback? onTap;
 
   const SocialLoginButton({
     super.key,
@@ -13,6 +14,7 @@ class SocialLoginButton extends StatelessWidget {
     required this.textColor,
     required this.label,
     required this.leading,
+    this.trailing,
     required this.onTap,
   });
 
@@ -25,16 +27,16 @@ class SocialLoginButton extends StatelessWidget {
         onTap: onTap,
         child: Ink(
           width: double.infinity,
-          height: 58,
+          height: 52,
           decoration: BoxDecoration(
             color: color,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(color: Colors.white.withValues(alpha: 0.45)),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
@@ -51,6 +53,10 @@ class SocialLoginButton extends StatelessWidget {
                   color: textColor,
                 ),
               ),
+              if (trailing != null) ...[
+                const SizedBox(width: 8),
+                trailing!,
+              ],
             ],
           ),
         ),

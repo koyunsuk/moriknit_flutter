@@ -2,6 +2,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:hive/hive.dart';
 import '../domain/project_model.dart';
 import '../../../core/constants/subscription_constants.dart';
@@ -52,6 +53,20 @@ class ProjectRepository {
       await _saveToHive(dirty);
       return dirty;
     }
+  }
+
+  // ── DUPLICATE ────────────────────────────────────────────
+  Future<ProjectModel> duplicateProject(ProjectModel original) async {
+    final now = DateTime.now();
+    final copy = original.copyWith(
+      id: '',
+      title: '${original.title} (복사)',
+      createdAt: now,
+      updatedAt: now,
+      isDirty: false,
+      counterIds: [],
+    );
+    return createProject(copy);
   }
 
   // ── READ (목록) ──────────────────────────────────────────
@@ -150,6 +165,7 @@ class ProjectRepository {
 
   // ── Hive ─────────────────────────────────────────────────
   Future<void> _saveToHive(ProjectModel project) async {
+    if (kIsWeb) return;
     final box = Hive.box<Map>(SubscriptionConstants.boxProjects);
     final key = project.id.isEmpty
         ? 'temp_${DateTime.now().millisecondsSinceEpoch}'
@@ -158,12 +174,13 @@ class ProjectRepository {
   }
 
   Future<void> _removeFromHive(String id) async {
+    if (kIsWeb) return;
     final box = Hive.box<Map>(SubscriptionConstants.boxProjects);
     await box.delete(id);
   }
 
   Future<void> syncDirtyProjects() async {
-    if (_uid.isEmpty) return;
+    if (kIsWeb || _uid.isEmpty) return;
     final box = Hive.box<Map>(SubscriptionConstants.boxProjects);
     for (final key in box.keys) {
       final data = box.get(key);

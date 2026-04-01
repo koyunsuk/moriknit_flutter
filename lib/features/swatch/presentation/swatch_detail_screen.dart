@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/localization/app_language.dart';
@@ -16,7 +16,7 @@ class SwatchDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isKorean = ref.watch(appLanguageProvider).isKorean;
+    final t = ref.watch(appStringsProvider);
     final swatchAsync = ref.watch(swatchByIdProvider(swatchId));
 
     return Scaffold(
@@ -25,26 +25,61 @@ class SwatchDetailScreen extends ConsumerWidget {
         backgroundColor: C.bg,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
+          icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(isKorean ? '스와치 상세' : 'Swatch Details', style: T.h3),
+        title: Text(t.swatchDetails, style: T.h3),
         actions: [
           swatchAsync.whenOrNull(
                 data: (swatch) => swatch == null
                     ? null
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit_outlined, color: C.lv),
-                            onPressed: () => _navigateToEdit(context, swatch),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline, color: C.og),
-                            onPressed: () => _confirmDelete(context, ref, swatch, isKorean),
-                          ),
-                        ],
+                    : Builder(
+                        builder: (ctx) {
+                          final isKorean = ref.watch(appLanguageProvider).isKorean;
+                          return PopupMenuButton<String>(
+                            icon: Icon(Icons.more_vert_rounded, color: C.tx),
+                            onSelected: (v) {
+                              if (v == 'edit') _navigateToEdit(context, swatch);
+                              if (v == 'copy') _duplicateSwatch(context, ref, swatch);
+                              if (v == 'delete') _confirmDelete(context, ref, swatch);
+                            },
+                            itemBuilder: (_) => [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit_outlined, size: 18, color: C.lv),
+                                    const SizedBox(width: 8),
+                                    Text(isKorean ? '수정' : 'Edit'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'copy',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.copy_rounded, size: 18, color: C.lv),
+                                    const SizedBox(width: 8),
+                                    Text(isKorean ? '복사' : 'Duplicate'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.delete_outline, size: 18, color: Colors.red.shade400),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      isKorean ? '삭제' : 'Delete',
+                                      style: TextStyle(color: Colors.red.shade400),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
               ) ??
               const SizedBox.shrink(),
@@ -53,16 +88,35 @@ class SwatchDetailScreen extends ConsumerWidget {
       body: swatchAsync.when(
         data: (swatch) {
           if (swatch == null) {
-            return Center(child: Text(isKorean ? '스와치를 찾을 수 없어요.' : 'Swatch not found.', style: T.body.copyWith(color: C.mu)));
+            return Center(child: Text(t.swatchNotFound, style: T.body.copyWith(color: C.mu)));
           }
-          return _SwatchDetailBody(swatch: swatch, isKorean: isKorean);
+          return _SwatchDetailBody(swatch: swatch);
         },
-        loading: () => const Center(child: CircularProgressIndicator(color: C.lv)),
+        loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
         error: (error, _) => Center(
-          child: Text(isKorean ? '스와치를 불러오지 못했어요: $error' : 'Failed to load swatch: $error', style: T.body.copyWith(color: C.og)),
+          child: Text(t.failedToLoadSwatch(error.toString()), style: T.body.copyWith(color: C.og)),
         ),
       ),
     );
+  }
+
+  Future<void> _duplicateSwatch(BuildContext context, WidgetRef ref, SwatchModel swatch) async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '복사하는 중입니다.' : 'Duplicating...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () => ref.read(swatchRepositoryProvider).duplicateSwatch(swatch),
+      );
+      if (context.mounted) {
+        showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '복사됐어요.' : 'Duplicated.');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+      }
+    }
   }
 
   void _navigateToEdit(BuildContext context, SwatchModel swatch) {
@@ -74,86 +128,99 @@ class SwatchDetailScreen extends ConsumerWidget {
     );
   }
 
-  void _confirmDelete(BuildContext context, WidgetRef ref, SwatchModel swatch, bool isKorean) {
-    showDialog<void>(
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref, SwatchModel swatch) async {
+    final t = ref.read(appStringsProvider);
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(isKorean ? '스와치 삭제' : 'Delete swatch', style: T.h3),
-        content: Text(
-          isKorean ? '이 스와치를 삭제할까요? 삭제한 뒤에는 되돌릴 수 없어요.' : 'Delete this swatch? This action cannot be undone.',
-          style: T.body,
-        ),
+        title: Text(t.deleteSwatch, style: T.h3),
+        content: Text(t.deleteSwatchConfirm, style: T.body),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(isKorean ? '취소' : 'Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(t.cancel),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: C.og, foregroundColor: Colors.white),
-            onPressed: () async {
-              Navigator.pop(dialogContext);
-              try {
-                await ref.read(swatchRepositoryProvider).deleteSwatch(swatch.id);
-                if (context.mounted) Navigator.pop(context);
-              } catch (error) {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(isKorean ? '삭제에 실패했어요: $error' : 'Failed to delete swatch: $error'),
-                    backgroundColor: C.og,
-                  ),
-                );
-              }
-            },
-            child: Text(isKorean ? '삭제' : 'Delete'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade400,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(t.deleteSwatch),
           ),
         ],
       ),
     );
+    if (confirm == true && context.mounted) {
+      try {
+        await runWithMoriLoadingDialog<void>(
+          context,
+          message: isKorean ? '삭제하는 중입니다.' : 'Deleting...',
+          subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+          task: () async {
+            await ref.read(swatchRepositoryProvider).deleteSwatch(swatch.id);
+          },
+        );
+        if (!context.mounted) return;
+        Navigator.pop(context);
+        showSavedSnackBar(
+          ScaffoldMessenger.of(context),
+          message: isKorean ? '삭제됐어요.' : 'Deleted.',
+        );
+      } catch (e) {
+        if (!context.mounted) return;
+        showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+      }
+    }
   }
 }
 
-class _SwatchDetailBody extends StatelessWidget {
+class _SwatchDetailBody extends ConsumerWidget {
   final SwatchModel swatch;
-  final bool isKorean;
 
-  const _SwatchDetailBody({required this.swatch, required this.isKorean});
+  const _SwatchDetailBody({required this.swatch});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(appStringsProvider);
+
     return Stack(
       children: [
         const BgOrbs(),
         ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
           children: [
-            MoriBrandHeader(
-              logoSize: 76,
-              titleSize: 24,
-              subtitle: isKorean ? '게이지와 재료 기록을 나중에도 다시 비교해볼 수 있어요.' : 'Compare your gauge and materials whenever you need them again.',
-            ),
-            const SizedBox(height: 16),
             GlassCard(
               padding: EdgeInsets.zero,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _PhotoHeader(photoUrl: swatch.beforePhotoUrl),
+                  _PhotoHeader(photoUrl: swatch.beforePhotoUrl, swatchId: swatch.id),
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (swatch.isDirty) ...[
-                          _SyncPendingBadge(isKorean: isKorean),
+                          _SyncPendingBadge(label: t.pendingSync),
                           const SizedBox(height: 12),
                         ],
+                        if (swatch.swatchName.isNotEmpty) ...[
+                          Text(swatch.swatchName, style: T.h2.copyWith(fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 4),
+                        ],
+                        if (swatch.yarnName.isNotEmpty) ...[
+                          Text(swatch.yarnName, style: T.h2),
+                          const SizedBox(height: 4),
+                        ],
                         Text(
-                          isKorean ? '${swatch.beforeStitchCount}코 x ${swatch.beforeRowCount}단' : '${swatch.beforeStitchCount} stitches x ${swatch.beforeRowCount} rows',
-                          style: T.h2,
+                          t.stitchesRows(swatch.beforeStitchCount, swatch.beforeRowCount),
+                          style: T.h2.copyWith(fontSize: 18),
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          swatch.yarnBrandName.isEmpty
-                              ? (isKorean ? '실 브랜드 미설정' : 'Yarn brand not set')
-                              : swatch.yarnBrandName,
+                          swatch.yarnBrandName.isEmpty ? t.yarnBrandNotSet : swatch.yarnBrandName,
                           style: T.body.copyWith(color: C.mu),
                         ),
                       ],
@@ -163,15 +230,15 @@ class _SwatchDetailBody extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            _GaugeCard(swatch: swatch, isKorean: isKorean),
+            _GaugeCard(swatch: swatch),
             const SizedBox(height: 12),
             if (swatch.needleSize > 0 || swatch.needleBrandName.isNotEmpty) ...[
               _InfoCard(
                 icon: Icons.circle_outlined,
-                title: isKorean ? '바늘 정보' : 'Needle',
+                title: t.needleInfo,
                 rows: [
-                  if (swatch.needleSize > 0) _InfoRowData(isKorean ? '사이즈' : 'Size', swatch.needleSizeDisplay),
-                  if (swatch.needleBrandName.isNotEmpty) _InfoRowData(isKorean ? '브랜드' : 'Brand', swatch.needleBrandName),
+                  if (swatch.needleSize > 0) _InfoRowData(t.size, swatch.needleSizeDisplay),
+                  if (swatch.needleBrandName.isNotEmpty) _InfoRowData(t.brand, swatch.needleBrandName),
                 ],
               ),
               const SizedBox(height: 12),
@@ -179,22 +246,22 @@ class _SwatchDetailBody extends StatelessWidget {
             if (swatch.yarnBrandName.isNotEmpty || swatch.yarnWeight.isNotEmpty || swatch.yarnColor.isNotEmpty) ...[
               _InfoCard(
                 icon: Icons.texture,
-                title: isKorean ? '실 정보' : 'Yarn',
+                title: t.yarnInfo,
                 rows: [
-                  if (swatch.yarnBrandName.isNotEmpty) _InfoRowData(isKorean ? '브랜드' : 'Brand', swatch.yarnBrandName),
-                  if (swatch.yarnWeight.isNotEmpty) _InfoRowData(isKorean ? '굵기' : 'Weight', swatch.yarnWeight),
-                  if (swatch.yarnColor.isNotEmpty) _InfoRowData(isKorean ? '색상' : 'Color', swatch.yarnColor),
+                  if (swatch.yarnBrandName.isNotEmpty) _InfoRowData(t.brand, swatch.yarnBrandName),
+                  if (swatch.yarnWeight.isNotEmpty) _InfoRowData(t.weight, swatch.yarnWeight),
+                  if (swatch.yarnColor.isNotEmpty) _InfoRowData(t.color, swatch.yarnColor),
                 ],
               ),
               const SizedBox(height: 12),
             ],
             if (swatch.memo.isNotEmpty) ...[
-              _MemoCard(title: isKorean ? '메모' : 'Memo', memo: swatch.memo),
+              _MemoCard(title: t.memo, memo: swatch.memo),
               const SizedBox(height: 12),
             ],
             if (swatch.createdAt != null)
               Text(
-                isKorean ? '기록일 ${_formatDate(swatch.createdAt!)}' : 'Saved on ${_formatDate(swatch.createdAt!)}',
+                t.savedOn(_formatDate(swatch.createdAt!)),
                 style: T.caption.copyWith(color: C.mu),
               ),
           ],
@@ -208,8 +275,9 @@ class _SwatchDetailBody extends StatelessWidget {
 
 class _PhotoHeader extends StatelessWidget {
   final String photoUrl;
+  final String swatchId;
 
-  const _PhotoHeader({required this.photoUrl});
+  const _PhotoHeader({required this.photoUrl, required this.swatchId});
 
   @override
   Widget build(BuildContext context) {
@@ -218,25 +286,80 @@ class _PhotoHeader extends StatelessWidget {
         height: 180,
         width: double.infinity,
         decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(18)),
-        child: const Center(child: Icon(Icons.texture, color: C.lv, size: 48)),
+        child: Center(child: Icon(Icons.texture, color: C.lv, size: 48)),
       );
     }
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: SizedBox(
-        height: 220,
-        width: double.infinity,
-        child: Image.network(photoUrl, fit: BoxFit.cover),
+    final heroTag = 'swatch_photo_$swatchId';
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            fullscreenDialog: true,
+            builder: (_) => _FullScreenImageViewer(
+              imageUrl: photoUrl,
+              heroTag: heroTag,
+            ),
+          ),
+        );
+      },
+      child: Hero(
+        tag: heroTag,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: SizedBox(
+            height: 220,
+            width: double.infinity,
+            child: Image.network(photoUrl, fit: BoxFit.cover),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FullScreenImageViewer extends StatelessWidget {
+  final String imageUrl;
+  final String heroTag;
+
+  const _FullScreenImageViewer({required this.imageUrl, required this.heroTag});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          Center(
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 5.0,
+              child: Hero(
+                tag: heroTag,
+                child: Image.network(imageUrl, fit: BoxFit.contain),
+              ),
+            ),
+          ),
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            right: 8,
+            child: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white, size: 28),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
 class _SyncPendingBadge extends StatelessWidget {
-  final bool isKorean;
+  final String label;
 
-  const _SyncPendingBadge({required this.isKorean});
+  const _SyncPendingBadge({required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -250,50 +373,35 @@ class _SyncPendingBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.sync, size: 12, color: C.og),
+          Icon(Icons.sync, size: 12, color: C.og),
           const SizedBox(width: 4),
-          Text(isKorean ? '동기화 대기 중' : 'Pending sync', style: T.caption.copyWith(color: C.og, fontWeight: FontWeight.w700)),
+          Text(label, style: T.caption.copyWith(color: C.og, fontWeight: FontWeight.w700)),
         ],
       ),
     );
   }
 }
 
-class _GaugeCard extends StatelessWidget {
+class _GaugeCard extends ConsumerWidget {
   final SwatchModel swatch;
-  final bool isKorean;
 
-  const _GaugeCard({required this.swatch, required this.isKorean});
+  const _GaugeCard({required this.swatch});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(appStringsProvider);
     return GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(isKorean ? '게이지' : 'Gauge', style: T.captionBold.copyWith(color: C.mu)),
+          Text(t.gaugeResult, style: T.captionBold.copyWith(color: C.mu)),
           const SizedBox(height: 12),
-          _GaugeRow(
-            label: isKorean ? '전' : 'Before',
-            stitchCount: swatch.beforeStitchCount,
-            rowCount: swatch.beforeRowCount,
-            color: C.lv,
-            isKorean: isKorean,
-          ),
+          _GaugeRow(label: t.beforeAfterLabel(true), stitchCount: swatch.beforeStitchCount, rowCount: swatch.beforeRowCount, color: C.lv),
           if (swatch.hasAfterWash) ...[
             const SizedBox(height: 10),
-            _GaugeRow(
-              label: isKorean ? '후' : 'After',
-              stitchCount: swatch.afterStitchCount,
-              rowCount: swatch.afterRowCount,
-              color: C.pk,
-              isKorean: isKorean,
-            ),
+            _GaugeRow(label: t.beforeAfterLabel(false), stitchCount: swatch.afterStitchCount, rowCount: swatch.afterRowCount, color: C.pk),
             const SizedBox(height: 12),
-            MoriChip(
-              label: isKorean ? '수축률 ${swatch.shrinkageRate.toStringAsFixed(1)}%' : 'Shrinkage ${swatch.shrinkageRate.toStringAsFixed(1)}%',
-              type: ChipType.lime,
-            ),
+            MoriChip(label: t.shrinkageLabel(swatch.shrinkageRate), type: ChipType.lime),
           ],
         ],
       ),
@@ -301,30 +409,29 @@ class _GaugeCard extends StatelessWidget {
   }
 }
 
-class _GaugeRow extends StatelessWidget {
+class _GaugeRow extends ConsumerWidget {
   final String label;
   final int stitchCount;
   final int rowCount;
   final Color color;
-  final bool isKorean;
 
   const _GaugeRow({
     required this.label,
     required this.stitchCount,
     required this.rowCount,
     required this.color,
-    required this.isKorean,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(appStringsProvider);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(width: 52, child: Text(label, style: T.caption.copyWith(color: C.mu))),
         Expanded(
           child: Text(
-            isKorean ? '$stitchCount코 / $rowCount단 (10cm)' : '$stitchCount stitches / $rowCount rows (10cm)',
+            t.gauge10cm(stitchCount, rowCount),
             style: T.bodyBold.copyWith(color: color),
           ),
         ),

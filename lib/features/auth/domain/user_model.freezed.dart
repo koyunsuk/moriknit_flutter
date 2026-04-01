@@ -30,6 +30,7 @@ mixin _$UserModel {
   String? get locale => throw _privateConstructorUsedError;
   DateTime? get createdAt => throw _privateConstructorUsedError;
   DateTime? get lastActiveAt => throw _privateConstructorUsedError;
+  int get moriBalance => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -52,7 +53,8 @@ abstract class $UserModelCopyWith<$Res> {
       UserUsage usage,
       String? locale,
       DateTime? createdAt,
-      DateTime? lastActiveAt});
+      DateTime? lastActiveAt,
+      int moriBalance});
 
   $UserSubscriptionCopyWith<$Res> get subscription;
   $UserUsageCopyWith<$Res> get usage;
@@ -81,6 +83,7 @@ class _$UserModelCopyWithImpl<$Res, $Val extends UserModel>
     Object? locale = freezed,
     Object? createdAt = freezed,
     Object? lastActiveAt = freezed,
+    Object? moriBalance = null,
   }) {
     return _then(_value.copyWith(
       uid: null == uid
@@ -123,6 +126,10 @@ class _$UserModelCopyWithImpl<$Res, $Val extends UserModel>
           ? _value.lastActiveAt
           : lastActiveAt // ignore: cast_nullable_to_non_nullable
               as DateTime?,
+      moriBalance: null == moriBalance
+          ? _value.moriBalance
+          : moriBalance // ignore: cast_nullable_to_non_nullable
+              as int,
     ) as $Val);
   }
 
@@ -161,7 +168,8 @@ abstract class _$$UserModelImplCopyWith<$Res>
       UserUsage usage,
       String? locale,
       DateTime? createdAt,
-      DateTime? lastActiveAt});
+      DateTime? lastActiveAt,
+      int moriBalance});
 
   @override
   $UserSubscriptionCopyWith<$Res> get subscription;
@@ -190,6 +198,7 @@ class __$$UserModelImplCopyWithImpl<$Res>
     Object? locale = freezed,
     Object? createdAt = freezed,
     Object? lastActiveAt = freezed,
+    Object? moriBalance = null,
   }) {
     return _then(_$UserModelImpl(
       uid: null == uid
@@ -232,6 +241,10 @@ class __$$UserModelImplCopyWithImpl<$Res>
           ? _value.lastActiveAt
           : lastActiveAt // ignore: cast_nullable_to_non_nullable
               as DateTime?,
+      moriBalance: null == moriBalance
+          ? _value.moriBalance
+          : moriBalance // ignore: cast_nullable_to_non_nullable
+              as int,
     ));
   }
 }
@@ -249,7 +262,8 @@ class _$UserModelImpl implements _UserModel {
       this.usage = const UserUsage(),
       this.locale,
       this.createdAt,
-      this.lastActiveAt});
+      this.lastActiveAt,
+      this.moriBalance = 10000});
 
   factory _$UserModelImpl.fromJson(Map<String, dynamic> json) =>
       _$$UserModelImplFromJson(json);
@@ -279,10 +293,13 @@ class _$UserModelImpl implements _UserModel {
   final DateTime? createdAt;
   @override
   final DateTime? lastActiveAt;
+  @override
+  @JsonKey()
+  final int moriBalance;
 
   @override
   String toString() {
-    return 'UserModel(uid: $uid, email: $email, displayName: $displayName, photoURL: $photoURL, bio: $bio, subscription: $subscription, usage: $usage, locale: $locale, createdAt: $createdAt, lastActiveAt: $lastActiveAt)';
+    return 'UserModel(uid: $uid, email: $email, displayName: $displayName, photoURL: $photoURL, bio: $bio, subscription: $subscription, usage: $usage, locale: $locale, createdAt: $createdAt, lastActiveAt: $lastActiveAt, moriBalance: $moriBalance)';
   }
 
   @override
@@ -304,13 +321,26 @@ class _$UserModelImpl implements _UserModel {
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.lastActiveAt, lastActiveAt) ||
-                other.lastActiveAt == lastActiveAt));
+                other.lastActiveAt == lastActiveAt) &&
+            (identical(other.moriBalance, moriBalance) ||
+                other.moriBalance == moriBalance));
   }
 
   @JsonKey(ignore: true)
   @override
-  int get hashCode => Object.hash(runtimeType, uid, email, displayName,
-      photoURL, bio, subscription, usage, locale, createdAt, lastActiveAt);
+  int get hashCode => Object.hash(
+      runtimeType,
+      uid,
+      email,
+      displayName,
+      photoURL,
+      bio,
+      subscription,
+      usage,
+      locale,
+      createdAt,
+      lastActiveAt,
+      moriBalance);
 
   @JsonKey(ignore: true)
   @override
@@ -337,7 +367,8 @@ abstract class _UserModel implements UserModel {
       final UserUsage usage,
       final String? locale,
       final DateTime? createdAt,
-      final DateTime? lastActiveAt}) = _$UserModelImpl;
+      final DateTime? lastActiveAt,
+      final int moriBalance}) = _$UserModelImpl;
 
   factory _UserModel.fromJson(Map<String, dynamic> json) =
       _$UserModelImpl.fromJson;
@@ -362,6 +393,8 @@ abstract class _UserModel implements UserModel {
   DateTime? get createdAt;
   @override
   DateTime? get lastActiveAt;
+  @override
+  int get moriBalance;
   @override
   @JsonKey(ignore: true)
   _$$UserModelImplCopyWith<_$UserModelImpl> get copyWith =>

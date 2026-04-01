@@ -10,6 +10,7 @@ _$SwatchModelImpl _$$SwatchModelImplFromJson(Map<String, dynamic> json) =>
     _$SwatchModelImpl(
       id: json['id'] as String,
       uid: json['uid'] as String,
+      swatchName: json['swatchName'] as String? ?? '',
       yarnBrandId: json['yarnBrandId'] as String? ?? '',
       yarnBrandName: json['yarnBrandName'] as String? ?? '',
       yarnName: json['yarnName'] as String? ?? '',
@@ -44,6 +45,7 @@ _$SwatchModelImpl _$$SwatchModelImplFromJson(Map<String, dynamic> json) =>
       updatedAt: json['updatedAt'] == null
           ? null
           : DateTime.parse(json['updatedAt'] as String),
+      projectId: json['projectId'] as String? ?? '',
       isDirty: json['isDirty'] as bool? ?? false,
     );
 
@@ -51,6 +53,7 @@ Map<String, dynamic> _$$SwatchModelImplToJson(_$SwatchModelImpl instance) =>
     <String, dynamic>{
       'id': instance.id,
       'uid': instance.uid,
+      'swatchName': instance.swatchName,
       'yarnBrandId': instance.yarnBrandId,
       'yarnBrandName': instance.yarnBrandName,
       'yarnName': instance.yarnName,
@@ -79,5 +82,6 @@ Map<String, dynamic> _$$SwatchModelImplToJson(_$SwatchModelImpl instance) =>
       'archivedDate': instance.archivedDate?.toIso8601String(),
       'createdAt': instance.createdAt?.toIso8601String(),
       'updatedAt': instance.updatedAt?.toIso8601String(),
+      'projectId': instance.projectId,
       'isDirty': instance.isDirty,
     };

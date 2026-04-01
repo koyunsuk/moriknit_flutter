@@ -19,6 +19,7 @@ class UserModel with _$UserModel {
     String? locale,
     DateTime? createdAt,
     DateTime? lastActiveAt,
+    @Default(10000) int moriBalance,
   }) = _UserModel;
 
   factory UserModel.fromJson(Map<String, dynamic> json) => _$UserModelFromJson(json);

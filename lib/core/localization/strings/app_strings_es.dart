@@ -1,9 +1,7 @@
-import 'base_app_strings.dart';
+ï»¿import 'app_strings_en.dart';
 
-class AppStringsEs extends BaseAppStrings {
+class AppStringsEs extends AppStringsEn {
   const AppStringsEs();
-
-  @override bool get isKorean => false;
   @override String get home => 'Inicio';
   @override String get projects => 'Proyectos';
   @override String get swatches => 'Muestras';
@@ -63,7 +61,7 @@ class AppStringsEs extends BaseAppStrings {
   @override String get swatchLibrary => 'Biblioteca de muestras';
   @override String get projectBoard => 'Tablero de proyectos';
   @override String get counterTools => 'Herramientas de contador';
-  @override String liveSaved(int current, int stored) => '$current en vivo ¡¤ $stored guardados';
+  @override String liveSaved(int current, int stored) => '$current en vivo Â· $stored guardados';
   @override String get needles => 'Agujas';
   @override String get manageNeedles => 'Gestiona tamanos y marcas de agujas guardadas';
   @override String get logout => 'Cerrar sesion';
@@ -74,3 +72,4 @@ class AppStringsEs extends BaseAppStrings {
   @override String get businessPlan => 'Plan empresarial';
   @override String get close => 'Cerrar';
 }
+

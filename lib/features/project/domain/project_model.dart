@@ -99,6 +99,8 @@ class ProjectModel with _$ProjectModel {
     DateTime? createdAt,
     DateTime? updatedAt,
     @Default(false) bool isDirty,
+    @Default(0) int completedStepCount,
+    @Default(0) int totalStepCount,
   }) = _ProjectModel;
 
   factory ProjectModel.fromJson(Map<String, dynamic> json) => _$ProjectModelFromJson(json);

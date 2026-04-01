@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' as kakao;
@@ -62,16 +65,9 @@ class AuthRepository {
             .signInWithPopup(GoogleAuthProvider())
             .timeout(const Duration(seconds: 20));
         final user = credential.user;
-        if (user == null) {
-          throw Exception('Google account was not returned.');
-        }
-        unawaited(_syncUserDocument(user));
-        return UserModel.initial(
-          uid: user.uid,
-          email: user.email ?? '',
-          displayName: user.displayName ?? '',
-          photoURL: user.photoURL ?? '',
-        );
+        if (user == null) throw Exception('Google account was not returned.');
+        // 신규/기존 모두 await로 처리 — 문서 생성 실패 시 에러 감지
+        return await _getOrCreateUser(user);
       }
 
       await _ensureGoogleInitialized();
@@ -86,19 +82,10 @@ class AuthRepository {
           .signInWithCredential(GoogleAuthProvider.credential(idToken: idToken))
           .timeout(const Duration(seconds: 20));
       final user = credential.user;
-      if (user == null) {
-        throw Exception('Firebase user was not returned after Google sign-in.');
-      }
+      if (user == null) throw Exception('Firebase user was not returned after Google sign-in.');
 
-      // Do not block navigation on Firestore profile sync.
-      unawaited(_syncUserDocument(user));
-
-      return UserModel.initial(
-        uid: user.uid,
-        email: user.email ?? '',
-        displayName: user.displayName ?? '',
-        photoURL: user.photoURL ?? '',
-      );
+      // 신규/기존 모두 await로 처리 — 문서 생성 실패 시 에러 감지
+      return await _getOrCreateUser(user);
     } on FirebaseAuthException catch (e) {
       throw Exception(_handleAuthException(e));
     } on GoogleSignInException catch (e) {
@@ -106,7 +93,7 @@ class AuthRepository {
     } on TimeoutException {
       throw Exception('Google login timed out. Please try again.');
     } catch (e) {
-      throw Exception('Google login failed: $e');
+      rethrow;
     }
   }
 
@@ -130,14 +117,6 @@ class AuthRepository {
       throw UnimplementedError('Kakao login requires Firebase custom token integration.');
     } catch (e) {
       throw Exception('Kakao login failed: $e');
-    }
-  }
-
-  Future<void> _syncUserDocument(User firebaseUser) async {
-    try {
-      await _getOrCreateUser(firebaseUser);
-    } catch (_) {
-      // Keep auth success even if profile sync is delayed.
     }
   }
 
@@ -167,8 +146,9 @@ class AuthRepository {
       ...newUser.toJson(),
       'createdAt': FieldValue.serverTimestamp(),
       'lastActiveAt': FieldValue.serverTimestamp(),
+      'moriBalance': 10000,
       'subscription': {
-        'planId': 'free',
+        'planId': 'pro', // 베타 기간: 신규 회원 전원 Pro
         'status': 'active',
       },
       'usage': {
@@ -185,6 +165,29 @@ class AuthRepository {
 
   Stream<UserModel?> userStream(String uid) {
     return _db.collection('users').doc(uid).snapshots().map((doc) => doc.exists ? UserModel.fromFirestore(doc) : null);
+  }
+
+  Future<String> uploadProfilePhoto(String uid, File file) async {
+    final ref = FirebaseStorage.instance.ref('users/$uid/profile.jpg');
+    await ref.putFile(file);
+    final url = await ref.getDownloadURL();
+    await _db.collection('users').doc(uid).update({'photoURL': url});
+    await _auth.currentUser?.updatePhotoURL(url);
+    return url;
+  }
+
+  Future<String> uploadProfilePhotoBytes(String uid, List<int> bytes) async {
+    final ref = FirebaseStorage.instance.ref('users/$uid/profile.jpg');
+    await ref.putData(Uint8List.fromList(bytes), SettableMetadata(contentType: 'image/jpeg'));
+    final url = await ref.getDownloadURL();
+    await _db.collection('users').doc(uid).update({'photoURL': url});
+    await _auth.currentUser?.updatePhotoURL(url);
+    return url;
+  }
+
+  Future<void> updateDisplayName(String uid, String displayName) async {
+    await _db.collection('users').doc(uid).update({'displayName': displayName});
+    await _auth.currentUser?.updateDisplayName(displayName);
   }
 
   String _handleAuthException(FirebaseAuthException e) {

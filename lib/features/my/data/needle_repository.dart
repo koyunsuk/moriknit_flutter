@@ -1,5 +1,6 @@
 ﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:hive/hive.dart';
 
 import '../../../core/constants/subscription_constants.dart';
@@ -13,7 +14,7 @@ class NeedleRepository {
 
   CollectionReference get _needlesRef => _db.collection('users').doc(_uid).collection('myNeedles');
 
-  Future<NeedleModel> createNeedle(NeedleModel needle) async {
+  Future<NeedleModel> createNeedle(NeedleModel needle, {String? photoUrl}) async {
     if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
 
     final prepared = needle.copyWith(updatedAt: DateTime.now());
@@ -29,6 +30,7 @@ class NeedleRepository {
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
         'isDirty': false,
+        if (photoUrl != null && photoUrl.isNotEmpty) 'photoUrl': photoUrl,
       });
 
       final saved = prepared.copyWith(id: docRef.id, isDirty: false);
@@ -52,7 +54,7 @@ class NeedleRepository {
     return snapshot.docs.map((doc) => NeedleModel.fromFirestore(doc)).toList();
   }
 
-  Future<NeedleModel> updateNeedle(NeedleModel needle) async {
+  Future<NeedleModel> updateNeedle(NeedleModel needle, {String? photoUrl}) async {
     if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
 
     final updated = needle.copyWith(updatedAt: DateTime.now());
@@ -63,6 +65,7 @@ class NeedleRepository {
         ...updated.toJson(),
         'updatedAt': FieldValue.serverTimestamp(),
         'isDirty': false,
+        if (photoUrl != null && photoUrl.isNotEmpty) 'photoUrl': photoUrl,
       });
       return updated.copyWith(isDirty: false);
     } catch (_) {
@@ -78,19 +81,30 @@ class NeedleRepository {
     await _needlesRef.doc(id).delete();
   }
 
+  Future<NeedleModel> duplicateNeedle(NeedleModel original) async {
+    final copy = original.copyWith(
+      id: '',
+      name: '${original.name} (복사)',
+      isDirty: false,
+    );
+    return createNeedle(copy);
+  }
+
   Future<void> _saveToHive(NeedleModel needle) async {
+    if (kIsWeb) return;
     final box = Hive.box<Map>(SubscriptionConstants.boxNeedles);
     final key = needle.id.isEmpty ? 'temp_${DateTime.now().millisecondsSinceEpoch}' : needle.id;
     await box.put(key, needle.toJson());
   }
 
   Future<void> _removeFromHive(String id) async {
+    if (kIsWeb) return;
     final box = Hive.box<Map>(SubscriptionConstants.boxNeedles);
     await box.delete(id);
   }
 
   Future<void> syncDirtyNeedles() async {
-    if (_uid.isEmpty) return;
+    if (kIsWeb || _uid.isEmpty) return;
     final box = Hive.box<Map>(SubscriptionConstants.boxNeedles);
     for (final key in box.keys) {
       final data = box.get(key);

@@ -1,0 +1,2 @@
+seller_uid,seller_name,title,description,price,accent_hex,image_type,is_official,is_sold_out,status,image_url,pdf_url
+official,moriknit,Simple socks,PDF pattern for cozy socks,4500,#C084FC,pattern,true,false,approved,https://example.com/pattern.jpg,https://example.com/pattern.pdf

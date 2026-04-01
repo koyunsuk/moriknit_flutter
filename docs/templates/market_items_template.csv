@@ -1,0 +1,2 @@
+seller_uid,seller_name,title,description,price,category,accent_hex,image_type,is_official,is_sold_out,status,image_url,pdf_url
+official,moriknit,Soft cotton yarn,Beginner friendly cotton yarn,12000,yarn,#F472B6,yarn,true,false,approved,https://example.com/yarn.jpg,

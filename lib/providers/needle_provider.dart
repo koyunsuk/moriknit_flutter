@@ -19,16 +19,20 @@ class NeedleInputNotifier extends StateNotifier<NeedleModel> {
 
   void setSize(double value) => state = state.copyWith(size: value);
   void setBrand(String value) => state = state.copyWith(brandName: value);
+  void setName(String value) => state = state.copyWith(name: value);
   void setMaterial(String value) => state = state.copyWith(material: value);
   void setType(String value) => state = state.copyWith(type: value);
   void setQuantity(int value) => state = state.copyWith(quantity: value);
   void setMemo(String value) => state = state.copyWith(memo: value);
+  void setPrice(int value) => state = state.copyWith(price: value);
+  void setPurchasePlace(String value) => state = state.copyWith(purchasePlace: value);
+  void setPurchaseDate(DateTime? value) => state = state.copyWith(purchaseDate: value);
 
   void load(NeedleModel needle) => state = needle;
   void reset(String uid) => state = NeedleModel.empty(uid: uid);
 
   String? get validationError {
-    if (state.size <= 0) return '바늘 사이즈를 선택해주세요.';
+    if (state.size < 0) return '바늘 사이즈를 선택해주세요.';
     return null;
   }
 }

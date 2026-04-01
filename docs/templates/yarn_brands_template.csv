@@ -1,0 +1,4 @@
+brand_id,name,country,website,notes,is_active,sort_order
+optional,required,optional,optional,optional,optional,optional
+sandnes_garn,Sandnes Garn,Norway,https://www.sandnes-garn.com,Core yarn brand,true,10
+,Malabrigo,Uruguay,https://malabrigoyarn.com,Hand dyed yarn,true,20

@@ -1,0 +1,4 @@
+brand_id,name,country,website,notes,is_active,sort_order
+optional,required,optional,optional,optional,optional,optional
+chiagoo,ChiaoGoo,China,https://www.chiaogoo.com,Red Lace and interchangeable needles,true,10
+,Seeknit,Japan,https://www.seeknit.com,Bamboo needle brand,true,20

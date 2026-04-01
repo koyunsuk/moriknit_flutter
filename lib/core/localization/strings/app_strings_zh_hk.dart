@@ -1,9 +1,7 @@
-﻿import 'base_app_strings.dart';
+﻿import 'app_strings_en.dart';
 
-class AppStringsZhHk extends BaseAppStrings {
+class AppStringsZhHk extends AppStringsEn {
   const AppStringsZhHk();
-
-  @override bool get isKorean => false;
   @override String get home => '主頁';
   @override String get projects => '項目';
   @override String get swatches => '織片';
@@ -74,3 +72,4 @@ class AppStringsZhHk extends BaseAppStrings {
   @override String get businessPlan => '商業方案';
   @override String get close => '關閉';
 }
+

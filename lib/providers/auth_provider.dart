@@ -1,4 +1,5 @@
-﻿import 'package:firebase_auth/firebase_auth.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/constants/subscription_constants.dart';
@@ -29,6 +30,33 @@ final currentUserProvider = StreamProvider<UserModel?>((ref) {
 
 final isLoggedInProvider = Provider<bool>((ref) {
   return ref.watch(authStateProvider).valueOrNull != null;
+});
+
+/// Firestore users/{uid}.isAdmin 필드를 실시간으로 읽습니다.
+final isAdminProvider = StreamProvider<bool>((ref) {
+  final authState = ref.watch(authStateProvider);
+  return authState.when(
+    data: (user) {
+      if (user == null) return Stream.value(false);
+      return FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .snapshots()
+          .map((doc) => (doc.data()?['isAdmin'] as bool?) ?? false);
+    },
+    loading: () => Stream.value(false),
+    error: (_, _) => Stream.value(false),
+  );
+});
+
+// 앱 전체에 관리자가 한 명도 없는지 확인 (최초 관리자 설정용)
+final hasAnyAdminProvider = FutureProvider<bool>((ref) async {
+  final snap = await FirebaseFirestore.instance
+      .collection('users')
+      .where('isAdmin', isEqualTo: true)
+      .limit(1)
+      .get();
+  return snap.docs.isNotEmpty;
 });
 
 final currentPlanProvider = Provider<String>((ref) {

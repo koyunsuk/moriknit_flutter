@@ -223,6 +223,7 @@ mixin _$CounterModel {
   String get uid => throw _privateConstructorUsedError;
   String get name => throw _privateConstructorUsedError;
   String get projectId => throw _privateConstructorUsedError;
+  String get projectStepId => throw _privateConstructorUsedError;
   int get stitchCount => throw _privateConstructorUsedError;
   int get rowCount => throw _privateConstructorUsedError;
   int get targetStitchCount => throw _privateConstructorUsedError;
@@ -249,6 +250,7 @@ abstract class $CounterModelCopyWith<$Res> {
       String uid,
       String name,
       String projectId,
+      String projectStepId,
       int stitchCount,
       int rowCount,
       int targetStitchCount,
@@ -276,6 +278,7 @@ class _$CounterModelCopyWithImpl<$Res, $Val extends CounterModel>
     Object? uid = null,
     Object? name = null,
     Object? projectId = null,
+    Object? projectStepId = null,
     Object? stitchCount = null,
     Object? rowCount = null,
     Object? targetStitchCount = null,
@@ -301,6 +304,10 @@ class _$CounterModelCopyWithImpl<$Res, $Val extends CounterModel>
       projectId: null == projectId
           ? _value.projectId
           : projectId // ignore: cast_nullable_to_non_nullable
+              as String,
+      projectStepId: null == projectStepId
+          ? _value.projectStepId
+          : projectStepId // ignore: cast_nullable_to_non_nullable
               as String,
       stitchCount: null == stitchCount
           ? _value.stitchCount
@@ -351,6 +358,7 @@ abstract class _$$CounterModelImplCopyWith<$Res>
       String uid,
       String name,
       String projectId,
+      String projectStepId,
       int stitchCount,
       int rowCount,
       int targetStitchCount,
@@ -376,6 +384,7 @@ class __$$CounterModelImplCopyWithImpl<$Res>
     Object? uid = null,
     Object? name = null,
     Object? projectId = null,
+    Object? projectStepId = null,
     Object? stitchCount = null,
     Object? rowCount = null,
     Object? targetStitchCount = null,
@@ -401,6 +410,10 @@ class __$$CounterModelImplCopyWithImpl<$Res>
       projectId: null == projectId
           ? _value.projectId
           : projectId // ignore: cast_nullable_to_non_nullable
+              as String,
+      projectStepId: null == projectStepId
+          ? _value.projectStepId
+          : projectStepId // ignore: cast_nullable_to_non_nullable
               as String,
       stitchCount: null == stitchCount
           ? _value.stitchCount
@@ -446,6 +459,7 @@ class _$CounterModelImpl implements _CounterModel {
       required this.uid,
       required this.name,
       this.projectId = '',
+      this.projectStepId = '',
       this.stitchCount = 0,
       this.rowCount = 0,
       this.targetStitchCount = 0,
@@ -468,6 +482,9 @@ class _$CounterModelImpl implements _CounterModel {
   @override
   @JsonKey()
   final String projectId;
+  @override
+  @JsonKey()
+  final String projectStepId;
   @override
   @JsonKey()
   final int stitchCount;
@@ -499,7 +516,7 @@ class _$CounterModelImpl implements _CounterModel {
 
   @override
   String toString() {
-    return 'CounterModel(id: $id, uid: $uid, name: $name, projectId: $projectId, stitchCount: $stitchCount, rowCount: $rowCount, targetStitchCount: $targetStitchCount, targetRowCount: $targetRowCount, marks: $marks, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty)';
+    return 'CounterModel(id: $id, uid: $uid, name: $name, projectId: $projectId, projectStepId: $projectStepId, stitchCount: $stitchCount, rowCount: $rowCount, targetStitchCount: $targetStitchCount, targetRowCount: $targetRowCount, marks: $marks, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty)';
   }
 
   @override
@@ -512,6 +529,8 @@ class _$CounterModelImpl implements _CounterModel {
             (identical(other.name, name) || other.name == name) &&
             (identical(other.projectId, projectId) ||
                 other.projectId == projectId) &&
+            (identical(other.projectStepId, projectStepId) ||
+                other.projectStepId == projectStepId) &&
             (identical(other.stitchCount, stitchCount) ||
                 other.stitchCount == stitchCount) &&
             (identical(other.rowCount, rowCount) ||
@@ -536,6 +555,7 @@ class _$CounterModelImpl implements _CounterModel {
       uid,
       name,
       projectId,
+      projectStepId,
       stitchCount,
       rowCount,
       targetStitchCount,
@@ -565,6 +585,7 @@ abstract class _CounterModel implements CounterModel {
       required final String uid,
       required final String name,
       final String projectId,
+      final String projectStepId,
       final int stitchCount,
       final int rowCount,
       final int targetStitchCount,
@@ -585,6 +606,8 @@ abstract class _CounterModel implements CounterModel {
   String get name;
   @override
   String get projectId;
+  @override
+  String get projectStepId;
   @override
   int get stitchCount;
   @override

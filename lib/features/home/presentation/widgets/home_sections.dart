@@ -18,7 +18,7 @@ class HomeAppBarTitle extends StatelessWidget {
           height: 28,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
-            gradient: const LinearGradient(colors: [C.pk, C.lv]),
+            gradient: LinearGradient(colors: [C.pk, C.lv]),
           ),
           child: const Center(
             child: Text('M', style: TextStyle(fontFamily: 'Fraunces', fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
@@ -70,7 +70,7 @@ class HomeWipSection extends ConsumerWidget {
               const SizedBox(height: 10),
               ClipRRect(
                 borderRadius: BorderRadius.circular(99),
-                child: LinearProgressIndicator(value: 0.62, minHeight: 5, backgroundColor: C.bd2, valueColor: const AlwaysStoppedAnimation(C.lm)),
+                child: LinearProgressIndicator(value: 0.62, minHeight: 5, backgroundColor: C.bd2, valueColor: AlwaysStoppedAnimation(C.lm)),
               ),
               const SizedBox(height: 6),
               Row(
@@ -174,7 +174,7 @@ class HomeCommunityFeed extends StatelessWidget {
               Container(width: 44, height: 44, decoration: BoxDecoration(color: [C.pkL, C.lvL][i], borderRadius: BorderRadius.circular(12)), child: Center(child: Text(initials[i], style: const TextStyle(fontSize: 22)))),
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(titles[i], style: T.bodyBold.copyWith(fontSize: 14)), Text(subtitles[i], style: T.caption)])),
-              Column(children: [const Icon(Icons.favorite_border, color: C.pk, size: 16), Text(['24', '8'][i], style: T.caption)]),
+              Column(children: [Icon(Icons.favorite_border, color: C.pk, size: 16), Text(['24', '8'][i], style: T.caption)]),
             ],
           ),
         )),

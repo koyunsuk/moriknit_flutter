@@ -1,12 +1,22 @@
-﻿import 'package:flutter/material.dart';
+import 'dart:math';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/localization/app_language.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/market_provider.dart';
+import '../../../providers/project_provider.dart';
+import '../../../providers/ui_copy_provider.dart';
+import '../../my/data/mori_service.dart';
+import '../../project/domain/project_model.dart';
 import '../domain/market_item.dart';
 
 class MarketScreen extends ConsumerWidget {
@@ -14,109 +24,106 @@ class MarketScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isKorean = ref.watch(appLanguageProvider).isKorean;
+    final t = ref.watch(appStringsProvider);
+    final language = ref.watch(appLanguageProvider);
+    final isKorean = language.isKorean;
+    final uiCopy = ref.watch(uiCopyProvider).valueOrNull;
+    final subtitle = resolveUiCopy(data: uiCopy, language: language, key: 'market_header_subtitle', fallback: t.marketHeaderSubtitle);
     final itemsAsync = ref.watch(marketItemsProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     final gates = ref.watch(featureGatesProvider);
-    final isDeveloper = _isDeveloper(user?.email);
-    final canCreate = user != null && (gates.isStarterOrAbove || isDeveloper);
+    final isAdmin = ref.watch(isAdminProvider).valueOrNull == true;
+    final canCreate = user != null && (gates.isStarterOrAbove || isAdmin);
+    final isWide = MediaQuery.of(context).size.width >= 1100;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          const BgOrbs(),
           SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 120),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  MoriBrandHeader(
-                    logoSize: 86,
-                    titleSize: 26,
-                    subtitle: isKorean ? '도안, 실, 뜨개 도구를 기록 흐름과 함께 연결하는 모리니트 마켓이에요.' : 'A market that connects patterns, yarn, and tools to your MoriKnit records.',
+            child: Column(
+              children: [
+                MoriPageHeaderShell(
+                  maxWidth: isWide ? 1380 : 920,
+                  padding: EdgeInsets.zero,
+                  child: MoriBrandHeader(
+                    subtitle: subtitle,
                   ),
-                  const SizedBox(height: 16),
-                  GlassCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+                ),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: isWide ? 1380 : 920),
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.storefront_rounded, color: C.lvD),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                isDeveloper
-                                    ? (isKorean ? '개발자 계정으로 상품 등록이 열려 있어요. 기본 상품과 함께 직접 판매 흐름을 테스트할 수 있어요.' : 'Developer access is enabled for seller testing.')
-                                    : (isKorean ? '기본 MoriKnit 상품은 바로 구입할 수 있고, 유료 구독자는 직접 상품을 등록할 수 있어요.' : 'Official items are ready to buy, and paid members can add listings.'),
-                                style: T.body,
-                              ),
-                            ),
-                          ],
+                      _MarketIntroCard(
+                          isKorean: isKorean,
+                          isAdmin: isAdmin,
+                          canCreate: canCreate,
+                          onCreate: canCreate ? () => _showCreateItemSheet(context, ref, user.uid, user.displayName ?? user.email ?? '') : null,
                         ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            const MoriChip(label: 'MoriKnit Picks', type: ChipType.pink),
-                            if (isDeveloper) MoriChip(label: isKorean ? '개발자 판매 가능' : 'Developer seller', type: ChipType.lime),
-                            MoriChip(label: canCreate ? (isKorean ? '상품 추가 가능' : 'Can create listing') : (isKorean ? '기본 상품 구매 가능' : 'Official items ready'), type: ChipType.white),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: canCreate ? () => _showCreateItemSheet(context, ref, user.uid, user.displayName ?? user.email ?? '') : null,
-                            icon: const Icon(Icons.add_business_rounded),
-                            label: Text(isKorean ? '상품 추가' : 'Add item'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SectionTitle(title: isKorean ? '추천 상품' : 'Recommended items'),
-                  const SizedBox(height: 10),
-                  itemsAsync.when(
+                      const SizedBox(height: 16),
+                      SectionTitle(title: isKorean ? '추천 상품' : 'Recommended items'),
+                      const SizedBox(height: 10),
+                      itemsAsync.when(
                     data: (items) {
                       if (items.isEmpty) {
-                        return GlassCard(
-                          child: Column(
-                            children: [
-                              Container(width: 84, height: 84, decoration: BoxDecoration(color: C.pkL, borderRadius: BorderRadius.circular(24)), child: const Icon(Icons.shopping_bag_rounded, color: C.pkD, size: 38)),
-                              const SizedBox(height: 14),
-                              Text(isKorean ? '등록된 상품이 아직 없어요' : 'No items listed yet', style: T.bodyBold),
-                              const SizedBox(height: 6),
-                              Text(isKorean ? '기본 상품을 먼저 준비해두고, 이후 셀러 상품이 함께 쌓이도록 구성했어요.' : 'Official items appear first, then seller listings join in.', style: T.caption.copyWith(color: C.mu), textAlign: TextAlign.center),
-                            ],
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 40),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(width: 72, height: 72, decoration: BoxDecoration(color: C.pkL, borderRadius: BorderRadius.circular(20)), child: Icon(Icons.shopping_bag_rounded, color: C.pkD, size: 36)),
+                                const SizedBox(height: 16),
+                                Text(isKorean ? '등록된 상품이 없어요' : 'No items yet', style: T.bodyBold),
+                                const SizedBox(height: 6),
+                                Text(isKorean ? '첫 번째 상품을 등록해보세요.' : 'Be the first to add an item.', style: T.caption.copyWith(color: C.mu)),
+                                if (canCreate) ...[
+                                  const SizedBox(height: 16),
+                                  ElevatedButton.icon(
+                                    onPressed: () => _showCreateItemSheet(context, ref, user.uid, user.displayName ?? user.email ?? ''),
+                                    icon: const Icon(Icons.add_rounded),
+                                    label: Text(isKorean ? '상품 추가하기' : 'Add item'),
+                                    style: ElevatedButton.styleFrom(backgroundColor: C.lv, foregroundColor: Colors.white),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
                         );
                       }
-                      return Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: items.map((item) => SizedBox(width: (MediaQuery.of(context).size.width - 42) / 2, child: _MarketCard(item: item))).toList(),
+                      return LayoutBuilder(
+                        builder: (context, constraints) {
+                          final cols = isWide ? 4 : (constraints.maxWidth > 500 ? 3 : 2);
+                          final cardW = (constraints.maxWidth - (cols - 1) * 10) / cols;
+                          return Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: items.map((item) => SizedBox(width: cardW, child: _MarketCard(item: item))).toList(),
+                          );
+                        },
                       );
                     },
-                    loading: () => const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator(color: C.lv))),
+                    loading: () => Center(child: Padding(padding: const EdgeInsets.all(24), child: CircularProgressIndicator(color: C.lv))),
                     error: (e, _) => Text('${isKorean ? '마켓을 불러오지 못했어요: ' : 'Market load failed: '}$e', style: T.body.copyWith(color: C.og)),
+                      ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
-  }
-
-  bool _isDeveloper(String? email) {
-    final value = (email ?? '').toLowerCase();
-    return value == 'koyunsuk@gmail.com' || value.endsWith('@moriknit.com');
   }
 
   Future<void> _showCreateItemSheet(BuildContext context, WidgetRef ref, String uid, String sellerName) async {
@@ -125,6 +132,12 @@ class MarketScreen extends ConsumerWidget {
     final descCtrl = TextEditingController();
     final priceCtrl = TextEditingController();
     String category = 'pattern';
+    bool isFree = true;
+    String? imageFilePath;
+    String? pdfFilePath;
+    final accentHex = ['#FA5BB4', '#B47EEB', '#A3E635', '#F472B6', '#60A5FA', '#34D399', '#FB923C', '#F9A8D4'][Random().nextInt(8)];
+
+    bool saving = false;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -135,56 +148,150 @@ class MarketScreen extends ConsumerWidget {
         padding: EdgeInsets.fromLTRB(20, 18, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
         child: StatefulBuilder(
           builder: (ctx, setState) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(isKorean ? '새 상품 추가' : 'Add new item', style: T.h3),
-                const SizedBox(height: 12),
-                TextField(controller: titleCtrl, decoration: InputDecoration(labelText: isKorean ? '상품 이름' : 'Title')),
-                const SizedBox(height: 10),
-                TextField(controller: descCtrl, maxLines: 3, decoration: InputDecoration(labelText: isKorean ? '설명' : 'Description')),
-                const SizedBox(height: 10),
-                TextField(controller: priceCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: isKorean ? '가격' : 'Price')),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  initialValue: category,
-                  decoration: InputDecoration(labelText: isKorean ? '카테고리' : 'Category'),
-                  items: [
-                    DropdownMenuItem(value: 'pattern', child: Text(isKorean ? '도안' : 'Pattern')),
-                    DropdownMenuItem(value: 'yarn', child: Text(isKorean ? '실' : 'Yarn')),
-                    DropdownMenuItem(value: 'tool', child: Text(isKorean ? '도구' : 'Tool')),
-                  ],
-                  onChanged: (value) => setState(() => category = value ?? 'pattern'),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      final price = int.tryParse(priceCtrl.text.trim()) ?? 0;
-                      if (titleCtrl.text.trim().isEmpty || price <= 0) return;
-                      final item = MarketItem(
-                        id: '',
-                        sellerUid: uid,
-                        sellerName: sellerName,
-                        title: titleCtrl.text.trim(),
-                        description: descCtrl.text.trim(),
-                        price: price,
-                        category: category,
-                        accentHex: _accentHex(category),
-                        imageType: category,
-                        isSoldOut: false,
-                        isOfficial: false,
-                        createdAt: DateTime.now(),
-                      );
-                      await ref.read(marketRepositoryProvider).createItem(item);
-                      if (ctx.mounted) Navigator.pop(ctx);
-                    },
-                    child: Text(isKorean ? '상품 등록' : 'Create item'),
+            return SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(isKorean ? '새 상품 추가' : 'Add new item', style: T.h3),
+                  const SizedBox(height: 12),
+                  TextField(controller: titleCtrl, decoration: InputDecoration(labelText: isKorean ? '상품 이름' : 'Title')),
+                  const SizedBox(height: 10),
+                  TextField(controller: descCtrl, maxLines: 3, decoration: InputDecoration(labelText: isKorean ? '설명' : 'Description')),
+                  const SizedBox(height: 10),
+                  // 무료/유료 선택
+                  Row(
+                    children: [
+                      _PriceTypeChip(
+                        label: isKorean ? '무료' : 'Free',
+                        selected: isFree,
+                        enabled: !saving,
+                        onTap: () => setState(() { isFree = true; priceCtrl.clear(); }),
+                      ),
+                      const SizedBox(width: 8),
+                      _PriceTypeChip(
+                        label: isKorean ? '유료' : 'Paid',
+                        selected: !isFree,
+                        enabled: !saving,
+                        onTap: () => setState(() => isFree = false),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                  if (!isFree) ...[
+                    const SizedBox(height: 10),
+                    TextField(controller: priceCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: isKorean ? '가격 (모리)' : 'Price (Mori)', hintText: '0')),
+                  ],
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: category,
+                    style: T.body.copyWith(color: C.tx),
+                    decoration: InputDecoration(labelText: isKorean ? '카테고리' : 'Category'),
+                    items: [
+                      DropdownMenuItem(value: 'pattern', child: Text(isKorean ? '도안' : 'Pattern', style: T.body)),
+                      DropdownMenuItem(value: 'yarn', child: Text(isKorean ? '실' : 'Yarn', style: T.body)),
+                      DropdownMenuItem(value: 'tool', child: Text(isKorean ? '도구' : 'Tool', style: T.body)),
+                    ],
+                    onChanged: (value) => setState(() => category = value ?? 'pattern'),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: saving ? null : () async {
+                        final result = await FilePicker.platform.pickFiles(type: FileType.image);
+                        if (result != null) setState(() => imageFilePath = result.files.single.path);
+                      },
+                      icon: Icon(Icons.image_rounded, size: 18),
+                      label: Text(imageFilePath != null ? (isKorean ? '✓ 이미지 선택됨' : '✓ Image selected') : (isKorean ? '이미지 선택' : 'Select image')),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: imageFilePath != null ? C.lmD : C.tx2,
+                        side: BorderSide(color: imageFilePath != null ? C.lmD : C.bd),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: saving ? null : () async {
+                        final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
+                        if (result != null) setState(() => pdfFilePath = result.files.single.path);
+                      },
+                      icon: Icon(Icons.description_rounded, size: 18),
+                      label: Text(pdfFilePath != null ? (isKorean ? '✓ PDF 선택됨' : '✓ PDF selected') : (isKorean ? 'PDF 선택' : 'Select PDF')),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: pdfFilePath != null ? C.lmD : C.tx2,
+                        side: BorderSide(color: pdfFilePath != null ? C.lmD : C.bd),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: saving ? null : () async {
+                        final price = isFree ? 0 : (int.tryParse(priceCtrl.text.trim()) ?? 0);
+                        // 필수항목 검증
+                        final missing = <String>[];
+                        if (titleCtrl.text.trim().isEmpty) missing.add(isKorean ? '상품 이름' : 'Title');
+                        if (!isFree && priceCtrl.text.trim().isEmpty) missing.add(isKorean ? '가격' : 'Price');
+                        if (missing.isNotEmpty) {
+                          showDialog(
+                            context: ctx,
+                            builder: (dCtx) => AlertDialog(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              title: Text(isKorean ? '필수 항목 누락' : 'Required fields missing', style: T.h3),
+                              content: Text(
+                                isKorean
+                                    ? '다음 항목을 입력해 주세요:\n${missing.map((e) => '• $e').join('\n')}'
+                                    : 'Please fill in:\n${missing.map((e) => '• $e').join('\n')}',
+                                style: T.body,
+                              ),
+                              actions: [TextButton(onPressed: () => Navigator.pop(dCtx), child: Text(isKorean ? '확인' : 'OK'))],
+                            ),
+                          );
+                          return;
+                        }
+                        setState(() => saving = true);
+                        try {
+                          await runWithMoriLoadingDialog<void>(
+                            ctx,
+                            message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+                            subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+                            task: () async {
+                              final item = MarketItem(
+                                id: '',
+                                sellerUid: uid,
+                                sellerName: sellerName,
+                                title: titleCtrl.text.trim(),
+                                description: descCtrl.text.trim(),
+                                price: price,
+                                category: category,
+                                accentHex: accentHex,
+                                imageType: category,
+                                isSoldOut: false,
+                                isOfficial: false,
+                                imageUrl: '',
+                                pdfUrl: '',
+                                createdAt: DateTime.now(),
+                                status: (!isFree && price > 0) ? 'pending' : 'approved',
+                              );
+                              await ref.read(marketRepositoryProvider).createItem(item, imageFile: imageFilePath, pdfFile: pdfFilePath);
+                            },
+                          );
+                          if (ctx.mounted) Navigator.pop(ctx);
+                        } catch (e) {
+                          if (ctx.mounted) showSaveErrorSnackBar(ctx, message: '${isKorean ? "오류: " : "Error: "}$e');
+                          if (ctx.mounted) setState(() => saving = false);
+                        }
+                      },
+                      child: saving
+                          ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white)))
+                          : Text(isKorean ? '상품 등록' : 'Create item'),
+                    ),
+                  ),
+                ],
+              ),
             );
           },
         ),
@@ -192,74 +299,24 @@ class MarketScreen extends ConsumerWidget {
     );
   }
 
-  String _accentHex(String category) {
-    switch (category) {
-      case 'yarn':
-        return '#A3E635';
-      case 'tool':
-        return '#C084FC';
-      default:
-        return '#F472B6';
-    }
-  }
 }
 
-class _MarketCard extends ConsumerWidget {
+class _MarketCard extends ConsumerStatefulWidget {
   final MarketItem item;
   const _MarketCard({required this.item});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isKorean = ref.watch(appLanguageProvider).isKorean;
-    final user = ref.watch(authStateProvider).valueOrNull;
-    final accent = _parseColor(item.accentHex);
+  ConsumerState<_MarketCard> createState() => _MarketCardState();
+}
 
-    return GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            height: 118,
-            decoration: BoxDecoration(color: accent.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(16)),
-            child: Stack(
-              children: [
-                Center(child: Icon(_icon(item.imageType), color: accent, size: 42)),
-                if (item.isOfficial)
-                  Positioned(
-                    top: 10,
-                    left: 10,
-                    child: MoriChip(label: isKorean ? '기본 상품' : 'Official', type: ChipType.white),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(item.title, style: T.bodyBold),
-          const SizedBox(height: 4),
-          Text(item.description, style: T.caption.copyWith(color: C.mu), maxLines: 2, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 8),
-          Text(item.sellerName, style: T.caption.copyWith(color: accent)),
-          const SizedBox(height: 4),
-          Text(isKorean ? '${item.price}원' : '${item.price} KRW', style: T.captionBold.copyWith(color: accent)),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: user == null ? null : () async {
-                await ref.read(marketRepositoryProvider).purchaseItem(buyerUid: user.uid, item: item);
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: accent, foregroundColor: Colors.white),
-              child: Text(isKorean ? '구입하기' : 'Buy now'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+class _MarketCardState extends ConsumerState<_MarketCard> {
+  bool _buyLoading = false;
+  bool _projectLoading = false;
 
-  Color _parseColor(String hex) {
-    final value = hex.replaceFirst('#', '');
-    return Color(int.parse('FF$value', radix: 16));
+  // 아이템 ID 해시 기반으로 현재 테마 색상에서 일관된 색상 반환
+  Color _accentColor(MarketItem item) {
+    final palette = [C.pk, C.lv, C.lm, C.lvD, C.pkD, C.lmD, C.og];
+    return palette[item.id.hashCode.abs() % palette.length];
   }
 
   IconData _icon(String type) {
@@ -272,4 +329,663 @@ class _MarketCard extends ConsumerWidget {
         return Icons.auto_stories_rounded;
     }
   }
+
+  Future<void> _onBuy(bool isKorean, dynamic user) async {
+    if (user == null) {
+      await showLoginRequiredDialog(context, isKorean: isKorean, fromRoute: Routes.market);
+      return;
+    }
+    if (_buyLoading) return;
+    setState(() => _buyLoading = true);
+    final messenger = ScaffoldMessenger.of(context);
+    bool insufficientMori = false;
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '구매하는 중입니다.' : 'Processing purchase...',
+        task: () async {
+          if (widget.item.price > 0) {
+            final success = await MoriService.spend(user.uid, amount: widget.item.price, reason: 'market_purchase:${widget.item.id}');
+            if (!success) {
+              insufficientMori = true;
+              return;
+            }
+          }
+          await ref.read(marketRepositoryProvider).purchaseItem(buyerUid: user.uid, item: widget.item);
+        },
+      );
+      if (insufficientMori) {
+        if (mounted) {
+          showDialog<void>(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: Text(isKorean ? '모리가 부족해요' : 'Insufficient Mori'),
+              content: Text(isKorean ? '모리가 부족합니다. 저장 활동이나 댓글로 모리를 획득해보세요!' : 'You need more Mori. Earn it by saving or commenting!'),
+              actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
+            ),
+          );
+        }
+        return;
+      }
+      if (mounted) showSavedSnackBar(messenger, message: isKorean ? '구매 완료!' : 'Purchase complete!');
+    } catch (_) {
+      if (mounted) showSaveErrorSnackBar(messenger, message: isKorean ? '구매에 실패했습니다.' : 'Purchase failed.');
+    } finally {
+      if (mounted) setState(() => _buyLoading = false);
+    }
+  }
+
+  Future<void> _onStartProject(bool isKorean, dynamic user) async {
+    if (user == null) {
+      await showLoginRequiredDialog(context, isKorean: isKorean, fromRoute: Routes.market);
+      return;
+    }
+    if (_projectLoading) return;
+    setState(() => _projectLoading = true);
+    try {
+      final saved = await runWithMoriLoadingDialog<dynamic>(
+        context,
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        task: () async {
+          final project = ProjectModel.empty(uid: user.uid).copyWith(
+            title: widget.item.title,
+            description: widget.item.description,
+          );
+          return await ref.read(projectRepositoryProvider).createProject(project);
+        },
+      );
+      if (mounted) {
+        showSavedSnackBar(context, message: isKorean ? '저장되었습니다.' : 'Saved.');
+        context.push('${Routes.projectList}/${saved.id}');
+      }
+    } catch (_) {
+      if (mounted) showSaveErrorSnackBar(context, message: isKorean ? '저장에 실패했습니다.' : 'Save failed.');
+    } finally {
+      if (mounted) setState(() => _projectLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isKorean = ref.watch(appLanguageProvider).isKorean;
+    final user = ref.watch(authStateProvider).valueOrNull;
+    final isAdmin = ref.watch(isAdminProvider).valueOrNull == true;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = isDark
+        ? HSLColor.fromColor(_accentColor(widget.item))
+            .withLightness(
+              (HSLColor.fromColor(_accentColor(widget.item)).lightness + 0.18).clamp(0.0, 0.95),
+            )
+            .toColor()
+        : _accentColor(widget.item);
+
+    return GlassCard(
+      onTap: () {
+        if (kIsWeb && user == null) {
+          showLoginRequiredDialog(
+            context,
+            isKorean: isKorean,
+            title: isKorean ? '상품 상세는 로그인 후 볼 수 있어요' : 'Item details require login',
+            fromRoute: Routes.market,
+          );
+          return;
+        }
+        _showItemDetail(context, widget.item, isKorean, user, accent, isAdmin || user?.uid == widget.item.sellerUid);
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              height: 118,
+              decoration: BoxDecoration(color: accent.withValues(alpha: isDark ? 0.22 : 0.14), borderRadius: BorderRadius.circular(16)),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (widget.item.imageUrl.isNotEmpty)
+                    Image.network(
+                      widget.item.imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => Center(child: Icon(_icon(widget.item.imageType), color: accent, size: 42)),
+                    )
+                  else
+                    Center(child: Icon(_icon(widget.item.imageType), color: accent, size: 42)),
+                  if (widget.item.isOfficial)
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: MoriChip(label: isKorean ? '기본 상품' : 'Official', type: ChipType.white),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(widget.item.title, style: T.bodyBold),
+          const SizedBox(height: 4),
+          Text(widget.item.description, style: T.caption.copyWith(color: C.mu), maxLines: 2, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 8),
+          Text(widget.item.sellerName, style: T.caption.copyWith(color: accent)),
+          const SizedBox(height: 4),
+          Text(widget.item.price == 0 ? (isKorean ? '무료 도안' : 'Free') : (isKorean ? '${widget.item.price}원' : '${widget.item.price} KRW'), style: T.captionBold.copyWith(color: accent)),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _buyLoading ? null : () => _onBuy(isKorean, user),
+              style: ElevatedButton.styleFrom(backgroundColor: accent, foregroundColor: Colors.white),
+              child: _buyLoading
+                  ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white)))
+                  : Text(isKorean ? '구입하기' : 'Buy now'),
+            ),
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _projectLoading ? null : () => _onStartProject(isKorean, user),
+              icon: _projectLoading
+                  ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(accent)))
+                  : Icon(Icons.fork_right_rounded, size: 16),
+              label: Text(isKorean ? '이걸로 프로젝트 시작' : 'Start project from this'),
+              style: OutlinedButton.styleFrom(foregroundColor: accent, side: BorderSide(color: accent.withValues(alpha: 0.4))),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showItemDetail(BuildContext context, MarketItem item, bool isKorean, dynamic user, Color accent, bool isAdmin) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => _ItemDetailSheet(item: item, isKorean: isKorean, user: user, accent: accent, isAdmin: isAdmin),
+    );
+  }
 }
+
+class _ItemDetailSheet extends ConsumerStatefulWidget {
+  final MarketItem item;
+  final bool isKorean;
+  final dynamic user;
+  final Color accent;
+  final bool isAdmin;
+
+  const _ItemDetailSheet({required this.item, required this.isKorean, required this.user, required this.accent, this.isAdmin = false});
+
+  @override
+  ConsumerState<_ItemDetailSheet> createState() => _ItemDetailSheetState();
+}
+
+class _ItemDetailSheetState extends ConsumerState<_ItemDetailSheet> {
+  bool _buyLoading = false;
+  bool _projectLoading = false;
+  bool _adminActionLoading = false;
+
+  IconData _icon(String type) {
+    switch (type) {
+      case 'yarn':
+        return Icons.blur_circular_rounded;
+      case 'tool':
+        return Icons.handyman_rounded;
+      default:
+        return Icons.auto_stories_rounded;
+    }
+  }
+
+  Future<void> _onBuy() async {
+    if (_buyLoading) return;
+    final isKorean = widget.isKorean;
+    if (widget.item.price > 0) {
+      final success = await MoriService.spend(widget.user.uid, amount: widget.item.price, reason: 'market_purchase:${widget.item.id}');
+      if (!success) {
+        if (mounted) {
+          showDialog<void>(
+            context: context,
+            builder: (dCtx) => AlertDialog(
+              title: Text(isKorean ? '모리가 부족해요' : 'Insufficient Mori'),
+              content: Text(isKorean ? '모리가 부족합니다. 저장 활동이나 댓글로 모리를 획득해보세요!' : 'You need more Mori. Earn it by saving or commenting!'),
+              actions: [TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('OK'))],
+            ),
+          );
+        }
+        return;
+      }
+    }
+    if (!mounted) return;
+    setState(() => _buyLoading = true);
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '구매하는 중입니다.' : 'Processing purchase...',
+        task: () async {
+          await ref.read(marketRepositoryProvider).purchaseItem(buyerUid: widget.user.uid, item: widget.item);
+        },
+      );
+      if (mounted) Navigator.pop(context);
+      if (mounted) showSavedSnackBar(context, message: isKorean ? '구매 완료!' : 'Purchase complete!');
+    } catch (_) {
+      if (mounted) showSaveErrorSnackBar(context, message: isKorean ? '구매에 실패했습니다.' : 'Purchase failed.');
+    } finally {
+      if (mounted) setState(() => _buyLoading = false);
+    }
+  }
+
+  Future<void> _onStartProject() async {
+    if (_projectLoading) return;
+    setState(() => _projectLoading = true);
+    try {
+      final saved = await runWithMoriLoadingDialog<dynamic>(
+        context,
+        message: widget.isKorean ? '저장하는 중입니다.' : 'Saving...',
+        task: () async {
+          final project = ProjectModel.empty(uid: widget.user.uid).copyWith(
+            title: widget.item.title,
+            description: widget.item.description,
+          );
+          return await ref.read(projectRepositoryProvider).createProject(project);
+        },
+      );
+      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        showSavedSnackBar(context, message: widget.isKorean ? '저장되었습니다.' : 'Saved.');
+        context.push('${Routes.projectList}/${saved.id}');
+      }
+    } catch (_) {
+      if (mounted) showSaveErrorSnackBar(context, message: widget.isKorean ? '저장에 실패했습니다.' : 'Save failed.');
+    } finally {
+      if (mounted) setState(() => _projectLoading = false);
+    }
+  }
+
+  Future<void> _onAdminDelete() async {
+    final isKorean = widget.isKorean;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(isKorean ? '상품 삭제' : 'Delete item', style: T.h3),
+        content: Text(
+          isKorean ? '이 상품을 삭제하시겠습니까?\n판매 기록이 있으면 삭제할 수 없습니다.' : 'Delete this item?\nCannot delete if sales records exist.',
+          style: T.body,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dCtx, false), child: Text(isKorean ? '취소' : 'Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, true),
+            child: Text(isKorean ? '삭제' : 'Delete', style: const TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (_adminActionLoading) return;
+    if (!mounted) return;
+    setState(() => _adminActionLoading = true);
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '삭제하는 중입니다.' : 'Deleting...',
+        task: () async {
+          await ref.read(marketRepositoryProvider).deleteItem(widget.item.id);
+        },
+      );
+      if (mounted) Navigator.pop(context);
+      if (mounted) showSavedSnackBar(context, message: isKorean ? '삭제되었습니다.' : 'Deleted.');
+    } catch (e) {
+      final isSold = e.toString().contains('sold');
+      if (mounted) showSaveErrorSnackBar(context, message: isSold ? (isKorean ? '판매 기록이 있어 삭제할 수 없습니다.' : 'Cannot delete: has sales records.') : (isKorean ? '삭제에 실패했습니다.' : 'Delete failed.'));
+    } finally {
+      if (mounted) setState(() => _adminActionLoading = false);
+    }
+  }
+
+  Future<void> _onAdminEdit() async {
+    final isKorean = widget.isKorean;
+    final item = widget.item;
+    final titleCtrl = TextEditingController(text: item.title);
+    final descCtrl = TextEditingController(text: item.description);
+    final priceCtrl = TextEditingController(text: item.price == 0 ? '' : item.price.toString());
+    String category = item.category;
+    bool isFree = item.price == 0;
+    bool saving = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(20, 18, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+        child: StatefulBuilder(
+          builder: (ctx, setModalState) => SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(isKorean ? '상품 수정' : 'Edit item', style: T.h3),
+                const SizedBox(height: 12),
+                TextField(controller: titleCtrl, decoration: InputDecoration(labelText: isKorean ? '상품 이름' : 'Title')),
+                const SizedBox(height: 10),
+                TextField(controller: descCtrl, maxLines: 3, decoration: InputDecoration(labelText: isKorean ? '설명' : 'Description')),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    _PriceTypeChip(
+                      label: isKorean ? '무료' : 'Free',
+                      selected: isFree,
+                      enabled: !saving,
+                      onTap: () => setModalState(() { isFree = true; priceCtrl.clear(); }),
+                    ),
+                    const SizedBox(width: 8),
+                    _PriceTypeChip(
+                      label: isKorean ? '유료' : 'Paid',
+                      selected: !isFree,
+                      enabled: !saving,
+                      onTap: () => setModalState(() => isFree = false),
+                    ),
+                  ],
+                ),
+                if (!isFree) ...[
+                  const SizedBox(height: 10),
+                  TextField(controller: priceCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: isKorean ? '가격 (원)' : 'Price (KRW)', hintText: '0')),
+                ],
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: category,
+                  decoration: InputDecoration(labelText: isKorean ? '카테고리' : 'Category'),
+                  items: [
+                    DropdownMenuItem(value: 'pattern', child: Text(isKorean ? '도안' : 'Pattern')),
+                    DropdownMenuItem(value: 'yarn', child: Text(isKorean ? '실' : 'Yarn')),
+                    DropdownMenuItem(value: 'tool', child: Text(isKorean ? '도구' : 'Tool')),
+                  ],
+                  onChanged: (value) => setModalState(() => category = value ?? 'pattern'),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: saving ? null : () async {
+                      if (titleCtrl.text.trim().isEmpty) return;
+                      setModalState(() => saving = true);
+                      try {
+                        await runWithMoriLoadingDialog<void>(
+                          ctx,
+                          message: isKorean ? '수정하는 중입니다.' : 'Updating...',
+                          task: () async {
+                            final updated = MarketItem(
+                              id: item.id,
+                              sellerUid: item.sellerUid,
+                              sellerName: item.sellerName,
+                              title: titleCtrl.text.trim(),
+                              description: descCtrl.text.trim(),
+                              price: isFree ? 0 : (int.tryParse(priceCtrl.text.trim()) ?? 0),
+                              category: category,
+                              accentHex: item.accentHex,
+                              imageType: item.imageType,
+                              isSoldOut: item.isSoldOut,
+                              isOfficial: item.isOfficial,
+                              imageUrl: item.imageUrl,
+                              pdfUrl: item.pdfUrl,
+                              status: item.status,
+                              createdAt: item.createdAt,
+                              viewCount: item.viewCount,
+                            );
+                            await ref.read(marketRepositoryProvider).updateItem(updated);
+                          },
+                        );
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (mounted) Navigator.pop(context);
+                        if (mounted) showSavedSnackBar(context, message: isKorean ? '수정되었습니다.' : 'Updated.');
+                      } catch (_) {
+                        if (ctx.mounted) showSaveErrorSnackBar(ctx, message: isKorean ? '수정에 실패했습니다.' : 'Update failed.');
+                        setModalState(() => saving = false);
+                      }
+                    },
+                    child: saving
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white)))
+                        : Text(isKorean ? '수정 저장' : 'Save changes'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext ctx) {
+    final item = widget.item;
+    final isKorean = widget.isKorean;
+    final accent = widget.accent;
+    final isAdmin = widget.isAdmin;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (_, scrollCtrl) => SingleChildScrollView(
+        controller: scrollCtrl,
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(width: 36, height: 4, margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(99))),
+            ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                height: 160,
+                width: double.infinity,
+                decoration: BoxDecoration(color: accent.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(20)),
+                child: item.imageUrl.isNotEmpty
+                    ? Image.network(
+                        item.imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => Center(child: Icon(_icon(item.imageType), color: accent, size: 64)),
+                      )
+                    : Center(child: Icon(_icon(item.imageType), color: accent, size: 64)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                if (item.isOfficial) ...[
+                  MoriChip(label: isKorean ? '기본 상품' : 'Official', type: ChipType.white),
+                  const SizedBox(width: 8),
+                ],
+                MoriChip(label: item.category, type: ChipType.lavender),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(item.title, style: T.h2),
+            const SizedBox(height: 6),
+            Text(item.sellerName, style: T.caption.copyWith(color: accent)),
+            const SizedBox(height: 12),
+            Text(item.description, style: T.body.copyWith(color: C.tx2, height: 1.5)),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Text(isKorean ? '가격' : 'Price', style: T.captionBold.copyWith(color: C.mu)),
+                const Spacer(),
+                Text(
+                  item.price == 0 ? (isKorean ? '무료 도안' : 'Free') : (isKorean ? '${item.price}원' : '${item.price} KRW'),
+                  style: T.bodyBold.copyWith(color: accent),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: widget.user == null || _buyLoading ? null : _onBuy,
+                style: ElevatedButton.styleFrom(backgroundColor: accent, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14)),
+                child: _buyLoading
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white)))
+                    : Text(isKorean ? '구입하기' : 'Buy now'),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: widget.user == null || _projectLoading ? null : _onStartProject,
+                icon: _projectLoading
+                    ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(accent)))
+                    : const Icon(Icons.fork_right_rounded, size: 16),
+                label: Text(isKorean ? '이걸로 프로젝트 시작' : 'Start project from this'),
+                style: OutlinedButton.styleFrom(foregroundColor: accent, side: BorderSide(color: accent.withValues(alpha: 0.4)), padding: const EdgeInsets.symmetric(vertical: 14)),
+              ),
+            ),
+            if (isAdmin) ...[
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _adminActionLoading ? null : _onAdminEdit,
+                      icon: const Icon(Icons.edit_rounded, size: 16),
+                      label: Text(isKorean ? '수정' : 'Edit'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: C.mu,
+                        side: BorderSide(color: C.bd),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _adminActionLoading ? null : _onAdminDelete,
+                      icon: _adminActionLoading
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.red)))
+                          : const Icon(Icons.delete_rounded, size: 16),
+                      label: Text(isKorean ? '삭제' : 'Delete'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        side: const BorderSide(color: Colors.red),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MarketIntroCard extends StatelessWidget {
+  final bool isKorean;
+  final bool isAdmin;
+  final bool canCreate;
+  final VoidCallback? onCreate;
+  const _MarketIntroCard({required this.isKorean, required this.isAdmin, required this.canCreate, this.onCreate});
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Icon(Icons.storefront_rounded, color: C.lvD, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: RichText(
+                  text: TextSpan(
+                    style: T.sm.copyWith(height: 1.6),
+                    children: isKorean
+                        ? [
+                            TextSpan(text: 'Pro', style: TextStyle(color: C.lv, fontWeight: FontWeight.w700)),
+                            const TextSpan(text: '·'),
+                            TextSpan(text: 'Business', style: TextStyle(color: C.lv, fontWeight: FontWeight.w700)),
+                            const TextSpan(text: ' 회원은 상품을 등록할 수 있습니다.\n일반 회원은 구매만 가능합니다.'),
+                          ]
+                        : [
+                            TextSpan(text: 'Pro', style: TextStyle(color: C.lv, fontWeight: FontWeight.w700)),
+                            const TextSpan(text: '·'),
+                            TextSpan(text: 'Business', style: TextStyle(color: C.lv, fontWeight: FontWeight.w700)),
+                            const TextSpan(text: ' members can list items.\nOthers can purchase only.'),
+                          ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onCreate,
+              icon: const Icon(Icons.add_business_rounded),
+              label: Text(isKorean ? '상품 추가' : 'Add item'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: canCreate ? C.lv : C.bd,
+                foregroundColor: canCreate ? Colors.white : C.mu,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PriceTypeChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _PriceTypeChip({
+    required this.label,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? C.lv : C.lvL,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? C.lv : C.lv.withValues(alpha: 0.20)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            color: selected ? Colors.white : C.lvD,
+          ),
+        ),
+      ),
+    );
+  }
+}
+

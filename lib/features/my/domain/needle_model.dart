@@ -13,10 +13,15 @@ class NeedleModel with _$NeedleModel {
     required String uid,
     required double size,
     @Default('') String brandName,
+    @Default('') String name,
     @Default('bamboo') String material,
     @Default('straight') String type,
     @Default(1) int quantity,
     @Default('') String memo,
+    @Default('') String photoUrl,
+    @Default(0) int price,
+    @Default('') String purchasePlace,
+    DateTime? purchaseDate,
     DateTime? createdAt,
     DateTime? updatedAt,
     @Default(false) bool isDirty,
@@ -41,7 +46,10 @@ class NeedleModel with _$NeedleModel {
 }
 
 extension NeedleModelExt on NeedleModel {
-  String get sizeDisplay => size % 1 == 0 ? '${size.toInt()}mm' : '${size}mm';
+  String get sizeDisplay {
+    if (size == 0.0) return '셋트';
+    return size % 1 == 0 ? '${size.toInt()}mm' : '${size}mm';
+  }
 
   String localizedMaterialLabel(bool isKorean) {
     switch (material) {
@@ -65,7 +73,9 @@ extension NeedleModelExt on NeedleModel {
       case 'circular':
         return isKorean ? '줄바늘' : 'Circular';
       case 'dpn':
-        return isKorean ? '양두바늘' : 'Double-pointed';
+        return isKorean ? '막대바늘' : 'Double-pointed';
+      case 'interchangeable':
+        return isKorean ? '조립식바늘' : 'Interchangeable';
       case 'cable':
         return isKorean ? '케이블 바늘' : 'Cable';
       default:

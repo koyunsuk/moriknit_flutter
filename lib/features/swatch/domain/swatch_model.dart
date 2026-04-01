@@ -11,6 +11,7 @@ class SwatchModel with _$SwatchModel {
   const factory SwatchModel({
     required String id,
     required String uid,
+    @Default('') String swatchName,
     @Default('') String yarnBrandId,
     @Default('') String yarnBrandName,
     @Default('') String yarnName,
@@ -39,6 +40,7 @@ class SwatchModel with _$SwatchModel {
     DateTime? archivedDate,
     DateTime? createdAt,
     DateTime? updatedAt,
+    @Default('') String projectId,
     @Default(false) bool isDirty,
   }) = _SwatchModel;
 
