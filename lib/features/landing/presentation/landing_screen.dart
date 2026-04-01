@@ -643,12 +643,12 @@ class _LandingFooter extends StatelessWidget {
                             spacing: 16,
                             children: [
                               TextButton(
-                                onPressed: () => launchUrl(Uri.parse('https://www.moriknit.com/terms'), mode: LaunchMode.externalApplication),
+                                onPressed: () => launchUrl(Uri.parse('https://www.moriknit.com/terms'), mode: LaunchMode.platformDefault),
                                 style: TextButton.styleFrom(foregroundColor: Colors.white54, padding: EdgeInsets.zero),
                                 child: const Text('이용약관', style: TextStyle(fontSize: 12)),
                               ),
                               TextButton(
-                                onPressed: () => launchUrl(Uri.parse('https://www.moriknit.com/privacy'), mode: LaunchMode.externalApplication),
+                                onPressed: () => launchUrl(Uri.parse('https://www.moriknit.com/privacy'), mode: LaunchMode.platformDefault),
                                 style: TextButton.styleFrom(foregroundColor: Colors.white54, padding: EdgeInsets.zero),
                                 child: const Text('개인정보처리방침', style: TextStyle(fontSize: 12)),
                               ),
