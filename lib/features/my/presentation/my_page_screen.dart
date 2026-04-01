@@ -20,6 +20,7 @@ import '../../../providers/project_provider.dart';
 import '../../../providers/swatch_provider.dart';
 import '../../../providers/theme_provider.dart';
 import '../../auth/domain/user_model.dart';
+import '../../yarn/presentation/yarn_list_screen.dart';
 import 'bug_report_sheet.dart';
 
 class MyPageScreen extends ConsumerWidget {
@@ -391,7 +392,7 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                       initialValue: language,
                       decoration: InputDecoration(
                         filled: true,
-                        fillColor: Colors.white.withValues(alpha: 0.84),
+                        fillColor: C.gx,
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: C.bd)),
                         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: C.bd)),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -517,6 +518,13 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                     title: Text(t.needles),
                     subtitle: Text(t.manageNeedles),
                     onTap: () => context.go('/my/needles'),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: Icon(Icons.collections_bookmark_outlined, color: C.lmD),
+                    title: Text(isKorean ? '나의 실 라이브러리' : 'My Yarn Library'),
+                    subtitle: Text(isKorean ? '보유 실 목록 관리' : 'Manage your yarn stash'),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const YarnListScreen())),
                   ),
                   const Divider(height: 1),
                   ListTile(

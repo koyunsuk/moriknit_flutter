@@ -16,8 +16,9 @@ import '../../../providers/editorial_provider.dart';
 import '../../../providers/market_provider.dart';
 import '../../../providers/post_provider.dart';
 import '../../../providers/project_provider.dart';
+import '../../../providers/course_provider.dart';
 import '../../../providers/ui_copy_provider.dart';
-import '../../admin/domain/admin_config.dart';
+import '../../course/presentation/course_screen.dart';
 import '../domain/editorial_post.dart';
 import 'editorial_screen.dart';
 
@@ -40,6 +41,13 @@ class HomeScreen extends ConsumerWidget {
         ? currentUser!.displayName
         : (currentUser?.email.isNotEmpty == true ? currentUser!.email.split('@').first : '');
 
+    final rawGreeting = isKorean
+        ? (adminConfig?.homeGreetingKo.isNotEmpty == true ? adminConfig!.homeGreetingKo : mobileSubtitle)
+        : (adminConfig?.homeGreetingEn.isNotEmpty == true ? adminConfig!.homeGreetingEn : mobileSubtitle);
+    final personalizedSubtitle = rawGreeting
+        .replaceAll('[사용자 이름]', userName)
+        .replaceAll('[userName]', userName);
+
     if (kIsWeb) {
       return _WebHomeLayout(
         t: t,
@@ -58,7 +66,7 @@ class HomeScreen extends ConsumerWidget {
             MoriPageHeaderShell(
               child: MoriWideHeader(
                 title: t.home,
-                subtitle: mobileSubtitle,
+                subtitle: personalizedSubtitle,
               ),
             ),
             Expanded(
@@ -105,6 +113,16 @@ class HomeScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 10),
                     _CommunityPreview(isKorean: isKorean),
+                    const SizedBox(height: 18),
+                    SectionTitle(
+                      title: isKorean ? '다른사람들이 많이 본 영상' : 'Popular Videos',
+                      trailing: GestureDetector(
+                        onTap: () => context.push(Routes.toolsCourse),
+                        child: Text(isKorean ? '더보기' : 'More', style: T.caption.copyWith(color: C.lvD)),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    const _PopularCourseSection(),
                     const SizedBox(height: 18),
                     SectionTitle(title: isKorean ? '오늘의 Knitting 소식' : "Today's Knitting News"),
                     const SizedBox(height: 10),
@@ -186,6 +204,16 @@ class _WebHomeLayout extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     _LatestPatternsPreview(isKorean: isKorean),
+                    const SizedBox(height: 20),
+                    SectionTitle(
+                      title: isKorean ? '다른사람들이 많이 본 영상' : 'Popular Videos',
+                      trailing: GestureDetector(
+                        onTap: () => context.push(Routes.toolsCourse),
+                        child: Text(isKorean ? '더보기' : 'More', style: T.caption.copyWith(color: C.lvD)),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    const _PopularCourseSection(),
                     const SizedBox(height: 20),
                     SectionTitle(title: isKorean ? '오늘의 Knitting 소식' : "Today's Knitting News"),
                     const SizedBox(height: 10),
@@ -999,6 +1027,125 @@ class _LatestPatternsPreviewState extends ConsumerState<_LatestPatternsPreview> 
       },
       loading: () => Center(child: CircularProgressIndicator(color: C.lmD)),
       error: (_, _) => const SizedBox.shrink(),
+    );
+  }
+}
+
+// ── 인기 강의 섹션 ──────────────────────────────────────────
+class _PopularCourseSection extends ConsumerWidget {
+  const _PopularCourseSection();
+
+  String? _videoId(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return null;
+    if (uri.host.contains('youtu.be')) return uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+    return uri.queryParameters['v'];
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isKorean = ref.watch(appLanguageProvider).isKorean;
+    final coursesAsync = ref.watch(randomCoursePicksProvider);
+
+    return coursesAsync.when(
+      loading: () => const SizedBox(height: 80, child: Center(child: CircularProgressIndicator())),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (courses) {
+        if (courses.isEmpty) return const SizedBox.shrink();
+        return Column(
+          children: courses.map((item) {
+            final videoId = _videoId(item.videoUrl);
+            final thumbUrl = videoId != null ? 'https://img.youtube.com/vi/$videoId/mqdefault.jpg' : '';
+            return GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CourseDetailScreen(item: item, isKorean: isKorean),
+                ),
+              ),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(
+                  color: C.gx,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: C.bd),
+                ),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(14),
+                        bottomLeft: Radius.circular(14),
+                      ),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          if (thumbUrl.isNotEmpty)
+                            Image.network(
+                              thumbUrl,
+                              width: 100,
+                              height: 70,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, e, stack) => Container(
+                                width: 100, height: 70,
+                                color: C.lvL,
+                                child: Icon(Icons.play_circle_outline_rounded, color: C.lvD, size: 28),
+                              ),
+                            )
+                          else
+                            Container(
+                              width: 100, height: 70,
+                              color: C.lvL,
+                              child: Icon(Icons.play_circle_outline_rounded, color: C.lvD, size: 28),
+                            ),
+                          Container(
+                            width: 30, height: 30,
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.5),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 18),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: C.lvL,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(item.category, style: T.caption.copyWith(color: C.lvD, fontWeight: FontWeight.w700)),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              isKorean ? item.title : (item.titleEn.isNotEmpty ? item.titleEn : item.title),
+                              style: T.bodyBold,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.only(right: 8),
+                      child: Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        );
+      },
     );
   }
 }
