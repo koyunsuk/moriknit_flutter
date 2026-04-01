@@ -18,7 +18,6 @@ import '../../../providers/post_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/course_provider.dart';
 import '../../../providers/ui_copy_provider.dart';
-import '../../course/presentation/course_screen.dart';
 import '../domain/editorial_post.dart';
 import 'editorial_screen.dart';
 
@@ -1057,12 +1056,13 @@ class _PopularCourseSection extends ConsumerWidget {
             final videoId = _videoId(item.videoUrl);
             final thumbUrl = videoId != null ? 'https://img.youtube.com/vi/$videoId/mqdefault.jpg' : '';
             return GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => CourseDetailScreen(item: item, isKorean: isKorean),
-                ),
-              ),
+              onTap: () {
+                if (videoId != null) {
+                  launchUrl(Uri.parse('https://www.youtube.com/watch?v=$videoId'), mode: LaunchMode.externalApplication);
+                } else if (item.videoUrl.isNotEmpty) {
+                  launchUrl(Uri.parse(item.videoUrl), mode: LaunchMode.externalApplication);
+                }
+              },
               child: Container(
                 margin: const EdgeInsets.only(bottom: 10),
                 decoration: BoxDecoration(

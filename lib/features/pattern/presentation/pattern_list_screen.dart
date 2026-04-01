@@ -50,7 +50,7 @@ class PatternListScreen extends ConsumerWidget {
                             title: isKorean ? '아직 도안이 없어요' : 'No patterns yet',
                             subtitle: isKorean ? '나만의 도안을 만들어보세요.' : 'Create your own pattern.',
                             buttonLabel: isKorean ? '새 도안 만들기' : 'Create new',
-                            onAction: () => context.push(Routes.toolsPattern),
+                            onAction: () => _showPatternStartSheet(context, ref),
                           );
                         }
                         return Column(
@@ -65,7 +65,7 @@ class PatternListScreen extends ConsumerWidget {
                                   ),
                                 ),
                                 TextButton.icon(
-                                  onPressed: () => context.push(Routes.toolsPattern),
+                                  onPressed: () => _showPatternStartSheet(context, ref),
                                   icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
                                   label: Text(isKorean ? '새 도안' : 'New pattern'),
                                 ),
@@ -76,8 +76,8 @@ class PatternListScreen extends ConsumerWidget {
                               chart: p,
                               isKorean: isKorean,
                               onTap: () => context.push('${Routes.toolsPattern}/${p.id}'),
-
                               onDelete: () => _confirmDelete(context, ref, p, isKorean),
+                              onDuplicate: () => _confirmDuplicate(context, ref, p, isKorean),
                             )),
                           ],
                         );
@@ -90,6 +90,135 @@ class PatternListScreen extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _confirmDuplicate(BuildContext context, WidgetRef ref, PatternChart chart, bool isKorean) async {
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '복사하는 중입니다.' : 'Duplicating...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () => ref.read(patternRepositoryProvider).duplicate(chart),
+      );
+      if (context.mounted) {
+        showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '복사됐어요.' : 'Duplicated.');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+      }
+    }
+  }
+
+  Future<void> _showPatternStartSheet(BuildContext context, WidgetRef ref) async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        final scrollCtrl = ScrollController();
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+          child: ListView(
+            controller: scrollCtrl,
+            shrinkWrap: true,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: C.bd2,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Text(isKorean ? '도안 만들기' : 'Create Pattern', style: T.h3),
+              const SizedBox(height: 16),
+              GlassCard(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push(Routes.toolsPattern);
+                },
+                child: Row(children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: C.lv.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(Icons.photo_library_rounded, color: C.lv),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isKorean ? '사진에서 만들기' : 'From photo',
+                          style: T.bodyBold,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          isKorean ? '갤러리나 카메라로 사진을 찍어요' : 'Take or pick a photo',
+                          style: T.caption.copyWith(color: C.mu),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: C.mu),
+                ]),
+              ),
+              const SizedBox(height: 10),
+              GlassCard(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  showSavedSnackBar(
+                    context,
+                    message: isKorean ? '준비 중이에요.' : 'Coming soon.',
+                  );
+                },
+                child: Row(children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: C.og.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(Icons.picture_as_pdf_rounded, color: C.og),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isKorean ? 'PDF에서 만들기' : 'From PDF',
+                          style: T.bodyBold,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          isKorean ? 'PDF 파일에서 도안을 가져와요' : 'Import pattern from PDF',
+                          style: T.caption.copyWith(color: C.mu),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: C.mu),
+                ]),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -139,7 +268,8 @@ class _PatternRow extends StatelessWidget {
   final bool isKorean;
   final VoidCallback onTap;
   final VoidCallback onDelete;
-  const _PatternRow({required this.chart, required this.isKorean, required this.onTap, required this.onDelete});
+  final VoidCallback onDuplicate;
+  const _PatternRow({required this.chart, required this.isKorean, required this.onTap, required this.onDelete, required this.onDuplicate});
 
   @override
   Widget build(BuildContext context) {
@@ -173,11 +303,16 @@ class _PatternRow extends StatelessWidget {
           onSelected: (value) {
             if (value == 'edit') onTap();
             if (value == 'delete') onDelete();
+            if (value == 'copy') onDuplicate();
           },
           itemBuilder: (_) => [
             PopupMenuItem(
               value: 'edit',
               child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: C.lvD), const SizedBox(width: 8), const Text('수정')]),
+            ),
+            PopupMenuItem(
+              value: 'copy',
+              child: Row(children: [Icon(Icons.copy_rounded, size: 18, color: C.lvD), const SizedBox(width: 8), const Text('복사')]),
             ),
             PopupMenuItem(
               value: 'delete',
