@@ -7,6 +7,8 @@ import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../providers/template_provider.dart';
+import '../domain/user_template.dart';
 
 // ---------------------------------------------------------------------------
 // 기본 템플릿 데이터 (하드코딩 — 추후 Firestore 연동 예정)
@@ -221,24 +223,117 @@ class TemplateListScreen extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  GlassCard(
-                    child: MoriEmptyState(
-                      icon: Icons.folder_special_rounded,
-                      iconColor: C.lv,
-                      title: isKorean ? '아직 커스텀 템플릿이 없어요' : 'No custom templates yet',
-                      subtitle: isKorean
-                          ? "'새 템플릿' 버튼을 눌러 나만의 단계를 만들어보세요."
-                          : "Tap 'New Template' to create your own steps.",
-                      buttonLabel: isKorean ? '새 템플릿 만들기' : 'Create Template',
-                      onAction: () => context.push(Routes.templateEditor),
-                    ),
-                  ),
+                  _CustomTemplateSection(isKorean: isKorean),
                 ],
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 커스텀 템플릿 섹션 (Firestore 연동)
+// ---------------------------------------------------------------------------
+class _CustomTemplateSection extends ConsumerWidget {
+  final bool isKorean;
+  const _CustomTemplateSection({required this.isKorean});
+
+  Future<void> _delete(BuildContext context, WidgetRef ref, UserTemplate tmpl) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isKorean ? '템플릿 삭제' : 'Delete template', style: T.h3),
+        content: Text(isKorean ? '"${tmpl.title}"을 삭제할까요?' : 'Delete "${tmpl.title}"?', style: T.body),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(isKorean ? '취소' : 'Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade400, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(isKorean ? '삭제' : 'Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true && context.mounted) {
+      try {
+        await runWithMoriLoadingDialog<void>(
+          context,
+          message: isKorean ? '삭제하는 중입니다.' : 'Deleting...',
+          subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+          task: () => ref.read(templateRepositoryProvider).delete(tmpl.id),
+        );
+        if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '삭제됐어요.' : 'Deleted.');
+      } catch (e) {
+        if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final templatesAsync = ref.watch(userTemplateListProvider);
+    return templatesAsync.when(
+      loading: () => GlassCard(
+        child: Center(child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: CircularProgressIndicator(color: C.lv),
+        )),
+      ),
+      error: (e, _) => GlassCard(child: Text('$e', style: T.caption.copyWith(color: C.og))),
+      data: (templates) {
+        if (templates.isEmpty) {
+          return GlassCard(
+            child: MoriEmptyState(
+              icon: Icons.folder_special_rounded,
+              iconColor: C.lv,
+              title: isKorean ? '아직 커스텀 템플릿이 없어요' : 'No custom templates yet',
+              subtitle: isKorean ? "'새 템플릿' 버튼을 눌러 나만의 단계를 만들어보세요." : "Tap 'New Template' to create your own steps.",
+              buttonLabel: isKorean ? '새 템플릿 만들기' : 'Create Template',
+              onAction: () => context.push(Routes.templateEditor),
+            ),
+          );
+        }
+        return GlassCard(
+          child: Column(
+            children: templates.map((tmpl) => Container(
+              margin: const EdgeInsets.only(bottom: 4),
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                leading: Container(
+                  width: 42, height: 42,
+                  decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+                  child: Icon(Icons.folder_special_rounded, color: C.lvD, size: 20),
+                ),
+                title: Text(tmpl.title, style: T.bodyBold),
+                subtitle: Text(
+                  isKorean ? '${tmpl.stepTitles.length}개 단계' : '${tmpl.stepTitles.length} steps',
+                  style: T.caption.copyWith(color: C.mu),
+                ),
+                trailing: PopupMenuButton<String>(
+                  icon: Icon(Icons.more_vert_rounded, color: C.mu, size: 22),
+                  onSelected: (value) {
+                    if (value == 'edit') {
+                      context.push(Routes.templateEditor, extra: {
+                        'templateId': tmpl.id,
+                        'title': tmpl.title,
+                        'steps': tmpl.stepTitles,
+                      });
+                    }
+                    if (value == 'delete') _delete(context, ref, tmpl);
+                  },
+                  itemBuilder: (_) => [
+                    PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: C.lvD), const SizedBox(width: 8), Text(isKorean ? '수정' : 'Edit')])),
+                    PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline_rounded, size: 18, color: C.og), const SizedBox(width: 8), Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og))])),
+                  ],
+                ),
+              ),
+            )).toList(),
+          ),
+        );
+      },
     );
   }
 }
