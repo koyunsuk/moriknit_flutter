@@ -29,13 +29,16 @@
 
   <title>MoriKnit — 뜨개 기록의 모든 것</title>
   <link rel="manifest" href="manifest.json">
+  <!-- Privacy & Terms for Google OAuth verification -->
+  <link rel="privacy-policy" href="/privacy">
+  <link rel="terms-of-service" href="/terms">
 </head>
 <body>
-  <!-- Static links for Google OAuth verification crawlers -->
-  <div style="display:none">
-    <a href="https://www.moriknit.com/privacy">개인정보처리방침</a>
-    <a href="https://www.moriknit.com/terms">이용약관</a>
-  </div>
+  <!-- Static footer for Google OAuth / crawler verification -->
+  <footer style="position:fixed;bottom:0;left:0;right:0;padding:6px 16px;font-size:11px;color:#aaa;background:transparent;z-index:0;pointer-events:auto;">
+    <a href="/privacy" style="color:#aaa;margin-right:12px;">개인정보처리방침</a>
+    <a href="/terms" style="color:#aaa;">이용약관</a>
+  </footer>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
