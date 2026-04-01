@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -642,12 +643,12 @@ class _LandingFooter extends StatelessWidget {
                             spacing: 16,
                             children: [
                               TextButton(
-                                onPressed: () {},
+                                onPressed: () => launchUrl(Uri.parse('https://www.moriknit.com/terms'), mode: LaunchMode.externalApplication),
                                 style: TextButton.styleFrom(foregroundColor: Colors.white54, padding: EdgeInsets.zero),
                                 child: const Text('이용약관', style: TextStyle(fontSize: 12)),
                               ),
                               TextButton(
-                                onPressed: () {},
+                                onPressed: () => launchUrl(Uri.parse('https://www.moriknit.com/privacy'), mode: LaunchMode.externalApplication),
                                 style: TextButton.styleFrom(foregroundColor: Colors.white54, padding: EdgeInsets.zero),
                                 child: const Text('개인정보처리방침', style: TextStyle(fontSize: 12)),
                               ),

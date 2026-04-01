@@ -475,13 +475,13 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                     ListTile(
                       leading: Icon(Icons.description_outlined, color: C.mu),
                       title: Text(isKorean ? '이용약관' : 'Terms of service'),
-                      onTap: () => launchUrl(Uri.parse('https://moriknit-ceea9.web.app/terms.html'), mode: LaunchMode.externalApplication),
+                      onTap: () => launchUrl(Uri.parse('https://www.moriknit.com/terms'), mode: LaunchMode.externalApplication),
                     ),
                     Divider(height: 1, color: Colors.grey.shade100),
                     ListTile(
                       leading: Icon(Icons.privacy_tip_outlined, color: C.mu),
                       title: Text(isKorean ? '개인정보처리방침' : 'Privacy policy'),
-                      onTap: () => launchUrl(Uri.parse('https://moriknit-ceea9.web.app/privacy.html'), mode: LaunchMode.externalApplication),
+                      onTap: () => launchUrl(Uri.parse('https://www.moriknit.com/privacy'), mode: LaunchMode.externalApplication),
                     ),
                     Divider(height: 1, color: Colors.grey.shade100),
                     ListTile(

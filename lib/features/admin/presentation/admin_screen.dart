@@ -293,7 +293,7 @@ class _AdminConsoleState extends State<_AdminConsole> {
                     _AdminSidebarUtil(
                       icon: Icons.open_in_new_rounded,
                       label: '앱으로 가기',
-                      onTap: () => launchUrl(Uri.parse('https://moriknit-ceea9.web.app'), mode: LaunchMode.externalApplication),
+                      onTap: () => launchUrl(Uri.parse('https://www.moriknit.com'), mode: LaunchMode.externalApplication),
                     ),
                     _AdminSidebarUtil(
                       icon: Icons.logout_rounded,
