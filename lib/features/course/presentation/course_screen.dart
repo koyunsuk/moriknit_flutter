@@ -53,13 +53,6 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
 
     return Scaffold(
       backgroundColor: C.bg,
-      floatingActionButton: user != null
-          ? FloatingActionButton(
-              onPressed: () => _showAddClassSheet(context, ref, isKorean),
-              backgroundColor: C.lv,
-              child: const Icon(Icons.add_rounded, color: Colors.white),
-            )
-          : null,
       body: SafeArea(
         child: Column(
           children: [
@@ -67,15 +60,24 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
               child: MoriWideHeader(
                 title: isKorean ? '클라스' : 'Class',
                 subtitle: isKorean ? '유튜브 링크로 뜨개 강의를 모아두는 임시 보드예요.' : 'A temporary board for knitting lessons with YouTube links.',
+                trailing: user != null
+                    ? [
+                        TextButton.icon(
+                          onPressed: () => _showCourseStartSheet(context, ref, isKorean),
+                          icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+                          label: Text(isKorean ? '강의 추가' : 'Add class'),
+                        ),
+                      ]
+                    : null,
               ),
             ),
             Expanded(
               child: coursesAsync.when(
                 loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
-                error: (_, _) => _CourseFallback(isKorean: isKorean, canAdd: user != null, onAdd: () => _showAddClassSheet(context, ref, isKorean)),
+                error: (_, _) => _CourseFallback(isKorean: isKorean, canAdd: user != null, onAdd: () => _showCourseStartSheet(context, ref, isKorean)),
                 data: (courses) {
                   if (courses.isEmpty) {
-                    return _CourseFallback(isKorean: isKorean, canAdd: user != null, onAdd: () => _showAddClassSheet(context, ref, isKorean));
+                    return _CourseFallback(isKorean: isKorean, canAdd: user != null, onAdd: () => _showCourseStartSheet(context, ref, isKorean));
                   }
                   final filtered = _query.isEmpty
                       ? courses
@@ -170,6 +172,116 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => CourseDetailScreen(item: item, isKorean: isKorean),
     ));
+  }
+
+  Future<void> _showCourseStartSheet(BuildContext context, WidgetRef ref, bool isKorean) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        final scrollCtrl = ScrollController();
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+          child: ListView(
+            controller: scrollCtrl,
+            shrinkWrap: true,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: C.bd2,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Text(isKorean ? '클라스 추가' : 'Add class', style: T.h3),
+              const SizedBox(height: 16),
+              GlassCard(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showAddClassSheet(context, ref, isKorean);
+                },
+                child: Row(children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: C.lv.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(Icons.video_library_rounded, color: C.lv),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isKorean ? '내 동영상 직접 올리기' : 'Add via video link',
+                          style: T.bodyBold,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          isKorean ? 'YouTube 링크로 추가해요' : 'Add with YouTube link',
+                          style: T.caption.copyWith(color: C.mu),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: C.mu),
+                ]),
+              ),
+              const SizedBox(height: 10),
+              GlassCard(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  showSavedSnackBar(
+                    context,
+                    message: isKorean ? '준비 중이에요.' : 'Coming soon.',
+                  );
+                },
+                child: Row(children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: C.pk.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(Icons.mic_rounded, color: C.pk),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isKorean ? '녹음파일 올리기' : 'Upload audio',
+                          style: T.bodyBold,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          isKorean ? '녹음 파일을 직접 업로드해요' : 'Upload your recording',
+                          style: T.caption.copyWith(color: C.mu),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: C.mu),
+                ]),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _showAddClassSheet(BuildContext context, WidgetRef ref, bool isKorean) async {
