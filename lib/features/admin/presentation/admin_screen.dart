@@ -155,6 +155,26 @@ final _dataHealthProvider = FutureProvider<Map<String, int>>((ref) async {
   };
 });
 
+// ── 어드민 네비게이션 아이템 (그룹 헤더 + 탭) ────────────────────────────────
+class _AdminNavItem {
+  final String? groupLabel;
+  final IconData? icon;
+  final String label;
+  final Color color;
+  final int? tabIndex;
+
+  const _AdminNavItem.tab({required int index, required this.icon, required this.label, required this.color})
+      : groupLabel = null,
+        tabIndex = index;
+
+  const _AdminNavItem.group({required this.label, required this.color})
+      : groupLabel = label,
+        icon = null,
+        tabIndex = null;
+
+  bool get isGroup => groupLabel != null;
+}
+
 class AdminScreen extends ConsumerWidget {
   const AdminScreen({super.key});
 
@@ -217,22 +237,29 @@ class _AdminConsole extends StatefulWidget {
 class _AdminConsoleState extends State<_AdminConsole> {
   int _selectedIndex = 0;
 
-  // (icon, label, accentColor)
-  static const _navItems = [
-    (Icons.dashboard_rounded,     '대시보드',    Color(0xFFA3E635)),  // lime
-    (Icons.people_rounded,        '회원',        Color(0xFFB47EEB)),  // lavender
-    (Icons.storefront_rounded,    '마켓상품',    Color(0xFFB47EEB)),  // lavender
-    (Icons.auto_fix_high_rounded, '도안목록',    Color(0xFFF472B6)),  // pink
-    (Icons.menu_book_rounded,     '뜨개백과',    Color(0xFFF472B6)),  // pink
-    (Icons.forum_rounded,         '커뮤니티',    Color(0xFF60A5FA)),  // blue
-    (Icons.grass_rounded,         '실 브랜드',   Color(0xFF4ADE80)),  // green
-    (Icons.straighten_rounded,    '바늘 브랜드', Color(0xFF4ADE80)),  // green
-    (Icons.palette_rounded,       '스와치',      Color(0xFFFBBF24)),  // yellow
-    (Icons.folder_copy_rounded,   '프로젝트',    Color(0xFFFBBF24)),  // yellow
-    (Icons.text_fields_rounded,   '문구관리',    Color(0xFF94A3B8)),  // slate
-    (Icons.bug_report_rounded,    '버그리포트',  Color(0xFFFB7185)),  // rose
-    (Icons.settings_rounded,      '설정',        Color(0xFF94A3B8)),  // slate
-    (Icons.newspaper_rounded,     '에디토리얼',  Color(0xFF38BDF8)),  // sky
+  static final _navItems = [
+    _AdminNavItem.tab(index: 0, icon: Icons.dashboard_rounded, label: '대시보드', color: Color(0xFFA3E635)),
+
+    _AdminNavItem.group(label: '뜨개 자료', color: Color(0xFF4ADE80)),
+    _AdminNavItem.tab(index: 1, icon: Icons.menu_book_rounded, label: '뜨개백과', color: Color(0xFF4ADE80)),
+    _AdminNavItem.tab(index: 2, icon: Icons.grass_rounded, label: '실 브랜드', color: Color(0xFF4ADE80)),
+    _AdminNavItem.tab(index: 3, icon: Icons.straighten_rounded, label: '바늘 브랜드', color: Color(0xFF4ADE80)),
+
+    _AdminNavItem.group(label: '사용자 데이터', color: Color(0xFFB47EEB)),
+    _AdminNavItem.tab(index: 4, icon: Icons.people_rounded, label: '회원', color: Color(0xFFB47EEB)),
+    _AdminNavItem.tab(index: 5, icon: Icons.auto_fix_high_rounded, label: '도안목록', color: Color(0xFFB47EEB)),
+    _AdminNavItem.tab(index: 6, icon: Icons.palette_rounded, label: '스와치', color: Color(0xFFB47EEB)),
+    _AdminNavItem.tab(index: 7, icon: Icons.folder_copy_rounded, label: '프로젝트', color: Color(0xFFB47EEB)),
+
+    _AdminNavItem.group(label: '콘텐츠', color: Color(0xFFF472B6)),
+    _AdminNavItem.tab(index: 8, icon: Icons.storefront_rounded, label: '마켓상품', color: Color(0xFFF472B6)),
+    _AdminNavItem.tab(index: 9, icon: Icons.forum_rounded, label: '커뮤니티', color: Color(0xFFF472B6)),
+
+    _AdminNavItem.group(label: '운영 지원', color: Color(0xFF94A3B8)),
+    _AdminNavItem.tab(index: 10, icon: Icons.text_fields_rounded, label: '문구관리', color: Color(0xFF94A3B8)),
+    _AdminNavItem.tab(index: 11, icon: Icons.bug_report_rounded, label: '버그리포트', color: Color(0xFFFB7185)),
+    _AdminNavItem.tab(index: 12, icon: Icons.newspaper_rounded, label: '에디토리얼', color: Color(0xFF38BDF8)),
+    _AdminNavItem.tab(index: 13, icon: Icons.settings_rounded, label: '설정', color: Color(0xFF94A3B8)),
   ];
 
   @override
@@ -276,49 +303,13 @@ class _AdminConsoleState extends State<_AdminConsole> {
                   ],
                 ),
               ),
-              // 탭 네비게이션 (가로 스크롤)
+              // 탭 네비게이션 (가로 스크롤 — 그룹 2단 계층)
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
                 child: Row(
-                  children: _navItems.asMap().entries.map((entry) {
-                    final i = entry.key;
-                    final item = entry.value;
-                    final isSelected = _selectedIndex == i;
-                    final accent = item.$3;
-                    return GestureDetector(
-                      onTap: () => setState(() => _selectedIndex = i),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        margin: const EdgeInsets.only(right: 2),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: isSelected ? accent.withValues(alpha: 0.14) : Colors.transparent,
-                          border: Border(
-                            bottom: BorderSide(
-                              color: isSelected ? accent : Colors.transparent,
-                              width: 2,
-                            ),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(item.$1, size: 14, color: isSelected ? accent : C.mu),
-                            const SizedBox(width: 6),
-                            Text(
-                              item.$2,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
-                                color: isSelected ? accent : C.tx2,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: _buildGroupedNav(_navItems, _selectedIndex, (i) => setState(() => _selectedIndex = i)),
                 ),
               ),
             ],
@@ -330,22 +321,107 @@ class _AdminConsoleState extends State<_AdminConsole> {
     );
   }
 
+  List<Widget> _buildGroupedNav(List<_AdminNavItem> items, int selectedIndex, void Function(int) onSelect) {
+    final result = <Widget>[];
+    // 현재 그룹 범위를 추적하며 그룹별 Column 빌드
+    _AdminNavItem? currentGroup;
+    List<_AdminNavItem> groupTabs = [];
+
+    void flushGroup() {
+      if (currentGroup == null && groupTabs.isEmpty) return;
+      final color = currentGroup?.color ?? C.mu;
+      final isGroupActive = groupTabs.any((t) => t.tabIndex == selectedIndex);
+      result.add(
+        Container(
+          margin: const EdgeInsets.only(left: 4, right: 2),
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(color: color.withValues(alpha: 0.35), width: 2),
+              bottom: BorderSide(color: isGroupActive ? color : Colors.transparent, width: 2),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (currentGroup != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+                  child: Text(
+                    currentGroup!.groupLabel!.toUpperCase(),
+                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: color, letterSpacing: 0.8),
+                  ),
+                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: groupTabs.map((item) {
+                  final isSelected = item.tabIndex == selectedIndex;
+                  final accent = item.color;
+                  return GestureDetector(
+                    onTap: () => onSelect(item.tabIndex!),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      margin: const EdgeInsets.only(right: 1),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isSelected ? accent.withValues(alpha: 0.14) : Colors.transparent,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(item.icon, size: 15, color: isSelected ? accent : C.mu),
+                          const SizedBox(width: 5),
+                          Text(
+                            item.label,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
+                              color: isSelected ? accent : C.tx2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
+      );
+      currentGroup = null;
+      groupTabs = [];
+    }
+
+    for (final item in items) {
+      if (item.isGroup) {
+        flushGroup();
+        currentGroup = item;
+      } else {
+        groupTabs.add(item);
+      }
+    }
+    flushGroup();
+    return result;
+  }
+
   Widget _buildContent() {
     switch (_selectedIndex) {
-      case 0: return _DashboardTab(isKorean: widget.isKorean);
-      case 1: return _MembersTab(isKorean: widget.isKorean);
-      case 2: return _CollectionWithImportTab(collection: 'market_items', title: '마켓상품', importKind: AdminImportKind.market, isKorean: widget.isKorean, adminUid: widget.user.uid);
-      case 3: return _CollectionWithImportTab(collection: 'pattern_charts', title: '도안목록', importKind: AdminImportKind.pattern, isKorean: widget.isKorean, adminUid: widget.user.uid);
-      case 4: return _CollectionWithImportTab(collection: 'encyclopedia', title: '뜨개백과', importKind: AdminImportKind.encyclopedia, isKorean: widget.isKorean, adminUid: widget.user.uid);
-      case 5: return _CollectionWithImportTab(collection: 'posts', title: '커뮤니티', importKind: AdminImportKind.communityPost, isKorean: widget.isKorean, adminUid: widget.user.uid);
-      case 6: return _BrandTab(collection: 'yarn_brands', title: '실 브랜드');
-      case 7: return _BrandTab(collection: 'needle_brands', title: '바늘 브랜드');
-      case 8: return const _AdminSwatchesTab();
-      case 9: return const _AdminProjectsTab();
+      case 0:  return _DashboardTab(isKorean: widget.isKorean);
+      case 1:  return _EncyclopediaTab(isKorean: widget.isKorean, adminUid: widget.user.uid);
+      case 2:  return _BrandTab(collection: 'yarn_brands', title: '실 브랜드');
+      case 3:  return _BrandTab(collection: 'needle_brands', title: '바늘 브랜드');
+      case 4:  return _MembersTab(isKorean: widget.isKorean);
+      case 5:  return _CollectionWithImportTab(collection: 'pattern_charts', title: '도안목록', importKind: AdminImportKind.pattern, isKorean: widget.isKorean, adminUid: widget.user.uid);
+      case 6:  return const _AdminSwatchesTab();
+      case 7:  return const _AdminProjectsTab();
+      case 8:  return _CollectionWithImportTab(collection: 'market_items', title: '마켓상품', importKind: AdminImportKind.market, isKorean: widget.isKorean, adminUid: widget.user.uid);
+      case 9:  return _CollectionWithImportTab(collection: 'posts', title: '커뮤니티', importKind: AdminImportKind.communityPost, isKorean: widget.isKorean, adminUid: widget.user.uid);
       case 10: return _CopyManagementTab(isKorean: widget.isKorean);
       case 11: return const _BugReportsTab();
-      case 12: return _SettingsTab(isKorean: widget.isKorean);
-      case 13: return const _EditorialAdminTab();
+      case 12: return const _EditorialAdminTab();
+      case 13: return _SettingsTab(isKorean: widget.isKorean);
       default: return _DashboardTab(isKorean: widget.isKorean);
     }
   }
@@ -4070,6 +4146,356 @@ class _AdminProjectsTabState extends ConsumerState<_AdminProjectsTab> {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ── 뜨개백과 탭 (개별 관리 + 일괄등록) ───────────────────────────────────────
+
+class _EncyclopediaTab extends StatefulWidget {
+  final bool isKorean;
+  final String adminUid;
+  const _EncyclopediaTab({required this.isKorean, required this.adminUid});
+
+  @override
+  State<_EncyclopediaTab> createState() => _EncyclopediaTabState();
+}
+
+class _EncyclopediaTabState extends State<_EncyclopediaTab> with SingleTickerProviderStateMixin {
+  late final TabController _tabCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabCtrl = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: Color(0xFF4ADE80).withValues(alpha: 0.3))),
+          ),
+          child: TabBar(
+            controller: _tabCtrl,
+            labelColor: Color(0xFF4ADE80),
+            unselectedLabelColor: Colors.grey,
+            indicatorColor: Color(0xFF4ADE80),
+            tabs: const [
+              Tab(text: '항목 목록 & 개별 관리'),
+              Tab(text: '일괄등록'),
+            ],
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabCtrl,
+            children: [
+              _EncyclopediaItemsTab(isKorean: widget.isKorean),
+              _CollectionWithImportTab(
+                collection: 'encyclopedia',
+                title: '뜨개백과',
+                importKind: AdminImportKind.encyclopedia,
+                isKorean: widget.isKorean,
+                adminUid: widget.adminUid,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── 뜨개백과 항목 목록 & 개별 관리 ────────────────────────────────────────────
+
+class _EncyclopediaItemsTab extends StatefulWidget {
+  final bool isKorean;
+  const _EncyclopediaItemsTab({required this.isKorean});
+
+  @override
+  State<_EncyclopediaItemsTab> createState() => _EncyclopediaItemsTabState();
+}
+
+class _EncyclopediaItemsTabState extends State<_EncyclopediaItemsTab> {
+  String _searchQuery = '';
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _docs = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDocs();
+  }
+
+  Future<void> _loadDocs() async {
+    setState(() => _loading = true);
+    final snap = await FirebaseFirestore.instance
+        .collection('encyclopedia')
+        .orderBy('term_ko')
+        .limit(200)
+        .get();
+    if (mounted) {
+      setState(() {
+        _docs = snap.docs;
+        _loading = false;
+      });
+    }
+  }
+
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> get _filtered {
+    if (_searchQuery.isEmpty) return _docs;
+    final q = _searchQuery.toLowerCase();
+    return _docs.where((d) {
+      final term = (d.data()['term_ko'] as String? ?? '').toLowerCase();
+      return term.contains(q);
+    }).toList();
+  }
+
+  void _showEditDialog(BuildContext context, [Map<String, dynamic>? data, String? docId]) {
+    final termKeyCtrl = TextEditingController(text: data?['term_key'] as String? ?? '');
+    final termKoCtrl = TextEditingController(text: data?['term_ko'] as String? ?? '');
+    final termEnCtrl = TextEditingController(text: data?['term_en'] as String? ?? '');
+    final categoryCtrl = TextEditingController(text: data?['category_key'] as String? ?? '');
+    final descKoCtrl = TextEditingController(text: data?['description_ko'] as String? ?? '');
+    final descEnCtrl = TextEditingController(text: data?['description_en'] as String? ?? '');
+    bool isPublic = data?['isPublic'] as bool? ?? true;
+    final isNew = docId == null;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, ss) => AlertDialog(
+          title: Text(isNew ? '새 항목 추가' : '항목 수정'),
+          content: SizedBox(
+            width: 480,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(controller: termKeyCtrl, decoration: const InputDecoration(labelText: 'term_key (영문 키) *')),
+                  const SizedBox(height: 8),
+                  TextField(controller: termKoCtrl, decoration: const InputDecoration(labelText: 'term_ko (한글 용어) *')),
+                  const SizedBox(height: 8),
+                  TextField(controller: termEnCtrl, decoration: const InputDecoration(labelText: 'term_en (영문 용어)')),
+                  const SizedBox(height: 8),
+                  TextField(controller: categoryCtrl, decoration: const InputDecoration(labelText: 'category_key (카테고리)')),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: descKoCtrl,
+                    maxLines: 4,
+                    decoration: const InputDecoration(labelText: 'description_ko (한글 설명)'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: descEnCtrl,
+                    maxLines: 4,
+                    decoration: const InputDecoration(labelText: 'description_en (영문 설명)'),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    const Text('공개 (isPublic)'),
+                    const Spacer(),
+                    Switch(value: isPublic, onChanged: (v) => ss(() => isPublic = v)),
+                  ]),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+            ElevatedButton(
+              onPressed: () async {
+                final key = termKeyCtrl.text.trim();
+                final ko = termKoCtrl.text.trim();
+                if (key.isEmpty || ko.isEmpty) return;
+                final fields = {
+                  'term_key': key,
+                  'term_ko': ko,
+                  'term_en': termEnCtrl.text.trim(),
+                  'category_key': categoryCtrl.text.trim(),
+                  'description_ko': descKoCtrl.text.trim(),
+                  'description_en': descEnCtrl.text.trim(),
+                  'isPublic': isPublic,
+                };
+                try {
+                  await runWithMoriLoadingDialog<void>(
+                    ctx,
+                    message: widget.isKorean ? '저장하는 중입니다.' : 'Saving...',
+                    subtitle: widget.isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+                    task: () async {
+                      if (isNew) {
+                        await FirebaseFirestore.instance.collection('encyclopedia').add({
+                          ...fields,
+                          'createdAt': FieldValue.serverTimestamp(),
+                        });
+                      } else {
+                        await FirebaseFirestore.instance.collection('encyclopedia').doc(docId).update(fields);
+                      }
+                    },
+                  );
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  _loadDocs();
+                } catch (e) {
+                  if (ctx.mounted) {
+                    showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '$e');
+                  }
+                }
+              },
+              child: const Text('저장'),
+            ),
+          ],
+        ),
+      ),
+    ).whenComplete(() {
+      termKeyCtrl.dispose(); termKoCtrl.dispose(); termEnCtrl.dispose();
+      categoryCtrl.dispose(); descKoCtrl.dispose(); descEnCtrl.dispose();
+    });
+  }
+
+  Future<void> _confirmDelete(BuildContext context, String docId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('항목 삭제'),
+        content: const Text('이 뜨개백과 항목을 삭제할까요?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade400, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await FirebaseFirestore.instance.collection('encyclopedia').doc(docId).delete();
+      _loadDocs();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: 'term_ko 검색',
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onChanged: (v) => setState(() => _searchQuery = v),
+                ),
+              ),
+              const SizedBox(width: 12),
+              TextButton.icon(
+                onPressed: () => _showEditDialog(context),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('+ 새 항목'),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _filtered.isEmpty
+                  ? Center(child: Text('항목이 없습니다.', style: TextStyle(color: Colors.grey)))
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                      itemCount: _filtered.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 4),
+                      itemBuilder: (context, index) {
+                        final doc = _filtered[index];
+                        final data = doc.data();
+                        return _EncyclopediaDocRow(
+                          data: data,
+                          docId: doc.id,
+                          onEdit: () => _showEditDialog(context, data, doc.id),
+                          onDelete: () => _confirmDelete(context, doc.id),
+                        );
+                      },
+                    ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EncyclopediaDocRow extends StatelessWidget {
+  final Map<String, dynamic> data;
+  final String docId;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _EncyclopediaDocRow({
+    required this.data,
+    required this.docId,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final termKo = data['term_ko'] as String? ?? '(용어 없음)';
+    final categoryKey = data['category_key'] as String? ?? '';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Row(
+              children: [
+                Text(termKo, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                if (categoryKey.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Text(categoryKey, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit_rounded, size: 16),
+            onPressed: onEdit,
+            tooltip: '수정',
+          ),
+          IconButton(
+            icon: Icon(Icons.delete_rounded, size: 16, color: Colors.red.shade400),
+            onPressed: onDelete,
+            tooltip: '삭제',
+          ),
+        ],
+      ),
     );
   }
 }

@@ -65,16 +65,9 @@ class AuthRepository {
             .signInWithPopup(GoogleAuthProvider())
             .timeout(const Duration(seconds: 20));
         final user = credential.user;
-        if (user == null) {
-          throw Exception('Google account was not returned.');
-        }
-        unawaited(_syncUserDocument(user));
-        return UserModel.initial(
-          uid: user.uid,
-          email: user.email ?? '',
-          displayName: user.displayName ?? '',
-          photoURL: user.photoURL ?? '',
-        );
+        if (user == null) throw Exception('Google account was not returned.');
+        // 신규/기존 모두 await로 처리 — 문서 생성 실패 시 에러 감지
+        return await _getOrCreateUser(user);
       }
 
       await _ensureGoogleInitialized();
@@ -89,19 +82,10 @@ class AuthRepository {
           .signInWithCredential(GoogleAuthProvider.credential(idToken: idToken))
           .timeout(const Duration(seconds: 20));
       final user = credential.user;
-      if (user == null) {
-        throw Exception('Firebase user was not returned after Google sign-in.');
-      }
+      if (user == null) throw Exception('Firebase user was not returned after Google sign-in.');
 
-      // Do not block navigation on Firestore profile sync.
-      unawaited(_syncUserDocument(user));
-
-      return UserModel.initial(
-        uid: user.uid,
-        email: user.email ?? '',
-        displayName: user.displayName ?? '',
-        photoURL: user.photoURL ?? '',
-      );
+      // 신규/기존 모두 await로 처리 — 문서 생성 실패 시 에러 감지
+      return await _getOrCreateUser(user);
     } on FirebaseAuthException catch (e) {
       throw Exception(_handleAuthException(e));
     } on GoogleSignInException catch (e) {
@@ -109,7 +93,7 @@ class AuthRepository {
     } on TimeoutException {
       throw Exception('Google login timed out. Please try again.');
     } catch (e) {
-      throw Exception('Google login failed: $e');
+      rethrow;
     }
   }
 
@@ -133,14 +117,6 @@ class AuthRepository {
       throw UnimplementedError('Kakao login requires Firebase custom token integration.');
     } catch (e) {
       throw Exception('Kakao login failed: $e');
-    }
-  }
-
-  Future<void> _syncUserDocument(User firebaseUser) async {
-    try {
-      await _getOrCreateUser(firebaseUser);
-    } catch (_) {
-      // Keep auth success even if profile sync is delayed.
     }
   }
 

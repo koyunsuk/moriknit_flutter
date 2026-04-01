@@ -34,4 +34,9 @@ class CourseRepository {
   Future<void> togglePublished(String id, bool value) async {
     await _col.doc(id).update({'isPublished': value});
   }
+
+  Future<List<CourseItem>> fetchAllPublished() async {
+    final snap = await _col.where('isPublished', isEqualTo: true).get();
+    return snap.docs.map(CourseItem.fromFirestore).toList();
+  }
 }

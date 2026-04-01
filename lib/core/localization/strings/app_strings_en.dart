@@ -47,7 +47,7 @@ class AppStringsEn extends BaseAppStrings {
   @override String get ecosystemHub => 'Ecosystem hub';
   @override String get editorialPicks => 'Editorial picks';
   @override String get communityPosts => 'Community posts';
-  @override String get marketListings => 'Market listings';
+  @override String get marketListings => 'Market items';
   @override String get myProjectsLabel => 'My projects';
   @override String get knittingLetter => 'Knitting letter';
   @override String get curatedPicks => 'Curated picks';
@@ -91,7 +91,7 @@ class AppStringsEn extends BaseAppStrings {
   @override String get addPatternFile => 'Add file';
   @override String get patternSavedToLibrary => 'Saved to your pattern library.';
   @override String get registerPattern => 'Register pattern';
-  @override String get copyrightNotice => 'Do not upload or sell copyrighted patterns without permission.';
+  @override String get copyrightNotice => 'No unauthorized upload/sale of copyrighted patterns.';
   @override String get afterWashPhoto => 'After-wash photo';
   @override String get addAfterWashPhoto => 'Add after-wash photo';
   @override String get needlePhoto => 'Needle photo';
@@ -202,7 +202,7 @@ class AppStringsEn extends BaseAppStrings {
   @override String get pleaseWaitMoment => 'Please wait a moment.';
   @override String get limitReached => 'Limit reached';
   @override String get upgrade => 'Upgrade';
-  @override String get projectsTabLabel => 'Projects';
+  @override String get projectsTabLabel => 'Workspace';
   @override String get messengerTabLabel => 'Messenger';
   @override String get createLabel => 'Create';
   @override String get adminLabel => 'Admin';

@@ -163,20 +163,20 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                     children: [
                       const SizedBox(height: 4),
 
-              // ── 1. 기본정보 (사진 카드) ─────────────────────────────
-              Text(isKorean ? '기본정보' : 'Basic profile', style: T.bodyBold.copyWith(color: C.tx2)),
-              const SizedBox(height: 10),
-              GestureDetector(
-                onTap: () => setState(() => _profileExpanded = !_profileExpanded),
-                child: GlassCard(
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          // 프로필 사진 + 편집 버튼
-                          Stack(
+                      // ── 1. 기본정보 ─────────────────────────────────
+                      SectionTitle(title: isKorean ? '기본정보' : 'Basic Info'),
+                      const SizedBox(height: 10),
+                      GestureDetector(
+                        onTap: () => setState(() => _profileExpanded = !_profileExpanded),
+                        child: GlassCard(
+                          child: Column(
                             children: [
-                              CircleAvatar(
+                              Row(
+                                children: [
+                                  // 프로필 사진 + 편집 버튼
+                                  Stack(
+                                    children: [
+                                      CircleAvatar(
                                 radius: 38,
                                 backgroundColor: C.lvL,
                                 backgroundImage: photo.isNotEmpty ? NetworkImage(photo) : null,
@@ -269,25 +269,25 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                   ),
                 ),
               ),
-              if (_profileExpanded) ...[
-                const SizedBox(height: 16),
-                GlassCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t.profileOverview, style: T.bodyBold), const SizedBox(height: 12), _InfoRow(label: t.displayName, value: name), _InfoRow(label: t.userId, value: user.uid.isEmpty ? t.notAvailable : user.uid), _InfoRow(label: t.email, value: user.email.isEmpty ? t.notConnected : user.email), _InfoRow(label: t.joined, value: joinedDate == null ? t.unknown : _formatDate(joinedDate)), _InfoRow(label: t.lastActive, value: user.lastActiveAt == null ? t.unknown : _formatDate(user.lastActiveAt!))])),
-                const SizedBox(height: 16),
-                GlassCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t.accountConnections, style: T.bodyBold), const SizedBox(height: 12), _InfoRow(label: t.plan, value: _planLabel(t, user.subscription.planId)), _InfoRow(label: t.status, value: user.subscription.status), _InfoRow(label: t.profilePhoto, value: photo.isEmpty ? t.usingDefaultAvatar : t.importedFromSocial), _InfoRow(label: t.signInSync, value: _socialSyncLabel(t, photo: photo, displayName: user.displayName, email: user.email))])),
-              ],
-              const SizedBox(height: 20),
+                      if (_profileExpanded) ...[
+                        const SizedBox(height: 16),
+                        GlassCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t.profileOverview, style: T.bodyBold), const SizedBox(height: 12), _InfoRow(label: t.displayName, value: name), _InfoRow(label: t.userId, value: user.uid.isEmpty ? t.notAvailable : user.uid), _InfoRow(label: t.email, value: user.email.isEmpty ? t.notConnected : user.email), _InfoRow(label: t.joined, value: joinedDate == null ? t.unknown : _formatDate(joinedDate)), _InfoRow(label: t.lastActive, value: user.lastActiveAt == null ? t.unknown : _formatDate(user.lastActiveAt!))])),
+                        const SizedBox(height: 16),
+                        GlassCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t.accountConnections, style: T.bodyBold), const SizedBox(height: 12), _InfoRow(label: t.plan, value: _planLabel(t, user.subscription.planId)), _InfoRow(label: t.status, value: user.subscription.status), _InfoRow(label: t.profilePhoto, value: photo.isEmpty ? t.usingDefaultAvatar : t.importedFromSocial), _InfoRow(label: t.signInSync, value: _socialSyncLabel(t, photo: photo, displayName: user.displayName, email: user.email))])),
+                      ],
+                      const SizedBox(height: 20),
 
-              // ── 2. 필수정보 ───────────────────────────────────────
-              Text(isKorean ? '필수정보' : 'Essential info', style: T.bodyBold.copyWith(color: C.tx2)),
-              const SizedBox(height: 10),
-              GlassCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t.usageSnapshot, style: T.bodyBold), const SizedBox(height: 12), _UsageRow(label: t.swatchLibrary, caption: t.liveSaved(swatchCount, user.usage.swatchCount), current: swatchCount, stored: user.usage.swatchCount, color: C.lv), const SizedBox(height: 10), _UsageRow(label: t.projectBoard, caption: t.liveSaved(projectCount, user.usage.projectCount), current: projectCount, stored: user.usage.projectCount, color: C.pk), const SizedBox(height: 10), _UsageRow(label: isKorean ? '카운터 기록' : 'Counter records', caption: t.liveSaved(counterCount, user.usage.counterCount), current: counterCount, stored: user.usage.counterCount, color: C.lmD)])),
-              const SizedBox(height: 16),
+                      // ── 2. 필수정보 ───────────────────────────────
+                      SectionTitle(title: isKorean ? '필수정보' : 'Essential Info'),
+                      const SizedBox(height: 10),
+                      GlassCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t.usageSnapshot, style: T.bodyBold), const SizedBox(height: 12), _UsageRow(label: t.swatchLibrary, caption: t.liveSaved(swatchCount, user.usage.swatchCount), current: swatchCount, stored: user.usage.swatchCount, color: C.lv), const SizedBox(height: 10), _UsageRow(label: t.projectBoard, caption: t.liveSaved(projectCount, user.usage.projectCount), current: projectCount, stored: user.usage.projectCount, color: C.pk), const SizedBox(height: 10), _UsageRow(label: isKorean ? '카운터 기록' : 'Counter records', caption: t.liveSaved(counterCount, user.usage.counterCount), current: counterCount, stored: user.usage.counterCount, color: C.lmD)])),
+                      const SizedBox(height: 16),
               GlassCard(
                 child: Row(
                   children: [
-                    Expanded(child: _ProfileStat(label: t.swatches, value: '$swatchCount', accent: C.lvD)),
-                    Expanded(child: _ProfileStat(label: t.projects, value: '$projectCount', accent: C.pkD)),
-                    Expanded(child: _ProfileStat(label: isKorean ? '카운터' : 'Counters', value: '$counterCount', accent: C.lmD)),
+                    Expanded(child: _ProfileStat(label: t.swatches, value: '$swatchCount', accent: C.lvD, onTap: () => context.push('/swatch'))),
+                    Expanded(child: _ProfileStat(label: t.projects, value: '$projectCount', accent: C.pkD, onTap: () => context.push('/project'))),
+                    Expanded(child: _ProfileStat(label: isKorean ? '카운터' : 'Counters', value: '$counterCount', accent: C.lmD, onTap: () => context.push('/counters'))),
                   ],
                 ),
               ),
@@ -456,7 +456,7 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
               const SizedBox(height: 20),
 
               // ── 4. 회사정보 ───────────────────────────────────────
-              Text(isKorean ? '회사정보' : 'Company info', style: T.bodyBold.copyWith(color: C.tx2)),
+              SectionTitle(title: isKorean ? '회사정보' : 'Company Info'),
               const SizedBox(height: 10),
               GlassCard(
                 child: Column(
@@ -471,7 +471,7 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                     ListTile(
                       leading: Icon(Icons.camera_alt_outlined, color: C.pkD),
                       title: const Text('Instagram'),
-                      subtitle: Text(isKorean ? '@moriknit_official' : '@moriknit_official'),
+                      subtitle: const Text('@moriknit_official'),
                       onTap: () => launchUrl(Uri.parse('https://instagram.com/moriknit'), mode: LaunchMode.externalApplication),
                     ),
                     Divider(height: 1, color: Colors.grey.shade100),
@@ -510,7 +510,26 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                 ),
               ),
               const SizedBox(height: 20),
-                      GlassCard(color: Colors.grey.shade100, child: Column(children: [ListTile(leading: Icon(Icons.logout, color: C.og), title: Text(t.logout), subtitle: Text(t.logoutDescription), onTap: () async { await ref.read(authRepositoryProvider).signOut(); if (context.mounted) context.go('/login'); })])),
+              GlassCard(
+                child: Column(children: [
+                  ListTile(
+                    leading: Icon(Icons.circle_outlined, color: C.lvD),
+                    title: Text(t.needles),
+                    subtitle: Text(t.manageNeedles),
+                    onTap: () => context.go('/my/needles'),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: Icon(Icons.logout, color: C.og),
+                    title: Text(t.logout),
+                    subtitle: Text(t.logoutDescription),
+                    onTap: () async {
+                      await ref.read(authRepositoryProvider).signOut();
+                      if (context.mounted) context.go('/login');
+                    },
+                  ),
+                ]),
+              ),
                     ],
                   ),
                 ),
@@ -550,9 +569,13 @@ class _ProfileStat extends StatelessWidget {
   final String label;
   final String value;
   final Color accent;
-  const _ProfileStat({required this.label, required this.value, required this.accent});
+  final VoidCallback? onTap;
+  const _ProfileStat({required this.label, required this.value, required this.accent, this.onTap});
   @override
-  Widget build(BuildContext context) => Column(children: [Text(value, style: T.numLG.copyWith(color: accent)), const SizedBox(height: 4), Text(label, style: T.caption)]);
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Column(children: [Text(value, style: T.numLG.copyWith(color: accent)), const SizedBox(height: 4), Text(label, style: T.caption)]),
+  );
 }
 
 class _SummaryCard extends StatelessWidget {

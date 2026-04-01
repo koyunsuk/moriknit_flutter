@@ -10,11 +10,14 @@ import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../providers/admin_config_provider.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../providers/editorial_provider.dart';
 import '../../../providers/market_provider.dart';
 import '../../../providers/post_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/ui_copy_provider.dart';
+import '../../admin/domain/admin_config.dart';
 import '../domain/editorial_post.dart';
 import 'editorial_screen.dart';
 
@@ -31,6 +34,11 @@ class HomeScreen extends ConsumerWidget {
     final postsAsync = ref.watch(postsProvider(communityAllCategory));
     final itemsAsync = ref.watch(marketItemsProvider);
     final projectCount = ref.watch(projectCountProvider);
+    final adminConfig = ref.watch(adminConfigProvider).valueOrNull;
+    final currentUser = ref.watch(currentUserProvider).valueOrNull;
+    final userName = currentUser?.displayName.isNotEmpty == true
+        ? currentUser!.displayName
+        : (currentUser?.email.isNotEmpty == true ? currentUser!.email.split('@').first : '');
 
     if (kIsWeb) {
       return _WebHomeLayout(
@@ -60,47 +68,47 @@ class HomeScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                        _EcosystemHero(
-                          t: t,
-                          isKorean: isKorean,
-                          projectCount: projectCount,
-                          postsAsync: postsAsync,
-                          itemsAsync: itemsAsync,
-                        ),
-                        const SizedBox(height: 18),
-                        SectionTitle(
-                          title: isKorean ? '인기도안 TOP5' : 'Top 5 Patterns',
-                          trailing: GestureDetector(
-                            onTap: () => context.push(Routes.market),
-                            child: Text(isKorean ? '더보기' : 'More', style: T.caption.copyWith(color: C.lmD)),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        _MarketPreview(isKorean: isKorean),
-                        const SizedBox(height: 18),
-                        SectionTitle(
-                          title: isKorean ? '최신 등록된 도안' : 'Latest Patterns',
-                          trailing: GestureDetector(
-                            onTap: () => context.push(Routes.market),
-                            child: Text(isKorean ? '더보기' : 'More', style: T.caption.copyWith(color: C.lmD)),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        _LatestPatternsPreview(isKorean: isKorean),
-                        const SizedBox(height: 18),
-                        SectionTitle(
-                          title: t.homeCommunityHighlights,
-                          trailing: GestureDetector(
-                            onTap: () => context.go(Routes.community),
-                            child: Text(t.homeMore, style: T.caption.copyWith(color: C.pkD)),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        _CommunityPreview(isKorean: isKorean),
-                        const SizedBox(height: 18),
-                        SectionTitle(title: isKorean ? '오늘의 Knitting 소식' : "Today's Knitting News"),
-                        const SizedBox(height: 10),
-                        _EditorialBoard(isKorean: isKorean, t: t),
+                    _EcosystemHero(
+                      t: t,
+                      isKorean: isKorean,
+                      projectCount: projectCount,
+                      postsAsync: postsAsync,
+                      itemsAsync: itemsAsync,
+                    ),
+                    const SizedBox(height: 18),
+                    SectionTitle(
+                      title: isKorean ? '인기도안 TOP5' : 'Top 5 Patterns',
+                      trailing: GestureDetector(
+                        onTap: () => context.push(Routes.market),
+                        child: Text(isKorean ? '더보기' : 'More', style: T.caption.copyWith(color: C.lmD)),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _MarketPreview(isKorean: isKorean),
+                    const SizedBox(height: 18),
+                    SectionTitle(
+                      title: isKorean ? '최신 등록된 도안' : 'Latest Patterns',
+                      trailing: GestureDetector(
+                        onTap: () => context.push(Routes.market),
+                        child: Text(isKorean ? '더보기' : 'More', style: T.caption.copyWith(color: C.lmD)),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _LatestPatternsPreview(isKorean: isKorean),
+                    const SizedBox(height: 18),
+                    SectionTitle(
+                      title: t.homeCommunityHighlights,
+                      trailing: GestureDetector(
+                        onTap: () => context.go(Routes.community),
+                        child: Text(t.homeMore, style: T.caption.copyWith(color: C.pkD)),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _CommunityPreview(isKorean: isKorean),
+                    const SizedBox(height: 18),
+                    SectionTitle(title: isKorean ? '오늘의 Knitting 소식' : "Today's Knitting News"),
+                    const SizedBox(height: 10),
+                    _EditorialBoard(isKorean: isKorean, t: t),
                   ],
                 ),
               ),
@@ -315,6 +323,7 @@ class _EcosystemHero extends StatelessWidget {
       ),
     );
   }
+
 }
 
 class _MetricTile extends StatelessWidget {

@@ -1,4 +1,5 @@
-﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
+﻿import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 
 import '../core/constants/subscription_constants.dart';
@@ -77,6 +78,7 @@ class AppThemeNotifier extends StateNotifier<AppThemeMode> {
   AppThemeNotifier() : super(_readSaved());
 
   static AppThemeMode _readSaved() {
+    if (kIsWeb) return AppThemeMode.lavender;
     try {
       final box = Hive.box<Map>(SubscriptionConstants.boxUser);
       final raw = box.get('settings');
@@ -92,6 +94,7 @@ class AppThemeNotifier extends StateNotifier<AppThemeMode> {
 
   Future<void> setTheme(AppThemeMode mode) async {
     state = mode;
+    if (kIsWeb) return;
     final box = Hive.box<Map>(SubscriptionConstants.boxUser);
     final current = Map<String, dynamic>.from(box.get('settings') ?? <String, dynamic>{});
     current['theme_mode'] = mode.name;

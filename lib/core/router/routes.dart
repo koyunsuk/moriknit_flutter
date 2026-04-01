@@ -6,6 +6,7 @@ class Routes {
   static const swatchList = '/swatch';
   static const swatchInput = '/swatch/input';
   static const projectList = '/project';
+  static const projectAllList = '/project/all';
   static const projectInput = '/project/input';
   static const projectPatterns = '/project/patterns';
   static const tools = '/tools';
@@ -23,4 +24,8 @@ class Routes {
   static const counter = '/counter/:id';
   static const admin = '/admin';
   static const messenger = '/messenger';
+  static const templateList = '/templates';
+  static const templateEditor = '/templates/editor';
+  static const yarnDetail = '/yarn-detail/:id';
+  static const needleDetail = '/needle-detail/:id';
 }

@@ -1,11 +1,11 @@
 {
-    "name": "moriknit_flutter",
-    "short_name": "moriknit_flutter",
+    "name": "MoriKnit",
+    "short_name": "MoriKnit",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#F7F5FF",
+    "theme_color": "#A78BFA",
+    "description": "뜨개질의 모든 순간을 기록하세요. 스와치, 프로젝트, 카운터까지 — MoriKnit 하나로.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

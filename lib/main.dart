@@ -17,16 +17,17 @@ import 'providers/theme_provider.dart';
 void main() async {
   if (kIsWeb) usePathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
-  await Hive.initFlutter();
-
-  await Future.wait([
-    Hive.openBox<Map>(SubscriptionConstants.boxSwatches),
-    Hive.openBox<Map>(SubscriptionConstants.boxProjects),
-    Hive.openBox<Map>(SubscriptionConstants.boxCounters),
-    Hive.openBox<Map>(SubscriptionConstants.boxNeedles),
-    Hive.openBox<Map>(SubscriptionConstants.boxSyncQueue),
-    Hive.openBox<Map>(SubscriptionConstants.boxUser),
-  ]);
+  if (!kIsWeb) {
+    await Hive.initFlutter();
+    await Future.wait([
+      Hive.openBox<Map>(SubscriptionConstants.boxSwatches),
+      Hive.openBox<Map>(SubscriptionConstants.boxProjects),
+      Hive.openBox<Map>(SubscriptionConstants.boxCounters),
+      Hive.openBox<Map>(SubscriptionConstants.boxNeedles),
+      Hive.openBox<Map>(SubscriptionConstants.boxSyncQueue),
+      Hive.openBox<Map>(SubscriptionConstants.boxUser),
+    ]);
+  }
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,

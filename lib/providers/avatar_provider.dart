@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 
@@ -37,6 +38,7 @@ class AvatarPresetNotifier extends StateNotifier<DefaultAvatarPreset> {
   AvatarPresetNotifier() : super(_readSaved());
 
   static DefaultAvatarPreset _readSaved() {
+    if (kIsWeb) return DefaultAvatarPreset.moyangi;
     try {
       final box = Hive.box<Map>(SubscriptionConstants.boxUser);
       final raw = box.get('settings');
@@ -52,6 +54,7 @@ class AvatarPresetNotifier extends StateNotifier<DefaultAvatarPreset> {
 
   Future<void> setPreset(DefaultAvatarPreset preset) async {
     state = preset;
+    if (kIsWeb) return;
     final box = Hive.box<Map>(SubscriptionConstants.boxUser);
     final current = Map<String, dynamic>.from(
       box.get('settings') ?? <String, dynamic>{},

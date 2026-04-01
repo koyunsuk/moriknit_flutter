@@ -25,6 +25,7 @@ class CounterModel with _$CounterModel {
     required String uid,
     required String name,
     @Default('') String projectId,
+    @Default('') String projectStepId,
     @Default(0) int stitchCount,
     @Default(0) int rowCount,
     @Default(0) int targetStitchCount,

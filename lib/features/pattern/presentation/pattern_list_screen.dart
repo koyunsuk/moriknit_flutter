@@ -44,7 +44,14 @@ class PatternListScreen extends ConsumerWidget {
                       error: (e, _) => Text('$e', style: T.caption.copyWith(color: C.og)),
                       data: (patterns) {
                         if (patterns.isEmpty) {
-                          return _EmptyState(isKorean: isKorean, onNew: () => context.push(Routes.toolsPattern));
+                          return MoriEmptyState(
+                            icon: Icons.grid_on_rounded,
+                            iconColor: C.lvD,
+                            title: isKorean ? '아직 도안이 없어요' : 'No patterns yet',
+                            subtitle: isKorean ? '나만의 도안을 만들어보세요.' : 'Create your own pattern.',
+                            buttonLabel: isKorean ? '새 도안 만들기' : 'Create new',
+                            onAction: () => context.push(Routes.toolsPattern),
+                          );
                         }
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -106,43 +113,24 @@ class PatternListScreen extends ConsumerWidget {
       ),
     );
     if (confirm == true && context.mounted) {
-      await ref.read(patternRepositoryProvider).delete(chart.id);
+      try {
+        await runWithMoriLoadingDialog<void>(
+          context,
+          message: isKorean ? '삭제하는 중입니다.' : 'Deleting...',
+          subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+          task: () async {
+            await ref.read(patternRepositoryProvider).delete(chart.id);
+          },
+        );
+        if (context.mounted) {
+          showSavedSnackBar(context, message: isKorean ? '삭제됐어요.' : 'Deleted.');
+        }
+      } catch (e) {
+        if (context.mounted) {
+          showSaveErrorSnackBar(context, message: '$e');
+        }
+      }
     }
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  final bool isKorean;
-  final VoidCallback onNew;
-  const _EmptyState({required this.isKorean, required this.onNew});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(14)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            isKorean ? '아직 도안이 없어요' : 'No patterns yet',
-            style: T.bodyBold.copyWith(color: C.lvD),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            isKorean ? '컬러 또는 기호 모드로 나만의 뜨개 도안을 만들어 보세요.' : 'Create your own chart in color or symbol mode.',
-            style: T.caption.copyWith(color: C.lvD, height: 1.5),
-          ),
-          const SizedBox(height: 12),
-          ElevatedButton.icon(
-            onPressed: onNew,
-            icon: const Icon(Icons.add_rounded),
-            label: Text(isKorean ? '새 도안 만들기' : 'Create new'),
-          ),
-        ],
-      ),
-    );
   }
 }
 
@@ -158,7 +146,7 @@ class _PatternRow extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.82),
+        color: C.gx,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: C.bd),
       ),
@@ -179,14 +167,21 @@ class _PatternRow extends StatelessWidget {
           '${chart.rows} × ${chart.cols}  |  ${chart.mode == ChartMode.color ? (isKorean ? '컬러' : 'Color') : (isKorean ? '기호' : 'Symbol')}',
           style: T.caption.copyWith(color: C.mu),
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.chevron_right_rounded, color: C.mu),
-            const SizedBox(width: 4),
-            GestureDetector(
-              onTap: onDelete,
-              child: Icon(Icons.delete_outline_rounded, color: Colors.red.shade300, size: 20),
+        trailing: PopupMenuButton<String>(
+          icon: Icon(Icons.more_vert_rounded, color: C.mu, size: 22),
+          padding: EdgeInsets.zero,
+          onSelected: (value) {
+            if (value == 'edit') onTap();
+            if (value == 'delete') onDelete();
+          },
+          itemBuilder: (_) => [
+            PopupMenuItem(
+              value: 'edit',
+              child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: C.lvD), const SizedBox(width: 8), const Text('수정')]),
+            ),
+            PopupMenuItem(
+              value: 'delete',
+              child: Row(children: [const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red), const SizedBox(width: 8), const Text('삭제', style: TextStyle(color: Colors.red))]),
             ),
           ],
         ),

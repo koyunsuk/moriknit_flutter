@@ -19,6 +19,7 @@ class ChartToolbar extends StatefulWidget {
   final VoidCallback onRedo;
   final VoidCallback onClear;
   final VoidCallback onExport;
+  final VoidCallback? onFitScreen;
 
   const ChartToolbar({
     super.key,
@@ -36,6 +37,7 @@ class ChartToolbar extends StatefulWidget {
     required this.onRedo,
     required this.onClear,
     required this.onExport,
+    this.onFitScreen,
   });
 
   @override
@@ -68,6 +70,7 @@ class _ChartToolbarState extends State<ChartToolbar> {
               onRedo: widget.onRedo,
               onClear: widget.onClear,
               onExport: widget.onExport,
+              onFitScreen: widget.onFitScreen,
             ),
             const Divider(height: 1),
             if (widget.mode == ChartMode.color)
@@ -75,13 +78,15 @@ class _ChartToolbarState extends State<ChartToolbar> {
                 activeColor: widget.activeColor,
                 onColorChanged: widget.onColorChanged,
               )
-            else
+            else if (widget.mode == ChartMode.symbol)
               _SymbolPanel(
                 selectedCategory: _selectedCategory,
                 activeSymbolId: widget.activeSymbolId,
                 onCategoryChanged: (cat) => setState(() => _selectedCategory = cat),
                 onSymbolChanged: widget.onSymbolChanged,
-              ),
+              )
+            else
+              const _NarrativeHint(),
           ],
         ),
       ),
@@ -100,6 +105,7 @@ class _TopBar extends StatelessWidget {
   final VoidCallback onRedo;
   final VoidCallback onClear;
   final VoidCallback onExport;
+  final VoidCallback? onFitScreen;
 
   static const List<({ChartTool tool, IconData icon})> _tools = [
     (tool: ChartTool.draw,  icon: Icons.edit_rounded),
@@ -119,6 +125,7 @@ class _TopBar extends StatelessWidget {
     required this.onRedo,
     required this.onClear,
     required this.onExport,
+    this.onFitScreen,
   });
 
   @override
@@ -138,6 +145,8 @@ class _TopBar extends StatelessWidget {
               onTap: () => onToolChanged(t.tool),
             ),
           const Spacer(),
+          if (onFitScreen != null)
+            _IconBtn(icon: Icons.fit_screen_rounded, enabled: true, onTap: onFitScreen!),
           _IconBtn(icon: Icons.undo_rounded, enabled: canUndo, onTap: onUndo),
           _IconBtn(icon: Icons.redo_rounded, enabled: canRedo, onTap: onRedo),
           const SizedBox(width: 4),
@@ -176,6 +185,11 @@ class _ModeToggle extends StatelessWidget {
             label: '기호',
             active: mode == ChartMode.symbol,
             onTap: () => onChanged(ChartMode.symbol),
+          ),
+          _Tab(
+            label: '서술형',
+            active: mode == ChartMode.narrative,
+            onTap: () => onChanged(ChartMode.narrative),
           ),
         ],
       ),
@@ -577,6 +591,23 @@ class _CategoryTab extends StatelessWidget {
             fontWeight: FontWeight.w600,
             color: active ? Colors.white : C.tx2,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NarrativeHint extends StatelessWidget {
+  const _NarrativeHint();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 72,
+      child: Center(
+        child: Text(
+          '위 텍스트 영역에 서술형 도안을 작성하세요.',
+          style: TextStyle(fontSize: 12, color: Colors.grey),
         ),
       ),
     );

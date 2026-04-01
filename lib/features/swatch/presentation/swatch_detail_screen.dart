@@ -33,18 +33,53 @@ class SwatchDetailScreen extends ConsumerWidget {
           swatchAsync.whenOrNull(
                 data: (swatch) => swatch == null
                     ? null
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: Icon(Icons.edit_outlined, color: C.lv),
-                            onPressed: () => _navigateToEdit(context, swatch),
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.delete_outline, color: C.og),
-                            onPressed: () => _confirmDelete(context, ref, swatch),
-                          ),
-                        ],
+                    : Builder(
+                        builder: (ctx) {
+                          final isKorean = ref.watch(appLanguageProvider).isKorean;
+                          return PopupMenuButton<String>(
+                            icon: Icon(Icons.more_vert_rounded, color: C.tx),
+                            onSelected: (v) {
+                              if (v == 'edit') _navigateToEdit(context, swatch);
+                              if (v == 'copy') _duplicateSwatch(context, ref, swatch);
+                              if (v == 'delete') _confirmDelete(context, ref, swatch);
+                            },
+                            itemBuilder: (_) => [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit_outlined, size: 18, color: C.lv),
+                                    const SizedBox(width: 8),
+                                    Text(isKorean ? '수정' : 'Edit'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'copy',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.copy_rounded, size: 18, color: C.lv),
+                                    const SizedBox(width: 8),
+                                    Text(isKorean ? '복사' : 'Duplicate'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.delete_outline, size: 18, color: Colors.red.shade400),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      isKorean ? '삭제' : 'Delete',
+                                      style: TextStyle(color: Colors.red.shade400),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
               ) ??
               const SizedBox.shrink(),
@@ -65,6 +100,25 @@ class SwatchDetailScreen extends ConsumerWidget {
     );
   }
 
+  Future<void> _duplicateSwatch(BuildContext context, WidgetRef ref, SwatchModel swatch) async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '복사하는 중입니다.' : 'Duplicating...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () => ref.read(swatchRepositoryProvider).duplicateSwatch(swatch),
+      );
+      if (context.mounted) {
+        showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '복사됐어요.' : 'Duplicated.');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+      }
+    }
+  }
+
   void _navigateToEdit(BuildContext context, SwatchModel swatch) {
     Navigator.push(
       context,
@@ -74,37 +128,51 @@ class SwatchDetailScreen extends ConsumerWidget {
     );
   }
 
-  void _confirmDelete(BuildContext context, WidgetRef ref, SwatchModel swatch) {
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref, SwatchModel swatch) async {
     final t = ref.read(appStringsProvider);
-    showDialog<void>(
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(t.deleteSwatch, style: T.h3),
         content: Text(t.deleteSwatchConfirm, style: T.body),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(t.cancel)),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(t.cancel),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: C.og, foregroundColor: Colors.white),
-            onPressed: () async {
-              Navigator.pop(dialogContext);
-              try {
-                await ref.read(swatchRepositoryProvider).deleteSwatch(swatch.id);
-                if (context.mounted) Navigator.pop(context);
-              } catch (error) {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(t.failedToDeleteSwatch(error.toString())),
-                    backgroundColor: C.og,
-                  ),
-                );
-              }
-            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade400,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
             child: Text(t.deleteSwatch),
           ),
         ],
       ),
     );
+    if (confirm == true && context.mounted) {
+      try {
+        await runWithMoriLoadingDialog<void>(
+          context,
+          message: isKorean ? '삭제하는 중입니다.' : 'Deleting...',
+          subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+          task: () async {
+            await ref.read(swatchRepositoryProvider).deleteSwatch(swatch.id);
+          },
+        );
+        if (!context.mounted) return;
+        Navigator.pop(context);
+        showSavedSnackBar(
+          ScaffoldMessenger.of(context),
+          message: isKorean ? '삭제됐어요.' : 'Deleted.',
+        );
+      } catch (e) {
+        if (!context.mounted) return;
+        showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+      }
+    }
   }
 }
 
@@ -123,14 +191,12 @@ class _SwatchDetailBody extends ConsumerWidget {
         ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
           children: [
-            MoriBrandHeader(subtitle: t.swatchDetailSubtitle),
-            const SizedBox(height: 16),
             GlassCard(
               padding: EdgeInsets.zero,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _PhotoHeader(photoUrl: swatch.beforePhotoUrl),
+                  _PhotoHeader(photoUrl: swatch.beforePhotoUrl, swatchId: swatch.id),
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
@@ -139,6 +205,10 @@ class _SwatchDetailBody extends ConsumerWidget {
                         if (swatch.isDirty) ...[
                           _SyncPendingBadge(label: t.pendingSync),
                           const SizedBox(height: 12),
+                        ],
+                        if (swatch.swatchName.isNotEmpty) ...[
+                          Text(swatch.swatchName, style: T.h2.copyWith(fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 4),
                         ],
                         if (swatch.yarnName.isNotEmpty) ...[
                           Text(swatch.yarnName, style: T.h2),
@@ -205,8 +275,9 @@ class _SwatchDetailBody extends ConsumerWidget {
 
 class _PhotoHeader extends StatelessWidget {
   final String photoUrl;
+  final String swatchId;
 
-  const _PhotoHeader({required this.photoUrl});
+  const _PhotoHeader({required this.photoUrl, required this.swatchId});
 
   @override
   Widget build(BuildContext context) {
@@ -219,12 +290,67 @@ class _PhotoHeader extends StatelessWidget {
       );
     }
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: SizedBox(
-        height: 220,
-        width: double.infinity,
-        child: Image.network(photoUrl, fit: BoxFit.cover),
+    final heroTag = 'swatch_photo_$swatchId';
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            fullscreenDialog: true,
+            builder: (_) => _FullScreenImageViewer(
+              imageUrl: photoUrl,
+              heroTag: heroTag,
+            ),
+          ),
+        );
+      },
+      child: Hero(
+        tag: heroTag,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: SizedBox(
+            height: 220,
+            width: double.infinity,
+            child: Image.network(photoUrl, fit: BoxFit.cover),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FullScreenImageViewer extends StatelessWidget {
+  final String imageUrl;
+  final String heroTag;
+
+  const _FullScreenImageViewer({required this.imageUrl, required this.heroTag});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          Center(
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 5.0,
+              child: Hero(
+                tag: heroTag,
+                child: Image.network(imageUrl, fit: BoxFit.contain),
+              ),
+            ),
+          ),
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            right: 8,
+            child: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white, size: 28),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+        ],
       ),
     );
   }

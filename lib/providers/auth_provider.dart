@@ -32,15 +32,21 @@ final isLoggedInProvider = Provider<bool>((ref) {
   return ref.watch(authStateProvider).valueOrNull != null;
 });
 
-// Firestore users/{uid}.isAdmin 필드를 실시간으로 구독합니다.
+/// Firestore users/{uid}.isAdmin 필드를 실시간으로 읽습니다.
 final isAdminProvider = StreamProvider<bool>((ref) {
-  final uid = ref.watch(authStateProvider).valueOrNull?.uid;
-  if (uid == null) return Stream.value(false);
-  return FirebaseFirestore.instance
-      .collection('users')
-      .doc(uid)
-      .snapshots()
-      .map((doc) => doc.data()?['isAdmin'] == true);
+  final authState = ref.watch(authStateProvider);
+  return authState.when(
+    data: (user) {
+      if (user == null) return Stream.value(false);
+      return FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .snapshots()
+          .map((doc) => (doc.data()?['isAdmin'] as bool?) ?? false);
+    },
+    loading: () => Stream.value(false),
+    error: (_, _) => Stream.value(false),
+  );
 });
 
 // 앱 전체에 관리자가 한 명도 없는지 확인 (최초 관리자 설정용)

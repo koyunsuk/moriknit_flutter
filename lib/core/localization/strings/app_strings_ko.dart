@@ -47,7 +47,7 @@ class AppStringsKo extends BaseAppStrings {
   @override String get ecosystemHub => '생태계 허브';
   @override String get editorialPicks => '추천 정보';
   @override String get communityPosts => '커뮤니티 글';
-  @override String get marketListings => '마켓 도안/상품';
+  @override String get marketListings => '마켓 등록수정';
   @override String get myProjectsLabel => '내 프로젝트';
   @override String get knittingLetter => '뜨개레터';
   @override String get curatedPicks => '추천 큐레이션';
@@ -91,7 +91,7 @@ class AppStringsKo extends BaseAppStrings {
   @override String get addPatternFile => '파일 추가';
   @override String get patternSavedToLibrary => '내 도안 라이브러리에 저장했어요.';
   @override String get registerPattern => '도안 등록하기';
-  @override String get copyrightNotice => '저작권이 있는 도안은 권한 없이 업로드하거나 판매하면 안 돼요.';
+  @override String get copyrightNotice => '저작권 도안 무단 업로드·판매 금지';
   @override String get afterWashPhoto => '세탁 후 사진';
   @override String get addAfterWashPhoto => '세탁 후 사진 추가';
   @override String get needlePhoto => '바늘 사진';
@@ -202,7 +202,7 @@ class AppStringsKo extends BaseAppStrings {
   @override String get pleaseWaitMoment => '잠시만 기다려주세요.';
   @override String get limitReached => '한도 도달';
   @override String get upgrade => '업그레이드';
-  @override String get projectsTabLabel => '프로젝트';
+  @override String get projectsTabLabel => '내 작업실';
   @override String get messengerTabLabel => '메신저';
   @override String get createLabel => '만들기';
   @override String get adminLabel => '관리자';

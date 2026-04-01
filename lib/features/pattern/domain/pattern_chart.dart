@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'knit_symbols.dart';
 
-enum ChartMode { color, symbol }
+enum ChartMode { color, symbol, narrative }
 
 enum ChartTool { draw, erase, fill, select, move }
 
@@ -30,6 +30,15 @@ class CellData {
 
   KnitSymbol? get symbol =>
       symbolId != null ? KnitSymbolLibrary.byId(symbolId!) : null;
+
+  @override
+  bool operator ==(Object other) =>
+      other is CellData &&
+      other.color?.toARGB32() == color?.toARGB32() &&
+      other.symbolId == symbolId;
+
+  @override
+  int get hashCode => Object.hash(color?.toARGB32(), symbolId);
 }
 
 class PatternChart {
@@ -39,6 +48,7 @@ class PatternChart {
   final int cols;
   final ChartMode mode;
   final List<List<CellData>> grid;
+  final String narrativeText;
 
   PatternChart({
     required this.id,
@@ -47,6 +57,7 @@ class PatternChart {
     required this.cols,
     required this.mode,
     required this.grid,
+    this.narrativeText = '',
   });
 
   PatternChart setCell(int row, int col, CellData cell) {
@@ -78,6 +89,7 @@ class PatternChart {
     int? cols,
     ChartMode? mode,
     List<List<CellData>>? grid,
+    String? narrativeText,
   }) {
     return PatternChart(
       id: id ?? this.id,
@@ -86,6 +98,7 @@ class PatternChart {
       cols: cols ?? this.cols,
       mode: mode ?? this.mode,
       grid: grid ?? this.grid,
+      narrativeText: narrativeText ?? this.narrativeText,
     );
   }
 
@@ -96,8 +109,9 @@ class PatternChart {
         'cols': cols,
         'mode': mode.name,
         'grid': grid
-            .map((row) => row.map((cell) => cell.toJson()).toList())
+            .map((row) => <String, dynamic>{'cells': row.map((cell) => cell.toJson()).toList()})
             .toList(),
+        'narrativeText': narrativeText,
       };
 
   factory PatternChart.fromJson(Map<String, dynamic> json) {
@@ -106,11 +120,16 @@ class PatternChart {
     final rawGrid = json['grid'] as List<dynamic>;
     final grid = List.generate(
       rows,
-      (r) => List.generate(
-        cols,
-        (c) => CellData.fromJson(
-            (rawGrid[r] as List<dynamic>)[c] as Map<String, dynamic>),
-      ),
+      (r) {
+        final rowData = rawGrid[r];
+        final cells = rowData is List
+            ? rowData
+            : ((rowData as Map<String, dynamic>)['cells'] as List<dynamic>);
+        return List.generate(
+          cols,
+          (c) => CellData.fromJson(cells[c] as Map<String, dynamic>),
+        );
+      },
     );
     return PatternChart(
       id: json['id'] as String,
@@ -119,6 +138,7 @@ class PatternChart {
       cols: cols,
       mode: ChartMode.values.byName(json['mode'] as String),
       grid: grid,
+      narrativeText: json['narrativeText'] as String? ?? '',
     );
   }
 
@@ -128,6 +148,7 @@ class PatternChart {
     int rows = 30,
     int cols = 20,
     ChartMode mode = ChartMode.color,
+    String narrativeText = '',
   }) {
     final grid = List.generate(
       rows,
@@ -140,6 +161,7 @@ class PatternChart {
       cols: cols,
       mode: mode,
       grid: grid,
+      narrativeText: narrativeText,
     );
   }
 }

@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -9,6 +9,7 @@ import 'package:moriknit_flutter/features/admin/presentation/admin_screen.dart';
 import 'package:moriknit_flutter/features/auth/presentation/login_screen.dart';
 import 'package:moriknit_flutter/features/auth/presentation/splash_screen.dart';
 import 'package:moriknit_flutter/features/landing/presentation/landing_screen.dart';
+import 'package:moriknit_flutter/features/counter/presentation/counter_list_screen.dart';
 import 'package:moriknit_flutter/features/community/presentation/community_screen.dart';
 import 'package:moriknit_flutter/features/messenger/presentation/messenger_screen.dart';
 import 'package:moriknit_flutter/features/counter/presentation/counter_screen.dart';
@@ -25,11 +26,16 @@ import 'package:moriknit_flutter/features/project/presentation/project_detail_sc
 import 'package:moriknit_flutter/features/project/presentation/project_input_screen.dart';
 import 'package:moriknit_flutter/features/project/presentation/project_list_screen.dart';
 import 'package:moriknit_flutter/features/project/presentation/project_patterns_screen.dart';
+import 'package:moriknit_flutter/features/project/presentation/template_list_screen.dart';
+import 'package:moriknit_flutter/features/project/presentation/template_editor_screen.dart';
 import 'package:moriknit_flutter/features/swatch/presentation/swatch_detail_screen.dart';
 import 'package:moriknit_flutter/features/swatch/presentation/swatch_input_screen.dart';
 import 'package:moriknit_flutter/features/swatch/presentation/swatch_list_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/tools_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/tool_memo_screen.dart';
+import 'package:moriknit_flutter/features/yarn/domain/yarn_model.dart';
+import 'package:moriknit_flutter/features/yarn/presentation/yarn_input_screen.dart';
+import 'package:moriknit_flutter/features/yarn/presentation/yarn_list_screen.dart';
 import 'package:moriknit_flutter/providers/auth_provider.dart';
 
 export 'routes.dart';
@@ -38,6 +44,8 @@ import 'routes.dart';
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authRepository = ref.watch(authRepositoryProvider);
   final authRefresh = GoRouterRefreshStream(authRepository.authStateChanges);
+  // isAdmin 변경 시에도 라우터 refresh 트리거
+  ref.listen(isAdminProvider, (_, _) => authRefresh.refresh());
   ref.onDispose(authRefresh.dispose);
 
   return GoRouter(
@@ -45,18 +53,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     refreshListenable: authRefresh,
     redirect: (context, state) {
       final isLoggedIn = authRepository.currentUser != null;
+      final isAdmin = ref.read(isAdminProvider).valueOrNull ?? false;
       final location = state.matchedLocation;
       final isSplash = location == Routes.splash;
       final isLogin = location == Routes.login;
-
       final isLanding = location == Routes.landing;
-      final isAdmin = location == Routes.admin;
+      final isAdminRoute = location == Routes.admin;
       final isPublicWebRoute = kIsWeb && (location == Routes.market || location == Routes.community || location == Routes.projectList);
 
       if (isSplash) {
         return null; // SplashScreen handles its own navigation after animation
       }
-      if (isAdmin && !isLoggedIn) {
+      if (isAdminRoute && !isLoggedIn) {
         return Routes.login;
       }
       if (!isLoggedIn && !isLogin && !isLanding && !isPublicWebRoute) {
@@ -67,7 +75,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final from = state.uri.queryParameters['from'];
           if (from != null && from.isNotEmpty) return from;
         }
-        return Routes.home;
+        return isAdmin ? Routes.admin : Routes.home;
       }
       return null;
     },
@@ -128,8 +136,37 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (_, _) => const MyPageScreen(),
             routes: [GoRoute(path: 'needles', builder: (_, _) => const NeedleListScreen())],
           ),
-          GoRoute(path: '/counter/:id', builder: (_, state) => CounterScreen(counterId: state.pathParameters['id']!)),
+          GoRoute(path: Routes.counterList, builder: (_, _) => const CounterListScreen()),
+          GoRoute(
+            path: Routes.templateList,
+            builder: (_, _) => const TemplateListScreen(),
+            routes: [
+              GoRoute(
+                path: 'editor',
+                builder: (_, state) {
+                  final extra = state.extra as Map<String, dynamic>?;
+                  return TemplateEditorScreen(
+                    templateId: extra?['templateId'] as String?,
+                    initialTitle: extra?['title'] as String?,
+                    initialSteps: (extra?['steps'] as List?)?.map((e) => e.toString()).toList(),
+                  );
+                },
+              ),
+            ],
+          ),
         ],
+      ),
+      GoRoute(path: '/counter/:id', builder: (_, state) => CounterScreen(counterId: state.pathParameters['id']!)),
+      GoRoute(path: '/yarn-list', builder: (_, _) => const YarnListScreen()),
+      GoRoute(
+        path: '/yarn-input',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return YarnInputScreen(
+            yarnId: extra?['yarnId'] as String?,
+            initialYarn: extra?['initialYarn'] as YarnModel?,
+          );
+        },
       ),
       GoRoute(path: Routes.admin, builder: (_, _) => const AdminScreen()),
     ],
@@ -143,6 +180,8 @@ class GoRouterRefreshStream extends ChangeNotifier {
   }
 
   late final StreamSubscription<dynamic> _subscription;
+
+  void refresh() => notifyListeners();
 
   @override
   void dispose() {

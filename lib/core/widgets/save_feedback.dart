@@ -77,6 +77,7 @@ void showSavedSnackBar(Object contextOrMessenger, {String? message}) {
       duration: const Duration(seconds: 2),
       backgroundColor: C.lvD,
       behavior: SnackBarBehavior.floating,
+      width: 260,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       content: Row(
         mainAxisSize: MainAxisSize.min,
@@ -104,6 +105,7 @@ void showSaveErrorSnackBar(Object contextOrMessenger, {String? message}) {
       duration: const Duration(seconds: 3),
       backgroundColor: C.og,
       behavior: SnackBarBehavior.floating,
+      width: 260,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       content: Row(
         mainAxisSize: MainAxisSize.min,

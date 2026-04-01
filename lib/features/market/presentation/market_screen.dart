@@ -60,32 +60,7 @@ class MarketScreen extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                      if (isWide)
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              flex: 7,
-                              child: _MarketIntroCard(
-                                isKorean: isKorean,
-                                isAdmin: isAdmin,
-                                canCreate: canCreate,
-                                onCreate: canCreate ? () => _showCreateItemSheet(context, ref, user.uid, user.displayName ?? user.email ?? '') : null,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              flex: 4,
-                              child: _MarketGuestCard(
-                                isKorean: isKorean,
-                                isGuest: user == null,
-                                onStart: () => showLoginRequiredDialog(context, isKorean: isKorean, fromRoute: Routes.market),
-                              ),
-                            ),
-                          ],
-                        )
-                      else
-                        _MarketIntroCard(
+                      _MarketIntroCard(
                           isKorean: isKorean,
                           isAdmin: isAdmin,
                           canCreate: canCreate,
@@ -157,7 +132,7 @@ class MarketScreen extends ConsumerWidget {
     final descCtrl = TextEditingController();
     final priceCtrl = TextEditingController();
     String category = 'pattern';
-    bool isFree = false;
+    bool isFree = true;
     String? imageFilePath;
     String? pdfFilePath;
     final accentHex = ['#FA5BB4', '#B47EEB', '#A3E635', '#F472B6', '#60A5FA', '#34D399', '#FB923C', '#F9A8D4'][Random().nextInt(8)];
@@ -184,24 +159,23 @@ class MarketScreen extends ConsumerWidget {
                   const SizedBox(height: 10),
                   TextField(controller: descCtrl, maxLines: 3, decoration: InputDecoration(labelText: isKorean ? '설명' : 'Description')),
                   const SizedBox(height: 10),
-                  // 무료 도안 토글
-                  GestureDetector(
-                    onTap: saving ? null : () => setState(() { isFree = !isFree; if (isFree) priceCtrl.clear(); }),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: isFree ? C.lmD.withValues(alpha: 0.10) : Colors.white.withValues(alpha: 0.82),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: isFree ? C.lmD : C.bd),
+                  // 무료/유료 선택
+                  Row(
+                    children: [
+                      _PriceTypeChip(
+                        label: isKorean ? '무료' : 'Free',
+                        selected: isFree,
+                        enabled: !saving,
+                        onTap: () => setState(() { isFree = true; priceCtrl.clear(); }),
                       ),
-                      child: Row(
-                        children: [
-                          Icon(isFree ? Icons.check_circle_rounded : Icons.circle_outlined, color: isFree ? C.lmD : C.mu, size: 20),
-                          const SizedBox(width: 10),
-                          Text(isKorean ? '무료 도안 (가격 없음)' : 'Free pattern (no price)', style: T.body.copyWith(color: isFree ? C.lmD : C.tx2)),
-                        ],
+                      const SizedBox(width: 8),
+                      _PriceTypeChip(
+                        label: isKorean ? '유료' : 'Paid',
+                        selected: !isFree,
+                        enabled: !saving,
+                        onTap: () => setState(() => isFree = false),
                       ),
-                    ),
+                    ],
                   ),
                   if (!isFree) ...[
                     const SizedBox(height: 10),
@@ -300,13 +274,14 @@ class MarketScreen extends ConsumerWidget {
                                 imageUrl: '',
                                 pdfUrl: '',
                                 createdAt: DateTime.now(),
+                                status: (!isFree && price > 0) ? 'pending' : 'approved',
                               );
                               await ref.read(marketRepositoryProvider).createItem(item, imageFile: imageFilePath, pdfFile: pdfFilePath);
                             },
                           );
                           if (ctx.mounted) Navigator.pop(ctx);
-                        } catch (_) {
-                          if (ctx.mounted) showSaveErrorSnackBar(ctx, message: isKorean ? '상품 등록에 실패했습니다.' : 'Failed to create item.');
+                        } catch (e) {
+                          if (ctx.mounted) showSaveErrorSnackBar(ctx, message: '${isKorean ? "오류: " : "Error: "}$e');
                           if (ctx.mounted) setState(() => saving = false);
                         }
                       },
@@ -362,31 +337,38 @@ class _MarketCardState extends ConsumerState<_MarketCard> {
     }
     if (_buyLoading) return;
     setState(() => _buyLoading = true);
-    final overlay = showSavingOverlay(context);
     final messenger = ScaffoldMessenger.of(context);
+    bool insufficientMori = false;
     try {
-      if (widget.item.price > 0) {
-        final success = await MoriService.spend(user.uid, amount: widget.item.price, reason: 'market_purchase:${widget.item.id}');
-        if (!success) {
-          overlay.close();
-          if (mounted) {
-            showDialog<void>(
-              context: context,
-              builder: (_) => AlertDialog(
-                title: Text(isKorean ? '모리가 부족해요' : 'Insufficient Mori'),
-                content: Text(isKorean ? '모리가 부족합니다. 저장 활동이나 댓글로 모리를 획득해보세요!' : 'You need more Mori. Earn it by saving or commenting!'),
-                actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
-              ),
-            );
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '구매하는 중입니다.' : 'Processing purchase...',
+        task: () async {
+          if (widget.item.price > 0) {
+            final success = await MoriService.spend(user.uid, amount: widget.item.price, reason: 'market_purchase:${widget.item.id}');
+            if (!success) {
+              insufficientMori = true;
+              return;
+            }
           }
-          return;
+          await ref.read(marketRepositoryProvider).purchaseItem(buyerUid: user.uid, item: widget.item);
+        },
+      );
+      if (insufficientMori) {
+        if (mounted) {
+          showDialog<void>(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: Text(isKorean ? '모리가 부족해요' : 'Insufficient Mori'),
+              content: Text(isKorean ? '모리가 부족합니다. 저장 활동이나 댓글로 모리를 획득해보세요!' : 'You need more Mori. Earn it by saving or commenting!'),
+              actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
+            ),
+          );
         }
+        return;
       }
-      await ref.read(marketRepositoryProvider).purchaseItem(buyerUid: user.uid, item: widget.item);
-      overlay.close();
       if (mounted) showSavedSnackBar(messenger, message: isKorean ? '구매 완료!' : 'Purchase complete!');
     } catch (_) {
-      overlay.close();
       if (mounted) showSaveErrorSnackBar(messenger, message: isKorean ? '구매에 실패했습니다.' : 'Purchase failed.');
     } finally {
       if (mounted) setState(() => _buyLoading = false);
@@ -400,20 +382,23 @@ class _MarketCardState extends ConsumerState<_MarketCard> {
     }
     if (_projectLoading) return;
     setState(() => _projectLoading = true);
-    final overlay = showSavingOverlay(context);
     try {
-      final project = ProjectModel.empty(uid: user.uid).copyWith(
-        title: widget.item.title,
-        description: widget.item.description,
+      final saved = await runWithMoriLoadingDialog<dynamic>(
+        context,
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        task: () async {
+          final project = ProjectModel.empty(uid: user.uid).copyWith(
+            title: widget.item.title,
+            description: widget.item.description,
+          );
+          return await ref.read(projectRepositoryProvider).createProject(project);
+        },
       );
-      final saved = await ref.read(projectRepositoryProvider).createProject(project);
-      overlay.close();
       if (mounted) {
         showSavedSnackBar(context, message: isKorean ? '저장되었습니다.' : 'Saved.');
         context.push('${Routes.projectList}/${saved.id}');
       }
     } catch (_) {
-      overlay.close();
       if (mounted) showSaveErrorSnackBar(context, message: isKorean ? '저장에 실패했습니다.' : 'Save failed.');
     } finally {
       if (mounted) setState(() => _projectLoading = false);
@@ -425,7 +410,14 @@ class _MarketCardState extends ConsumerState<_MarketCard> {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
     final user = ref.watch(authStateProvider).valueOrNull;
     final isAdmin = ref.watch(isAdminProvider).valueOrNull == true;
-    final accent = _accentColor(widget.item);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = isDark
+        ? HSLColor.fromColor(_accentColor(widget.item))
+            .withLightness(
+              (HSLColor.fromColor(_accentColor(widget.item)).lightness + 0.18).clamp(0.0, 0.95),
+            )
+            .toColor()
+        : _accentColor(widget.item);
 
     return GlassCard(
       onTap: () {
@@ -447,7 +439,7 @@ class _MarketCardState extends ConsumerState<_MarketCard> {
             borderRadius: BorderRadius.circular(16),
             child: Container(
               height: 118,
-              decoration: BoxDecoration(color: accent.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(16)),
+              decoration: BoxDecoration(color: accent.withValues(alpha: isDark ? 0.22 : 0.14), borderRadius: BorderRadius.circular(16)),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -566,14 +558,17 @@ class _ItemDetailSheetState extends ConsumerState<_ItemDetailSheet> {
     }
     if (!mounted) return;
     setState(() => _buyLoading = true);
-    final overlay = showSavingOverlay(context);
     try {
-      await ref.read(marketRepositoryProvider).purchaseItem(buyerUid: widget.user.uid, item: widget.item);
-      overlay.close();
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '구매하는 중입니다.' : 'Processing purchase...',
+        task: () async {
+          await ref.read(marketRepositoryProvider).purchaseItem(buyerUid: widget.user.uid, item: widget.item);
+        },
+      );
       if (mounted) Navigator.pop(context);
       if (mounted) showSavedSnackBar(context, message: isKorean ? '구매 완료!' : 'Purchase complete!');
     } catch (_) {
-      overlay.close();
       if (mounted) showSaveErrorSnackBar(context, message: isKorean ? '구매에 실패했습니다.' : 'Purchase failed.');
     } finally {
       if (mounted) setState(() => _buyLoading = false);
@@ -583,21 +578,24 @@ class _ItemDetailSheetState extends ConsumerState<_ItemDetailSheet> {
   Future<void> _onStartProject() async {
     if (_projectLoading) return;
     setState(() => _projectLoading = true);
-    final overlay = showSavingOverlay(context);
     try {
-      final project = ProjectModel.empty(uid: widget.user.uid).copyWith(
-        title: widget.item.title,
-        description: widget.item.description,
+      final saved = await runWithMoriLoadingDialog<dynamic>(
+        context,
+        message: widget.isKorean ? '저장하는 중입니다.' : 'Saving...',
+        task: () async {
+          final project = ProjectModel.empty(uid: widget.user.uid).copyWith(
+            title: widget.item.title,
+            description: widget.item.description,
+          );
+          return await ref.read(projectRepositoryProvider).createProject(project);
+        },
       );
-      final saved = await ref.read(projectRepositoryProvider).createProject(project);
-      overlay.close();
       if (mounted) Navigator.pop(context);
       if (mounted) {
         showSavedSnackBar(context, message: widget.isKorean ? '저장되었습니다.' : 'Saved.');
         context.push('${Routes.projectList}/${saved.id}');
       }
     } catch (_) {
-      overlay.close();
       if (mounted) showSaveErrorSnackBar(context, message: widget.isKorean ? '저장에 실패했습니다.' : 'Save failed.');
     } finally {
       if (mounted) setState(() => _projectLoading = false);
@@ -628,14 +626,17 @@ class _ItemDetailSheetState extends ConsumerState<_ItemDetailSheet> {
     if (_adminActionLoading) return;
     if (!mounted) return;
     setState(() => _adminActionLoading = true);
-    final overlay = showSavingOverlay(context, message: isKorean ? '삭제하는 중입니다.' : 'Deleting...');
     try {
-      await ref.read(marketRepositoryProvider).deleteItem(widget.item.id);
-      overlay.close();
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '삭제하는 중입니다.' : 'Deleting...',
+        task: () async {
+          await ref.read(marketRepositoryProvider).deleteItem(widget.item.id);
+        },
+      );
       if (mounted) Navigator.pop(context);
       if (mounted) showSavedSnackBar(context, message: isKorean ? '삭제되었습니다.' : 'Deleted.');
     } catch (e) {
-      overlay.close();
       final isSold = e.toString().contains('sold');
       if (mounted) showSaveErrorSnackBar(context, message: isSold ? (isKorean ? '판매 기록이 있어 삭제할 수 없습니다.' : 'Cannot delete: has sales records.') : (isKorean ? '삭제에 실패했습니다.' : 'Delete failed.'));
     } finally {
@@ -672,23 +673,22 @@ class _ItemDetailSheetState extends ConsumerState<_ItemDetailSheet> {
                 const SizedBox(height: 10),
                 TextField(controller: descCtrl, maxLines: 3, decoration: InputDecoration(labelText: isKorean ? '설명' : 'Description')),
                 const SizedBox(height: 10),
-                GestureDetector(
-                  onTap: saving ? null : () => setModalState(() { isFree = !isFree; if (isFree) priceCtrl.clear(); }),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: isFree ? C.lmD.withValues(alpha: 0.10) : Colors.white.withValues(alpha: 0.82),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: isFree ? C.lmD : C.bd),
+                Row(
+                  children: [
+                    _PriceTypeChip(
+                      label: isKorean ? '무료' : 'Free',
+                      selected: isFree,
+                      enabled: !saving,
+                      onTap: () => setModalState(() { isFree = true; priceCtrl.clear(); }),
                     ),
-                    child: Row(
-                      children: [
-                        Icon(isFree ? Icons.check_circle_rounded : Icons.circle_outlined, color: isFree ? C.lmD : C.mu, size: 20),
-                        const SizedBox(width: 10),
-                        Text(isKorean ? '무료 도안 (가격 없음)' : 'Free pattern (no price)', style: T.body.copyWith(color: isFree ? C.lmD : C.tx2)),
-                      ],
+                    const SizedBox(width: 8),
+                    _PriceTypeChip(
+                      label: isKorean ? '유료' : 'Paid',
+                      selected: !isFree,
+                      enabled: !saving,
+                      onTap: () => setModalState(() => isFree = false),
                     ),
-                  ),
+                  ],
                 ),
                 if (!isFree) ...[
                   const SizedBox(height: 10),
@@ -712,33 +712,36 @@ class _ItemDetailSheetState extends ConsumerState<_ItemDetailSheet> {
                     onPressed: saving ? null : () async {
                       if (titleCtrl.text.trim().isEmpty) return;
                       setModalState(() => saving = true);
-                      final overlay = showSavingOverlay(ctx);
                       try {
-                        final updated = MarketItem(
-                          id: item.id,
-                          sellerUid: item.sellerUid,
-                          sellerName: item.sellerName,
-                          title: titleCtrl.text.trim(),
-                          description: descCtrl.text.trim(),
-                          price: isFree ? 0 : (int.tryParse(priceCtrl.text.trim()) ?? 0),
-                          category: category,
-                          accentHex: item.accentHex,
-                          imageType: item.imageType,
-                          isSoldOut: item.isSoldOut,
-                          isOfficial: item.isOfficial,
-                          imageUrl: item.imageUrl,
-                          pdfUrl: item.pdfUrl,
-                          status: item.status,
-                          createdAt: item.createdAt,
-                          viewCount: item.viewCount,
+                        await runWithMoriLoadingDialog<void>(
+                          ctx,
+                          message: isKorean ? '수정하는 중입니다.' : 'Updating...',
+                          task: () async {
+                            final updated = MarketItem(
+                              id: item.id,
+                              sellerUid: item.sellerUid,
+                              sellerName: item.sellerName,
+                              title: titleCtrl.text.trim(),
+                              description: descCtrl.text.trim(),
+                              price: isFree ? 0 : (int.tryParse(priceCtrl.text.trim()) ?? 0),
+                              category: category,
+                              accentHex: item.accentHex,
+                              imageType: item.imageType,
+                              isSoldOut: item.isSoldOut,
+                              isOfficial: item.isOfficial,
+                              imageUrl: item.imageUrl,
+                              pdfUrl: item.pdfUrl,
+                              status: item.status,
+                              createdAt: item.createdAt,
+                              viewCount: item.viewCount,
+                            );
+                            await ref.read(marketRepositoryProvider).updateItem(updated);
+                          },
                         );
-                        await ref.read(marketRepositoryProvider).updateItem(updated);
-                        overlay.close();
                         if (ctx.mounted) Navigator.pop(ctx);
                         if (mounted) Navigator.pop(context);
                         if (mounted) showSavedSnackBar(context, message: isKorean ? '수정되었습니다.' : 'Updated.');
                       } catch (_) {
-                        overlay.close();
                         if (ctx.mounted) showSaveErrorSnackBar(ctx, message: isKorean ? '수정에 실패했습니다.' : 'Update failed.');
                         setModalState(() => saving = false);
                       }
@@ -948,37 +951,41 @@ class _MarketIntroCard extends StatelessWidget {
   }
 }
 
-class _MarketGuestCard extends StatelessWidget {
-  final bool isKorean;
-  final bool isGuest;
-  final VoidCallback onStart;
-  const _MarketGuestCard({required this.isKorean, required this.isGuest, required this.onStart});
+class _PriceTypeChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _PriceTypeChip({
+    required this.label,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(isKorean ? '웹에서 먼저 둘러보세요' : 'Browse first on web', style: T.bodyBold),
-          const SizedBox(height: 10),
-          Text(
-            isGuest
-                ? (isKorean ? '상품 목록은 둘러볼 수 있고, 상세와 구매는 로그인 후 바로 이어집니다.' : 'You can browse the listing now, then log in to open full details and buy.')
-                : (isKorean ? '로그인된 상태라서 상세와 구매를 바로 진행할 수 있어요.' : 'You are signed in, so details and purchase are ready.'),
-            style: T.caption.copyWith(color: C.mu, height: 1.6),
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? C.lv : C.lvL,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? C.lv : C.lv.withValues(alpha: 0.20)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            color: selected ? Colors.white : C.lvD,
           ),
-          const SizedBox(height: 14),
-          if (isGuest)
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: onStart,
-                child: Text(isKorean ? '무료로 시작하기' : 'Start free'),
-              ),
-            ),
-        ],
+        ),
       ),
     );
   }
 }
+

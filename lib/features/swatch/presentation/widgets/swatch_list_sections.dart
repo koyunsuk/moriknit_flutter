@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -64,7 +64,18 @@ class SwatchCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
-  const SwatchCard({super.key, required this.swatch, required this.onTap, this.onEdit, this.onDelete});
+  final VoidCallback? onDuplicate;
+  final String? projectName;
+
+  const SwatchCard({
+    super.key,
+    required this.swatch,
+    required this.onTap,
+    this.onEdit,
+    this.onDelete,
+    this.onDuplicate,
+    this.projectName,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -78,20 +89,23 @@ class SwatchCard extends StatelessWidget {
         child: Row(children: [
           Container(width: 56, height: 56, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(12)), child: swatch.beforePhotoUrl.isNotEmpty ? ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(swatch.beforePhotoUrl, fit: BoxFit.cover)) : Icon(Icons.texture, color: C.lv, size: 28)),
           const SizedBox(width: 14),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [if (swatch.yarnName.isNotEmpty) ...[Text(swatch.yarnName, style: T.h3.copyWith(fontSize: 15)), const SizedBox(height: 2)], Text(swatch.gaugeDisplay, style: T.h3.copyWith(fontSize: 16)), const SizedBox(height: 4), if (swatch.needleSize > 0) Text(swatch.needleSizeDisplay, style: T.sm.copyWith(color: C.lvD)), if (swatch.yarnBrandName.isNotEmpty) Text(swatch.yarnBrandName, style: T.caption.copyWith(color: C.mu))])),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [if (swatch.yarnName.isNotEmpty) ...[Text(swatch.yarnName, style: T.h3.copyWith(fontSize: 15, fontWeight: FontWeight.w700)), const SizedBox(height: 2)], Text(swatch.gaugeDisplay, style: T.h3.copyWith(fontSize: 16)), const SizedBox(height: 4), if (swatch.needleSize > 0) Text(swatch.needleSizeDisplay, style: T.sm.copyWith(color: C.lvD)), if (swatch.yarnBrandName.isNotEmpty) Text(swatch.yarnBrandName, style: T.caption.copyWith(color: C.mu)), if (projectName != null && projectName!.isNotEmpty) ...[const SizedBox(height: 6), _SwatchProjectBadge(name: projectName!)]])),
           if (swatch.hasAfterWash) Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: C.lmG, borderRadius: BorderRadius.circular(20)), child: Text(isKorean ? '세탁 후 ${swatch.shrinkageRate.toStringAsFixed(1)}%' : 'After wash ${swatch.shrinkageRate.toStringAsFixed(1)}%', style: T.caption.copyWith(color: C.lmD, fontWeight: FontWeight.w600))),
           const SizedBox(width: 4),
-          if (onEdit != null || onDelete != null)
+          if (onEdit != null || onDelete != null || onDuplicate != null)
             PopupMenuButton<String>(
               icon: Icon(Icons.more_vert_rounded, color: C.mu, size: 22),
               padding: EdgeInsets.zero,
               onSelected: (value) {
                 if (value == 'edit') onEdit?.call();
                 if (value == 'delete') onDelete?.call();
+                if (value == 'duplicate') onDuplicate?.call();
               },
               itemBuilder: (_) => [
                 if (onEdit != null)
                   PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: C.lvD), const SizedBox(width: 8), Text(isKorean ? '수정' : 'Edit')])),
+                if (onDuplicate != null)
+                  PopupMenuItem(value: 'duplicate', child: Row(children: [Icon(Icons.copy_rounded, size: 18, color: C.lmD), const SizedBox(width: 8), Text(isKorean ? '복사' : 'Duplicate')])),
                 if (onDelete != null)
                   PopupMenuItem(value: 'delete', child: Row(children: [const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red), const SizedBox(width: 8), Text(isKorean ? '삭제' : 'Delete', style: const TextStyle(color: Colors.red))])),
               ],
@@ -99,6 +113,31 @@ class SwatchCard extends StatelessWidget {
           else
             Icon(Icons.chevron_right, color: C.mu),
         ]),
+      ),
+    );
+  }
+}
+
+class _SwatchProjectBadge extends StatelessWidget {
+  final String name;
+  const _SwatchProjectBadge({required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: C.lmD.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: C.lmD.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.folder_outlined, color: C.lmD, size: 12),
+          const SizedBox(width: 4),
+          Text(name, style: T.caption.copyWith(color: C.lmD, fontWeight: FontWeight.w600)),
+        ],
       ),
     );
   }

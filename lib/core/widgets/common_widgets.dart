@@ -966,6 +966,60 @@ class MoriToggleChip extends StatelessWidget {
   }
 }
 
+class MoriEmptyState extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final String? buttonLabel;
+  final VoidCallback? onAction;
+
+  const MoriEmptyState({
+    super.key,
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    this.buttonLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(icon, color: iconColor, size: 36),
+            ),
+            const SizedBox(height: 16),
+            Text(title, style: T.bodyBold, textAlign: TextAlign.center),
+            const SizedBox(height: 8),
+            Text(subtitle, style: T.caption.copyWith(color: C.mu), textAlign: TextAlign.center),
+            if (buttonLabel != null && onAction != null) ...[
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: onAction,
+                icon: const Icon(Icons.add_rounded),
+                label: Text(buttonLabel!),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// 소규모 옵션(카테고리 등) 선택용 공통 chip 위젯
 /// DropdownButtonFormField 대신 사용하여 일관된 UI 제공
 class MoriOptionChips<V> extends StatelessWidget {

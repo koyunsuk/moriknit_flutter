@@ -2,6 +2,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:hive/hive.dart';
 import '../domain/counter_model.dart';
 import '../../../core/constants/subscription_constants.dart';
@@ -55,6 +56,20 @@ class CounterRepository {
     }
   }
 
+  // ── DUPLICATE ────────────────────────────────────────────
+  Future<CounterModel> duplicateCounter(CounterModel original) async {
+    final now = DateTime.now();
+    final copy = original.copyWith(
+      id: '',
+      name: '${original.name} (복사)',
+      createdAt: now,
+      updatedAt: now,
+      isDirty: false,
+      marks: [],
+    );
+    return createCounter(copy);
+  }
+
   // ── READ (목록) ──────────────────────────────────────────
   Stream<List<CounterModel>> watchCounters() {
     if (_uid.isEmpty) return Stream.value([]);
@@ -94,11 +109,13 @@ class CounterRepository {
     await _saveToHive(updated);
 
     try {
-      await _countersRef.doc(counter.id).update({
-        ...updated.toJson(),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'isDirty': false,
-      });
+      final json = Map<String, dynamic>.from(updated.toJson())
+        ..remove('id')
+        ..remove('uid')
+        ..remove('createdAt');
+      json['updatedAt'] = FieldValue.serverTimestamp();
+      json['isDirty'] = false;
+      await _countersRef.doc(counter.id).update(json);
       return updated.copyWith(isDirty: false);
     } catch (e) {
       final dirty = updated.copyWith(isDirty: true);
@@ -137,6 +154,14 @@ class CounterRepository {
     });
   }
 
+  Future<void> updateTargets(String id, {required int targetStitchCount, required int targetRowCount}) async {
+    await _countersRef.doc(id).update({
+      'targetStitchCount': targetStitchCount,
+      'targetRowCount': targetRowCount,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   // ── DELETE ───────────────────────────────────────────────
   Future<void> deleteCounter(String id) async {
     if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
@@ -152,6 +177,7 @@ class CounterRepository {
 
   // ── Hive ─────────────────────────────────────────────────
   Future<void> _saveToHive(CounterModel counter) async {
+    if (kIsWeb) return;
     final box = Hive.box<Map>(SubscriptionConstants.boxCounters);
     final key = counter.id.isEmpty
         ? 'temp_${DateTime.now().millisecondsSinceEpoch}'
@@ -160,12 +186,13 @@ class CounterRepository {
   }
 
   Future<void> _removeFromHive(String id) async {
+    if (kIsWeb) return;
     final box = Hive.box<Map>(SubscriptionConstants.boxCounters);
     await box.delete(id);
   }
 
   Future<void> syncDirtyCounters() async {
-    if (_uid.isEmpty) return;
+    if (kIsWeb || _uid.isEmpty) return;
     final box = Hive.box<Map>(SubscriptionConstants.boxCounters);
     for (final key in box.keys) {
       final data = box.get(key);

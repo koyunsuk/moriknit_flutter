@@ -1,13 +1,11 @@
-﻿import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../features/counter/domain/counter_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/avatar_provider.dart';
-import '../../providers/counter_provider.dart';
 import '../localization/app_language.dart';
 import '../router/app_router.dart';
 import '../theme/app_colors.dart';
@@ -26,9 +24,10 @@ class _MainShellState extends ConsumerState<MainShell> {
   bool _fabOpen = false;
 
   int _locationToIndex(String location) {
+    if (location.startsWith(Routes.tools)) return 1;
     if (location.startsWith(Routes.projectList)) return 1;
     if (location.startsWith(Routes.swatchList)) return 1;
-    if (location.startsWith(Routes.tools)) return 1;
+    if (location.startsWith(Routes.counterList)) return 1;
     if (location.startsWith(Routes.community)) return 2;
     if (location.startsWith(Routes.messenger)) return 3;
     if (location.startsWith(Routes.market)) return 4;
@@ -72,7 +71,7 @@ class _MainShellState extends ConsumerState<MainShell> {
       _SpeedItem(icon: Icons.folder_open_rounded, label: '새 프로젝트', color: C.lv, onTap: () { _closeFab(); context.push(Routes.projectInput); }),
       _SpeedItem(icon: Icons.grid_view_rounded, label: t.swatches, color: C.lmD, onTap: () { _closeFab(); context.push(Routes.swatchInput); }),
       _SpeedItem(icon: Icons.edit_note_rounded, label: '새 메모', color: C.pk, onTap: () { _closeFab(); context.push(Routes.toolsMemo); }),
-      _SpeedItem(icon: Icons.exposure_plus_1_rounded, label: t.newCounter, color: C.pkD, onTap: () { _closeFab(); _createCounter(context); }),
+      _SpeedItem(icon: Icons.exposure_plus_1_rounded, label: t.newCounter, color: C.pkD, onTap: () { _closeFab(); context.push(Routes.counterList); }),
     ];
 
     return Scaffold(
@@ -106,7 +105,7 @@ class _MainShellState extends ConsumerState<MainShell> {
   void _onTap(BuildContext context, int index) {
     switch (index) {
       case 0: context.go(Routes.home); return;
-      case 1: context.go(Routes.projectList); return;
+      case 1: context.go(Routes.tools); return;
       case 2: context.go(Routes.community); return;
       case 3: context.go(Routes.messenger); return;
       case 4: context.go(Routes.market); return;
@@ -114,33 +113,6 @@ class _MainShellState extends ConsumerState<MainShell> {
     }
   }
 
-  void _createCounter(BuildContext context) {
-    final t = ref.read(appStringsProvider);
-    final user = ref.read(authStateProvider).valueOrNull;
-    if (user == null) { context.go(Routes.login); return; }
-    final ctrl = TextEditingController(text: t.newCounter);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(t.newCounter, style: T.h3),
-        content: TextField(controller: ctrl, decoration: InputDecoration(hintText: t.newCounter), autofocus: true),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(t.close)),
-          ElevatedButton(
-            onPressed: () async {
-              final name = ctrl.text.trim();
-              if (name.isEmpty) return;
-              Navigator.pop(ctx);
-              final counter = CounterModel.empty(uid: user.uid, name: name);
-              final saved = await ref.read(counterRepositoryProvider).createCounter(counter);
-              if (context.mounted) context.push('/counter/${saved.id}');
-            },
-            child: Text(t.create),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _SpeedItem {
@@ -229,8 +201,13 @@ class _WebShell extends ConsumerWidget {
   final int locationIndex;
   const _WebShell({required this.child, required this.locationIndex});
 
+  static const double _sidebarBreakpoint = 700;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final showSidebar = screenWidth >= _sidebarBreakpoint;
+
     final t = ref.watch(appStringsProvider);
     final profile = ref.watch(currentUserProvider).valueOrNull;
     final avatarPreset = ref.watch(avatarPresetProvider);
@@ -243,7 +220,7 @@ class _WebShell extends ConsumerWidget {
 
     final navItems = [
       _WebNavItem(Icons.home_rounded, t.home, C.pk, Routes.home),
-      _WebNavItem(Icons.folder_special_rounded, t.projectsTabLabel, C.lv, Routes.projectList),
+      _WebNavItem(Icons.folder_special_rounded, t.projectsTabLabel, C.lv, Routes.tools),
       _WebNavItem(Icons.people_alt_rounded, t.community, C.pkD, Routes.community),
       _WebNavItem(Icons.chat_bubble_outline_rounded, t.messengerTabLabel, C.lmD, Routes.messenger),
       _WebNavItem(Icons.storefront_rounded, t.market, C.lvD, Routes.market),
@@ -251,6 +228,44 @@ class _WebShell extends ConsumerWidget {
       if (isAdmin) _WebNavItem(Icons.admin_panel_settings_rounded, t.adminLabel, const Color(0xFF1A1A2E), Routes.admin),
     ];
 
+    final sidebarContent = _buildSidebarContent(context, ref, t, navItems, displayName, avatarUrl, avatarPreset, authUser);
+
+    if (!showSidebar) {
+      // Narrow web window: use drawer
+      return Scaffold(
+        backgroundColor: C.bg,
+        appBar: AppBar(
+          backgroundColor: C.bg,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          leadingWidth: 52,
+          leading: Builder(
+            builder: (ctx) => IconButton(
+              icon: Icon(Icons.menu_rounded, color: C.tx),
+              onPressed: () => Scaffold.of(ctx).openDrawer(),
+            ),
+          ),
+          title: const MoriKnitTitle(fontSize: 18),
+          centerTitle: false,
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Divider(height: 1, color: C.bd2),
+          ),
+        ),
+        drawer: Drawer(
+          backgroundColor: C.gx,
+          child: SafeArea(child: sidebarContent),
+        ),
+        body: Stack(
+          children: [
+            const BgOrbs(),
+            child,
+          ],
+        ),
+      );
+    }
+
+    // Wide window: fixed sidebar layout
     return Scaffold(
       backgroundColor: const Color(0xFFF2F3F5),
       body: Center(
@@ -265,129 +280,135 @@ class _WebShell extends ConsumerWidget {
             ),
             child: Row(
               children: [
-          // ?? Sidebar ??????????????????????????????????????????????????????
-          Container(
-            width: 220,
-            height: double.infinity,
-            decoration: BoxDecoration(
-              color: C.gx,
-              border: Border(right: BorderSide(color: C.bd2, width: 1)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Logo
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 22, 20, 16),
-                  child: const MoriKnitTitle(fontSize: 22),
-                ),
-                Divider(height: 1, color: C.bd2),
-                const SizedBox(height: 8),
-                // Nav items
-                ...List.generate(navItems.length, (i) {
-                  final item = navItems[i];
-                  final selected = i == locationIndex;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(10),
-                      onTap: () {
-                        if (kIsWeb && item.route == Routes.admin) {
-                          launchUrl(Uri.base.resolve(Routes.admin), webOnlyWindowName: '_blank');
-                        } else {
-                          context.go(item.route);
-                        }
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: selected ? C.lvL : Colors.transparent,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(item.icon, size: 18, color: selected ? C.lvD : C.mu),
-                            const SizedBox(width: 8),
-                            Text(
-                              item.label,
-                              style: T.body.copyWith(
-                                color: selected ? C.lvD : C.tx2,
-                                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-                const SizedBox(height: 12),
-                Divider(height: 1, color: C.bd2),
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: ElevatedButton.icon(
-                    onPressed: () => _showWebCreate(context, ref),
-                    icon: const Icon(Icons.add_rounded, size: 16),
-                    label: Text(t.createLabel),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: C.lv,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
+                // Sidebar
+                Container(
+                  width: 220,
+                  height: double.infinity,
+                  decoration: BoxDecoration(
+                    color: C.gx,
+                    border: Border(right: BorderSide(color: C.bd2, width: 1)),
                   ),
+                  child: sidebarContent,
                 ),
-                const Spacer(),
-                Divider(height: 1, color: C.bd2),
-                // User section
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 16,
-                        backgroundColor: C.lvL,
-                        backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
-                        child: avatarUrl.isEmpty
-                            ? MoriDefaultAvatar(size: 26, borderRadius: 999, preset: avatarPreset)
-                            : null,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(displayName, style: T.sm.copyWith(fontWeight: FontWeight.w700, color: C.tx), maxLines: 1, overflow: TextOverflow.ellipsis),
-                            if (authUser?.email != null)
-                              Text(authUser!.email!, style: T.caption.copyWith(color: C.mu), maxLines: 1, overflow: TextOverflow.ellipsis),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                // Main content
+                Expanded(
+                  child: _WebContentArea(child: child),
                 ),
               ],
-            ),
-          ),
-          // ?? Main content ?????????????????????????????????????????????????
-          Expanded(
-            child: Stack(
-              children: [
-                const BgOrbs(),
-                child,
-              ],
-            ),
-          ),
-        ],
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSidebarContent(
+    BuildContext context,
+    WidgetRef ref,
+    dynamic t,
+    List<_WebNavItem> navItems,
+    String displayName,
+    String avatarUrl,
+    dynamic avatarPreset,
+    dynamic authUser,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 22, 20, 16),
+          child: const MoriKnitTitle(fontSize: 22),
+        ),
+        Divider(height: 1, color: C.bd2),
+        const SizedBox(height: 8),
+        ...List.generate(navItems.length, (i) {
+          final item = navItems[i];
+          final selected = i == locationIndex;
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () {
+                Navigator.of(context).maybePop(); // close drawer if open
+                if (kIsWeb && item.route == Routes.admin) {
+                  launchUrl(Uri.base.resolve(Routes.admin), webOnlyWindowName: '_blank');
+                } else {
+                  context.go(item.route);
+                }
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: selected ? C.lvL : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Icon(item.icon, size: 18, color: selected ? C.lvD : C.mu),
+                    const SizedBox(width: 8),
+                    Text(
+                      item.label,
+                      style: T.body.copyWith(
+                        color: selected ? C.lvD : C.tx2,
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+        const SizedBox(height: 12),
+        Divider(height: 1, color: C.bd2),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: ElevatedButton.icon(
+            onPressed: () => _showWebCreate(context, ref),
+            icon: const Icon(Icons.add_rounded, size: 16),
+            label: Text(t.createLabel),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: C.lv,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
+          ),
+        ),
+        const Spacer(),
+        Divider(height: 1, color: C.bd2),
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 16,
+                backgroundColor: C.lvL,
+                backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                child: avatarUrl.isEmpty
+                    ? MoriDefaultAvatar(size: 26, borderRadius: 999, preset: avatarPreset)
+                    : null,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(displayName, style: T.sm.copyWith(fontWeight: FontWeight.w700, color: C.tx), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    if (authUser?.email != null)
+                      Text(authUser!.email!, style: T.caption.copyWith(color: C.mu), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -431,6 +452,54 @@ class _WebShell extends ConsumerWidget {
   }
 }
 
+class _WebContentArea extends ConsumerStatefulWidget {
+  final Widget child;
+  const _WebContentArea({required this.child});
+
+  @override
+  ConsumerState<_WebContentArea> createState() => _WebContentAreaState();
+}
+
+class _WebContentAreaState extends ConsumerState<_WebContentArea> {
+  bool _fabOpen = false;
+
+  void _closeFab() => setState(() => _fabOpen = false);
+
+  @override
+  Widget build(BuildContext context) {
+    final t = ref.watch(appStringsProvider);
+    final speedItems = [
+      _SpeedItem(icon: Icons.folder_open_rounded, label: '새 프로젝트', color: C.lv, onTap: () { _closeFab(); context.push(Routes.projectInput); }),
+      _SpeedItem(icon: Icons.grid_view_rounded, label: t.swatches, color: C.lmD, onTap: () { _closeFab(); context.push(Routes.swatchInput); }),
+      _SpeedItem(icon: Icons.edit_note_rounded, label: '새 메모', color: C.pk, onTap: () { _closeFab(); context.push(Routes.toolsMemo); }),
+      _SpeedItem(icon: Icons.exposure_plus_1_rounded, label: t.newCounter, color: C.pkD, onTap: () { _closeFab(); context.push(Routes.counterList); }),
+    ];
+
+    return Stack(
+      children: [
+        const BgOrbs(),
+        widget.child,
+        if (_fabOpen)
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: _closeFab,
+              child: Container(color: Colors.black.withValues(alpha: 0.2)),
+            ),
+          ),
+        Positioned(
+          right: 24,
+          bottom: 24,
+          child: _SpeedDial(
+            open: _fabOpen,
+            onToggle: () => setState(() => _fabOpen = !_fabOpen),
+            items: speedItems,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _WebNavItem {
   final IconData icon;
   final String label;
@@ -460,4 +529,3 @@ class _CreateChip extends StatelessWidget {
     );
   }
 }
-

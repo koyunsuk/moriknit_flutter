@@ -17,6 +17,9 @@ class ChartCanvas extends StatefulWidget {
   final Color activeColor;
   final String? activeSymbolId;
   final ValueChanged<PatternChart> onChartChanged;
+  final TransformationController? transformationController;
+  /// 전체 조망: non-null Size가 들어오면 해당 크기에 맞게 셀 크기 자동 조정
+  final ValueNotifier<Size?>? fitToScreenNotifier;
 
   const ChartCanvas({
     super.key,
@@ -25,6 +28,8 @@ class ChartCanvas extends StatefulWidget {
     required this.activeColor,
     this.activeSymbolId,
     required this.onChartChanged,
+    this.transformationController,
+    this.fitToScreenNotifier,
   });
 
   @override
@@ -32,12 +37,42 @@ class ChartCanvas extends StatefulWidget {
 }
 
 class _ChartCanvasState extends State<ChartCanvas> {
-  final _transformCtrl = TransformationController();
+  TransformationController? _ownedCtrl;
+  TransformationController get _transformCtrl =>
+      widget.transformationController ?? (_ownedCtrl ??= TransformationController());
   bool _isPainting = false;
 
   @override
+  void initState() {
+    super.initState();
+    widget.fitToScreenNotifier?.addListener(_onFitScreen);
+  }
+
+  @override
+  void didUpdateWidget(ChartCanvas old) {
+    super.didUpdateWidget(old);
+    if (old.fitToScreenNotifier != widget.fitToScreenNotifier) {
+      old.fitToScreenNotifier?.removeListener(_onFitScreen);
+      widget.fitToScreenNotifier?.addListener(_onFitScreen);
+    }
+  }
+
+  void _onFitScreen() {
+    final size = widget.fitToScreenNotifier?.value;
+    if (size == null) return;
+    final chart = widget.chart;
+    final availableW = size.width - _headerW;
+    final availableH = size.height - _headerH;
+    final cellW = availableW / chart.cols;
+    final cellH = availableH / chart.rows;
+    final scale = (cellW < cellH ? cellW : cellH) / _cellW;
+    _transformCtrl.value = Matrix4.diagonal3Values(scale, scale, 1.0);
+  }
+
+  @override
   void dispose() {
-    _transformCtrl.dispose();
+    widget.fitToScreenNotifier?.removeListener(_onFitScreen);
+    _ownedCtrl?.dispose();
     super.dispose();
   }
 

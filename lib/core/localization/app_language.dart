@@ -1,5 +1,6 @@
 ﻿import 'dart:ui';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 import 'package:moriknit_flutter/core/constants/subscription_constants.dart';
@@ -37,6 +38,7 @@ class AppLanguageNotifier extends StateNotifier<AppLanguage> {
   AppLanguageNotifier() : super(_readSaved());
 
   static AppLanguage _readSaved() {
+    if (kIsWeb) return AppLanguage.ko;
     try {
       final box = Hive.box<Map>(SubscriptionConstants.boxUser);
       final raw = box.get('settings');
@@ -59,6 +61,7 @@ class AppLanguageNotifier extends StateNotifier<AppLanguage> {
 
   Future<void> setLanguage(AppLanguage language) async {
     state = language;
+    if (kIsWeb) return;
     final box = Hive.box<Map>(SubscriptionConstants.boxUser);
     final current = Map<String, dynamic>.from(box.get('settings') ?? <String, dynamic>{});
     current['language'] = language.code;

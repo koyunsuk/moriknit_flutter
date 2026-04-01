@@ -2,6 +2,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:hive/hive.dart';
 import '../domain/swatch_model.dart';
 import '../../../core/constants/subscription_constants.dart';
@@ -61,6 +62,21 @@ class SwatchRepository {
       await _saveToHive(calculated.copyWith(isDirty: true));
       return calculated.copyWith(isDirty: true);
     }
+  }
+
+  // ── DUPLICATE ────────────────────────────────────────────
+  Future<SwatchModel> duplicateSwatch(SwatchModel original) async {
+    final now = DateTime.now();
+    final copy = original.copyWith(
+      id: '',
+      swatchName: original.swatchName.isEmpty
+          ? ''
+          : '${original.swatchName} (복사)',
+      createdAt: now,
+      updatedAt: now,
+      isDirty: false,
+    );
+    return createSwatch(copy);
   }
 
   // ── READ (목록) ──────────────────────────────────────────
@@ -132,19 +148,21 @@ class SwatchRepository {
 
   // ── Hive 로컬 저장 ───────────────────────────────────────
   Future<void> _saveToHive(SwatchModel swatch) async {
+    if (kIsWeb) return;
     final box = Hive.box<Map>(SubscriptionConstants.boxSwatches);
     await box.put(swatch.id.isEmpty ? 'temp_${DateTime.now().millisecondsSinceEpoch}' : swatch.id,
         swatch.toJson());
   }
 
   Future<void> _removeFromHive(String swatchId) async {
+    if (kIsWeb) return;
     final box = Hive.box<Map>(SubscriptionConstants.boxSwatches);
     await box.delete(swatchId);
   }
 
   // ── Dirty 항목 sync (30분마다 호출) ─────────────────────
   Future<void> syncDirtySwatches() async {
-    if (_uid.isEmpty) return;
+    if (kIsWeb || _uid.isEmpty) return;
     final box = Hive.box<Map>(SubscriptionConstants.boxSwatches);
     for (final key in box.keys) {
       final data = box.get(key);

@@ -27,6 +27,7 @@
 - 체크박스는 항상 `- [ ]` 미체크로만 생성. Claude가 임의로 `- [x]` 체크 금지
 - 사용자가 직접 확인 후 체크하는 방식
 - 이슈는 Claude가 임의로 닫지 않음. 사용자 승인 후에만 close.
+- **기존 이슈에 대한 피드백/추가 작업은 새 이슈 생성 금지.** 기존 이슈에 항목 추가할지 먼저 물어볼 것.
 - 작업 완료 후 사용자에게 "이슈 #N 점검해 주세요" 요청.
 - 세션 시작 시 "이슈 확인해" 요청이 오면 열린 이슈 목록 먼저 확인.
 
@@ -55,3 +56,37 @@
 - 중복 버튼(저장, 새로만들기 등) 발견 시 삭제.
 - 헤더는 공통 컴포넌트로 관리 (스와치/프로젝트/도안 등 통일성 유지).
 - 기준 화면: 스와치 화면 → 모든 저장 화면의 UI 레퍼런스.
+
+## 고정 UI 패턴 — 입력화면 표준 (기준: swatch_input_screen.dart)
+
+### 입력/편집 화면 구조
+- **AppBar**: `arrow_back_ios (size 20, color C.tx)` + 제목 `T.h3` + (선택) AppBar actions에 저장 버튼
+- **Scaffold body**: `Stack([BgOrbs(), SingleChildScrollView(...)])`, padding `fromLTRB(16, 12, 16, 28)`
+- **섹션 레이블**: `SectionTitle` 공통 위젯 고정 사용 — `_SectionLabel` 같은 파일별 커스텀 위젯 금지
+- **TextField**: `labelText` + `hintText` 병용, border는 테마 기본값 (`OutlineInputBorder` 직접 지정 금지)
+  - `fillColor`: 항상 `C.gx` (흰색 또는 다른 색상 금지)
+- **저장 버튼**: `bottomNavigationBar` 안에 `SafeArea > ElevatedButton (height 54, width double.infinity)`
+  - AppBar에 저장 버튼이 있는 경우 body 하단 버튼은 제거 (중복 금지)
+
+### 선택/토글 UI 표준 (칩 스타일)
+- **선택 위젯**: `MoriChip` 또는 아래 커스텀 칩 패턴 사용. `SegmentedButton`, `RadioListTile`, `Switch` 금지.
+- **칩 스타일** (선택/미선택):
+  ```dart
+  // 선택됨
+  color: C.lv, border: C.lv, text: Colors.white, fontWeight: w700
+  // 미선택
+  color: C.lvL, border: C.lv.withValues(alpha: 0.20), text: C.lvD, fontWeight: w500
+  borderRadius: BorderRadius.circular(20), padding: horizontal 10 vertical 6
+  ```
+- **기준 파일**: `project_input_screen.dart`의 `_StatusSelector`
+
+### 사진 첨부 표준 (갤러리 + 즉시촬영 항상 함께)
+- **모든 사진 첨부 기능**: 갤러리 선택 + 즉시촬영 두 가지 옵션을 항상 함께 제공
+- 구현 방식: `_showImageSourceDialog()` 공통 패턴 사용 — 카메라/갤러리 선택 bottomSheet 후 `ImagePicker` 호출
+- 단일 버튼(갤러리만 또는 카메라만) 금지. 사용자가 항상 선택 가능해야 함.
+- **기준 파일**: `project_input_screen.dart`의 `_showImageSourceDialog()` + `_pickCover()` 패턴
+
+### 수정/삭제 액션 표준 (점세개 팝업)
+- **모든 상세 화면 AppBar**: 수정/삭제 아이콘을 개별 `IconButton`으로 두지 말고 `PopupMenuButton<String>(icon: Icons.more_vert)` 하나로 통합
+- 메뉴 항목: `수정` (기본색), `삭제` (color: C.og)
+- **기준 파일**: `counter_screen.dart`의 AppBar actions

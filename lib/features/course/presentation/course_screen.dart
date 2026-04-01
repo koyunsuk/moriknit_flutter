@@ -28,17 +28,38 @@ String _thumbnailUrl(String videoUrl) {
   return 'https://img.youtube.com/vi/$id/mqdefault.jpg';
 }
 
-class CourseScreen extends ConsumerWidget {
+class CourseScreen extends ConsumerStatefulWidget {
   const CourseScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CourseScreen> createState() => _CourseScreenState();
+}
+
+class _CourseScreenState extends ConsumerState<CourseScreen> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
     final user = ref.watch(authStateProvider).valueOrNull;
     final coursesAsync = ref.watch(courseProvider);
 
     return Scaffold(
       backgroundColor: C.bg,
+      floatingActionButton: user != null
+          ? FloatingActionButton(
+              onPressed: () => _showAddClassSheet(context, ref, isKorean),
+              backgroundColor: C.lv,
+              child: const Icon(Icons.add_rounded, color: Colors.white),
+            )
+          : null,
       body: SafeArea(
         child: Column(
           children: [
@@ -56,7 +77,15 @@ class CourseScreen extends ConsumerWidget {
                   if (courses.isEmpty) {
                     return _CourseFallback(isKorean: isKorean, canAdd: user != null, onAdd: () => _showAddClassSheet(context, ref, isKorean));
                   }
-                  final categories = courses.map((c) => c.category).toSet().toList();
+                  final filtered = _query.isEmpty
+                      ? courses
+                      : courses.where((c) {
+                          final q = _query.toLowerCase();
+                          return c.title.toLowerCase().contains(q) ||
+                              c.titleEn.toLowerCase().contains(q) ||
+                              c.category.toLowerCase().contains(q);
+                        }).toList();
+                  final categories = filtered.map((c) => c.category).toSet().toList();
                   final sortedCourses = [...courses]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
                   final recentCourse = sortedCourses.first;
 
@@ -65,24 +94,51 @@ class CourseScreen extends ConsumerWidget {
                     children: [
                       // 통계 카드
                       GlassCard(
-                        margin: const EdgeInsets.only(bottom: 16),
+                        margin: const EdgeInsets.only(bottom: 12),
                         child: Text(
                           isKorean
-                              ? '전체 ${courses.length}개 클라스 · 카테고리 ${categories.length}개'
-                              : 'Total ${courses.length} classes · ${categories.length} categories',
+                              ? '전체 ${courses.length}개 클라스 · 카테고리 ${courses.map((c) => c.category).toSet().length}개'
+                              : 'Total ${courses.length} classes · ${courses.map((c) => c.category).toSet().length} categories',
                           style: T.bodyBold.copyWith(color: C.lvD),
                         ),
                       ),
-                      // 최근 추가 하이라이트 카드 (대형 썸네일)
-                      _RecentCourseCard(
-                        item: recentCourse,
-                        isKorean: isKorean,
-                        onTap: () => _openDetail(context, recentCourse, isKorean),
+                      // 검색창
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: (v) => setState(() => _query = v),
+                          decoration: InputDecoration(
+                            hintText: isKorean ? '강의 제목, 카테고리 검색' : 'Search classes',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            suffixIcon: _query.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear_rounded),
+                                    onPressed: () { _searchController.clear(); setState(() => _query = ''); },
+                                  )
+                                : null,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: C.bd)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 16),
+                      if (filtered.isEmpty && _query.isNotEmpty)
+                        Center(child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Text(isKorean ? '검색 결과가 없어요' : 'No results found', style: T.body.copyWith(color: C.mu)),
+                        )),
+                      // 최근 추가 하이라이트 카드 (대형 썸네일) — 검색 없을 때만
+                      if (_query.isEmpty) ...[
+                        _RecentCourseCard(
+                          item: recentCourse,
+                          isKorean: isKorean,
+                          onTap: () => _openDetail(context, recentCourse, isKorean),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                       // 카테고리별 목록
                       ...categories.map((cat) {
-                        final items = courses.where((c) => c.category == cat).toList();
+                        final items = filtered.where((c) => c.category == cat).toList();
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -149,7 +205,14 @@ class CourseScreen extends ConsumerWidget {
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 initialValue: category,
-                decoration: InputDecoration(labelText: isKorean ? '분류' : 'Category'),
+                decoration: InputDecoration(
+                  labelText: isKorean ? '분류' : 'Category',
+                  filled: true,
+                  fillColor: C.gx,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: C.bd)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: C.bd)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                ),
                 items: [
                   DropdownMenuItem(value: isKorean ? '입문' : 'Beginner', child: Text(isKorean ? '입문' : 'Beginner')),
                   DropdownMenuItem(value: isKorean ? '중급' : 'Intermediate', child: Text(isKorean ? '중급' : 'Intermediate')),
@@ -172,7 +235,12 @@ class CourseScreen extends ConsumerWidget {
                       isPublished: true,
                       createdAt: DateTime.now(),
                     );
-                    await ref.read(courseRepositoryProvider).createCourse(item);
+                    await runWithMoriLoadingDialog<void>(
+                      ctx,
+                      message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+                      subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+                      task: () => ref.read(courseRepositoryProvider).createCourse(item),
+                    );
                     if (ctx.mounted) {
                       showSavedSnackBar(ctx, message: isKorean ? '클라스가 등록됐어요.' : 'Class saved.');
                       Navigator.pop(ctx);
@@ -566,7 +634,14 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 initialValue: category,
-                decoration: InputDecoration(labelText: widget.isKorean ? '분류' : 'Category'),
+                decoration: InputDecoration(
+                  labelText: widget.isKorean ? '분류' : 'Category',
+                  filled: true,
+                  fillColor: C.gx,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: C.bd)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: C.bd)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                ),
                 items: [
                   DropdownMenuItem(value: widget.isKorean ? '입문' : 'Beginner', child: Text(widget.isKorean ? '입문' : 'Beginner')),
                   DropdownMenuItem(value: widget.isKorean ? '중급' : 'Intermediate', child: Text(widget.isKorean ? '중급' : 'Intermediate')),
@@ -592,7 +667,12 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
                       isPublished: widget.item.isPublished,
                       createdAt: widget.item.createdAt,
                     );
-                    await ref.read(courseRepositoryProvider).updateCourse(updated);
+                    await runWithMoriLoadingDialog<void>(
+                      ctx,
+                      message: widget.isKorean ? '저장하는 중입니다.' : 'Saving...',
+                      subtitle: widget.isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+                      task: () => ref.read(courseRepositoryProvider).updateCourse(updated),
+                    );
                     if (ctx.mounted) {
                       showSavedSnackBar(ctx, message: widget.isKorean ? '수정되었습니다.' : 'Updated.');
                       Navigator.pop(ctx);
@@ -628,9 +708,13 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
       ),
     );
     if (confirm == true && context.mounted) {
-      final overlay = showSavingOverlay(context, message: widget.isKorean ? '삭제하는 중입니다.' : 'Deleting...');
-      await ref.read(courseRepositoryProvider).deleteCourse(widget.item.id);
-      overlay.close();
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: widget.isKorean ? '삭제하는 중입니다.' : 'Deleting...',
+        task: () async {
+          await ref.read(courseRepositoryProvider).deleteCourse(widget.item.id);
+        },
+      );
       if (context.mounted) {
         showSavedSnackBar(context, message: widget.isKorean ? '삭제되었습니다.' : 'Deleted.');
         Navigator.pop(context);

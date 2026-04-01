@@ -11,6 +11,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/project_provider.dart';
 import '../../../providers/swatch_provider.dart';
 import '../../my/data/mori_service.dart';
 import '../domain/swatch_model.dart';
@@ -28,6 +29,7 @@ class SwatchInputScreen extends ConsumerStatefulWidget {
 
 class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
   final TextEditingController _memoController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
   bool _isSaving = false;
 
   @override
@@ -38,6 +40,7 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(swatchInputProvider.notifier).loadSwatch(initial);
         _memoController.text = initial.memo;
+        _nameController.text = initial.swatchName;
       });
     }
   }
@@ -45,12 +48,14 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
   @override
   void dispose() {
     _memoController.dispose();
+    _nameController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final t = ref.watch(appStringsProvider);
+    final isKorean = ref.watch(appLanguageProvider).isKorean;
     final swatch = ref.watch(swatchInputProvider);
     final notifier = ref.read(swatchInputProvider.notifier);
 
@@ -101,6 +106,30 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
               children: [
                 MoriBrandHeader(subtitle: t.swatchHeaderSubtitle),
                 const SizedBox(height: 18),
+                GlassCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SectionTitle(title: isKorean ? '이름 (닉네임)' : 'Name (nickname)'),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _nameController,
+                        decoration: InputDecoration(
+                          labelText: isKorean ? '스와치 이름 (선택)' : 'Swatch name (optional)',
+                          hintText: isKorean ? '예: 핑크 메리노 테스트' : 'e.g. Pink Merino Test',
+                        ),
+                        onChanged: notifier.updateSwatchName,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _ProjectLinkCard(
+                  selectedProjectId: swatch.projectId,
+                  onChanged: notifier.updateProjectId,
+                  isKorean: isKorean,
+                ),
+                const SizedBox(height: 14),
                 GlassCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -337,6 +366,51 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
         title: Text(t.swatchLimitReached, style: T.h3),
         content: Text(message, style: T.body),
         actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(t.close))],
+      ),
+    );
+  }
+}
+
+class _ProjectLinkCard extends ConsumerWidget {
+  final String selectedProjectId;
+  final ValueChanged<String> onChanged;
+  final bool isKorean;
+
+  const _ProjectLinkCard({
+    required this.selectedProjectId,
+    required this.onChanged,
+    required this.isKorean,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final projectsAsync = ref.watch(projectListProvider);
+    final projects = projectsAsync.valueOrNull ?? [];
+
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionTitle(title: isKorean ? '프로젝트 연결 (선택)' : 'Link project (optional)'),
+          const SizedBox(height: 10),
+          DropdownButton<String>(
+            value: selectedProjectId.isEmpty ? '' : selectedProjectId,
+            isExpanded: true,
+            underline: const SizedBox.shrink(),
+            borderRadius: BorderRadius.circular(12),
+            items: [
+              DropdownMenuItem<String>(
+                value: '',
+                child: Text(isKorean ? '연결 안 함' : 'No project', style: T.body.copyWith(color: C.mu)),
+              ),
+              ...projects.map((p) => DropdownMenuItem<String>(
+                    value: p.id,
+                    child: Text(p.title, style: T.body, overflow: TextOverflow.ellipsis),
+                  )),
+            ],
+            onChanged: (value) => onChanged(value ?? ''),
+          ),
+        ],
       ),
     );
   }

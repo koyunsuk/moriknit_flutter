@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/localization/app_language.dart';
-import '../../../core/localization/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/needle_provider.dart';
 import '../domain/needle_model.dart';
+import 'needle_detail_screen.dart';
 import 'needle_input_screen.dart';
 
 class NeedleListScreen extends ConsumerWidget {
@@ -29,7 +29,7 @@ class NeedleListScreen extends ConsumerWidget {
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton(
         backgroundColor: C.lv,
-        onPressed: () => _navigateToInput(context),
+        onPressed: () => _showNeedleStartSheet(context, ref),
         child: const Icon(Icons.add, color: Colors.white),
       ),
       body: SafeArea(
@@ -122,7 +122,7 @@ class NeedleListScreen extends ConsumerWidget {
                                   runSpacing: 8,
                                   children: [
                                     ElevatedButton.icon(
-                                      onPressed: () => _navigateToInput(context),
+                                      onPressed: () => _showNeedleStartSheet(context, ref),
                                       icon: const Icon(Icons.add_rounded),
                                       label: Text(t.addNeedle),
                                       style: ElevatedButton.styleFrom(
@@ -145,7 +145,7 @@ class NeedleListScreen extends ConsumerWidget {
                                 ),
                               ),
                               TextButton.icon(
-                                onPressed: () => _navigateToInput(context),
+                                onPressed: () => _showNeedleStartSheet(context, ref),
                                 icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
                                 label: Text(t.addNeedle),
                               ),
@@ -156,8 +156,12 @@ class NeedleListScreen extends ConsumerWidget {
                             (needle) => _NeedleCard(
                               needle: needle,
                               isKorean: isKorean,
-                              onTap: () => _navigateToInput(context, needle: needle),
-                              onDelete: () => _confirmDelete(context, ref, needle, t),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => NeedleDetailScreen(needleId: needle.id),
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -180,45 +184,160 @@ class NeedleListScreen extends ConsumerWidget {
     );
   }
 
-  void _confirmDelete(BuildContext context, WidgetRef ref, NeedleModel needle, AppStrings t) {
-    showDialog<void>(
+  void _showNeedleStartSheet(BuildContext context, WidgetRef ref) {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    showModalBottomSheet<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Delete needle', style: T.h3),
-        content: Text(
-          'Delete ${needle.sizeDisplay} ${needle.localizedMaterialLabel(false)} needle?',
-          style: T.body,
+      isScrollControlled: true,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.4,
+        maxChildSize: 0.6,
+        minChildSize: 0.3,
+        builder: (_, scrollCtrl) => Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(children: [Text(isKorean ? '바늘 추가' : 'Add needle', style: T.h3)]),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                children: [
+                  GlassCard(
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _navigateToInput(context);
+                    },
+                    child: Row(
+                      children: [
+                        Container(width: 48, height: 48, decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(14)), child: Icon(Icons.add_rounded, color: C.tx2)),
+                        const SizedBox(width: 14),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(isKorean ? '새 바늘 추가' : 'Add new needle', style: T.bodyBold),
+                          const SizedBox(height: 4),
+                          Text(isKorean ? '새 바늘 정보를 직접 입력해요' : 'Enter needle info manually', style: T.caption.copyWith(color: C.mu)),
+                        ])),
+                        Icon(Icons.chevron_right_rounded, color: C.mu),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  GlassCard(
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showCopyNeedleSheet(context, ref);
+                    },
+                    child: Row(
+                      children: [
+                        Container(width: 48, height: 48, decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14)), child: Icon(Icons.copy_rounded, color: C.lv)),
+                        const SizedBox(width: 14),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(isKorean ? '기존 바늘 복사로 시작' : 'Copy existing needle', style: T.bodyBold),
+                          const SizedBox(height: 4),
+                          Text(isKorean ? '기존 바늘을 복사해서 시작해요' : 'Duplicate an existing needle', style: T.caption.copyWith(color: C.mu)),
+                        ])),
+                        Icon(Icons.chevron_right_rounded, color: C.mu),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(t.cancel),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: C.og, foregroundColor: Colors.white),
-            onPressed: () async {
-              Navigator.pop(dialogContext);
-              await ref.read(needleRepositoryProvider).deleteNeedle(needle.id);
-            },
-            child: const Text('Delete'),
-          ),
-        ],
       ),
     );
   }
+
+  void _showCopyNeedleSheet(BuildContext context, WidgetRef ref) {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final needles = ref.read(needleListProvider).valueOrNull ?? [];
+    if (needles.isEmpty) {
+      showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '복사할 바늘이 없어요.' : 'No needles to copy.');
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        maxChildSize: 0.9,
+        minChildSize: 0.4,
+        builder: (_, scrollCtrl) => Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Text(isKorean ? '복사할 바늘 선택' : 'Select needle to copy', style: T.h3)),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                itemCount: needles.length,
+                itemBuilder: (_, i) {
+                  final n = needles[i];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: GlassCard(
+                      onTap: () async {
+                        Navigator.pop(ctx);
+                        try {
+                          await runWithMoriLoadingDialog<void>(
+                            context,
+                            message: isKorean ? '복사하는 중입니다.' : 'Duplicating...',
+                            subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+                            task: () => ref.read(needleRepositoryProvider).duplicateNeedle(n),
+                          );
+                          if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '복사됐어요.' : 'Duplicated.');
+                        } catch (e) {
+                          if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+                        }
+                      },
+                      child: Row(
+                        children: [
+                          Container(width: 48, height: 48, decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(10)), child: Icon(Icons.straighten_rounded, color: C.lv, size: 24)),
+                          const SizedBox(width: 14),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text('${n.brandName} ${n.name}'.trim(), style: T.bodyBold),
+                            Text('${n.size}mm', style: T.caption.copyWith(color: C.mu)),
+                          ])),
+                          Icon(Icons.copy_rounded, color: C.mu, size: 18),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
 }
 
 class _NeedleCard extends StatelessWidget {
   final NeedleModel needle;
   final bool isKorean;
   final VoidCallback onTap;
-  final VoidCallback onDelete;
 
   const _NeedleCard({
     required this.needle,
     required this.isKorean,
     required this.onTap,
-    required this.onDelete,
   });
 
   @override
@@ -237,22 +356,30 @@ class _NeedleCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: C.lvL,
                 borderRadius: BorderRadius.circular(14),
+                image: needle.photoUrl.isNotEmpty
+                    ? DecorationImage(
+                        image: NetworkImage(needle.photoUrl),
+                        fit: BoxFit.cover,
+                      )
+                    : null,
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    needle.sizeDisplay.replaceAll('mm', ''),
-                    style: TextStyle(
-                      fontFamily: 'Fraunces',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: C.lv,
+              child: needle.photoUrl.isNotEmpty
+                  ? null
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          needle.sizeDisplay.replaceAll('mm', ''),
+                          style: TextStyle(
+                            fontFamily: 'Fraunces',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: C.lv,
+                          ),
+                        ),
+                        Text('mm', style: T.caption.copyWith(color: C.mu, fontSize: 9)),
+                      ],
                     ),
-                  ),
-                  Text('mm', style: T.caption.copyWith(color: C.mu, fontSize: 9)),
-                ],
-              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -284,10 +411,7 @@ class _NeedleCard extends StatelessWidget {
                 ],
               ),
             ),
-            GestureDetector(
-              onTap: onDelete,
-              child: Icon(Icons.delete_outline, color: C.mu, size: 18),
-            ),
+            Icon(Icons.chevron_right_rounded, color: C.mu, size: 20),
           ],
         ),
       ),

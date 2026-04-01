@@ -35,6 +35,19 @@ class PatternRepository {
     await _ref.doc(id).delete();
   }
 
+  Future<PatternChart> duplicate(PatternChart original) async {
+    final copy = PatternChart(
+      id: '',
+      title: '${original.title} (복사)',
+      rows: original.rows,
+      cols: original.cols,
+      mode: original.mode,
+      grid: original.grid,
+      narrativeText: original.narrativeText,
+    );
+    return save(copy);
+  }
+
   Stream<List<PatternChart>> watchAll() {
     if (_uid.isEmpty) return const Stream.empty();
     return _ref

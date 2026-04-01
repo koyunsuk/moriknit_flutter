@@ -44,6 +44,8 @@ mixin _$ProjectModel {
   DateTime? get createdAt => throw _privateConstructorUsedError;
   DateTime? get updatedAt => throw _privateConstructorUsedError;
   bool get isDirty => throw _privateConstructorUsedError;
+  int get completedStepCount => throw _privateConstructorUsedError;
+  int get totalStepCount => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -81,7 +83,9 @@ abstract class $ProjectModelCopyWith<$Res> {
       DateTime? finishDate,
       DateTime? createdAt,
       DateTime? updatedAt,
-      bool isDirty});
+      bool isDirty,
+      int completedStepCount,
+      int totalStepCount});
 }
 
 /// @nodoc
@@ -121,6 +125,8 @@ class _$ProjectModelCopyWithImpl<$Res, $Val extends ProjectModel>
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
     Object? isDirty = null,
+    Object? completedStepCount = null,
+    Object? totalStepCount = null,
   }) {
     return _then(_value.copyWith(
       id: null == id
@@ -219,6 +225,14 @@ class _$ProjectModelCopyWithImpl<$Res, $Val extends ProjectModel>
           ? _value.isDirty
           : isDirty // ignore: cast_nullable_to_non_nullable
               as bool,
+      completedStepCount: null == completedStepCount
+          ? _value.completedStepCount
+          : completedStepCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      totalStepCount: null == totalStepCount
+          ? _value.totalStepCount
+          : totalStepCount // ignore: cast_nullable_to_non_nullable
+              as int,
     ) as $Val);
   }
 }
@@ -255,7 +269,9 @@ abstract class _$$ProjectModelImplCopyWith<$Res>
       DateTime? finishDate,
       DateTime? createdAt,
       DateTime? updatedAt,
-      bool isDirty});
+      bool isDirty,
+      int completedStepCount,
+      int totalStepCount});
 }
 
 /// @nodoc
@@ -293,6 +309,8 @@ class __$$ProjectModelImplCopyWithImpl<$Res>
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
     Object? isDirty = null,
+    Object? completedStepCount = null,
+    Object? totalStepCount = null,
   }) {
     return _then(_$ProjectModelImpl(
       id: null == id
@@ -391,6 +409,14 @@ class __$$ProjectModelImplCopyWithImpl<$Res>
           ? _value.isDirty
           : isDirty // ignore: cast_nullable_to_non_nullable
               as bool,
+      completedStepCount: null == completedStepCount
+          ? _value.completedStepCount
+          : completedStepCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      totalStepCount: null == totalStepCount
+          ? _value.totalStepCount
+          : totalStepCount // ignore: cast_nullable_to_non_nullable
+              as int,
     ));
   }
 }
@@ -422,7 +448,9 @@ class _$ProjectModelImpl implements _ProjectModel {
       this.finishDate,
       this.createdAt,
       this.updatedAt,
-      this.isDirty = false})
+      this.isDirty = false,
+      this.completedStepCount = 0,
+      this.totalStepCount = 0})
       : _counterIds = counterIds,
         _photoUrls = photoUrls;
 
@@ -505,10 +533,16 @@ class _$ProjectModelImpl implements _ProjectModel {
   @override
   @JsonKey()
   final bool isDirty;
+  @override
+  @JsonKey()
+  final int completedStepCount;
+  @override
+  @JsonKey()
+  final int totalStepCount;
 
   @override
   String toString() {
-    return 'ProjectModel(id: $id, uid: $uid, title: $title, description: $description, status: $status, progressPercent: $progressPercent, yarnBrandId: $yarnBrandId, yarnBrandName: $yarnBrandName, yarnName: $yarnName, yarnColor: $yarnColor, yarnWeight: $yarnWeight, needleSize: $needleSize, needleBrandName: $needleBrandName, swatchId: $swatchId, counterIds: $counterIds, photoUrls: $photoUrls, coverPhotoUrl: $coverPhotoUrl, memo: $memo, startDate: $startDate, targetDate: $targetDate, finishDate: $finishDate, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty)';
+    return 'ProjectModel(id: $id, uid: $uid, title: $title, description: $description, status: $status, progressPercent: $progressPercent, yarnBrandId: $yarnBrandId, yarnBrandName: $yarnBrandName, yarnName: $yarnName, yarnColor: $yarnColor, yarnWeight: $yarnWeight, needleSize: $needleSize, needleBrandName: $needleBrandName, swatchId: $swatchId, counterIds: $counterIds, photoUrls: $photoUrls, coverPhotoUrl: $coverPhotoUrl, memo: $memo, startDate: $startDate, targetDate: $targetDate, finishDate: $finishDate, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty, completedStepCount: $completedStepCount, totalStepCount: $totalStepCount)';
   }
 
   @override
@@ -557,7 +591,11 @@ class _$ProjectModelImpl implements _ProjectModel {
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
                 other.updatedAt == updatedAt) &&
-            (identical(other.isDirty, isDirty) || other.isDirty == isDirty));
+            (identical(other.isDirty, isDirty) || other.isDirty == isDirty) &&
+            (identical(other.completedStepCount, completedStepCount) ||
+                other.completedStepCount == completedStepCount) &&
+            (identical(other.totalStepCount, totalStepCount) ||
+                other.totalStepCount == totalStepCount));
   }
 
   @JsonKey(ignore: true)
@@ -587,7 +625,9 @@ class _$ProjectModelImpl implements _ProjectModel {
         finishDate,
         createdAt,
         updatedAt,
-        isDirty
+        isDirty,
+        completedStepCount,
+        totalStepCount
       ]);
 
   @JsonKey(ignore: true)
@@ -629,7 +669,9 @@ abstract class _ProjectModel implements ProjectModel {
       final DateTime? finishDate,
       final DateTime? createdAt,
       final DateTime? updatedAt,
-      final bool isDirty}) = _$ProjectModelImpl;
+      final bool isDirty,
+      final int completedStepCount,
+      final int totalStepCount}) = _$ProjectModelImpl;
 
   factory _ProjectModel.fromJson(Map<String, dynamic> json) =
       _$ProjectModelImpl.fromJson;
@@ -682,6 +724,10 @@ abstract class _ProjectModel implements ProjectModel {
   DateTime? get updatedAt;
   @override
   bool get isDirty;
+  @override
+  int get completedStepCount;
+  @override
+  int get totalStepCount;
   @override
   @JsonKey(ignore: true)
   _$$ProjectModelImplCopyWith<_$ProjectModelImpl> get copyWith =>

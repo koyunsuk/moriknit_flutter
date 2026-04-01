@@ -13,6 +13,7 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/project_step_provider.dart';
+import '../../../providers/swatch_provider.dart';
 import '../../my/data/mori_service.dart';
 import '../domain/project_model.dart';
 import '../../swatch/presentation/brand_search_sheet.dart';
@@ -47,6 +48,15 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
     _memoController = TextEditingController(text: project?.memo ?? '');
     _yarnNameController = TextEditingController(text: project?.yarnName ?? '');
     _yarnColorController = TextEditingController(text: project?.yarnColor ?? '');
+
+    // 템플릿 선택 시 제목 자동 입력
+    if (project == null && widget.templateType != null) {
+      final name = _templateName(widget.templateType!);
+      _titleController.text = name;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(projectInputProvider.notifier).setTitle(name);
+      });
+    }
 
     if (project != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -89,6 +99,25 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                   : t.newProject,
           style: T.h3,
         ),
+        actions: [
+          if (_isSaving)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else
+            TextButton.icon(
+              onPressed: _isSaving ? null : () => _save(context),
+              icon: Icon(Icons.save_rounded, size: 18, color: C.lvD),
+              label: Text('저장', style: TextStyle(color: C.lvD)),
+            ),
+        ],
       ),
       body: Stack(
         children: [
@@ -98,6 +127,7 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (widget.templateType != null) _TemplateBanner(templateType: widget.templateType!),
                 _CoverImagePicker(
                   photoUrl: project.coverPhotoUrl,
                   localPath: _localCoverPath,
@@ -106,7 +136,7 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                   onTap: () => _pickCover(notifier),
                 ),
                 const SizedBox(height: 20),
-                _SectionLabel(t.projectTitle),
+                SectionTitle(title:t.projectTitle),
                 const SizedBox(height: 8),
                 _StyledField(
                   controller: _titleController,
@@ -114,7 +144,7 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                   onChanged: notifier.setTitle,
                 ),
                 const SizedBox(height: 16),
-                _SectionLabel(t.description),
+                SectionTitle(title:t.description),
                 const SizedBox(height: 8),
                 _StyledField(
                   controller: _descriptionController,
@@ -123,11 +153,11 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                   onChanged: notifier.setDescription,
                 ),
                 const SizedBox(height: 20),
-                _SectionLabel(t.status),
+                SectionTitle(title:t.status),
                 const SizedBox(height: 10),
                 _StatusSelector(selected: project.status, isKorean: isKorean, onSelected: notifier.setStatus),
                 const SizedBox(height: 20),
-                _SectionLabel(t.yarnInformation),
+                SectionTitle(title:t.yarnInformation),
                 const SizedBox(height: 8),
                 _BrandSearchField(
                   hint: t.yarnBrandHint,
@@ -161,7 +191,7 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                 const SizedBox(height: 8),
                 _YarnWeightSelector(selected: project.yarnWeight, isKorean: isKorean, onSelected: notifier.setYarnWeight),
                 const SizedBox(height: 20),
-                _SectionLabel(t.needleSizeLabel),
+                SectionTitle(title:t.needleSizeLabel),
                 const SizedBox(height: 10),
                 _NeedleSizeSelector(selectedSize: project.needleSize, onSelected: notifier.setNeedleSize),
                 const SizedBox(height: 8),
@@ -175,7 +205,7 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                _SectionLabel(t.timeline),
+                SectionTitle(title:t.timeline),
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -197,7 +227,7 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                   ],
                 ),
                 const SizedBox(height: 20),
-                _SectionLabel(t.memo),
+                SectionTitle(title:t.memo),
                 const SizedBox(height: 8),
                 _StyledField(
                   controller: _memoController,
@@ -205,15 +235,13 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                   maxLines: 3,
                   onChanged: notifier.setMemo,
                 ),
-                const SizedBox(height: 28),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _isSaving ? null : () => _save(context),
-                    child: _isSaving
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : Text(t.save),
-                  ),
+                const SizedBox(height: 20),
+                SectionTitle(title:isKorean ? '연결된 스와치 (선택)' : 'Linked Swatch (optional)'),
+                const SizedBox(height: 8),
+                _SwatchDropdown(
+                  selectedSwatchId: project.swatchId,
+                  isKorean: isKorean,
+                  onChanged: notifier.setSwatchId,
                 ),
               ],
             ),
@@ -351,16 +379,6 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
   }
 }
 
-class _SectionLabel extends StatelessWidget {
-  final String text;
-
-  const _SectionLabel(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(text, style: T.caption.copyWith(color: C.mu, fontWeight: FontWeight.w600, letterSpacing: 0.5));
-  }
-}
 
 class _StyledField extends StatelessWidget {
   final TextEditingController controller;
@@ -378,11 +396,6 @@ class _StyledField extends StatelessWidget {
       onChanged: onChanged,
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: T.body.copyWith(color: C.mu),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: C.bd2)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: C.lv)),
-        filled: true,
-        fillColor: C.gx,
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       ),
     );
@@ -609,6 +622,108 @@ class _DateField extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SwatchDropdown extends ConsumerWidget {
+  final String selectedSwatchId;
+  final bool isKorean;
+  final ValueChanged<String> onChanged;
+
+  const _SwatchDropdown({
+    required this.selectedSwatchId,
+    required this.isKorean,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final swatchesAsync = ref.watch(swatchListProvider);
+    final swatches = swatchesAsync.valueOrNull ?? [];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      decoration: BoxDecoration(
+        color: C.gx,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: C.bd2),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: swatches.any((s) => s.id == selectedSwatchId) ? selectedSwatchId : '',
+          isExpanded: true,
+          dropdownColor: C.bg,
+          style: T.body.copyWith(color: C.tx),
+          items: [
+            DropdownMenuItem(
+              value: '',
+              child: Text(
+                isKorean ? '연결 안 함' : 'No swatch linked',
+                style: T.body.copyWith(color: C.mu),
+              ),
+            ),
+            ...swatches.map((swatch) => DropdownMenuItem(
+              value: swatch.id,
+              child: Text(
+                swatch.swatchName.isNotEmpty ? swatch.swatchName : swatch.yarnBrandName.isNotEmpty ? swatch.yarnBrandName : 'Swatch',
+                style: T.body,
+                overflow: TextOverflow.ellipsis,
+              ),
+            )),
+          ],
+          onChanged: (value) => onChanged(value ?? ''),
+        ),
+      ),
+    );
+  }
+}
+
+class _TemplateBanner extends StatelessWidget {
+  final String templateType;
+  const _TemplateBanner({required this.templateType});
+
+  static const _info = <String, (IconData, String, String)>{
+    'topdown': (Icons.dry_cleaning_rounded, '탑다운 스웨터', '8단계 가이드 자동 생성'),
+    'socks':   (Icons.hiking_rounded,         '양말',           '8단계 힐 가이드 자동 생성'),
+    'scarf':   (Icons.ac_unit_rounded,        '목도리',         '5단계 가이드 자동 생성'),
+    'gloves':  (Icons.back_hand_rounded,      '장갑',           '7단계 가이드 자동 생성'),
+    'hat':     (Icons.face_rounded,           '모자',           '5단계 가이드 자동 생성'),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final info = _info[templateType];
+    if (info == null) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: C.lv.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: C.lv.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40, height: 40,
+            decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+            child: Icon(info.$1, color: C.lvD, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${info.$2} 템플릿', style: T.bodyBold.copyWith(color: C.lvD)),
+                const SizedBox(height: 2),
+                Text(info.$3, style: T.caption.copyWith(color: C.mu)),
+              ],
+            ),
+          ),
+          Icon(Icons.check_circle_rounded, color: C.lv, size: 18),
+        ],
       ),
     );
   }

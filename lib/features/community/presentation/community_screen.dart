@@ -12,10 +12,12 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/comment_provider.dart';
+import '../../../providers/guestbook_provider.dart';
 import '../../../providers/post_provider.dart';
 import '../../../providers/ui_copy_provider.dart';
 import '../../my/data/mori_service.dart';
 import '../domain/comment_model.dart';
+import '../domain/guestbook_entry.dart';
 import '../domain/post_model.dart';
 
 const _categoryKeys = ['all', 'showcase', 'questions', 'pattern_share'];
@@ -50,6 +52,8 @@ class CommunityScreen extends ConsumerWidget {
                 subtitle: subtitle,
               ),
             ),
+            const SizedBox(height: 8),
+            _GuestbookSection(isKorean: isKorean),
             const SizedBox(height: 8),
             SizedBox(
               height: 36,
@@ -100,7 +104,7 @@ class CommunityScreen extends ConsumerWidget {
                   return ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 140),
                     itemCount: posts.length + 1,
-                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (_, index) {
                       if (index == 0) {
                         return Padding(
@@ -120,6 +124,7 @@ class CommunityScreen extends ConsumerWidget {
                         );
                       }
                       return GlassCard(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                         child: _PostRow(post: posts[index - 1], isKorean: isKorean),
                       );
                     },
@@ -310,40 +315,406 @@ class _EmptyCommunity extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: C.lvL,
-              borderRadius: BorderRadius.circular(20),
+    return MoriEmptyState(
+      icon: Icons.forum_outlined,
+      iconColor: C.lvD,
+      title: isKorean ? '아직 게시글이 없어요' : 'No posts yet',
+      subtitle: isKorean ? '첫 글을 남겨보세요.' : 'Be the first to post!',
+      buttonLabel: isKorean ? '글 작성하기' : 'Write a post',
+      onAction: onWrite,
+    );
+  }
+}
+
+// ────────────────────────────────────────────
+// 방명록 섹션
+// ────────────────────────────────────────────
+
+class _GuestbookSection extends ConsumerWidget {
+  final bool isKorean;
+  const _GuestbookSection({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final entriesAsync = ref.watch(guestbookListProvider);
+    final user = ref.watch(authStateProvider).valueOrNull;
+    final currentUserModel = ref.watch(currentUserProvider).valueOrNull;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: GlassCard(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 헤더 행
+            Row(
+              children: [
+                Icon(Icons.auto_awesome_rounded, size: 15, color: C.pkD),
+                const SizedBox(width: 6),
+                Text(
+                  isKorean ? '방명록 · 한 줄 인사' : 'Guestbook',
+                  style: T.bodyBold.copyWith(color: C.tx),
+                ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () {
+                    if (user == null) {
+                      showLoginRequiredDialog(
+                        context,
+                        isKorean: isKorean,
+                        fromRoute: '/community',
+                      );
+                      return;
+                    }
+                    _showWriteSheet(context, ref, user.uid, currentUserModel);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: C.lv.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(99),
+                      border: Border.all(color: C.lv.withValues(alpha: 0.3)),
+                    ),
+                    child: Text(
+                      isKorean ? '작성하기' : 'Write',
+                      style: T.sm.copyWith(color: C.lvD, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            child: Icon(Icons.forum_outlined, color: C.lvD, size: 36),
+            const SizedBox(height: 10),
+            const Divider(height: 1),
+            const SizedBox(height: 8),
+            // 항목 목록
+            entriesAsync.when(
+              loading: () => Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: CircularProgressIndicator(color: C.lv, strokeWidth: 2),
+                ),
+              ),
+              error: (_, _) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  isKorean ? '불러오지 못했어요.' : 'Unable to load.',
+                  style: T.caption.copyWith(color: C.mu),
+                ),
+              ),
+              data: (entries) {
+                if (entries.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Text(
+                      isKorean ? '첫 번째 인사를 남겨보세요!' : 'Leave the first greeting!',
+                      style: T.caption.copyWith(color: C.mu),
+                    ),
+                  );
+                }
+                return Column(
+                  children: entries
+                      .map((e) => _GuestbookEntryTile(
+                            entry: e,
+                            isKorean: isKorean,
+                            isOwn: user?.uid == e.uid,
+                            onDelete: () async {
+                              await ref
+                                  .read(guestbookRepositoryProvider)
+                                  .deleteEntry(e.id);
+                            },
+                          ))
+                      .toList(),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showWriteSheet(
+    BuildContext context,
+    WidgetRef ref,
+    String uid,
+    dynamic userModel,
+  ) {
+    final isKoreanLocal = isKorean;
+    final displayName = (userModel?.displayName as String?) ?? '';
+    final avatarUrl = (userModel?.photoURL as String?) ?? '';
+    final ctrl = TextEditingController();
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _GuestbookWriteSheet(
+        uid: uid,
+        displayName: displayName,
+        avatarUrl: avatarUrl,
+        isKorean: isKoreanLocal,
+        ctrl: ctrl,
+        ref: ref,
+      ),
+    );
+  }
+}
+
+class _GuestbookEntryTile extends StatelessWidget {
+  final GuestbookEntry entry;
+  final bool isKorean;
+  final bool isOwn;
+  final VoidCallback onDelete;
+
+  const _GuestbookEntryTile({
+    required this.entry,
+    required this.isKorean,
+    required this.isOwn,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // 아바타
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: C.lvL,
+            backgroundImage: entry.avatarUrl.isNotEmpty
+                ? NetworkImage(entry.avatarUrl)
+                : null,
+            child: entry.avatarUrl.isEmpty
+                ? Text(
+                    entry.displayName.isNotEmpty
+                        ? entry.displayName.characters.first.toUpperCase()
+                        : '?',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: C.lvD,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  )
+                : null,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(width: 8),
+          // 이름 + 메시지
+          Expanded(
+            child: RichText(
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: '${entry.displayName.isNotEmpty ? entry.displayName : (isKorean ? '익명' : 'Anonymous')}: ',
+                    style: T.captionBold.copyWith(color: C.tx),
+                  ),
+                  TextSpan(
+                    text: entry.message,
+                    style: T.body.copyWith(fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          // 시간
           Text(
-            isKorean ? '아직 게시글이 없어요' : 'No posts yet',
-            style: T.bodyBold,
+            entry.timeAgoLocalized(isKorean: isKorean),
+            style: T.caption.copyWith(color: C.mu, fontSize: 11),
           ),
-          const SizedBox(height: 6),
-          Text(
-            isKorean ? '첫 글을 남겨보세요.' : 'Be the first to post!',
-            style: T.caption.copyWith(color: C.mu),
-          ),
-          const SizedBox(height: 12),
-          ElevatedButton.icon(
-            onPressed: onWrite,
-            icon: const Icon(Icons.edit_rounded),
-            label: Text(isKorean ? '글 작성하기' : 'Write a post'),
-          ),
+          // 본인 글 삭제
+          if (isOwn) ...[
+            const SizedBox(width: 4),
+            GestureDetector(
+              onTap: onDelete,
+              child: Icon(Icons.close, size: 14, color: C.mu),
+            ),
+          ],
         ],
       ),
     );
   }
 }
+
+class _GuestbookWriteSheet extends ConsumerStatefulWidget {
+  final String uid;
+  final String displayName;
+  final String avatarUrl;
+  final bool isKorean;
+  final TextEditingController ctrl;
+  final WidgetRef ref;
+
+  const _GuestbookWriteSheet({
+    required this.uid,
+    required this.displayName,
+    required this.avatarUrl,
+    required this.isKorean,
+    required this.ctrl,
+    required this.ref,
+  });
+
+  @override
+  ConsumerState<_GuestbookWriteSheet> createState() => _GuestbookWriteSheetState();
+}
+
+class _GuestbookWriteSheetState extends ConsumerState<_GuestbookWriteSheet> {
+  late final TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = widget.ctrl;
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final text = _ctrl.text.trim();
+    if (text.isEmpty) return;
+
+    await runWithMoriLoadingDialog<void>(
+      context,
+      message: widget.isKorean ? '저장하는 중입니다.' : 'Saving...',
+      subtitle: widget.isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+      task: () async {
+        final entry = GuestbookEntry(
+          id: '',
+          uid: widget.uid,
+          displayName: widget.displayName.isNotEmpty
+              ? widget.displayName
+              : (widget.isKorean ? '익명' : 'Anonymous'),
+          avatarUrl: widget.avatarUrl,
+          message: text.length > 100 ? text.substring(0, 100) : text,
+          createdAt: DateTime.now(),
+        );
+        await ref.read(guestbookRepositoryProvider).addEntry(entry);
+     
+      },
+    );
+
+    if (!mounted) return;
+
+    showSavedSnackBar(ScaffoldMessenger.of(context), message: widget.isKorean ? '방명록이 등록되었어요! +100 🪙' : 'Added to guestbook! +100 🪙');
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        0,
+        0,
+        0,
+        MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: C.bg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border.all(color: C.bd),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 드래그 핸들
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: C.bd2,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+            ),
+            Row(
+              children: [
+                Icon(Icons.auto_awesome_rounded, size: 18, color: C.pkD),
+                const SizedBox(width: 8),
+                Text(
+                  widget.isKorean ? '방명록 작성' : 'Write in Guestbook',
+                  style: T.h3,
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: Icon(Icons.close, color: C.mu),
+                  onPressed: () => Navigator.of(context).pop(),
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            // 모리화폐 안내
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: C.lm.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: C.lm.withValues(alpha: 0.4)),
+              ),
+              child: Row(
+                children: [
+                  Text('🪙', style: const TextStyle(fontSize: 14)),
+                  const SizedBox(width: 6),
+                  Text(
+                    widget.isKorean
+                        ? '방명록 작성 시 모리화폐 +100 적립!'
+                        : 'Earn +100 MoriCoin for writing!',
+                    style: T.caption.copyWith(
+                      color: C.lmD,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _ctrl,
+              autofocus: true,
+              maxLength: 100,
+              maxLines: 2,
+              style: T.body,
+              decoration: InputDecoration(
+                hintText: widget.isKorean
+                    ? '한 줄 인사를 남겨보세요 (최대 100자)'
+                    : 'Leave a short greeting (max 100 chars)',
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: C.bd),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            MoriSaveButton(
+              label: widget.isKorean ? '등록하기' : 'Submit',
+              onPressed: _submit,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ────────────────────────────────────────────
 
 String _categoryLabel(String key, bool isKorean) {
   switch (key) {
@@ -400,7 +771,7 @@ class _PostRowState extends ConsumerState<_PostRow> {
     return InkWell(
       onTap: () => _showDetail(context, ref),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 2),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -425,9 +796,9 @@ class _PostRowState extends ConsumerState<_PostRow> {
                       Expanded(child: Text(post.title, style: T.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis)),
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(post.content, style: T.caption.copyWith(color: C.mu), maxLines: 2, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Row(
                     children: [
                       Text(post.authorName, style: T.caption.copyWith(color: C.tx2)),
@@ -484,8 +855,8 @@ class _PostRowState extends ConsumerState<_PostRow> {
                 borderRadius: BorderRadius.circular(8),
                 child: Image.network(
                   post.imageUrls.first,
-                  width: 72,
-                  height: 72,
+                  width: 62,
+                  height: 62,
                   fit: BoxFit.cover,
                   errorBuilder: (_, _, _) => const SizedBox.shrink(),
                 ),
@@ -530,9 +901,13 @@ class _PostRowState extends ConsumerState<_PostRow> {
               title: Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: Colors.red.shade400)),
               onTap: () async {
                 Navigator.pop(ctx);
-                final overlay = showSavingOverlay(context, message: isKorean ? '삭제하는 중입니다.' : 'Deleting...');
-                await ref.read(postRepositoryProvider).deletePost(post.id);
-                overlay.close();
+                await runWithMoriLoadingDialog<void>(
+                  context,
+                  message: isKorean ? '삭제하는 중입니다.' : 'Deleting...',
+                  task: () async {
+                    await ref.read(postRepositoryProvider).deletePost(post.id);
+                  },
+                );
                 if (context.mounted) showSavedSnackBar(context, message: isKorean ? '삭제되었습니다.' : 'Deleted.');
               },
             ),
@@ -744,9 +1119,13 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
                       IconButton(
                         icon: Icon(Icons.delete_outline, color: C.og, size: 20),
                         onPressed: () async {
-                          final overlay = showSavingOverlay(context, message: widget.isKorean ? '삭제하는 중입니다.' : 'Deleting...');
-                          await ref.read(postRepositoryProvider).deletePost(widget.post.id);
-                          overlay.close();
+                          await runWithMoriLoadingDialog<void>(
+                            context,
+                            message: widget.isKorean ? '삭제하는 중입니다.' : 'Deleting...',
+                            task: () async {
+                              await ref.read(postRepositoryProvider).deletePost(widget.post.id);
+                            },
+                          );
                           if (context.mounted) {
                             showSavedSnackBar(context, message: widget.isKorean ? '삭제되었습니다.' : 'Deleted.');
                             Navigator.pop(context);

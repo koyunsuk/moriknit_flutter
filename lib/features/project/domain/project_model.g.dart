@@ -48,6 +48,8 @@ _$ProjectModelImpl _$$ProjectModelImplFromJson(Map<String, dynamic> json) =>
           ? null
           : DateTime.parse(json['updatedAt'] as String),
       isDirty: json['isDirty'] as bool? ?? false,
+      completedStepCount: (json['completedStepCount'] as num?)?.toInt() ?? 0,
+      totalStepCount: (json['totalStepCount'] as num?)?.toInt() ?? 0,
     );
 
 Map<String, dynamic> _$$ProjectModelImplToJson(_$ProjectModelImpl instance) =>
@@ -76,4 +78,6 @@ Map<String, dynamic> _$$ProjectModelImplToJson(_$ProjectModelImpl instance) =>
       'createdAt': instance.createdAt?.toIso8601String(),
       'updatedAt': instance.updatedAt?.toIso8601String(),
       'isDirty': instance.isDirty,
+      'completedStepCount': instance.completedStepCount,
+      'totalStepCount': instance.totalStepCount,
     };

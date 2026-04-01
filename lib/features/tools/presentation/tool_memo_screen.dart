@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/memo_lock_provider.dart';
 import '../../../providers/memo_provider.dart';
 import '../domain/memo_model.dart';
 
@@ -17,6 +18,7 @@ const _hiveBoxName = 'tool_memo_box_v2';
 const _hiveListKey = 'memos';
 
 Future<void> migrateMemoFromHiveIfNeeded(WidgetRef ref) async {
+  if (kIsWeb) return;
   try {
     final prefs = await _MigrationPrefs.load();
     if (prefs) return; // 이미 마이그레이션 완료
@@ -54,6 +56,8 @@ class ToolMemoScreen extends ConsumerStatefulWidget {
 
 class _ToolMemoScreenState extends ConsumerState<ToolMemoScreen> {
   bool _migrated = false;
+  bool _isLocked = false;
+  bool _lockChecked = false;
 
   @override
   void initState() {
@@ -64,6 +68,19 @@ class _ToolMemoScreenState extends ConsumerState<ToolMemoScreen> {
   Future<void> _runMigration() async {
     await migrateMemoFromHiveIfNeeded(ref);
     if (mounted) setState(() => _migrated = true);
+    await _checkLock();
+  }
+
+  Future<void> _checkLock() async {
+    // SharedPreferences에서 직접 읽어 비동기 초기화 타이밍 문제 회피
+    final hasPin = await ref.read(memoLockProvider.notifier).hasPin();
+    final isEnabled = await ref.read(memoLockProvider.notifier).isEnabled();
+    if (mounted) {
+      setState(() {
+        _isLocked = isEnabled && hasPin;
+        _lockChecked = true;
+      });
+    }
   }
 
   void _openEditor({MemoModel? existing}) {
@@ -94,16 +111,165 @@ class _ToolMemoScreenState extends ConsumerState<ToolMemoScreen> {
               ),
             ),
             Expanded(
-              child: !_migrated
+              child: !_migrated || !_lockChecked
                   ? Center(child: CircularProgressIndicator(color: C.lv))
-                  : memosAsync.when(
-                      loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
-                      error: (e, _) => Center(child: Text('오류: $e', style: T.caption.copyWith(color: C.og))),
-                      data: (memos) => _buildList(memos),
-                    ),
+                  : _isLocked
+                      ? _buildLockScreen()
+                      : memosAsync.when(
+                          loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
+                          error: (e, _) => Center(child: Text('오류: $e', style: T.caption.copyWith(color: C.og))),
+                          data: (memos) => _buildList(memos),
+                        ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  final _lockPinCtrl = TextEditingController();
+  String _lockError = '';
+
+  Widget _buildLockScreen() {
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(32, 32, 32, 32 + bottom),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(20)),
+              child: Icon(Icons.lock_rounded, color: C.lv, size: 36),
+            ),
+            const SizedBox(height: 20),
+            Text('메모장 잠금', style: T.h3),
+            const SizedBox(height: 8),
+            Text('PIN을 입력해주세요', style: T.body.copyWith(color: C.mu)),
+            const SizedBox(height: 20),
+            TextField(
+              controller: _lockPinCtrl,
+              obscureText: true,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              textAlign: TextAlign.center,
+              style: T.h3,
+              decoration: const InputDecoration(
+                hintText: '••••',
+                counterText: '',
+                filled: true,
+              ),
+            ),
+            if (_lockError.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(_lockError, style: T.caption.copyWith(color: Colors.red)),
+            ],
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 54,
+              child: ElevatedButton(
+                onPressed: () async {
+                  final ok = await ref.read(memoLockProvider.notifier).verifyPin(_lockPinCtrl.text);
+                  if (ok) {
+                    _lockPinCtrl.clear();
+                    setState(() { _isLocked = false; _lockError = ''; });
+                  } else {
+                    _lockPinCtrl.clear();
+                    setState(() => _lockError = '잘못된 PIN입니다. 다시 시도해주세요.');
+                  }
+                },
+                child: const Text('확인'),
+              ),
+            ),
+          ],
+        ),
+      );
+  }
+
+  Future<void> _toggleLock(bool currentlyEnabled) async {
+    if (currentlyEnabled) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('잠금 해제'),
+          content: const Text('메모장 잠금을 해제할까요? PIN도 함께 삭제됩니다.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('취소'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade400,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('해제'),
+            ),
+          ],
+        ),
+      );
+      if (confirm == true && mounted) {
+        await ref.read(memoLockProvider.notifier).clearPin();
+      }
+    } else {
+      await _showSetPinDialog();
+    }
+  }
+
+  Future<void> _showSetPinDialog() async {
+    final pinCtrl = TextEditingController();
+    final confirmCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('PIN 설정'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: pinCtrl,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                decoration: const InputDecoration(labelText: 'PIN (4-6자리)'),
+                validator: (v) =>
+                    (v == null || v.length < 4) ? '4자리 이상 입력해주세요' : null,
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: confirmCtrl,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                decoration: const InputDecoration(labelText: 'PIN 확인'),
+                validator: (v) =>
+                    v != pinCtrl.text ? 'PIN이 일치하지 않아요' : null,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              await ref.read(memoLockProvider.notifier).setPin(pinCtrl.text);
+              await ref.read(memoLockProvider.notifier).setEnabled(true);
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('저장'),
+          ),
+        ],
       ),
     );
   }
@@ -134,38 +300,58 @@ class _ToolMemoScreenState extends ConsumerState<ToolMemoScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+        // 잠금 설정
+        GlassCard(
+          child: Row(
+            children: [
+              Container(
+                width: 38, height: 38,
+                decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(10)),
+                child: Icon(Icons.lock_outline_rounded, color: C.lvD, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('메모장 잠금', style: T.bodyBold),
+                    Text('앱 시작 시 PIN으로 잠궈요', style: T.caption.copyWith(color: C.mu)),
+                  ],
+                ),
+              ),
+              GestureDetector(
+                onTap: () => _toggleLock(ref.read(memoLockProvider)),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: ref.watch(memoLockProvider) ? C.lv : C.lvL,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    ref.watch(memoLockProvider) ? '잠금 ON' : '잠금 OFF',
+                    style: T.caption.copyWith(
+                      color: ref.watch(memoLockProvider) ? Colors.white : C.lvD,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
         // 리스트
         GlassCard(
           child: memos.isEmpty
-              ? Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: C.pkL,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('아직 메모가 없어요', style: T.bodyBold.copyWith(color: C.pkD)),
-                      const SizedBox(height: 6),
-                      Text(
-                        '도안 아이디어, 재료 기록, 작업 노트를 자유롭게 작성해보세요.',
-                        style: T.caption.copyWith(color: C.pkD, height: 1.5),
-                      ),
-                      const SizedBox(height: 12),
-                      ElevatedButton.icon(
-                        onPressed: () => _openEditor(),
-                        icon: const Icon(Icons.edit_note_rounded),
-                        label: const Text('첫 메모 작성하기'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: C.pk,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
+              ? MoriEmptyState(
+                  icon: Icons.edit_note_rounded,
+                  iconColor: C.pk,
+                  title: '아직 메모가 없어요',
+                  subtitle: '생각을 자유롭게 기록해보세요.',
+                  buttonLabel: '첫 메모 작성하기',
+                  onAction: () => _openEditor(),
                 )
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -350,16 +536,16 @@ class _MemoEditScreenState extends ConsumerState<_MemoEditScreen> {
       updatedAt: DateTime.now(),
     );
 
-    await runWithSaveFeedback(
+    await runWithMoriLoadingDialog<void>(
       context,
-      () async {
+      message: '저장하는 중입니다.',
+      task: () async {
         if (isNew) {
           await notifier.create(memo, newImages: _newImageBytes);
         } else {
           await notifier.save(memo, newImages: _newImageBytes);
         }
       },
-      successMessage: '저장했어요',
     );
 
     if (!mounted) return;
@@ -385,11 +571,12 @@ class _MemoEditScreenState extends ConsumerState<_MemoEditScreen> {
       ),
     );
     if (confirm != true || !mounted) return;
-    final overlay = showSavingOverlay(context, message: '삭제하는 중입니다.');
-    await ref.read(memoNotifierProvider.notifier).delete(widget.initial!.id);
-    overlay.close();
+    await runWithMoriLoadingDialog<void>(
+      context,
+      message: '삭제하는 중입니다.',
+      task: () => ref.read(memoNotifierProvider.notifier).delete(widget.initial!.id),
+    );
     if (!mounted) return;
-    showSavedSnackBar(context, message: '삭제되었습니다.');
     Navigator.pop(context);
   }
 
@@ -403,7 +590,7 @@ class _MemoEditScreenState extends ConsumerState<_MemoEditScreen> {
       appBar: AppBar(
         backgroundColor: C.bg,
         elevation: 0,
-        title: Text(isNew ? '새 메모' : '메모 수정', style: T.bodyBold),
+        title: Text(isNew ? '새 메모' : '메모 수정', style: T.h3),
         actions: [
           if (!isNew)
             IconButton(
@@ -490,7 +677,7 @@ class _MemoEditScreenState extends ConsumerState<_MemoEditScreen> {
                     decoration: InputDecoration(
                       hintText: '도안 아이디어, 재료 메모, 작업 노트...',
                       filled: true,
-                      fillColor: Colors.white.withValues(alpha: 0.82),
+                      fillColor: C.gx,
                     ),
                   ),
                 ],

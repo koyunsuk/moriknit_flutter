@@ -22,6 +22,7 @@ SwatchModel _$SwatchModelFromJson(Map<String, dynamic> json) {
 mixin _$SwatchModel {
   String get id => throw _privateConstructorUsedError;
   String get uid => throw _privateConstructorUsedError;
+  String get swatchName => throw _privateConstructorUsedError;
   String get yarnBrandId => throw _privateConstructorUsedError;
   String get yarnBrandName => throw _privateConstructorUsedError;
   String get yarnName => throw _privateConstructorUsedError;
@@ -50,6 +51,7 @@ mixin _$SwatchModel {
   DateTime? get archivedDate => throw _privateConstructorUsedError;
   DateTime? get createdAt => throw _privateConstructorUsedError;
   DateTime? get updatedAt => throw _privateConstructorUsedError;
+  String get projectId => throw _privateConstructorUsedError;
   bool get isDirty => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -67,6 +69,7 @@ abstract class $SwatchModelCopyWith<$Res> {
   $Res call(
       {String id,
       String uid,
+      String swatchName,
       String yarnBrandId,
       String yarnBrandName,
       String yarnName,
@@ -95,6 +98,7 @@ abstract class $SwatchModelCopyWith<$Res> {
       DateTime? archivedDate,
       DateTime? createdAt,
       DateTime? updatedAt,
+      String projectId,
       bool isDirty});
 }
 
@@ -113,6 +117,7 @@ class _$SwatchModelCopyWithImpl<$Res, $Val extends SwatchModel>
   $Res call({
     Object? id = null,
     Object? uid = null,
+    Object? swatchName = null,
     Object? yarnBrandId = null,
     Object? yarnBrandName = null,
     Object? yarnName = null,
@@ -141,6 +146,7 @@ class _$SwatchModelCopyWithImpl<$Res, $Val extends SwatchModel>
     Object? archivedDate = freezed,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
+    Object? projectId = null,
     Object? isDirty = null,
   }) {
     return _then(_value.copyWith(
@@ -151,6 +157,10 @@ class _$SwatchModelCopyWithImpl<$Res, $Val extends SwatchModel>
       uid: null == uid
           ? _value.uid
           : uid // ignore: cast_nullable_to_non_nullable
+              as String,
+      swatchName: null == swatchName
+          ? _value.swatchName
+          : swatchName // ignore: cast_nullable_to_non_nullable
               as String,
       yarnBrandId: null == yarnBrandId
           ? _value.yarnBrandId
@@ -264,6 +274,10 @@ class _$SwatchModelCopyWithImpl<$Res, $Val extends SwatchModel>
           ? _value.updatedAt
           : updatedAt // ignore: cast_nullable_to_non_nullable
               as DateTime?,
+      projectId: null == projectId
+          ? _value.projectId
+          : projectId // ignore: cast_nullable_to_non_nullable
+              as String,
       isDirty: null == isDirty
           ? _value.isDirty
           : isDirty // ignore: cast_nullable_to_non_nullable
@@ -283,6 +297,7 @@ abstract class _$$SwatchModelImplCopyWith<$Res>
   $Res call(
       {String id,
       String uid,
+      String swatchName,
       String yarnBrandId,
       String yarnBrandName,
       String yarnName,
@@ -311,6 +326,7 @@ abstract class _$$SwatchModelImplCopyWith<$Res>
       DateTime? archivedDate,
       DateTime? createdAt,
       DateTime? updatedAt,
+      String projectId,
       bool isDirty});
 }
 
@@ -327,6 +343,7 @@ class __$$SwatchModelImplCopyWithImpl<$Res>
   $Res call({
     Object? id = null,
     Object? uid = null,
+    Object? swatchName = null,
     Object? yarnBrandId = null,
     Object? yarnBrandName = null,
     Object? yarnName = null,
@@ -355,6 +372,7 @@ class __$$SwatchModelImplCopyWithImpl<$Res>
     Object? archivedDate = freezed,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
+    Object? projectId = null,
     Object? isDirty = null,
   }) {
     return _then(_$SwatchModelImpl(
@@ -365,6 +383,10 @@ class __$$SwatchModelImplCopyWithImpl<$Res>
       uid: null == uid
           ? _value.uid
           : uid // ignore: cast_nullable_to_non_nullable
+              as String,
+      swatchName: null == swatchName
+          ? _value.swatchName
+          : swatchName // ignore: cast_nullable_to_non_nullable
               as String,
       yarnBrandId: null == yarnBrandId
           ? _value.yarnBrandId
@@ -478,6 +500,10 @@ class __$$SwatchModelImplCopyWithImpl<$Res>
           ? _value.updatedAt
           : updatedAt // ignore: cast_nullable_to_non_nullable
               as DateTime?,
+      projectId: null == projectId
+          ? _value.projectId
+          : projectId // ignore: cast_nullable_to_non_nullable
+              as String,
       isDirty: null == isDirty
           ? _value.isDirty
           : isDirty // ignore: cast_nullable_to_non_nullable
@@ -492,6 +518,7 @@ class _$SwatchModelImpl implements _SwatchModel {
   const _$SwatchModelImpl(
       {required this.id,
       required this.uid,
+      this.swatchName = '',
       this.yarnBrandId = '',
       this.yarnBrandName = '',
       this.yarnName = '',
@@ -520,6 +547,7 @@ class _$SwatchModelImpl implements _SwatchModel {
       this.archivedDate,
       this.createdAt,
       this.updatedAt,
+      this.projectId = '',
       this.isDirty = false});
 
   factory _$SwatchModelImpl.fromJson(Map<String, dynamic> json) =>
@@ -529,6 +557,9 @@ class _$SwatchModelImpl implements _SwatchModel {
   final String id;
   @override
   final String uid;
+  @override
+  @JsonKey()
+  final String swatchName;
   @override
   @JsonKey()
   final String yarnBrandId;
@@ -612,11 +643,14 @@ class _$SwatchModelImpl implements _SwatchModel {
   final DateTime? updatedAt;
   @override
   @JsonKey()
+  final String projectId;
+  @override
+  @JsonKey()
   final bool isDirty;
 
   @override
   String toString() {
-    return 'SwatchModel(id: $id, uid: $uid, yarnBrandId: $yarnBrandId, yarnBrandName: $yarnBrandName, yarnName: $yarnName, yarnColor: $yarnColor, yarnWeight: $yarnWeight, needleBrandId: $needleBrandId, needleBrandName: $needleBrandName, needleMaterial: $needleMaterial, needleSize: $needleSize, myNeedleId: $myNeedleId, beforeStitchCount: $beforeStitchCount, beforeRowCount: $beforeRowCount, beforeWidthCm: $beforeWidthCm, beforeHeightCm: $beforeHeightCm, beforePhotoUrl: $beforePhotoUrl, hasAfterWash: $hasAfterWash, afterStitchCount: $afterStitchCount, afterRowCount: $afterRowCount, afterWidthCm: $afterWidthCm, afterHeightCm: $afterHeightCm, afterPhotoUrl: $afterPhotoUrl, shrinkageRate: $shrinkageRate, memo: $memo, isPublic: $isPublic, isArchived: $isArchived, archivedDate: $archivedDate, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty)';
+    return 'SwatchModel(id: $id, uid: $uid, swatchName: $swatchName, yarnBrandId: $yarnBrandId, yarnBrandName: $yarnBrandName, yarnName: $yarnName, yarnColor: $yarnColor, yarnWeight: $yarnWeight, needleBrandId: $needleBrandId, needleBrandName: $needleBrandName, needleMaterial: $needleMaterial, needleSize: $needleSize, myNeedleId: $myNeedleId, beforeStitchCount: $beforeStitchCount, beforeRowCount: $beforeRowCount, beforeWidthCm: $beforeWidthCm, beforeHeightCm: $beforeHeightCm, beforePhotoUrl: $beforePhotoUrl, hasAfterWash: $hasAfterWash, afterStitchCount: $afterStitchCount, afterRowCount: $afterRowCount, afterWidthCm: $afterWidthCm, afterHeightCm: $afterHeightCm, afterPhotoUrl: $afterPhotoUrl, shrinkageRate: $shrinkageRate, memo: $memo, isPublic: $isPublic, isArchived: $isArchived, archivedDate: $archivedDate, createdAt: $createdAt, updatedAt: $updatedAt, projectId: $projectId, isDirty: $isDirty)';
   }
 
   @override
@@ -626,6 +660,8 @@ class _$SwatchModelImpl implements _SwatchModel {
             other is _$SwatchModelImpl &&
             (identical(other.id, id) || other.id == id) &&
             (identical(other.uid, uid) || other.uid == uid) &&
+            (identical(other.swatchName, swatchName) ||
+                other.swatchName == swatchName) &&
             (identical(other.yarnBrandId, yarnBrandId) ||
                 other.yarnBrandId == yarnBrandId) &&
             (identical(other.yarnBrandName, yarnBrandName) ||
@@ -681,6 +717,8 @@ class _$SwatchModelImpl implements _SwatchModel {
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
                 other.updatedAt == updatedAt) &&
+            (identical(other.projectId, projectId) ||
+                other.projectId == projectId) &&
             (identical(other.isDirty, isDirty) || other.isDirty == isDirty));
   }
 
@@ -690,6 +728,7 @@ class _$SwatchModelImpl implements _SwatchModel {
         runtimeType,
         id,
         uid,
+        swatchName,
         yarnBrandId,
         yarnBrandName,
         yarnName,
@@ -718,6 +757,7 @@ class _$SwatchModelImpl implements _SwatchModel {
         archivedDate,
         createdAt,
         updatedAt,
+        projectId,
         isDirty
       ]);
 
@@ -739,6 +779,7 @@ abstract class _SwatchModel implements SwatchModel {
   const factory _SwatchModel(
       {required final String id,
       required final String uid,
+      final String swatchName,
       final String yarnBrandId,
       final String yarnBrandName,
       final String yarnName,
@@ -767,6 +808,7 @@ abstract class _SwatchModel implements SwatchModel {
       final DateTime? archivedDate,
       final DateTime? createdAt,
       final DateTime? updatedAt,
+      final String projectId,
       final bool isDirty}) = _$SwatchModelImpl;
 
   factory _SwatchModel.fromJson(Map<String, dynamic> json) =
@@ -776,6 +818,8 @@ abstract class _SwatchModel implements SwatchModel {
   String get id;
   @override
   String get uid;
+  @override
+  String get swatchName;
   @override
   String get yarnBrandId;
   @override
@@ -832,6 +876,8 @@ abstract class _SwatchModel implements SwatchModel {
   DateTime? get createdAt;
   @override
   DateTime? get updatedAt;
+  @override
+  String get projectId;
   @override
   bool get isDirty;
   @override
