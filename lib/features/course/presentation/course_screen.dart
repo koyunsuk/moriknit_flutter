@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:url_launcher/url_launcher.dart' show LaunchMode, launchUrl;
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
@@ -60,15 +64,6 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
               child: MoriWideHeader(
                 title: isKorean ? '클라스' : 'Class',
                 subtitle: isKorean ? '유튜브 링크로 뜨개 강의를 모아두는 임시 보드예요.' : 'A temporary board for knitting lessons with YouTube links.',
-                trailing: user != null
-                    ? [
-                        TextButton.icon(
-                          onPressed: () => _showCourseStartSheet(context, ref, isKorean),
-                          icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
-                          label: Text(isKorean ? '강의 추가' : 'Add class'),
-                        ),
-                      ]
-                    : null,
               ),
             ),
             Expanded(
@@ -131,6 +126,18 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
                         )),
                       // 최근 추가 하이라이트 카드 (대형 썸네일) — 검색 없을 때만
                       if (_query.isEmpty) ...[
+                        Row(
+                          children: [
+                            Expanded(child: Text(isKorean ? '최근 강의' : 'Recent', style: T.h3.copyWith(color: C.lvD))),
+                            if (user != null)
+                              TextButton.icon(
+                                onPressed: () => _showCourseStartSheet(context, ref, isKorean),
+                                icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+                                label: Text(isKorean ? '새 강의 추가' : 'Add class'),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
                         _RecentCourseCard(
                           item: recentCourse,
                           isKorean: isKorean,
@@ -148,7 +155,7 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
                               padding: const EdgeInsets.fromLTRB(0, 8, 0, 10),
                               child: Text(cat, style: T.h3.copyWith(color: C.lvD)),
                             ),
-                            ...items.map((item) => _CourseCard(
+                            ...items.map((item) => _CourseTitleRow(
                               item: item,
                               isKorean: isKorean,
                               onTap: () => _openDetail(context, item, isKorean),
@@ -195,14 +202,12 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
                   width: 40,
                   height: 4,
                   margin: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: C.bd2,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+                  decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(2)),
                 ),
               ),
               Text(isKorean ? '클라스 추가' : 'Add class', style: T.h3),
               const SizedBox(height: 16),
+              // 옵션 1: 유튜브에서 가져오기
               GlassCard(
                 onTap: () {
                   Navigator.pop(ctx);
@@ -210,69 +215,65 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
                 },
                 child: Row(children: [
                   Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: C.lv.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(Icons.video_library_rounded, color: C.lv),
+                    width: 48, height: 48,
+                    decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14)),
+                    child: Icon(Icons.smart_display_rounded, color: C.lv),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          isKorean ? '내 동영상 직접 올리기' : 'Add via video link',
-                          style: T.bodyBold,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          isKorean ? 'YouTube 링크로 추가해요' : 'Add with YouTube link',
-                          style: T.caption.copyWith(color: C.mu),
-                        ),
-                      ],
-                    ),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(isKorean ? '유튜브에서 가져오기' : 'From YouTube', style: T.bodyBold),
+                      const SizedBox(height: 4),
+                      Text(isKorean ? 'YouTube 링크로 강의를 추가해요' : 'Add class with YouTube link', style: T.caption.copyWith(color: C.mu)),
+                    ]),
                   ),
                   Icon(Icons.chevron_right_rounded, color: C.mu),
                 ]),
               ),
               const SizedBox(height: 10),
+              // 옵션 2: 내 동영상 직접 올리기
               GlassCard(
                 onTap: () {
                   Navigator.pop(ctx);
-                  showSavedSnackBar(
-                    context,
-                    message: isKorean ? '준비 중이에요.' : 'Coming soon.',
-                  );
+                  _pickAndUploadFile(context, ref, isKorean, FileType.video);
                 },
                 child: Row(children: [
                   Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: C.pk.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                    width: 48, height: 48,
+                    decoration: BoxDecoration(color: C.og.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14)),
+                    child: Icon(Icons.video_file_rounded, color: C.og),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(isKorean ? '내 동영상 직접 올리기' : 'Upload video file', style: T.bodyBold),
+                      const SizedBox(height: 4),
+                      Text(isKorean ? '내 모바일에 있는 동영상 파일을 올려요' : 'Pick a video from your device', style: T.caption.copyWith(color: C.mu)),
+                    ]),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: C.mu),
+                ]),
+              ),
+              const SizedBox(height: 10),
+              // 옵션 3: 녹음파일 올리기
+              GlassCard(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickAndUploadFile(context, ref, isKorean, FileType.audio);
+                },
+                child: Row(children: [
+                  Container(
+                    width: 48, height: 48,
+                    decoration: BoxDecoration(color: C.pk.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14)),
                     child: Icon(Icons.mic_rounded, color: C.pk),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          isKorean ? '녹음파일 올리기' : 'Upload audio',
-                          style: T.bodyBold,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          isKorean ? '녹음 파일을 직접 업로드해요' : 'Upload your recording',
-                          style: T.caption.copyWith(color: C.mu),
-                        ),
-                      ],
-                    ),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(isKorean ? '녹음파일 올리기' : 'Upload audio file', style: T.bodyBold),
+                      const SizedBox(height: 4),
+                      Text(isKorean ? '녹음 파일을 직접 업로드해요' : 'Pick an audio recording from your device', style: T.caption.copyWith(color: C.mu)),
+                    ]),
                   ),
                   Icon(Icons.chevron_right_rounded, color: C.mu),
                 ]),
@@ -282,6 +283,59 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
         );
       },
     );
+  }
+
+  Future<void> _pickAndUploadFile(BuildContext context, WidgetRef ref, bool isKorean, FileType fileType) async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
+
+    final result = await FilePicker.platform.pickFiles(type: fileType);
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    final bytes = file.bytes;
+    final path = file.path;
+    if (bytes == null && path == null) return;
+    if (!context.mounted) return;
+
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+    final storageRef = FirebaseStorage.instance.ref().child('courses/${user.uid}/$fileName');
+
+    try {
+      String downloadUrl;
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '업로드하는 중입니다.' : 'Uploading...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () async {
+          UploadTask uploadTask;
+          if (bytes != null) {
+            uploadTask = storageRef.putData(bytes);
+          } else {
+            uploadTask = storageRef.putData(await File(path!).readAsBytes());
+          }
+          final snapshot = await uploadTask;
+          downloadUrl = await snapshot.ref.getDownloadURL();
+          final category = isKorean ? '입문' : 'Beginner';
+          final item = CourseItem(
+            id: '',
+            title: file.name.replaceAll(RegExp(r'\.[^.]+$'), ''),
+            description: '',
+            videoUrl: downloadUrl,
+            category: category,
+            isPublished: true,
+            createdAt: DateTime.now(),
+          );
+          await ref.read(courseRepositoryProvider).createCourse(item);
+        },
+      );
+      if (context.mounted) {
+        showSavedSnackBar(context, message: isKorean ? '클라스가 등록됐어요.' : 'Class saved.');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        showSaveErrorSnackBar(context, message: '$e');
+      }
+    }
   }
 
   Future<void> _showAddClassSheet(BuildContext context, WidgetRef ref, bool isKorean) async {
@@ -477,13 +531,13 @@ class _RecentCourseCard extends StatelessWidget {
   }
 }
 
-// ── 목록 카드 ────────────────────────────────────────────────────────────────
-class _CourseCard extends StatelessWidget {
+// ── 제목만 표시하는 컴팩트 목록 행 ──────────────────────────────────────────────
+class _CourseTitleRow extends StatelessWidget {
   final CourseItem item;
   final bool isKorean;
   final VoidCallback onTap;
 
-  const _CourseCard({required this.item, required this.isKorean, required this.onTap});
+  const _CourseTitleRow({required this.item, required this.isKorean, required this.onTap});
 
   Color get _catColor {
     switch (item.category) {
@@ -500,105 +554,55 @@ class _CourseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final thumbUrl = _thumbnailUrl(item.videoUrl);
-
-    return GlassCard(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: EdgeInsets.zero,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: item.videoUrl.isEmpty ? null : onTap,
-        child: Row(
-          children: [
-            // 썸네일
-            ClipRRect(
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                bottomLeft: Radius.circular(16),
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  if (thumbUrl.isNotEmpty)
-                    Image.network(
-                      thumbUrl,
-                      width: 100,
-                      height: 72,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => _ThumbPlaceholder(width: 100, height: 72, color: _catColor),
-                    )
-                  else
-                    _ThumbPlaceholder(width: 100, height: 72, color: _catColor),
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.5),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 18),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: _catColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(item.category, style: T.caption.copyWith(color: _catColor, fontWeight: FontWeight.w700)),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      isKorean ? item.title : (item.titleEn.isNotEmpty ? item.titleEn : item.title),
-                      style: T.bodyBold,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      item.videoUrl,
-                      style: T.caption.copyWith(color: C.mu),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.only(right: 8),
-              child: Icon(Icons.chevron_right_rounded, color: Colors.grey),
-            ),
-          ],
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: C.gx,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: C.bd),
+      ),
+      child: ListTile(
+        onTap: onTap,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        leading: Container(
+          width: 42, height: 42,
+          decoration: BoxDecoration(
+            color: _catColor.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            item.videoUrl.contains('youtube') || item.videoUrl.contains('youtu.be')
+                ? Icons.smart_display_rounded
+                : Icons.audiotrack_rounded,
+            color: _catColor,
+            size: 22,
+          ),
         ),
+        title: Text(
+          isKorean ? item.title : (item.titleEn.isNotEmpty ? item.titleEn : item.title),
+          style: T.bodyBold,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(item.category, style: T.caption.copyWith(color: _catColor)),
+        trailing: Icon(Icons.chevron_right_rounded, color: C.mu, size: 20),
       ),
     );
   }
 }
 
+
 // ── 썸네일 플레이스홀더 ────────────────────────────────────────────────────────
 class _ThumbPlaceholder extends StatelessWidget {
-  final double? width;
   final double height;
-  final Color? color;
-  const _ThumbPlaceholder({this.width, required this.height, this.color});
+  const _ThumbPlaceholder({required this.height});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: width,
       height: height,
-      color: (color ?? C.lvD).withValues(alpha: 0.12),
-      child: Icon(Icons.play_circle_outline_rounded, color: color ?? C.lvD, size: height * 0.4),
+      color: C.lvD.withValues(alpha: 0.12),
+      child: Icon(Icons.play_circle_outline_rounded, color: C.lvD, size: height * 0.4),
     );
   }
 }

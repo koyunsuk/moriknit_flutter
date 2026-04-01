@@ -69,7 +69,7 @@ class DefaultFirebaseOptions {
     appId: '1:683285854424:web:31cebe736d620b4d21bfad',
     messagingSenderId: '683285854424',
     projectId: 'moriknit-ceea9',
-    authDomain: 'moriknit-ceea9.firebaseapp.com',
+    authDomain: 'www.moriknit.com',
     storageBucket: 'moriknit-ceea9.firebasestorage.app',
   );
 

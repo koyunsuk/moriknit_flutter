@@ -1,5 +1,4 @@
-﻿import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -46,16 +45,6 @@ class HomeScreen extends ConsumerWidget {
     final personalizedSubtitle = rawGreeting
         .replaceAll('[사용자 이름]', userName)
         .replaceAll('[userName]', userName);
-
-    if (kIsWeb) {
-      return _WebHomeLayout(
-        t: t,
-        isKorean: isKorean,
-        postsAsync: postsAsync,
-        itemsAsync: itemsAsync,
-        projectCount: projectCount,
-      );
-    }
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -126,142 +115,6 @@ class HomeScreen extends ConsumerWidget {
                     SectionTitle(title: isKorean ? '오늘의 Knitting 소식' : "Today's Knitting News"),
                     const SizedBox(height: 10),
                     _EditorialBoard(isKorean: isKorean, t: t),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _WebHomeLayout extends StatelessWidget {
-  final AppStrings t;
-  final bool isKorean;
-  final AsyncValue postsAsync;
-  final AsyncValue itemsAsync;
-  final int projectCount;
-
-  const _WebHomeLayout({
-    required this.t,
-    required this.isKorean,
-    required this.postsAsync,
-    required this.itemsAsync,
-    required this.projectCount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SafeArea(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 3,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 16, 16, 40),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    MoriPageHeaderShell(
-                      maxWidth: double.infinity,
-                      padding: EdgeInsets.zero,
-                      child: MoriWideHeader(
-                        title: t.home,
-                        subtitle: t.homeHeaderSubtitleWeb,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    _EcosystemHero(
-                      t: t,
-                      isKorean: isKorean,
-                      projectCount: projectCount,
-                      postsAsync: postsAsync,
-                      itemsAsync: itemsAsync,
-                    ),
-                    const SizedBox(height: 20),
-                    SectionTitle(
-                      title: isKorean ? '인기도안 TOP5' : 'Top 5 Patterns',
-                      trailing: GestureDetector(
-                        onTap: () => context.push(Routes.market),
-                        child: Text(isKorean ? '더보기' : 'More', style: T.caption.copyWith(color: C.lmD)),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _MarketPreview(isKorean: isKorean),
-                    const SizedBox(height: 20),
-                    SectionTitle(
-                      title: isKorean ? '최신 등록된 도안' : 'Latest Patterns',
-                      trailing: GestureDetector(
-                        onTap: () => context.push(Routes.market),
-                        child: Text(isKorean ? '더보기' : 'More', style: T.caption.copyWith(color: C.lmD)),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _LatestPatternsPreview(isKorean: isKorean),
-                    const SizedBox(height: 20),
-                    SectionTitle(
-                      title: isKorean ? '다른사람들이 많이 본 영상' : 'Popular Videos',
-                      trailing: GestureDetector(
-                        onTap: () => context.push(Routes.toolsCourse),
-                        child: Text(isKorean ? '더보기' : 'More', style: T.caption.copyWith(color: C.lvD)),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    const _PopularCourseSection(),
-                    const SizedBox(height: 20),
-                    SectionTitle(title: isKorean ? '오늘의 Knitting 소식' : "Today's Knitting News"),
-                    const SizedBox(height: 10),
-                    _EditorialBoard(isKorean: isKorean, t: t),
-                  ],
-                ),
-              ),
-            ),
-            SizedBox(
-              width: 340,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 24, 40),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 72),
-                    SectionTitle(
-                      title: t.homeCommunityHighlights,
-                      trailing: GestureDetector(
-                        onTap: () => context.push(Routes.community),
-                        child: Text(t.homeMore, style: T.caption.copyWith(color: C.pkD)),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _CommunityPreview(isKorean: isKorean),
-                    const SizedBox(height: 20),
-                    GlassCard(
-                      onTap: () => context.go(Routes.projectList),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(t.homeWorkspaceTitle, style: T.bodyBold),
-                          const SizedBox(height: 8),
-                          Text(
-                            t.homeWorkspaceDescription,
-                            style: T.caption.copyWith(color: C.mu, height: 1.6),
-                          ),
-                          const SizedBox(height: 14),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: MoriChip(
-                              label: t.homeOpenProjects,
-                              type: ChipType.white,
-                              onTap: () => context.go(Routes.projectList),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
               ),

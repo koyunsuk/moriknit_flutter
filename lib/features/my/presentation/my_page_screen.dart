@@ -386,11 +386,31 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(t.languageLabel, style: T.bodyBold),
-                    const SizedBox(height: 12),
-                    MoriOptionChips<AppLanguage>(
-                      options: AppLanguage.values.map((l) => (value: l, label: l.label)).toList(),
-                      selected: language,
-                      onSelected: (value) => ref.read(appLanguageProvider.notifier).setLanguage(value),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: C.gx,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: C.bd),
+                      ),
+                      child: DropdownButton<AppLanguage>(
+                        value: language,
+                        isExpanded: true,
+                        underline: const SizedBox.shrink(),
+                        isDense: true,
+                        style: T.caption.copyWith(color: C.tx),
+                        dropdownColor: C.bg,
+                        items: AppLanguage.values
+                            .map((l) => DropdownMenuItem(
+                                  value: l,
+                                  child: Text(l.label, style: T.caption.copyWith(color: C.tx)),
+                                ))
+                            .toList(),
+                        onChanged: (value) {
+                          if (value != null) ref.read(appLanguageProvider.notifier).setLanguage(value);
+                        },
+                      ),
                     ),
                     const SizedBox(height: 20),
                     Text(isKorean ? '테마 컬러' : 'Theme color', style: T.bodyBold),
