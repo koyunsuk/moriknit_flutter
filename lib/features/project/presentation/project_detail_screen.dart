@@ -17,6 +17,7 @@ import '../../../providers/project_provider.dart';
 import '../../../providers/project_step_provider.dart';
 import '../../../providers/needle_provider.dart';
 import '../../../providers/swatch_provider.dart';
+import '../../../providers/template_provider.dart';
 import '../../../providers/yarn_provider.dart';
 import '../../counter/domain/counter_model.dart';
 import '../../my/domain/needle_model.dart';
@@ -738,42 +739,104 @@ class _StepsSection extends ConsumerWidget {
   }
 
   void _showTemplateSheet(BuildContext context, WidgetRef ref) {
-    final templates = [
-      ('topdown', '탑다운 스웨터', Icons.dry_cleaning_rounded),
-      ('socks', '양말', Icons.hiking_rounded),
-      ('scarf', '목도리', Icons.ac_unit_rounded),
-      ('gloves', '장갑', Icons.back_hand_rounded),
-      ('hat', '모자', Icons.face_rounded),
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final builtins = [
+      ('topdown', isKorean ? '탑다운 스웨터' : 'Top-down Sweater', Icons.dry_cleaning_rounded),
+      ('socks', isKorean ? '양말' : 'Socks', Icons.hiking_rounded),
+      ('scarf', isKorean ? '목도리' : 'Scarf', Icons.ac_unit_rounded),
+      ('gloves', isKorean ? '장갑' : 'Gloves', Icons.back_hand_rounded),
+      ('hat', isKorean ? '모자' : 'Hat', Icons.face_rounded),
     ];
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: C.bg,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 12),
-            Text('템플릿 선택', style: T.bodyBold),
-            const SizedBox(height: 8),
-            ...templates.map((tpl) => ListTile(
-              leading: Icon(tpl.$3, color: C.lv),
-              title: Text(tpl.$2, style: T.body),
-              onTap: () {
-                Navigator.pop(ctx);
-                runWithMoriLoadingDialog<void>(
-                  context,
-                  message: '스텝 추가 중...',
-                  subtitle: '잠시만 기다려 주세요.',
-                  task: () => ref.read(projectStepRepositoryProvider).addTemplateSteps(project.id, tpl.$1),
-                );
-              },
-            )),
-            const SizedBox(height: 8),
-          ],
-        ),
+      builder: (ctx) => Consumer(
+        builder: (ctx, cRef, _) {
+          final customTemplates = cRef.watch(userTemplateListProvider).valueOrNull ?? [];
+          return SafeArea(
+            child: DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.5,
+              maxChildSize: 0.9,
+              minChildSize: 0.3,
+              builder: (_, scrollCtrl) => ListView(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                children: [
+                  const SizedBox(height: 8),
+                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(2)))),
+                  const SizedBox(height: 12),
+                  Text(isKorean ? '템플릿 선택' : 'Select Template', style: T.h3),
+                  const SizedBox(height: 12),
+                  // 기본 템플릿
+                  Text(isKorean ? '기본 템플릿' : 'Built-in', style: T.caption.copyWith(color: C.mu)),
+                  const SizedBox(height: 6),
+                  ...builtins.map((tpl) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Container(
+                      width: 40, height: 40,
+                      decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                      child: Icon(tpl.$3, color: C.lv, size: 20),
+                    ),
+                    title: Text(tpl.$2, style: T.body),
+                    trailing: Icon(Icons.chevron_right_rounded, color: C.mu, size: 18),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      runWithMoriLoadingDialog<void>(
+                        context,
+                        message: isKorean ? '단계 추가 중...' : 'Adding steps...',
+                        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+                        task: () => ref.read(projectStepRepositoryProvider).addTemplateSteps(project.id, tpl.$1),
+                      );
+                    },
+                  )),
+                  // 커스텀 템플릿
+                  if (customTemplates.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(isKorean ? '나의 커스텀 템플릿' : 'My Custom Templates', style: T.caption.copyWith(color: C.mu)),
+                    const SizedBox(height: 6),
+                    ...customTemplates.map((tmpl) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Container(
+                        width: 40, height: 40,
+                        decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(10)),
+                        child: Icon(Icons.folder_special_rounded, color: C.lvD, size: 20),
+                      ),
+                      title: Text(tmpl.title, style: T.body),
+                      subtitle: Text(
+                        isKorean ? '${tmpl.stepTitles.length}개 단계' : '${tmpl.stepTitles.length} steps',
+                        style: T.caption.copyWith(color: C.mu),
+                      ),
+                      trailing: Icon(Icons.chevron_right_rounded, color: C.mu, size: 18),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        runWithMoriLoadingDialog<void>(
+                          context,
+                          message: isKorean ? '단계 추가 중...' : 'Adding steps...',
+                          subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+                          task: () async {
+                            final stepRepo = ref.read(projectStepRepositoryProvider);
+                            for (int i = 0; i < tmpl.stepTitles.length; i++) {
+                              await stepRepo.addStep(
+                                project.id,
+                                tmpl.stepTitles[i],
+                                i,
+                                description: i < tmpl.stepDescs.length ? tmpl.stepDescs[i] : '',
+                              );
+                            }
+                          },
+                        );
+                      },
+                    )),
+                  ],
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
