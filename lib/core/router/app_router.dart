@@ -29,11 +29,13 @@ import 'package:moriknit_flutter/features/project/presentation/project_list_scre
 import 'package:moriknit_flutter/features/project/presentation/project_patterns_screen.dart';
 import 'package:moriknit_flutter/features/project/presentation/template_list_screen.dart';
 import 'package:moriknit_flutter/features/project/presentation/template_editor_screen.dart';
+import 'package:moriknit_flutter/features/ravelry/data/ravelry_auth_provider.dart';
 import 'package:moriknit_flutter/features/swatch/presentation/swatch_detail_screen.dart';
 import 'package:moriknit_flutter/features/swatch/presentation/swatch_input_screen.dart';
 import 'package:moriknit_flutter/features/swatch/presentation/swatch_list_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/tools_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/tool_memo_screen.dart';
+import 'package:moriknit_flutter/features/ravelry/presentation/ravelry_screen.dart';
 import 'package:moriknit_flutter/features/yarn/domain/yarn_model.dart';
 import 'package:moriknit_flutter/features/yarn/presentation/yarn_input_screen.dart';
 import 'package:moriknit_flutter/features/yarn/presentation/yarn_detail_screen.dart';
@@ -129,6 +131,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(path: 'course', builder: (_, _) => const CourseScreen()),
               GoRoute(path: 'encyclopedia', builder: (_, _) => const EncyclopediaScreen()),
               GoRoute(path: 'memo', builder: (_, _) => const ToolMemoScreen()),
+              GoRoute(path: 'ravelry', builder: (_, _) => const RavelryScreen()),
             ],
           ),
           GoRoute(path: Routes.community, builder: (_, _) => const CommunityScreen()),
@@ -176,10 +179,46 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: Routes.admin, builder: (_, _) => const AdminScreen()),
     ],
-    errorBuilder: (_, state) => Scaffold(body: Center(child: Text('Page not found: ${state.error}'))),
+    errorBuilder: (_, state) {
+      if (state.uri.toString().contains('oauth-callback/ravelry')) {
+        return _RavelryOAuthCallbackScreen(uri: state.uri);
+      }
+      return Scaffold(body: Center(child: Text('Page not found: ${state.error}')));
+    },
   );
 });
 
+class _RavelryOAuthCallbackScreen extends ConsumerStatefulWidget {
+  const _RavelryOAuthCallbackScreen({required this.uri});
+
+  final Uri uri;
+
+  @override
+  ConsumerState<_RavelryOAuthCallbackScreen> createState() =>
+      _RavelryOAuthCallbackScreenState();
+}
+
+class _RavelryOAuthCallbackScreenState
+    extends ConsumerState<_RavelryOAuthCallbackScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await ref
+          .read(ravelryAuthProvider.notifier)
+          .handleOAuthCallback(widget.uri);
+      if (!mounted) return;
+      context.go(Routes.ravelry);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(child: CircularProgressIndicator()),
+    );
+  }
+}
 
 class GoRouterRefreshStream extends ChangeNotifier {
   GoRouterRefreshStream(Stream<dynamic> stream) {

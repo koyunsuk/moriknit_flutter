@@ -16,6 +16,7 @@ import '../../../providers/ui_copy_provider.dart';
 import '../../course/domain/course_item.dart';
 import '../../project/domain/project_model.dart';
 import '../../yarn/presentation/yarn_list_screen.dart';
+import '../../ravelry/data/ravelry_auth_provider.dart';
 
 String _youtubeThumbnail(String videoUrl) {
   final uri = Uri.tryParse(videoUrl);
@@ -233,7 +234,13 @@ class ToolsScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 20),
 
-                    // 5. 나의 Asset 관리
+                    // 5. Ravelry 연동
+                    SectionTitle(title: 'Ravelry'),
+                    const SizedBox(height: 10),
+                    _RavelryCard(isKorean: isKorean),
+                    const SizedBox(height: 20),
+
+                    // 6. 나의 Asset 관리
                     SectionTitle(title: isKorean ? '나의 Asset 관리' : 'My Asset Management'),
                     const SizedBox(height: 10),
                     _ToolCard(
@@ -490,6 +497,52 @@ class _StatChip extends StatelessWidget {
           Text(value, style: T.h3.copyWith(color: C.lvD)),
           const SizedBox(height: 4),
           Text(label, style: T.caption.copyWith(color: C.mu)),
+        ],
+      ),
+    );
+  }
+}
+
+class _RavelryCard extends ConsumerWidget {
+  const _RavelryCard({required this.isKorean});
+  final bool isKorean;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(ravelryAuthProvider);
+    return GlassCard(
+      onTap: () => context.push(Routes.ravelry),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: C.lv.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(Icons.texture, color: C.lv),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Ravelry', style: T.bodyBold),
+                const SizedBox(height: 4),
+                Text(
+                  auth.isLoggedIn
+                      ? (isKorean ? '${auth.username}님 계정 연결됨' : 'Connected as ${auth.username}')
+                      : (isKorean ? '실·도안·프로젝트를 라벨리와 연동해요' : 'Sync stash, patterns & projects'),
+                  style: T.caption.copyWith(color: auth.isLoggedIn ? C.lv : C.mu),
+                ),
+              ],
+            ),
+          ),
+          if (auth.isLoggedIn)
+            Icon(Icons.check_circle_rounded, color: C.lv, size: 18)
+          else
+            Icon(Icons.chevron_right_rounded, color: C.mu),
         ],
       ),
     );

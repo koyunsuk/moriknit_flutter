@@ -28,4 +28,5 @@ class Routes {
   static const templateEditor = '/templates/editor';
   static const yarnDetail = '/yarn-detail/:id';
   static const needleDetail = '/needle-detail/:id';
+  static const ravelry = '/tools/ravelry';
 }

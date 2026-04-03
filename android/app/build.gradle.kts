@@ -31,6 +31,7 @@ android {
         targetSdk = 34
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["appAuthRedirectScheme"] = "com.moriknit.app"
     }
 
     buildTypes {
