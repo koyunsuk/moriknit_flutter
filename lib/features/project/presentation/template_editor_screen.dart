@@ -5,6 +5,7 @@ import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../providers/template_provider.dart';
 
 // ---------------------------------------------------------------------------
 // TemplateEditorScreen
@@ -13,12 +14,14 @@ class TemplateEditorScreen extends ConsumerStatefulWidget {
   final String? templateId;
   final String? initialTitle;
   final List<String>? initialSteps;
+  final List<String>? initialStepDescs;
 
   const TemplateEditorScreen({
     super.key,
     this.templateId,
     this.initialTitle,
     this.initialSteps,
+    this.initialStepDescs,
   });
 
   @override
@@ -40,9 +43,12 @@ class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
       _nameController.text = widget.initialTitle!;
     }
     if (widget.initialSteps != null && widget.initialSteps!.isNotEmpty) {
-      for (final step in widget.initialSteps!) {
-        _titleCtrls.add(TextEditingController(text: step));
-        _descCtrls.add(TextEditingController());
+      for (int i = 0; i < widget.initialSteps!.length; i++) {
+        _titleCtrls.add(TextEditingController(text: widget.initialSteps![i]));
+        final desc = (widget.initialStepDescs != null && i < widget.initialStepDescs!.length)
+            ? widget.initialStepDescs![i]
+            : '';
+        _descCtrls.add(TextEditingController(text: desc));
       }
     } else {
       _titleCtrls.add(TextEditingController());
@@ -54,8 +60,12 @@ class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
   void dispose() {
     _nameController.dispose();
     _descController.dispose();
-    for (final c in _titleCtrls) c.dispose();
-    for (final c in _descCtrls) c.dispose();
+    for (final c in _titleCtrls) {
+      c.dispose();
+    }
+    for (final c in _descCtrls) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -94,8 +104,25 @@ class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
         message: isKorean ? '저장하는 중입니다.' : 'Saving...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
         task: () async {
-          // TODO: Firestore 연동 — TemplateRepository.save() 호출 예정
-          await Future.delayed(const Duration(milliseconds: 600));
+          final repo = ref.read(templateRepositoryProvider);
+          final titles = _titleCtrls.map((c) => c.text.trim()).toList();
+          final descs = _descCtrls.map((c) => c.text.trim()).toList();
+          if (widget.templateId != null) {
+            await repo.update(
+              id: widget.templateId!,
+              title: name,
+              description: _descController.text.trim(),
+              stepTitles: titles,
+              stepDescs: descs,
+            );
+          } else {
+            await repo.create(
+              title: name,
+              description: _descController.text.trim(),
+              stepTitles: titles,
+              stepDescs: descs,
+            );
+          }
         },
       );
       if (!mounted) return;
@@ -271,7 +298,6 @@ class _StepCard extends StatelessWidget {
   final VoidCallback onDelete;
 
   const _StepCard({
-    super.key,
     required this.index,
     required this.titleCtrl,
     required this.descCtrl,

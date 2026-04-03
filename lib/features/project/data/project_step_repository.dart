@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../domain/builtin_template.dart';
 import '../domain/project_step.dart';
 
 class ProjectStepRepository {
@@ -111,6 +112,17 @@ class ProjectStepRepository {
     await _stepsRef(projectId).doc(stepId).delete();
   }
 
+  Future<void> updateStepOrder(String projectId, String stepId, int newOrder) async {
+    await _stepsRef(projectId).doc(stepId).update({'order': newOrder});
+  }
+
+  Future<void> swapStepOrders(String projectId, String stepIdA, int newOrderA, String stepIdB, int newOrderB) async {
+    final batch = _db.batch();
+    batch.update(_stepsRef(projectId).doc(stepIdA), {'order': newOrderA});
+    batch.update(_stepsRef(projectId).doc(stepIdB), {'order': newOrderB});
+    await batch.commit();
+  }
+
   Future<void> addDefaultSteps(String projectId) async {
     final defaults = ['코잡기 (Cast on)', '몸통 뜨기', '소매 분리', '마무리 (Finishing)'];
     for (int i = 0; i < defaults.length; i++) {
@@ -127,6 +139,20 @@ class ProjectStepRepository {
       data['photoUrl'] = null;
       data['createdAt'] = DateTime.now().toIso8601String();
       await _stepsRef(toProjectId).add(data);
+    }
+  }
+
+  Future<void> addBuiltinTemplateSteps(String projectId, BuiltinTemplate template, bool isKorean) async {
+    final steps = isKorean ? template.stepsKo : template.stepsEn;
+    final notesKo = template.stepNotesKo;
+    final notesEn = template.stepNotesEn;
+    final targetRows = template.stepTargetRows;
+    for (int i = 0; i < steps.length; i++) {
+      final note = isKorean
+          ? (i < notesKo.length ? notesKo[i] : '')
+          : (i < notesEn.length ? notesEn[i] : '');
+      final targetRow = i < targetRows.length ? targetRows[i] : 0;
+      await addStep(projectId, steps[i], i, note: note, targetRow: targetRow);
     }
   }
 

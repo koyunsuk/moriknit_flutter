@@ -293,7 +293,6 @@ class CounterListScreen extends ConsumerWidget {
       ),
     );
     final newName = nameCtrl.text.trim();
-    nameCtrl.dispose();
     if (confirm == true && newName.isNotEmpty && context.mounted) {
       await runWithMoriLoadingDialog<void>(
         context,

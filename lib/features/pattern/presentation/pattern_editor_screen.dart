@@ -1,9 +1,15 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
@@ -37,6 +43,9 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
   bool _isSaving = false;
   bool _showReference = false;
   late TextEditingController _narrativeController;
+  File? _referenceImageFile;
+
+  final GlobalKey _chartKey = GlobalKey();
 
   // 이슈 #98: 전체 조망 — ValueNotifier로 ChartCanvas에 크기 전달
   final ValueNotifier<Size?> _fitToScreenNotifier = ValueNotifier(null);
@@ -49,6 +58,7 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
       title: 'Untitled',
     );
     _narrativeController = TextEditingController(text: _chart.narrativeText);
+    _referenceImageFile = widget.referenceImageFile;
     if (widget.patternId != null && widget.patternId!.isNotEmpty) {
       _loadChart(widget.patternId!);
     }
@@ -158,6 +168,7 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
       );
       if (!mounted) return;
       showSavedSnackBar(messenger, message: isKorean ? '저장됐어요.' : 'Saved.');
+      if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
       showSaveErrorSnackBar(messenger, message: '$e');
@@ -238,16 +249,7 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              // TODO: pdf/printing 패키지 추가 후 실제 PDF 내보내기 구현
-              // 워터마크: opacity 0.05로 'MoriKnit' 텍스트 배경 반복
-              // 제작자 이름: 현재 사용자 displayName 표시
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(isKorean ? 'PDF 내보내기는 준비 중입니다.' : 'PDF export is coming soon.'),
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              );
+              _exportPdf(isKorean);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: C.lv,
@@ -259,6 +261,89 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _changeReferenceImage() async {
+    if (kIsWeb) return;
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.camera_alt_rounded, color: C.lv),
+              title: Text(isKorean ? '카메라로 찍기' : 'Take a photo'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final p = await ImagePicker().pickImage(source: ImageSource.camera);
+                if (p != null && mounted) setState(() => _referenceImageFile = File(p.path));
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.photo_library_rounded, color: C.lv),
+              title: Text(isKorean ? '갤러리에서 선택' : 'Choose from gallery'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final p = await ImagePicker().pickImage(source: ImageSource.gallery);
+                if (p != null && mounted) setState(() => _referenceImageFile = File(p.path));
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _exportPdf(bool isKorean) async {
+    try {
+      final boundary = _chartKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return;
+      final image = await boundary.toImage(pixelRatio: 2.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null || !mounted) return;
+      final bytes = byteData.buffer.asUint8List();
+
+      final user = ref.read(authStateProvider).valueOrNull;
+      final creatorName = user?.displayName ?? user?.email ?? 'MoriKnit';
+
+      final pdfDoc = pw.Document();
+      final pdfImage = pw.MemoryImage(bytes);
+
+      pdfDoc.addPage(pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        build: (ctx) => pw.Stack(
+          children: [
+            pw.Center(child: pw.Image(pdfImage, fit: pw.BoxFit.contain)),
+            pw.Positioned(
+              bottom: 20,
+              right: 20,
+              child: pw.Opacity(
+                opacity: 0.25,
+                child: pw.Text(
+                  'MoriKnit | $creatorName | ${_chart.title}',
+                  style: pw.TextStyle(fontSize: 9, color: PdfColors.grey),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ));
+
+      if (!mounted) return;
+      await Printing.sharePdf(
+        bytes: await pdfDoc.save(),
+        filename: '${_chart.title}.pdf',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
   }
 
   // 이슈 #98: 전체 조망 — 현재 가용 화면 크기를 notifier에 전달
@@ -323,10 +408,30 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
           Column(
             children: [
               // 참조 이미지 패널
-              if (_showReference && widget.referenceImageFile != null)
-                SizedBox(
-                  height: 220,
-                  child: Image.file(widget.referenceImageFile!, fit: BoxFit.contain),
+              if (_showReference && _referenceImageFile != null)
+                Stack(
+                  children: [
+                    SizedBox(
+                      height: 220,
+                      width: double.infinity,
+                      child: Image.file(_referenceImageFile!, fit: BoxFit.contain),
+                    ),
+                    Positioned(
+                      right: 8,
+                      bottom: 8,
+                      child: GestureDetector(
+                        onTap: _changeReferenceImage,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: C.lv.withValues(alpha: 0.85),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.edit_rounded, size: 18, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               if (_showReference && widget.referencePdfPath != null && !kIsWeb)
                 SizedBox(
@@ -338,7 +443,9 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
               // CellData.== 구현으로 동일 셀 중복 칠하기도 안전하게 처리됨.
               Expanded(
                 child: ClipRect(
-                  child: _chart.mode == ChartMode.narrative
+                  child: RepaintBoundary(
+                    key: _chartKey,
+                    child: _chart.mode == ChartMode.narrative
                       ? _NarrativeEditor(
                           controller: _narrativeController,
                           onChanged: (text) {
@@ -365,6 +472,7 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
                           // 이슈 #98: fitToScreenNotifier — 전체 조망 트리거
                           fitToScreenNotifier: _fitToScreenNotifier,
                         ),
+                  ),
                 ),
               ),
               // 이슈 #98: ChartToolbar.onFitScreen → _triggerFitToScreen

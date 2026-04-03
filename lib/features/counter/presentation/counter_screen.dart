@@ -70,7 +70,7 @@ class _CounterScreenState extends ConsumerState<CounterScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () { noteCtrl.dispose(); Navigator.pop(ctx, false); },
+            onPressed: () => Navigator.pop(ctx, false),
             child: Text(isKorean ? '취소' : 'Cancel'),
           ),
           ElevatedButton(
@@ -81,7 +81,6 @@ class _CounterScreenState extends ConsumerState<CounterScreen> {
       ),
     );
     final newNote = noteCtrl.text.trim();
-    noteCtrl.dispose();
     if (confirm != true || !mounted) return;
     final repo = ref.read(counterRepositoryProvider);
     await runWithMoriLoadingDialog<void>(
@@ -157,11 +156,11 @@ class _CounterScreenState extends ConsumerState<CounterScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () { noteCtrl.dispose(); Navigator.pop(ctx); },
+            onPressed: () => Navigator.pop(ctx),
             child: Text(isKorean ? '취소' : 'Cancel'),
           ),
           ElevatedButton(
-            onPressed: () { final v = noteCtrl.text.trim(); noteCtrl.dispose(); Navigator.pop(ctx, v); },
+            onPressed: () => Navigator.pop(ctx, noteCtrl.text.trim()),
             child: Text(isKorean ? '저장' : 'Save'),
           ),
         ],
@@ -216,8 +215,6 @@ class _CounterScreenState extends ConsumerState<CounterScreen> {
     );
     final newStitch = int.tryParse(stitchCtrl.text.trim()) ?? 0;
     final newRow = int.tryParse(rowCtrl.text.trim()) ?? 0;
-    stitchCtrl.dispose();
-    rowCtrl.dispose();
     if (confirm == true && mounted) {
       await runWithMoriLoadingDialog<void>(
         context,
@@ -259,7 +256,6 @@ class _CounterScreenState extends ConsumerState<CounterScreen> {
       ),
     );
     final newName = nameCtrl.text.trim();
-    nameCtrl.dispose();
     if (confirm == true && newName.isNotEmpty && mounted) {
       await runWithMoriLoadingDialog<void>(
         context,

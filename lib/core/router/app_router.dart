@@ -19,6 +19,7 @@ import 'package:moriknit_flutter/features/gauge/presentation/gauge_calculator_sc
 import 'package:moriknit_flutter/features/home/presentation/home_screen.dart';
 import 'package:moriknit_flutter/features/market/presentation/market_screen.dart';
 import 'package:moriknit_flutter/features/my/presentation/my_page_screen.dart';
+import 'package:moriknit_flutter/features/my/presentation/needle_detail_screen.dart';
 import 'package:moriknit_flutter/features/my/presentation/needle_list_screen.dart';
 import 'package:moriknit_flutter/features/pattern/presentation/pattern_editor_screen.dart';
 import 'package:moriknit_flutter/features/pattern/presentation/pattern_list_screen.dart';
@@ -35,6 +36,7 @@ import 'package:moriknit_flutter/features/tools/presentation/tools_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/tool_memo_screen.dart';
 import 'package:moriknit_flutter/features/yarn/domain/yarn_model.dart';
 import 'package:moriknit_flutter/features/yarn/presentation/yarn_input_screen.dart';
+import 'package:moriknit_flutter/features/yarn/presentation/yarn_detail_screen.dart';
 import 'package:moriknit_flutter/features/yarn/presentation/yarn_list_screen.dart';
 import 'package:moriknit_flutter/providers/auth_provider.dart';
 
@@ -51,6 +53,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: Routes.splash,
     refreshListenable: authRefresh,
+
     redirect: (context, state) {
       final isLoggedIn = authRepository.currentUser != null;
       final isAdmin = ref.read(isAdminProvider).valueOrNull ?? false;
@@ -149,6 +152,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     templateId: extra?['templateId'] as String?,
                     initialTitle: extra?['title'] as String?,
                     initialSteps: (extra?['steps'] as List?)?.map((e) => e.toString()).toList(),
+                    initialStepDescs: (extra?['stepDescs'] as List?)?.map((e) => e.toString()).toList(),
                   );
                 },
               ),
@@ -158,6 +162,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/counter/:id', builder: (_, state) => CounterScreen(counterId: state.pathParameters['id']!)),
       GoRoute(path: '/yarn-list', builder: (_, _) => const YarnListScreen()),
+      GoRoute(path: '/yarn-detail/:id', builder: (_, state) => YarnDetailScreen(yarnId: state.pathParameters['id']!)),
+      GoRoute(path: '/needle-detail/:id', builder: (_, state) => NeedleDetailScreen(needleId: state.pathParameters['id']!)),
       GoRoute(
         path: '/yarn-input',
         builder: (context, state) {
@@ -173,6 +179,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     errorBuilder: (_, state) => Scaffold(body: Center(child: Text('Page not found: ${state.error}'))),
   );
 });
+
 
 class GoRouterRefreshStream extends ChangeNotifier {
   GoRouterRefreshStream(Stream<dynamic> stream) {

@@ -14,6 +14,7 @@ import 'package:moriknit_flutter/features/project/presentation/widgets/project_l
 import 'package:moriknit_flutter/providers/auth_provider.dart';
 import 'package:moriknit_flutter/providers/project_provider.dart';
 import 'package:moriknit_flutter/providers/ui_copy_provider.dart';
+import 'package:moriknit_flutter/providers/template_provider.dart';
 
 
 class ProjectListScreen extends ConsumerWidget {
@@ -254,13 +255,8 @@ class ProjectListScreen extends ConsumerWidget {
   }
 
   void _showProjectStartSheet(BuildContext context, WidgetRef ref) {
-    final templates = [
-      ('topdown', '탑다운 스웨터', Icons.dry_cleaning_rounded, C.lv, '넥라인부터 시작 · 8단계 가이드 포함'),
-      ('socks', '양말', Icons.hiking_rounded, C.pkD, '커프부터 발끝까지 · 8단계 힐 가이드'),
-      ('scarf', '목도리', Icons.ac_unit_rounded, C.lmD, '단순하고 따뜻한 · 5단계 기본 완성'),
-      ('gloves', '장갑', Icons.back_hand_rounded, C.og, '손가락 분리까지 · 7단계 상세 가이드'),
-      ('hat', '모자', Icons.face_rounded, C.pkD, '게이지 계산부터 · 5단계 크라운 완성'),
-    ];
+    final builtinTemplates = ref.read(builtinTemplateListProvider).valueOrNull ?? [];
+    final isKorean = ref.read(appLanguageProvider).isKorean;
 
     showModalBottomSheet<void>(
       context: context,
@@ -363,46 +359,50 @@ class ProjectListScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Text('템플릿으로 시작', style: T.bodyBold.copyWith(color: C.tx2)),
-                  ),
-                  ...templates.map((tpl) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: GlassCard(
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        Navigator.push(context, MaterialPageRoute(
-                          builder: (_) => ProjectInputScreen(templateType: tpl.$1),
-                        ));
-                      },
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: tpl.$4.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Icon(tpl.$3, color: tpl.$4),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(tpl.$2, style: T.bodyBold),
-                                const SizedBox(height: 4),
-                                Text(tpl.$5, style: T.caption.copyWith(color: C.mu)),
-                              ],
-                            ),
-                          ),
-                          Icon(Icons.chevron_right_rounded, color: C.mu),
-                        ],
-                      ),
+                  if (builtinTemplates.isEmpty)
+                    const SizedBox.shrink()
+                  else ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Text('템플릿으로 시작', style: T.bodyBold.copyWith(color: C.tx2)),
                     ),
-                  )),
+                    ...builtinTemplates.map((tpl) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: GlassCard(
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          Navigator.push(context, MaterialPageRoute(
+                            builder: (_) => ProjectInputScreen(builtinTemplate: tpl),
+                          ));
+                        },
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: _colorFromHex(tpl.colorHex).withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Icon(_iconFromName(tpl.iconName), color: _colorFromHex(tpl.colorHex)),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(isKorean ? tpl.titleKo : tpl.titleEn, style: T.bodyBold),
+                                  const SizedBox(height: 4),
+                                  Text(isKorean ? tpl.descKo : tpl.descEn, style: T.caption.copyWith(color: C.mu)),
+                                ],
+                              ),
+                            ),
+                            Icon(Icons.chevron_right_rounded, color: C.mu),
+                          ],
+                        ),
+                      ),
+                    )),
+                  ],
                 ],
               ),
             ),
@@ -462,7 +462,7 @@ class ProjectListScreen extends ConsumerWidget {
                             ClipRRect(
                               borderRadius: BorderRadius.circular(10),
                               child: Image.network(p.coverPhotoUrl, width: 48, height: 48, fit: BoxFit.cover,
-                                  errorBuilder: (_, __, _) => _ProjectIconPlaceholder()),
+                                  errorBuilder: (_, _, _) => _ProjectIconPlaceholder()),
                             )
                           else
                             _ProjectIconPlaceholder(),
@@ -655,7 +655,56 @@ class _MobileProjectList extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          ...done.map((project) => _projectCard(context, project)),
+          GlassCard(
+            child: Column(
+              children: done.asMap().entries.map((entry) {
+                final i = entry.key;
+                final project = entry.value;
+                return Column(
+                  children: [
+                    if (i > 0) Divider(height: 1, color: C.bd),
+                    InkWell(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => ProjectDetailScreen(projectId: project.id)),
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+                        child: Row(
+                          children: [
+                            project.coverPhotoUrl.isNotEmpty
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(5),
+                                    child: Image.network(project.coverPhotoUrl, width: 22, height: 22, fit: BoxFit.cover,
+                                        errorBuilder: (_, _, _) => Container(width: 22, height: 22, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(5)), child: Icon(Icons.folder_rounded, color: C.lv, size: 13))),
+                                  )
+                                : Container(width: 22, height: 22, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(5)), child: Icon(Icons.folder_rounded, color: C.lv, size: 13)),
+                            const SizedBox(width: 10),
+                            Expanded(child: Text(project.title, style: T.body, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                            PopupMenuButton<String>(
+                              icon: Icon(Icons.more_vert_rounded, size: 16, color: C.mu),
+                              padding: EdgeInsets.zero,
+                              onSelected: (v) {
+                                if (v == 'edit') onEdit(project);
+                                if (v == 'copy') onDuplicate(project);
+                                if (v == 'delete') onDelete(project);
+                              },
+                              itemBuilder: (_) => [
+                                PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: C.lvD), const SizedBox(width: 8), Text(isKorean ? '수정' : 'Edit')])),
+                                PopupMenuItem(value: 'copy', child: Row(children: [Icon(Icons.copy_rounded, size: 18, color: C.lmD), const SizedBox(width: 8), Text(isKorean ? '복사하기' : 'Duplicate')])),
+                                PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline_rounded, size: 18, color: C.og), const SizedBox(width: 8), Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og))])),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
         ],
       ],
     );
@@ -878,9 +927,11 @@ class ProjectAllListScreen extends ConsumerWidget {
                               child: PopupMenuButton<String>(
                                 icon: Icon(Icons.more_vert, size: 20, color: C.mu),
                                 onSelected: (v) {
-                                  if (v == 'edit') Navigator.push(context, MaterialPageRoute(
-                                    builder: (_) => ProjectInputScreen(projectId: project.id, initialProject: project),
+                                  if (v == 'edit') {
+                                    Navigator.push(context, MaterialPageRoute(
+                                    builder: (_) => ProjectDetailScreen(projectId: project.id),
                                   ));
+                                  }
                                   if (v == 'copy') _duplicateProject(context, ref, project, isKorean);
                                   if (v == 'delete') _confirmDelete(context, ref, project, isKorean);
                                 },
@@ -988,5 +1039,25 @@ class _ProjStatCell extends StatelessWidget {
         Text(label, style: T.caption.copyWith(color: C.mu)),
       ],
     );
+  }
+}
+
+IconData _iconFromName(String name) {
+  switch (name) {
+    case 'dry_cleaning': return Icons.dry_cleaning_rounded;
+    case 'hiking': return Icons.hiking_rounded;
+    case 'ac_unit': return Icons.ac_unit_rounded;
+    case 'back_hand': return Icons.back_hand_rounded;
+    case 'face': return Icons.face_rounded;
+    default: return Icons.article_rounded;
+  }
+}
+
+Color _colorFromHex(String hex) {
+  try {
+    final v = hex.replaceFirst('#', '');
+    return Color(int.parse('FF$v', radix: 16));
+  } catch (_) {
+    return C.lv;
   }
 }

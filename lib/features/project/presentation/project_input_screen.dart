@@ -15,6 +15,7 @@ import '../../../providers/project_provider.dart';
 import '../../../providers/project_step_provider.dart';
 import '../../../providers/swatch_provider.dart';
 import '../../my/data/mori_service.dart';
+import '../domain/builtin_template.dart';
 import '../domain/project_model.dart';
 import '../../swatch/presentation/brand_search_sheet.dart';
 
@@ -22,8 +23,9 @@ class ProjectInputScreen extends ConsumerStatefulWidget {
   final String? projectId;
   final ProjectModel? initialProject;
   final String? templateType;
+  final BuiltinTemplate? builtinTemplate;
 
-  const ProjectInputScreen({super.key, this.projectId, this.initialProject, this.templateType});
+  const ProjectInputScreen({super.key, this.projectId, this.initialProject, this.templateType, this.builtinTemplate});
 
   @override
   ConsumerState<ProjectInputScreen> createState() => _ProjectInputScreenState();
@@ -54,6 +56,16 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
       final name = _templateName(widget.templateType!);
       _titleController.text = name;
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(projectInputProvider.notifier).setTitle(name);
+      });
+    }
+
+    if (project == null && widget.builtinTemplate != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final isKorean = ref.read(appLanguageProvider).isKorean;
+        final bt = widget.builtinTemplate!;
+        final name = isKorean ? bt.titleKo : bt.titleEn;
+        _titleController.text = name;
         ref.read(projectInputProvider.notifier).setTitle(name);
       });
     }
@@ -362,6 +374,10 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
             MoriService.earn(user.uid, amount: 100, reason: 'project_save');
             if (widget.templateType != null) {
               await ref.read(projectStepRepositoryProvider).addTemplateSteps(saved.id, widget.templateType!);
+            }
+            if (widget.builtinTemplate != null) {
+              final isKorean = ref.read(appLanguageProvider).isKorean;
+              await ref.read(projectStepRepositoryProvider).addBuiltinTemplateSteps(saved.id, widget.builtinTemplate!, isKorean);
             }
           }
         },

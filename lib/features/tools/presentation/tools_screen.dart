@@ -447,7 +447,7 @@ class _CourseCard extends StatelessWidget {
           ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
             child: SizedBox(
-              height: 120,
+              height: 180,
               width: double.infinity,
               child: thumbUrl.isNotEmpty
                   ? Image.network(thumbUrl, fit: BoxFit.cover, errorBuilder: (_, e, s) => Container(color: C.lvL, child: Icon(Icons.school_rounded, color: C.lvD, size: 36)))

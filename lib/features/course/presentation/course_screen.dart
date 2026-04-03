@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:url_launcher/url_launcher.dart' show LaunchMode, launchUrl;
+import 'package:video_player/video_player.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import '../../../core/localization/app_language.dart';
@@ -84,7 +85,7 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
                         }).toList();
                   final categories = filtered.map((c) => c.category).toSet().toList();
                   final sortedCourses = [...courses]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-                  final recentCourse = sortedCourses.first;
+                  final recentCourse = sortedCourses.isNotEmpty ? sortedCourses.first : null;
 
                   return ListView(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
@@ -125,7 +126,7 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
                           child: Text(isKorean ? '검색 결과가 없어요' : 'No results found', style: T.body.copyWith(color: C.mu)),
                         )),
                       // 최근 추가 하이라이트 카드 (대형 썸네일) — 검색 없을 때만
-                      if (_query.isEmpty) ...[
+                      if (_query.isEmpty && recentCourse != null) ...[
                         Row(
                           children: [
                             Expanded(child: Text(isKorean ? '최근 강의' : 'Recent', style: T.h3.copyWith(color: C.lvD))),
@@ -316,11 +317,13 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
           final snapshot = await uploadTask;
           downloadUrl = await snapshot.ref.getDownloadURL();
           final category = isKorean ? '입문' : 'Beginner';
+          final mediaType = fileType == FileType.video ? 'video' : 'audio';
           final item = CourseItem(
             id: '',
             title: file.name.replaceAll(RegExp(r'\.[^.]+$'), ''),
             description: '',
             videoUrl: downloadUrl,
+            mediaType: mediaType,
             category: category,
             isPublished: true,
             createdAt: DateTime.now(),
@@ -371,10 +374,12 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 initialValue: category,
+                menuMaxHeight: 280,
+                dropdownColor: Colors.white,
                 decoration: InputDecoration(
                   labelText: isKorean ? '분류' : 'Category',
                   filled: true,
-                  fillColor: C.gx,
+                  fillColor: Colors.white,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: C.bd)),
                   enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: C.bd)),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -397,6 +402,7 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
                       title: titleCtrl.text.trim(),
                       description: '',
                       videoUrl: urlCtrl.text.trim(),
+                      mediaType: 'youtube',
                       category: category,
                       isPublished: true,
                       createdAt: DateTime.now(),
@@ -446,8 +452,12 @@ class _RecentCourseCard extends StatelessWidget {
             // 썸네일
             ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              child: Stack(
-                children: [
+              child: SizedBox(
+                height: 200,
+                width: double.infinity,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
                   if (thumbUrl.isNotEmpty)
                     Image.network(
                       thumbUrl,
@@ -489,6 +499,7 @@ class _RecentCourseCard extends StatelessWidget {
                     ),
                   ),
                 ],
+                ),
               ),
             ),
             // 정보
@@ -516,7 +527,9 @@ class _RecentCourseCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    item.videoUrl,
+                    item.videoUrl.contains('firebasestorage.googleapis.com')
+                        ? '모리니트 서버에 저장되었습니다.'
+                        : item.videoUrl,
                     style: T.caption.copyWith(color: C.mu),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -531,13 +544,22 @@ class _RecentCourseCard extends StatelessWidget {
   }
 }
 
-// ── 제목만 표시하는 컴팩트 목록 행 ──────────────────────────────────────────────
+// ── 강의 카드 (홈탭 스타일) ──────────────────────────────────────────────────
 class _CourseTitleRow extends StatelessWidget {
   final CourseItem item;
   final bool isKorean;
   final VoidCallback onTap;
 
   const _CourseTitleRow({required this.item, required this.isKorean, required this.onTap});
+
+  static String? _videoId(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return null;
+    if (uri.host.contains('youtu.be')) return uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+    return uri.queryParameters['v'];
+  }
+
+  static bool _isFirebaseUrl(String url) => url.contains('firebasestorage.googleapis.com');
 
   Color get _catColor {
     switch (item.category) {
@@ -552,40 +574,141 @@ class _CourseTitleRow extends StatelessWidget {
     }
   }
 
+  IconData get _mediaIcon {
+    switch (item.mediaType) {
+      case 'video': return Icons.play_circle_filled_rounded;
+      case 'audio': return Icons.music_note_rounded;
+      case 'pdf': return Icons.picture_as_pdf_rounded;
+      case 'file': return Icons.attach_file_rounded;
+      default: return Icons.smart_display_rounded;
+    }
+  }
+
+  Color get _mediaColor {
+    switch (item.mediaType) {
+      case 'video': return C.og;
+      case 'audio': return C.pk;
+      case 'pdf': return C.og;
+      default: return C.lvD;
+    }
+  }
+
+  String get _mediaLabel {
+    switch (item.mediaType) {
+      case 'video': return '동영상';
+      case 'audio': return '음성';
+      case 'pdf': return 'PDF';
+      case 'file': return '파일';
+      default: return '유튜브';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: C.gx,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: C.bd),
-      ),
-      child: ListTile(
-        onTap: onTap,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-        leading: Container(
-          width: 42, height: 42,
-          decoration: BoxDecoration(
-            color: _catColor.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(
-            item.videoUrl.contains('youtube') || item.videoUrl.contains('youtu.be')
-                ? Icons.smart_display_rounded
-                : Icons.audiotrack_rounded,
-            color: _catColor,
-            size: 22,
-          ),
+    final title = isKorean ? item.title : (item.titleEn.isNotEmpty ? item.titleEn : item.title);
+    final videoId = _videoId(item.videoUrl);
+    final thumbUrl = videoId != null ? 'https://img.youtube.com/vi/$videoId/mqdefault.jpg' : '';
+    final isFirebase = _isFirebaseUrl(item.videoUrl);
+    final isAudio = item.mediaType == 'audio';
+    final isVideo = item.mediaType == 'video';
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: C.gx,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: C.bd),
         ),
-        title: Text(
-          isKorean ? item.title : (item.titleEn.isNotEmpty ? item.titleEn : item.title),
-          style: T.bodyBold,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(14),
+                bottomLeft: Radius.circular(14),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  if (thumbUrl.isNotEmpty)
+                    Image.network(
+                      thumbUrl,
+                      width: 100,
+                      height: 70,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, e, s) => Container(
+                        width: 100, height: 70,
+                        color: C.lvL,
+                        child: Icon(isAudio ? Icons.music_note_rounded : Icons.play_circle_filled_rounded, color: C.lvD, size: 28),
+                      ),
+                    )
+                  else
+                    Container(
+                      width: 100, height: 70,
+                      color: isVideo ? C.og.withValues(alpha: 0.08) : C.lvL,
+                      child: Icon(isAudio ? Icons.music_note_rounded : Icons.play_circle_filled_rounded, color: isAudio ? C.pk : C.lvD, size: 28),
+                    ),
+                  if (!isAudio)
+                    Container(
+                      width: 30, height: 30,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 18),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          margin: const EdgeInsets.only(right: 6),
+                          decoration: BoxDecoration(
+                            color: _mediaColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(_mediaIcon, size: 10, color: _mediaColor),
+                            const SizedBox(width: 3),
+                            Text(_mediaLabel, style: T.caption.copyWith(color: _mediaColor, fontWeight: FontWeight.w700, fontSize: 10)),
+                          ]),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: _catColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(item.category, style: T.caption.copyWith(color: _catColor, fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(title, style: T.bodyBold, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    if (isFirebase) ...[
+                      const SizedBox(height: 2),
+                      Text('모리니트 서버에 저장되었습니다.', style: T.caption.copyWith(color: C.mu)),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(right: 8),
+              child: Icon(Icons.chevron_right_rounded, color: Colors.grey),
+            ),
+          ],
         ),
-        subtitle: Text(item.category, style: T.caption.copyWith(color: _catColor)),
-        trailing: Icon(Icons.chevron_right_rounded, color: C.mu, size: 20),
       ),
     );
   }
@@ -750,10 +873,12 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 initialValue: category,
+                menuMaxHeight: 280,
+                dropdownColor: Colors.white,
                 decoration: InputDecoration(
                   labelText: widget.isKorean ? '분류' : 'Category',
                   filled: true,
-                  fillColor: C.gx,
+                  fillColor: Colors.white,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: C.bd)),
                   enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: C.bd)),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -884,10 +1009,47 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
         builder: (ctx, player) => player,
       );
     } else {
-      playerWidget = Container(
-        height: 220,
-        color: Colors.black,
-        child: const Center(child: Icon(Icons.error_outline, color: Colors.white54, size: 40)),
+      // Firebase Storage file — in-app playback
+      final isAudio = widget.item.mediaType == 'audio';
+      playerWidget = GestureDetector(
+        onTap: () {
+          showDialog<void>(
+            context: context,
+            builder: (ctx) => _VideoPlayerDialog(
+              url: widget.item.videoUrl,
+              isAudio: isAudio,
+              isKorean: widget.isKorean,
+            ),
+          );
+        },
+        child: Container(
+          height: isAudio ? 120 : 220,
+          decoration: BoxDecoration(
+            color: isAudio ? C.pk.withValues(alpha: 0.08) : C.lvD.withValues(alpha: 0.08),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                isAudio ? Icons.music_note_rounded : Icons.play_circle_filled_rounded,
+                color: isAudio ? C.pk : C.lvD,
+                size: 56,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                isAudio
+                    ? (widget.isKorean ? '탭하여 음성 재생' : 'Tap to play audio')
+                    : (widget.isKorean ? '탭하여 동영상 재생' : 'Tap to play video'),
+                style: T.body.copyWith(color: isAudio ? C.pk : C.lvD),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                widget.isKorean ? '인앱 재생' : 'In-app playback',
+                style: T.caption.copyWith(color: C.mu),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -945,7 +1107,14 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
                         ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: Text(widget.item.videoUrl, style: T.caption.copyWith(color: C.mu), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          child: Text(
+                            widget.item.videoUrl.contains('firebasestorage.googleapis.com')
+                                ? '모리니트 서버에 저장되었습니다.'
+                                : widget.item.videoUrl,
+                            style: T.caption.copyWith(color: C.mu),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ],
                     ),
@@ -983,6 +1152,150 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── 인앱 동영상/음성 재생 다이얼로그 ──────────────────────────────────────────────
+class _VideoPlayerDialog extends StatefulWidget {
+  final String url;
+  final bool isAudio;
+  final bool isKorean;
+
+  const _VideoPlayerDialog({
+    required this.url,
+    required this.isAudio,
+    required this.isKorean,
+  });
+
+  @override
+  State<_VideoPlayerDialog> createState() => _VideoPlayerDialogState();
+}
+
+class _VideoPlayerDialogState extends State<_VideoPlayerDialog> {
+  late VideoPlayerController _controller;
+  bool _initialized = false;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+    _controller.initialize().then((_) {
+      if (mounted) {
+        setState(() => _initialized = true);
+        _controller.play();
+      }
+    }).catchError((_) {
+      if (mounted) setState(() => _hasError = true);
+    });
+    _controller.addListener(() {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  String _formatDuration(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return h > 0 ? '$h:$m:$s' : '$m:$s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.black,
+      insetPadding: const EdgeInsets.all(16),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.85),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+          // 닫기 버튼
+          Align(
+            alignment: Alignment.topRight,
+            child: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          if (_hasError)
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                widget.isKorean ? '재생할 수 없습니다.' : 'Cannot play this file.',
+                style: const TextStyle(color: Colors.white),
+              ),
+            )
+          else if (!_initialized)
+            const Padding(
+              padding: EdgeInsets.all(40),
+              child: CircularProgressIndicator(color: Colors.white),
+            )
+          else ...[
+            if (!widget.isAudio)
+              AspectRatio(
+                aspectRatio: _controller.value.aspectRatio,
+                child: VideoPlayer(_controller),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Icon(Icons.music_note_rounded, color: C.pk, size: 64),
+              ),
+            // 컨트롤
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: Column(
+                children: [
+                  VideoProgressIndicator(
+                    _controller,
+                    allowScrubbing: true,
+                    colors: VideoProgressColors(
+                      playedColor: C.lv,
+                      bufferedColor: C.lv.withValues(alpha: 0.3),
+                      backgroundColor: Colors.white24,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _formatDuration(_controller.value.position),
+                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          _controller.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                        onPressed: () {
+                          _controller.value.isPlaying ? _controller.pause() : _controller.play();
+                        },
+                      ),
+                      Text(
+                        _formatDuration(_controller.value.duration),
+                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+          ),
         ),
       ),
     );

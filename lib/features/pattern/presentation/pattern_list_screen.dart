@@ -14,7 +14,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../data/pattern_repository.dart';
 import '../domain/pattern_chart.dart';
-import 'pattern_editor_screen.dart';
+import 'pattern_detail_screen.dart';
 
 class PatternListScreen extends ConsumerWidget {
   const PatternListScreen({super.key});
@@ -81,7 +81,7 @@ class PatternListScreen extends ConsumerWidget {
                             ...patterns.map((p) => _PatternRow(
                               chart: p,
                               isKorean: isKorean,
-                              onTap: () => context.push('${Routes.toolsPattern}/${p.id}'),
+                              onTap: () => _openPattern(context, p),
                               onDelete: () => _confirmDelete(context, ref, p, isKorean),
                               onDuplicate: () => _confirmDuplicate(context, ref, p, isKorean),
                             )),
@@ -97,6 +97,12 @@ class PatternListScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  void _openPattern(BuildContext context, PatternChart chart) {
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => PatternDetailScreen(chart: chart),
+    ));
   }
 
   Future<void> _confirmDuplicate(BuildContext context, WidgetRef ref, PatternChart chart, bool isKorean) async {
@@ -117,7 +123,7 @@ class PatternListScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _showImageSourceDialog(BuildContext context, bool isKorean) async {
+  Future<void> _showImageSourceDialog(BuildContext context, WidgetRef ref, bool isKorean) async {
     if (kIsWeb) {
       showSavedSnackBar(context, message: isKorean ? '모바일에서만 사용 가능해요.' : 'Available on mobile only.');
       return;
@@ -146,9 +152,7 @@ class PatternListScreen extends ConsumerWidget {
                   Navigator.pop(ctx);
                   final picked = await ImagePicker().pickImage(source: ImageSource.camera);
                   if (picked != null && context.mounted) {
-                    Navigator.push(context, MaterialPageRoute(
-                      builder: (_) => PatternEditorScreen(referenceImageFile: File(picked.path)),
-                    ));
+                    await _saveImageFile(context, ref, File(picked.path), isKorean);
                   }
                 },
               ),
@@ -159,9 +163,7 @@ class PatternListScreen extends ConsumerWidget {
                   Navigator.pop(ctx);
                   final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
                   if (picked != null && context.mounted) {
-                    Navigator.push(context, MaterialPageRoute(
-                      builder: (_) => PatternEditorScreen(referenceImageFile: File(picked.path)),
-                    ));
+                    await _saveImageFile(context, ref, File(picked.path), isKorean);
                   }
                 },
               ),
@@ -170,6 +172,75 @@ class PatternListScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _saveImageFile(BuildContext context, WidgetRef ref, File file, bool isKorean) async {
+    final title = await _askPatternTitle(context, isKorean);
+    if (title == null || !context.mounted) return;
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () => ref.read(patternRepositoryProvider).saveImagePattern(
+          title: title,
+          imageFile: file,
+        ),
+      );
+      if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '저장됐어요.' : 'Saved.');
+    } catch (e) {
+      if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+
+  Future<void> _savePdfFile(BuildContext context, WidgetRef ref, File file, bool isKorean) async {
+    final title = await _askPatternTitle(context, isKorean);
+    if (title == null || !context.mounted) return;
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () => ref.read(patternRepositoryProvider).savePdfPattern(
+          title: title,
+          pdfFile: file,
+        ),
+      );
+      if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '저장됐어요.' : 'Saved.');
+    } catch (e) {
+      if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+
+  Future<String?> _askPatternTitle(BuildContext context, bool isKorean) async {
+    final ctrl = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(isKorean ? '도안 이름' : 'Pattern name', style: T.h3),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: isKorean ? '도안 이름을 입력하세요' : 'Enter pattern name',
+          ),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim().isEmpty ? (isKorean ? '내 도안' : 'My Pattern') : v.trim()),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(isKorean ? '취소' : 'Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              final v = ctrl.text.trim();
+              Navigator.pop(ctx, v.isEmpty ? (isKorean ? '내 도안' : 'My Pattern') : v);
+            },
+            child: Text(isKorean ? '등록' : 'Save'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    return result;
   }
 
   Future<void> _showPatternStartSheet(BuildContext context, WidgetRef ref) async {
@@ -206,7 +277,7 @@ class PatternListScreen extends ConsumerWidget {
               GlassCard(
                 onTap: () {
                   Navigator.pop(ctx);
-                  _showImageSourceDialog(context, isKorean);
+                  _showImageSourceDialog(context, ref, isKorean);
                 },
                 child: Row(children: [
                   Container(
@@ -252,9 +323,7 @@ class PatternListScreen extends ConsumerWidget {
                     allowedExtensions: ['pdf'],
                   );
                   if (result != null && result.files.first.path != null && context.mounted) {
-                    Navigator.push(context, MaterialPageRoute(
-                      builder: (_) => PatternEditorScreen(referencePdfPath: result.files.first.path),
-                    ));
+                    await _savePdfFile(context, ref, File(result.files.first.path!), isKorean);
                   }
                 },
                 child: Row(children: [
@@ -380,6 +449,34 @@ class _PatternRow extends StatelessWidget {
   final VoidCallback onDuplicate;
   const _PatternRow({required this.chart, required this.isKorean, required this.onTap, required this.onDelete, required this.onDuplicate});
 
+  IconData get _typeIcon {
+    switch (chart.type) {
+      case PatternType.image: return Icons.image_rounded;
+      case PatternType.pdf: return Icons.picture_as_pdf_rounded;
+      case PatternType.chart: return Icons.grid_on_rounded;
+    }
+  }
+
+  Color get _iconBgColor {
+    switch (chart.type) {
+      case PatternType.image: return C.lmD;
+      case PatternType.pdf: return C.og;
+      case PatternType.chart: return C.lvD;
+    }
+  }
+
+  String _subtitleText(bool isKorean) {
+    switch (chart.type) {
+      case PatternType.image: return isKorean ? '이미지 도안' : 'Image pattern';
+      case PatternType.pdf: return isKorean ? 'PDF 도안' : 'PDF pattern';
+      case PatternType.chart:
+        final modeLabel = chart.mode == ChartMode.color
+            ? (isKorean ? '컬러' : 'Color')
+            : (isKorean ? '기호' : 'Symbol');
+        return '${chart.rows} × ${chart.cols}  |  $modeLabel';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -396,36 +493,50 @@ class _PatternRow extends StatelessWidget {
           width: 42,
           height: 42,
           decoration: BoxDecoration(
-            color: C.lv.withValues(alpha: 0.12),
+            color: _iconBgColor.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(Icons.grid_on_rounded, color: C.lvD),
+          child: Icon(_typeIcon, color: _iconBgColor),
         ),
         title: Text(chart.title, style: T.bodyBold),
         subtitle: Text(
-          '${chart.rows} × ${chart.cols}  |  ${chart.mode == ChartMode.color ? (isKorean ? '컬러' : 'Color') : (isKorean ? '기호' : 'Symbol')}',
+          _subtitleText(isKorean),
           style: T.caption.copyWith(color: C.mu),
         ),
-        trailing: PopupMenuButton<String>(
-          icon: Icon(Icons.more_vert_rounded, color: C.mu, size: 22),
-          padding: EdgeInsets.zero,
-          onSelected: (value) {
-            if (value == 'edit') onTap();
-            if (value == 'delete') onDelete();
-            if (value == 'copy') onDuplicate();
-          },
-          itemBuilder: (_) => [
-            PopupMenuItem(
-              value: 'edit',
-              child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: C.lvD), const SizedBox(width: 8), const Text('수정')]),
-            ),
-            PopupMenuItem(
-              value: 'copy',
-              child: Row(children: [Icon(Icons.copy_rounded, size: 18, color: C.lvD), const SizedBox(width: 8), const Text('복사')]),
-            ),
-            PopupMenuItem(
-              value: 'delete',
-              child: Row(children: [const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red), const SizedBox(width: 8), const Text('삭제', style: TextStyle(color: Colors.red))]),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (chart.type == PatternType.image && chart.imageUrl.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(chart.imageUrl, width: 38, height: 38, fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => const SizedBox.shrink()),
+                ),
+              ),
+            PopupMenuButton<String>(
+              icon: Icon(Icons.more_vert_rounded, color: C.mu, size: 22),
+              padding: EdgeInsets.zero,
+              onSelected: (value) {
+                if (value == 'edit') onTap();
+                if (value == 'delete') onDelete();
+                if (value == 'copy') onDuplicate();
+              },
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  value: 'edit',
+                  child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: C.lvD), const SizedBox(width: 8), const Text('수정')]),
+                ),
+                PopupMenuItem(
+                  value: 'copy',
+                  child: Row(children: [Icon(Icons.copy_rounded, size: 18, color: C.lvD), const SizedBox(width: 8), const Text('복사')]),
+                ),
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Row(children: [const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red), const SizedBox(width: 8), const Text('삭제', style: TextStyle(color: Colors.red))]),
+                ),
+              ],
             ),
           ],
         ),

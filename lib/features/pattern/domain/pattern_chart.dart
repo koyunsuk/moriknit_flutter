@@ -5,6 +5,8 @@ enum ChartMode { color, symbol, narrative }
 
 enum ChartTool { draw, erase, fill, select, move }
 
+enum PatternType { chart, image, pdf }
+
 class CellData {
   final Color? color;
   final String? symbolId;
@@ -49,6 +51,9 @@ class PatternChart {
   final ChartMode mode;
   final List<List<CellData>> grid;
   final String narrativeText;
+  final PatternType type;
+  final String imageUrl;
+  final String pdfUrl;
 
   PatternChart({
     required this.id,
@@ -58,6 +63,9 @@ class PatternChart {
     required this.mode,
     required this.grid,
     this.narrativeText = '',
+    this.type = PatternType.chart,
+    this.imageUrl = '',
+    this.pdfUrl = '',
   });
 
   PatternChart setCell(int row, int col, CellData cell) {
@@ -90,6 +98,9 @@ class PatternChart {
     ChartMode? mode,
     List<List<CellData>>? grid,
     String? narrativeText,
+    PatternType? type,
+    String? imageUrl,
+    String? pdfUrl,
   }) {
     return PatternChart(
       id: id ?? this.id,
@@ -99,6 +110,9 @@ class PatternChart {
       mode: mode ?? this.mode,
       grid: grid ?? this.grid,
       narrativeText: narrativeText ?? this.narrativeText,
+      type: type ?? this.type,
+      imageUrl: imageUrl ?? this.imageUrl,
+      pdfUrl: pdfUrl ?? this.pdfUrl,
     );
   }
 
@@ -112,6 +126,9 @@ class PatternChart {
             .map((row) => <String, dynamic>{'cells': row.map((cell) => cell.toJson()).toList()})
             .toList(),
         'narrativeText': narrativeText,
+        'type': type.name,
+        'imageUrl': imageUrl,
+        'pdfUrl': pdfUrl,
       };
 
   factory PatternChart.fromJson(Map<String, dynamic> json) {
@@ -139,6 +156,9 @@ class PatternChart {
       mode: ChartMode.values.byName(json['mode'] as String),
       grid: grid,
       narrativeText: json['narrativeText'] as String? ?? '',
+      type: PatternType.values.byName(json['type'] as String? ?? 'chart'),
+      imageUrl: json['imageUrl'] as String? ?? '',
+      pdfUrl: json['pdfUrl'] as String? ?? '',
     );
   }
 

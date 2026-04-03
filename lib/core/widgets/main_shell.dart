@@ -1,11 +1,16 @@
+import 'dart:async';
+import 'dart:math';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../providers/avatar_provider.dart';
+import '../../providers/fab_settings_provider.dart';
 import '../localization/app_language.dart';
 import '../router/app_router.dart';
 import '../theme/app_colors.dart';
@@ -20,8 +25,68 @@ class MainShell extends ConsumerStatefulWidget {
   ConsumerState<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends ConsumerState<MainShell> {
+// ── 모바일 스파클 파티클 ───────────────────────────────────────────────────────
+class _MobileParticle {
+  final AnimationController controller;
+  final double x;
+  final String emoji;
+  final double drift;
+  final double size;
+  _MobileParticle({required this.controller, required this.x, required this.emoji, required this.drift, required this.size});
+}
+
+class _MainShellState extends ConsumerState<MainShell> with TickerProviderStateMixin {
   bool _fabOpen = false;
+
+  // ── 스파클 ───────────────────────────────────────────────────────────────
+  static const _sparkleEmojis = ['❤️', '🩷', '♪', '♫', '✨', '💜', '🎵', '🧶'];
+  final _rng = Random();
+  final _particles = <_MobileParticle>[];
+  Timer? _sparkleTimer;
+
+  // ── FAB 드래그 ────────────────────────────────────────────────────────────
+  double _fabBottom = 24.0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _fabBottom = ref.read(fabSettingsProvider).bottomOffset;
+      _startSparkle();
+    });
+  }
+
+  void _startSparkle() {
+    _sparkleTimer = Timer.periodic(const Duration(milliseconds: 900), (_) => _spawnSparkle());
+  }
+
+  void _spawnSparkle() {
+    if (!mounted) return;
+    final ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600));
+    final p = _MobileParticle(
+      controller: ctrl,
+      x: _rng.nextDouble(),
+      emoji: _sparkleEmojis[_rng.nextInt(_sparkleEmojis.length)],
+      drift: (_rng.nextDouble() - 0.5) * 22,
+      size: 13 + _rng.nextDouble() * 9,
+    );
+    setState(() => _particles.add(p));
+    ctrl.forward().then((_) {
+      if (mounted) setState(() => _particles.remove(p));
+      ctrl.dispose();
+    });
+  }
+
+  @override
+  void dispose() {
+    _sparkleTimer?.cancel();
+    for (final p in _particles) {
+      p.controller.dispose();
+    }
+    super.dispose();
+  }
+
 
   int _locationToIndex(String location) {
     if (location.startsWith(Routes.tools)) return 1;
@@ -74,31 +139,90 @@ class _MainShellState extends ConsumerState<MainShell> {
       _SpeedItem(icon: Icons.exposure_plus_1_rounded, label: t.newCounter, color: C.pkD, onTap: () { _closeFab(); context.push(Routes.counterList); }),
     ];
 
-    return Scaffold(
-      backgroundColor: C.bg,
-      body: Stack(
-        children: [
-          const BgOrbs(),
-          widget.child,
-          if (_fabOpen)
-            Positioned.fill(
+    final fabSettings = ref.watch(fabSettingsProvider);
+    final backAlpha = fabSettings.transparent ? 0.40 : 1.0;
+    final speedAlpha = fabSettings.transparent ? 0.40 : 1.0;
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        if (currentIndex != 0) {
+          if (context.mounted) context.go(Routes.home);
+        } else {
+          await SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: C.bg,
+        body: Stack(
+          children: [
+            const BgOrbs(),
+            widget.child,
+            // ── 상단 스파클 파티클 ─────────────────────────────────────────
+            ..._particles.map((p) => AnimatedBuilder(
+                  animation: p.controller,
+                  builder: (context, _) {
+                    final t = p.controller.value;
+                    final opacity = (t < 0.15 ? t / 0.15 : t > 0.65 ? (1 - t) / 0.35 : 1.0).clamp(0.0, 1.0);
+                    final w = MediaQuery.of(context).size.width;
+                    return Positioned(
+                      left: p.x * w + p.drift * t * 2,
+                      top: 4 + 60.0 * t,
+                      child: Opacity(
+                        opacity: opacity,
+                        child: Transform.scale(
+                          scale: 0.7 + 0.4 * (1 - t),
+                          child: Text(p.emoji, style: TextStyle(fontSize: p.size)),
+                        ),
+                      ),
+                    );
+                  },
+                )),
+            // ── FAB 다크 오버레이 ──────────────────────────────────────────
+            if (_fabOpen)
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: _closeFab,
+                  child: Container(color: Colors.black.withValues(alpha: 0.2)),
+                ),
+              ),
+            // ── 뒤로가기 FAB (왼쪽 — 드래그 가능) ───────────────────────
+            Positioned(
+              left: 16,
+              bottom: _fabBottom,
               child: GestureDetector(
-                onTap: _closeFab,
-                child: Container(color: Colors.black.withValues(alpha: 0.2)),
+                onPanUpdate: (d) => setState(() => _fabBottom = (_fabBottom - d.delta.dy).clamp(8.0, 550.0)),
+                onPanEnd: (_) => ref.read(fabSettingsProvider.notifier).setBottomOffset(_fabBottom),
+                child: FloatingActionButton(
+                  heroTag: 'global_back_fab',
+                  onPressed: () => Navigator.maybePop(context),
+                  backgroundColor: C.lm.withValues(alpha: backAlpha),
+                  foregroundColor: const Color(0xFF1a3000),
+                  elevation: 4,
+                  child: const Icon(Icons.arrow_back_ios_rounded, size: 24),
+                ),
               ),
             ),
-        ],
-      ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: _SpeedDial(
-          open: _fabOpen,
-          onToggle: () => setState(() => _fabOpen = !_fabOpen),
-          items: speedItems,
+            // ── 스피드다이얼 (오른쪽 — 드래그 가능) ─────────────────────
+            Positioned(
+              right: 16,
+              bottom: _fabBottom,
+              child: GestureDetector(
+                onPanUpdate: (d) => setState(() => _fabBottom = (_fabBottom - d.delta.dy).clamp(8.0, 550.0)),
+                onPanEnd: (_) => ref.read(fabSettingsProvider.notifier).setBottomOffset(_fabBottom),
+                child: _SpeedDial(
+                  open: _fabOpen,
+                  onToggle: () => setState(() => _fabOpen = !_fabOpen),
+                  items: speedItems,
+                  speedAlpha: speedAlpha,
+                ),
+              ),
+            ),
+          ],
         ),
+        bottomNavigationBar: MoriTabBar(currentIndex: currentIndex, tabs: tabs, onTap: (i) => _onTap(context, i)),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      bottomNavigationBar: MoriTabBar(currentIndex: currentIndex, tabs: tabs, onTap: (i) => _onTap(context, i)),
     );
   }
 
@@ -127,7 +251,8 @@ class _SpeedDial extends StatelessWidget {
   final bool open;
   final VoidCallback onToggle;
   final List<_SpeedItem> items;
-  const _SpeedDial({required this.open, required this.onToggle, required this.items});
+  final double speedAlpha;
+  const _SpeedDial({required this.open, required this.onToggle, required this.items, this.speedAlpha = 1.0});
 
   @override
   Widget build(BuildContext context) {
@@ -167,7 +292,7 @@ class _SpeedDial extends StatelessWidget {
                       FloatingActionButton.small(
                         heroTag: 'fab_${item.label}',
                         onPressed: item.onTap,
-                        backgroundColor: item.color,
+                        backgroundColor: item.color.withValues(alpha: 0.75),
                         foregroundColor: Colors.white,
                         child: Icon(item.icon, size: 18),
                       ),
@@ -182,7 +307,7 @@ class _SpeedDial extends StatelessWidget {
         FloatingActionButton(
           heroTag: 'main_speed_fab',
           onPressed: onToggle,
-          backgroundColor: C.lm,
+          backgroundColor: C.lm.withValues(alpha: speedAlpha),
           foregroundColor: const Color(0xFF1a3000),
           elevation: open ? 6 : 4,
           child: AnimatedRotation(
@@ -486,6 +611,18 @@ class _WebContentAreaState extends ConsumerState<_WebContentArea> {
               child: Container(color: Colors.black.withValues(alpha: 0.2)),
             ),
           ),
+        Positioned(
+          left: 24,
+          bottom: 24,
+          child: FloatingActionButton(
+            heroTag: 'global_back_fab_web',
+            onPressed: () => Navigator.maybePop(context),
+            backgroundColor: C.lm,
+            foregroundColor: const Color(0xFF1a3000),
+            elevation: 4,
+            child: const Icon(Icons.arrow_back_ios_rounded, size: 24),
+          ),
+        ),
         Positioned(
           right: 24,
           bottom: 24,

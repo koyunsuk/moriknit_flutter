@@ -18,6 +18,7 @@ import '../../../providers/counter_provider.dart';
 import '../../../providers/market_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/swatch_provider.dart';
+import '../../../providers/fab_settings_provider.dart';
 import '../../../providers/theme_provider.dart';
 import '../../auth/domain/user_model.dart';
 import 'bug_report_sheet.dart';
@@ -398,13 +399,13 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                         value: language,
                         isExpanded: true,
                         underline: const SizedBox.shrink(),
-                        isDense: true,
-                        style: T.caption.copyWith(color: C.tx),
+                        menuMaxHeight: 280,
                         dropdownColor: C.bg,
+                        style: T.bodyBold.copyWith(color: C.tx),
                         items: AppLanguage.values
                             .map((l) => DropdownMenuItem(
                                   value: l,
-                                  child: Text(l.label, style: T.caption.copyWith(color: C.tx)),
+                                  child: Text(l.label, style: T.bodyBold.copyWith(color: C.tx)),
                                 ))
                             .toList(),
                         onChanged: (value) {
@@ -465,7 +466,15 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
               ),
               const SizedBox(height: 20),
 
-              // ── 4. 회사정보 ───────────────────────────────────────
+              // ── 4. 퀵다이얼 설정 ─────────────────────────────────
+              if (!kIsWeb) ...[
+                SectionTitle(title: isKorean ? '퀵다이얼 설정' : 'Quick Dial Settings'),
+                const SizedBox(height: 10),
+                _FabSettingsCard(isKorean: isKorean),
+                const SizedBox(height: 20),
+              ],
+
+              // ── 5. 회사정보 ───────────────────────────────────────
               SectionTitle(title: isKorean ? '회사정보' : 'Company Info'),
               const SizedBox(height: 10),
               GlassCard(
@@ -656,6 +665,95 @@ class _LedgerRow extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(child: Text(title, style: T.body)),
           Text(subtitle, style: T.captionBold.copyWith(color: accent)),
+        ],
+      ),
+    );
+  }
+}
+
+// ── 퀵다이얼 설정 카드 ────────────────────────────────────────────────────────
+class _FabSettingsCard extends ConsumerWidget {
+  final bool isKorean;
+  const _FabSettingsCard({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(fabSettingsProvider);
+
+    final presets = [
+      ('bottom', isKorean ? '하단' : 'Bottom'),
+      ('middle', isKorean ? '중간' : 'Middle'),
+      ('top', isKorean ? '상단' : 'Top'),
+    ];
+
+    String currentPreset = 'bottom';
+    if (settings.bottomOffset > 350) {
+      currentPreset = 'top';
+    } else if (settings.bottomOffset > 100) {
+      currentPreset = 'middle';
+    }
+
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 투명도 토글
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(isKorean ? '반투명 모드' : 'Transparent Mode', style: T.bodyBold),
+                    Text(isKorean ? '퀵다이얼 버튼을 반투명하게 표시' : 'Show quick dial buttons as semi-transparent',
+                        style: T.caption.copyWith(color: C.mu)),
+                  ],
+                ),
+              ),
+              Switch(
+                value: settings.transparent,
+                onChanged: (v) => ref.read(fabSettingsProvider.notifier).setTransparent(v),
+                activeThumbColor: C.lv,
+                activeTrackColor: C.lvL,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // 위치 프리셋
+          Text(isKorean ? '기본 위치' : 'Default Position', style: T.bodyBold),
+          const SizedBox(height: 8),
+          Text(isKorean ? '버튼을 길게 드래그해서 자유롭게 이동할 수 있어요' : 'Long drag the buttons to move them freely',
+              style: T.caption.copyWith(color: C.mu)),
+          const SizedBox(height: 10),
+          Row(
+            children: presets.map((e) {
+              final (key, label) = e;
+              final selected = currentPreset == key;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  onTap: () => ref.read(fabSettingsProvider.notifier).setPreset(key),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: selected ? C.lv : C.lvL,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: selected ? C.lv : C.lv.withValues(alpha: 0.20)),
+                    ),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: selected ? Colors.white : C.lvD,
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
         ],
       ),
     );

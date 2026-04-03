@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/pattern_chart.dart';
@@ -62,6 +65,62 @@ class PatternRepository {
     final doc = await _ref.doc(id).get();
     if (!doc.exists) return null;
     return PatternChart.fromJson(doc.data() as Map<String, dynamic>);
+  }
+
+  Future<String> _uploadFile(File file, String folder) async {
+    if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
+    final ext = file.path.split('.').last;
+    final storageRef = FirebaseStorage.instance
+        .ref()
+        .child('users/$_uid/patterns/$folder/${DateTime.now().millisecondsSinceEpoch}.$ext');
+    await storageRef.putFile(file);
+    return storageRef.getDownloadURL();
+  }
+
+  Future<PatternChart> saveImagePattern({
+    required String title,
+    required File imageFile,
+  }) async {
+    final imageUrl = await _uploadFile(imageFile, 'images');
+    final docRef = _ref.doc();
+    final chart = PatternChart(
+      id: docRef.id,
+      title: title,
+      rows: 0,
+      cols: 0,
+      mode: ChartMode.color,
+      grid: const <List<CellData>>[],
+      type: PatternType.image,
+      imageUrl: imageUrl,
+    );
+    await docRef.set({
+      ...chart.toJson(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    return chart;
+  }
+
+  Future<PatternChart> savePdfPattern({
+    required String title,
+    required File pdfFile,
+  }) async {
+    final pdfUrl = await _uploadFile(pdfFile, 'pdfs');
+    final docRef = _ref.doc();
+    final chart = PatternChart(
+      id: docRef.id,
+      title: title,
+      rows: 0,
+      cols: 0,
+      mode: ChartMode.color,
+      grid: const <List<CellData>>[],
+      type: PatternType.pdf,
+      pdfUrl: pdfUrl,
+    );
+    await docRef.set({
+      ...chart.toJson(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    return chart;
   }
 }
 

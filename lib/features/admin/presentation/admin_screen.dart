@@ -18,8 +18,10 @@ import '../../../core/utils/file_download.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/editorial_provider.dart';
+import '../../../providers/template_provider.dart';
 import '../../auth/domain/user_model.dart';
 import '../../home/domain/editorial_post.dart';
+import '../../project/domain/builtin_template.dart';
 import '../data/admin_bulk_import_service.dart';
 import '../domain/admin_import_models.dart';
 
@@ -241,6 +243,7 @@ class _AdminConsoleState extends State<_AdminConsole> {
     _AdminNavItem.tab(index: 0, icon: Icons.dashboard_rounded, label: '대시보드', color: Color(0xFFA3E635)),
 
     _AdminNavItem.group(label: '뜨개 자료', color: Color(0xFF4ADE80)),
+    _AdminNavItem.tab(index: 13, icon: Icons.folder_special_rounded, label: '기본 템플릿', color: Color(0xFF4ADE80)),
     _AdminNavItem.tab(index: 1, icon: Icons.menu_book_rounded, label: '뜨개백과', color: Color(0xFF4ADE80)),
     _AdminNavItem.tab(index: 2, icon: Icons.grass_rounded, label: '실 브랜드', color: Color(0xFF4ADE80)),
     _AdminNavItem.tab(index: 3, icon: Icons.straighten_rounded, label: '바늘 브랜드', color: Color(0xFF4ADE80)),
@@ -259,7 +262,7 @@ class _AdminConsoleState extends State<_AdminConsole> {
     _AdminNavItem.tab(index: 10, icon: Icons.text_fields_rounded, label: '문구관리', color: Color(0xFF94A3B8)),
     _AdminNavItem.tab(index: 11, icon: Icons.bug_report_rounded, label: '버그리포트', color: Color(0xFFFB7185)),
     _AdminNavItem.tab(index: 12, icon: Icons.newspaper_rounded, label: '에디토리얼', color: Color(0xFF38BDF8)),
-    _AdminNavItem.tab(index: 13, icon: Icons.settings_rounded, label: '설정', color: Color(0xFF94A3B8)),
+    _AdminNavItem.tab(index: 14, icon: Icons.settings_rounded, label: '설정', color: Color(0xFF94A3B8)),
   ];
 
   @override
@@ -421,7 +424,8 @@ class _AdminConsoleState extends State<_AdminConsole> {
       case 10: return _CopyManagementTab(isKorean: widget.isKorean);
       case 11: return const _BugReportsTab();
       case 12: return const _EditorialAdminTab();
-      case 13: return _SettingsTab(isKorean: widget.isKorean);
+      case 13: return const _BuiltinTemplateAdminTab();
+      case 14: return _SettingsTab(isKorean: widget.isKorean);
       default: return _DashboardTab(isKorean: widget.isKorean);
     }
   }
@@ -4005,6 +4009,14 @@ class _AdminSwatchesTabState extends ConsumerState<_AdminSwatchesTab> {
 
 // ─── 어드민 프로젝트 탭 ────────────────────────────────────────────────────────
 
+DateTime? _parseAdminDate(dynamic v) {
+  if (v is Timestamp) return v.toDate();
+  if (v is String && v.isNotEmpty) {
+    try { return DateTime.parse(v); } catch (_) {}
+  }
+  return null;
+}
+
 final _adminAllProjectsProvider = StreamProvider<List<QueryDocumentSnapshot<Map<String, dynamic>>>>((ref) {
   return FirebaseFirestore.instance
       .collectionGroup('projects')
@@ -4013,10 +4025,12 @@ final _adminAllProjectsProvider = StreamProvider<List<QueryDocumentSnapshot<Map<
       .map((s) {
         final docs = s.docs;
         docs.sort((a, b) {
-          final aTs = a.data()['createdAt'];
-          final bTs = b.data()['createdAt'];
-          if (aTs == null || bTs == null) return 0;
-          return (bTs as Timestamp).compareTo(aTs as Timestamp);
+          final aD = _parseAdminDate(a.data()['createdAt']);
+          final bD = _parseAdminDate(b.data()['createdAt']);
+          if (aD == null && bD == null) return 0;
+          if (aD == null) return 1;
+          if (bD == null) return -1;
+          return bD.compareTo(aD);
         });
         return docs;
       });
@@ -4106,10 +4120,8 @@ class _AdminProjectsTabState extends ConsumerState<_AdminProjectsTab> {
                   final statusColor = _statusColors[status] ?? Colors.grey;
                   final statusLabel = _statusLabels[status] ?? status;
                   final createdAt = data['createdAt'];
-                  String dateStr = '';
-                  if (createdAt is Timestamp) {
-                    dateStr = DateFormat('yyyy-MM-dd').format(createdAt.toDate());
-                  }
+                  final createdAtDate = _parseAdminDate(createdAt);
+                  final dateStr = createdAtDate != null ? DateFormat('yyyy-MM-dd').format(createdAtDate) : '';
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
@@ -4863,6 +4875,312 @@ class _EditorialAdminTabState extends ConsumerState<_EditorialAdminTab> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── 기본 템플릿 관리 탭 ─────────────────────────────────────────────────────
+class _BuiltinTemplateAdminTab extends ConsumerWidget {
+  const _BuiltinTemplateAdminTab();
+
+  IconData _iconFromName(String name) {
+    switch (name) {
+      case 'checkroom_rounded': return Icons.checkroom_rounded;
+      case 'loop_rounded': return Icons.loop_rounded;
+      case 'face_rounded': return Icons.face_rounded;
+      case 'back_hand_rounded': return Icons.back_hand_rounded;
+      case 'local_cafe_rounded': return Icons.local_cafe_rounded;
+      default: return Icons.folder_special_rounded;
+    }
+  }
+
+  Color _colorFromHex(String hex) {
+    final h = hex.replaceAll('#', '');
+    return Color(int.parse('FF$h', radix: 16));
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final templatesAsync = ref.watch(builtinTemplateListProvider);
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('기본 템플릿 관리', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: C.tx)),
+              const Spacer(),
+              ElevatedButton.icon(
+                onPressed: () => _showAddDialog(context, ref),
+                icon: const Icon(Icons.add_rounded, size: 16),
+                label: const Text('템플릿 추가'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFB47EEB),
+                  foregroundColor: Colors.white,
+                  textStyle: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: () => _seed(context, ref),
+                icon: const Icon(Icons.download_rounded, size: 16),
+                label: const Text('초기 데이터 시드'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFB47EEB),
+                  side: const BorderSide(color: Color(0xFFB47EEB)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: templatesAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Text('오류: $e', style: TextStyle(color: C.og)),
+              data: (templates) {
+                if (templates.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.folder_special_rounded, size: 48, color: C.mu),
+                        const SizedBox(height: 12),
+                        Text('기본 템플릿이 없습니다.', style: TextStyle(color: C.mu)),
+                        const SizedBox(height: 8),
+                        Text('\'초기 데이터 시드\' 버튼으로 5개 기본 템플릿을 등록하세요.',
+                            style: TextStyle(color: C.mu, fontSize: 12)),
+                      ],
+                    ),
+                  );
+                }
+                return ListView.separated(
+                  itemCount: templates.length,
+                  separatorBuilder: (_, __) => Divider(color: C.bd2, height: 1),
+                  itemBuilder: (ctx, i) {
+                    final tmpl = templates[i];
+                    final icon = _iconFromName(tmpl.iconName);
+                    final color = _colorFromHex(tmpl.colorHex);
+                    return ListTile(
+                      leading: Container(
+                        width: 40, height: 40,
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(icon, color: color, size: 20),
+                      ),
+                      title: Text('${tmpl.titleKo} / ${tmpl.titleEn}',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                      subtitle: Text(tmpl.descKo, style: TextStyle(color: C.mu, fontSize: 12)),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('순서: ${tmpl.order}',
+                              style: TextStyle(color: C.mu, fontSize: 12)),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: tmpl.isActive
+                                  ? const Color(0xFF4ADE80).withValues(alpha: 0.15)
+                                  : C.gx,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              tmpl.isActive ? '활성' : '비활성',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: tmpl.isActive ? const Color(0xFF16A34A) : C.mu,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          PopupMenuButton<String>(
+                            icon: Icon(Icons.more_vert, color: C.mu, size: 20),
+                            onSelected: (value) {
+                              if (value == 'edit') _showEditDialog(context, ref, tmpl);
+                              if (value == 'delete') _confirmDelete(context, ref, tmpl);
+                            },
+                            itemBuilder: (_) => [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Row(children: [
+                                  Icon(Icons.edit_outlined, size: 16, color: C.tx),
+                                  const SizedBox(width: 8),
+                                  const Text('수정'),
+                                ]),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Row(children: [
+                                  Icon(Icons.delete_outline_rounded, size: 16, color: C.og),
+                                  const SizedBox(width: 8),
+                                  Text('삭제', style: TextStyle(color: C.og)),
+                                ]),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _seed(BuildContext context, WidgetRef ref) async {
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: '초기 데이터를 등록하는 중입니다.',
+        subtitle: '잠시만 기다려 주세요.',
+        task: () => ref.read(templateRepositoryProvider).seedBuiltinTemplates(forceSeed: true),
+      );
+      if (context.mounted) {
+        showSavedSnackBar(ScaffoldMessenger.of(context), message: '초기 데이터가 등록됐어요.');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+      }
+    }
+  }
+
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref, BuiltinTemplate tmpl) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('템플릿 삭제'),
+        content: Text('"${tmpl.titleKo}"을 삭제할까요?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade400, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true && context.mounted) {
+      try {
+        await runWithMoriLoadingDialog<void>(
+          context,
+          message: '삭제하는 중입니다.',
+          subtitle: '잠시만 기다려 주세요.',
+          task: () => ref.read(templateRepositoryProvider).deleteBuiltinTemplate(tmpl.id),
+        );
+        if (context.mounted) {
+          showSavedSnackBar(ScaffoldMessenger.of(context), message: '삭제됐어요.');
+        }
+      } catch (e) {
+        if (context.mounted) {
+          showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+        }
+      }
+    }
+  }
+
+  void _showAddDialog(BuildContext context, WidgetRef ref) {
+    _showTemplateFormDialog(context, ref, existing: null);
+  }
+
+  void _showEditDialog(BuildContext context, WidgetRef ref, BuiltinTemplate tmpl) {
+    _showTemplateFormDialog(context, ref, existing: tmpl);
+  }
+
+  void _showTemplateFormDialog(BuildContext context, WidgetRef ref, {BuiltinTemplate? existing}) {
+    final titleKoCtrl = TextEditingController(text: existing?.titleKo ?? '');
+    final titleEnCtrl = TextEditingController(text: existing?.titleEn ?? '');
+    final descKoCtrl = TextEditingController(text: existing?.descKo ?? '');
+    final descEnCtrl = TextEditingController(text: existing?.descEn ?? '');
+    final iconCtrl = TextEditingController(text: existing?.iconName ?? 'folder_special_rounded');
+    final colorCtrl = TextEditingController(text: existing?.colorHex ?? '#B47EEB');
+    final orderCtrl = TextEditingController(text: '${existing?.order ?? 0}');
+    final isAdd = existing == null;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isAdd ? '기본 템플릿 추가' : '기본 템플릿 수정',
+            style: const TextStyle(fontWeight: FontWeight.w700)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: titleKoCtrl, decoration: InputDecoration(labelText: '제목 (한국어)', fillColor: C.gx, filled: true)),
+              const SizedBox(height: 8),
+              TextField(controller: titleEnCtrl, decoration: InputDecoration(labelText: '제목 (English)', fillColor: C.gx, filled: true)),
+              const SizedBox(height: 8),
+              TextField(controller: descKoCtrl, decoration: InputDecoration(labelText: '설명 (한국어)', fillColor: C.gx, filled: true)),
+              const SizedBox(height: 8),
+              TextField(controller: descEnCtrl, decoration: InputDecoration(labelText: '설명 (English)', fillColor: C.gx, filled: true)),
+              const SizedBox(height: 8),
+              TextField(controller: iconCtrl, decoration: InputDecoration(
+                labelText: '아이콘 이름',
+                hintText: 'checkroom_rounded / loop_rounded / face_rounded ...',
+                fillColor: C.gx,
+                filled: true,
+              )),
+              const SizedBox(height: 8),
+              TextField(controller: colorCtrl, decoration: InputDecoration(labelText: '색상 HEX', hintText: '#B47EEB', fillColor: C.gx, filled: true)),
+              const SizedBox(height: 8),
+              TextField(controller: orderCtrl, keyboardType: TextInputType.number,
+                  decoration: InputDecoration(labelText: '순서 (숫자)', fillColor: C.gx, filled: true)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+          ElevatedButton(
+            onPressed: () async {
+              final tmpl = BuiltinTemplate(
+                id: existing?.id ?? '',
+                titleKo: titleKoCtrl.text.trim(),
+                titleEn: titleEnCtrl.text.trim(),
+                descKo: descKoCtrl.text.trim(),
+                descEn: descEnCtrl.text.trim(),
+                iconName: iconCtrl.text.trim(),
+                colorHex: colorCtrl.text.trim(),
+                stepsKo: existing?.stepsKo ?? [],
+                stepsEn: existing?.stepsEn ?? [],
+                stepNotesKo: existing?.stepNotesKo ?? [],
+                stepNotesEn: existing?.stepNotesEn ?? [],
+                stepTargetRows: existing?.stepTargetRows ?? [],
+                order: int.tryParse(orderCtrl.text.trim()) ?? 0,
+                isActive: existing?.isActive ?? true,
+              );
+              try {
+                await runWithMoriLoadingDialog<void>(
+                  ctx,
+                  message: '저장하는 중입니다.',
+                  subtitle: '잠시만 기다려 주세요.',
+                  task: () => isAdd
+                      ? ref.read(templateRepositoryProvider).createBuiltinTemplate(tmpl)
+                      : ref.read(templateRepositoryProvider).updateBuiltinTemplate(tmpl),
+                );
+                if (ctx.mounted) {
+                  Navigator.pop(ctx);
+                  showSavedSnackBar(ScaffoldMessenger.of(context), message: '저장됐어요.');
+                }
+              } catch (e) {
+                if (ctx.mounted) {
+                  showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '$e');
+                }
+              }
+            },
+            child: const Text('저장'),
+          ),
+        ],
       ),
     );
   }

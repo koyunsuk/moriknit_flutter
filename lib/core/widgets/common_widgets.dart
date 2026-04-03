@@ -58,11 +58,13 @@ class GlassCard extends StatelessWidget {
               offset: Offset(0, -1),
             ),
           ],
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xF9FFFFFF), Color(0xF2FFF7FD)],
-          ),
+          gradient: color == null
+              ? const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xF9FFFFFF), Color(0xF2FFF7FD)],
+                )
+              : null,
         ),
         child: child,
       ),
@@ -1068,6 +1070,55 @@ class MoriOptionChips<V> extends StatelessWidget {
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+/// 컴팩트 목록 행 — leading 아이콘 + title/subtitle + trailing(팝업 등) + 화살표
+class MoriCompactRow extends StatelessWidget {
+  final VoidCallback onTap;
+  final Widget? leading;
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+  final bool dense;
+
+  const MoriCompactRow({
+    super.key,
+    required this.onTap,
+    required this.title,
+    this.leading,
+    this.subtitle,
+    this.trailing,
+    this.dense = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: dense ? 6 : 10),
+        child: Row(
+          children: [
+            if (leading != null) ...[leading!, const SizedBox(width: 12)],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(title, style: T.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  if (subtitle != null && subtitle!.isNotEmpty)
+                    Text(subtitle!, style: T.caption.copyWith(color: C.mu), maxLines: 1, overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+            ?trailing,
+            Icon(Icons.chevron_right_rounded, color: C.mu, size: 20),
+          ],
+        ),
+      ),
     );
   }
 }

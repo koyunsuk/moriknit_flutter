@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:math';
+
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -12,6 +14,7 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/admin_config_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/editorial_provider.dart';
+import '../../../providers/guestbook_provider.dart';
 import '../../../providers/market_provider.dart';
 import '../../../providers/post_provider.dart';
 import '../../../providers/project_provider.dart';
@@ -83,14 +86,24 @@ class HomeScreen extends ConsumerWidget {
                     _MarketPreview(isKorean: isKorean),
                     const SizedBox(height: 18),
                     SectionTitle(
-                      title: isKorean ? '최신 등록된 도안' : 'Latest Patterns',
+                      title: isKorean ? '인기 마켓 상품' : 'Market Items',
                       trailing: GestureDetector(
                         onTap: () => context.push(Routes.market),
                         child: Text(isKorean ? '더보기' : 'More', style: T.caption.copyWith(color: C.lmD)),
                       ),
                     ),
                     const SizedBox(height: 10),
-                    _LatestPatternsPreview(isKorean: isKorean),
+                    _RandomMarketPreview(isKorean: isKorean),
+                    const SizedBox(height: 18),
+                    SectionTitle(
+                      title: isKorean ? '방명록' : 'Guestbook',
+                      trailing: GestureDetector(
+                        onTap: () => context.go(Routes.community),
+                        child: Text(isKorean ? '더보기' : 'More', style: T.caption.copyWith(color: C.pkD)),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _HomeGuestbookSection(isKorean: isKorean),
                     const SizedBox(height: 18),
                     SectionTitle(
                       title: t.homeCommunityHighlights,
@@ -633,13 +646,6 @@ class _MarketPreview extends ConsumerWidget {
   final bool isKorean;
   const _MarketPreview({required this.isKorean});
 
-  static final _palette = [C.pk, C.lv, C.lm, C.lvD, C.pkD, C.lmD, C.og];
-
-  Color _accentColor(dynamic item) {
-    final idx = item.id.hashCode.abs() % _palette.length;
-    return _palette[idx];
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final itemsAsync = ref.watch(popularPatternItemsProvider);
@@ -656,42 +662,19 @@ class _MarketPreview extends ConsumerWidget {
           );
         }
         final top5 = items.take(5).toList();
-        return Column(
-          children: List.generate(top5.length, (index) {
+        return ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: top5.length,
+          itemBuilder: (context, index) {
             final item = top5[index];
-            final accent = _accentColor(item);
-            final isEven = index % 2 == 0;
-            return GestureDetector(
+            return _HomeMarketItemCard(
+              item: item,
+              isKorean: isKorean,
+              bottomMargin: index < top5.length - 1 ? 8.0 : 0.0,
               onTap: () => context.push(Routes.market),
-              child: Container(
-                height: 80,
-                margin: EdgeInsets.only(bottom: index < top5.length - 1 ? 8 : 0),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.72),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: C.bd),
-                  boxShadow: [
-                    BoxShadow(color: accent.withValues(alpha: 0.10), blurRadius: 8, offset: const Offset(0, 4)),
-                  ],
-                ),
-                child: Row(
-                  children: isEven
-                      ? [
-                          _ItemImage(item: item, accent: accent),
-                          const SizedBox(width: 12),
-                          Expanded(child: _ItemText(item: item, accent: accent, isKorean: isKorean)),
-                          const SizedBox(width: 10),
-                        ]
-                      : [
-                          const SizedBox(width: 10),
-                          Expanded(child: _ItemText(item: item, accent: accent, isKorean: isKorean)),
-                          const SizedBox(width: 12),
-                          _ItemImage(item: item, accent: accent),
-                        ],
-                ),
-              ),
             );
-          }),
+          },
         );
       },
       loading: () => Center(child: CircularProgressIndicator(color: C.lmD)),
@@ -700,54 +683,145 @@ class _MarketPreview extends ConsumerWidget {
   }
 }
 
-class _ItemImage extends StatelessWidget {
-  final dynamic item;
-  final Color accent;
-  const _ItemImage({required this.item, required this.accent});
+// 인기 마켓 상품 — 전체 상품 랜덤 표시
+class _RandomMarketPreview extends ConsumerWidget {
+  final bool isKorean;
+  const _RandomMarketPreview({required this.isKorean});
 
   @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: item.imageUrl.isNotEmpty
-          ? Image.network(
-              item.imageUrl,
-              width: 70,
-              height: 70,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => _Placeholder(accent: accent, imageType: item.imageType),
-            )
-          : _Placeholder(accent: accent, imageType: item.imageType),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final itemsAsync = ref.watch(marketItemsProvider);
+    return itemsAsync.when(
+      data: (items) {
+        if (items.isEmpty) {
+          return GlassCard(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(isKorean ? '등록된 상품이 아직 없어요' : 'No items yet', style: T.caption.copyWith(color: C.mu)),
+              ),
+            ),
+          );
+        }
+        final shuffled = List.of(items)..shuffle(Random());
+        final preview = shuffled.take(5).toList();
+        return ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: preview.length,
+          itemBuilder: (context, index) {
+            final item = preview[index];
+            return _HomeMarketItemCard(
+              item: item,
+              isKorean: isKorean,
+              bottomMargin: index < preview.length - 1 ? 8.0 : 0.0,
+              onTap: () => context.push(Routes.market),
+            );
+          },
+        );
+      },
+      loading: () => Center(child: CircularProgressIndicator(color: C.lmD)),
+      error: (_, _) => const SizedBox.shrink(),
     );
   }
 }
 
-class _ItemText extends StatelessWidget {
+// 홈화면 마켓 아이템 통합 카드 (인기도안 TOP5 / 인기 마켓 상품 공통 사용)
+class _HomeMarketItemCard extends StatelessWidget {
   final dynamic item;
-  final Color accent;
   final bool isKorean;
-  const _ItemText({required this.item, required this.accent, required this.isKorean});
+  final double bottomMargin;
+  final VoidCallback? onTap;
+
+  const _HomeMarketItemCard({
+    required this.item,
+    required this.isKorean,
+    this.bottomMargin = 0,
+    this.onTap,
+  });
+
+  static final _palette = [C.pk, C.lv, C.lm, C.lvD, C.pkD, C.lmD, C.og];
+  Color get _accent => _palette[item.id.hashCode.abs() % _palette.length];
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          item.title,
-          style: T.caption.copyWith(fontWeight: FontWeight.w700, fontSize: 13),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
+    final accent = _accent;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 80,
+        margin: EdgeInsets.only(bottom: bottomMargin),
+        decoration: BoxDecoration(
+          color: C.bg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: C.bd),
+          boxShadow: [BoxShadow(color: accent.withValues(alpha: 0.10), blurRadius: 8, offset: const Offset(0, 4))],
         ),
-        const SizedBox(height: 4),
-        Text(
-          item.price == 0
-              ? (isKorean ? '무료 도안' : 'Free')
-              : '${item.price}${isKorean ? '원' : ' KRW'}',
-          style: T.caption.copyWith(color: accent, fontWeight: FontWeight.w600),
+        child: Row(
+          children: [
+            const SizedBox(width: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: SizedBox(
+                width: 64,
+                height: 64,
+                child: item.imageUrl.isNotEmpty
+                    ? Image.network(
+                        item.imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => _PlaceholderIcon(accent: accent, imageType: item.imageType as String?),
+                      )
+                    : _PlaceholderIcon(accent: accent, imageType: item.imageType as String?),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title as String,
+                    style: T.caption.copyWith(fontWeight: FontWeight.w700, fontSize: 13),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    (item.price as int) == 0
+                        ? (isKorean ? '무료 도안' : 'Free')
+                        : '${item.price}${isKorean ? '원' : ' KRW'}',
+                    style: T.caption.copyWith(color: accent, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
         ),
-      ],
+      ),
+    );
+  }
+}
+
+class _PlaceholderIcon extends StatelessWidget {
+  final Color accent;
+  final String? imageType;
+  const _PlaceholderIcon({required this.accent, this.imageType});
+
+  IconData get _resolvedIcon {
+    switch (imageType ?? '') {
+      case 'yarn': return Icons.blur_circular_rounded;
+      case 'tool': return Icons.handyman_rounded;
+      default: return Icons.auto_stories_rounded;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: accent.withValues(alpha: 0.12),
+      child: Center(child: Icon(_resolvedIcon, color: accent, size: 28)),
     );
   }
 }
@@ -847,9 +921,9 @@ class _LatestPatternsPreviewState extends ConsumerState<_LatestPatternsPreview> 
                                 width: 130,
                                 height: 90,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => _Placeholder(accent: accent, imageType: item.imageType),
+                                errorBuilder: (_, _, _) => _PlaceholderIcon(accent: accent, imageType: item.imageType),
                               )
-                            : _Placeholder(accent: accent, imageType: item.imageType),
+                            : _PlaceholderIcon(accent: accent, imageType: item.imageType),
                       ),
                       Padding(
                         padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
@@ -1003,29 +1077,90 @@ class _PopularCourseSection extends ConsumerWidget {
   }
 }
 
-class _Placeholder extends StatelessWidget {
-  final Color accent;
-  final String imageType;
-  const _Placeholder({required this.accent, required this.imageType});
+// ────────────────────────────────────────────
+// 홈화면 방명록 세로 스크롤 섹션
+// ────────────────────────────────────────────
 
-  IconData get _icon {
-    switch (imageType) {
-      case 'yarn':
-        return Icons.blur_circular_rounded;
-      case 'tool':
-        return Icons.handyman_rounded;
-      default:
-        return Icons.auto_stories_rounded;
-    }
-  }
+class _HomeGuestbookSection extends ConsumerWidget {
+  final bool isKorean;
+  const _HomeGuestbookSection({required this.isKorean});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 130,
-      height: 90,
-      color: accent.withValues(alpha: 0.12),
-      child: Icon(_icon, color: accent, size: 32),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final entriesAsync = ref.watch(guestbookListProvider);
+    return entriesAsync.when(
+      loading: () => Center(child: CircularProgressIndicator(color: C.lv, strokeWidth: 2)),
+      error: (_, _) => Text(isKorean ? '불러오지 못했어요.' : 'Unable to load.', style: T.caption.copyWith(color: C.mu)),
+      data: (entries) {
+        if (entries.isEmpty) {
+          return GlassCard(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                isKorean ? '아직 방명록이 없어요. 첫 인사를 남겨보세요!' : 'No guestbook entries yet.',
+                style: T.caption.copyWith(color: C.mu),
+              ),
+            ),
+          );
+        }
+        final visible = entries.take(10).toList();
+        return GlassCard(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          child: ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: visible.length,
+            separatorBuilder: (_, _) => const Divider(height: 12, thickness: 0.5),
+            itemBuilder: (_, i) {
+              final e = visible[i];
+              return GestureDetector(
+                onTap: () => context.go(Routes.community),
+                behavior: HitTestBehavior.opaque,
+                child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  CircleAvatar(
+                    radius: 14,
+                    backgroundColor: C.lvL,
+                    backgroundImage: e.avatarUrl.isNotEmpty ? NetworkImage(e.avatarUrl) : null,
+                    child: e.avatarUrl.isEmpty
+                        ? Text(
+                            e.displayName.isNotEmpty ? e.displayName.characters.first.toUpperCase() : '?',
+                            style: TextStyle(fontSize: 11, color: C.lvD, fontWeight: FontWeight.w700),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: RichText(
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      text: TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '${e.displayName.isNotEmpty ? e.displayName : (isKorean ? '익명' : 'Anon')}: ',
+                            style: T.captionBold.copyWith(color: C.tx),
+                          ),
+                          TextSpan(
+                            text: e.message,
+                            style: T.body.copyWith(fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    e.timeAgoLocalized(isKorean: isKorean),
+                    style: T.caption.copyWith(color: C.mu, fontSize: 11),
+                  ),
+                ],
+              ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }

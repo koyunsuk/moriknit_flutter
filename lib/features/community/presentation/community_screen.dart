@@ -194,7 +194,9 @@ class CommunityScreen extends ConsumerWidget {
                         setState(() {});
                       },
                 icon: const Icon(Icons.add_photo_alternate_rounded),
-                label: Text(isKorean ? '사진 추가 (${images.length}/4)' : 'Add photo (${images.length}/4)'),
+                label: Text(isKorean
+                  ? (images.isEmpty ? '사진 추가' : '사진 추가 +${images.length}')
+                  : (images.isEmpty ? 'Add photo' : 'Add photo +${images.length}')),
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
@@ -920,49 +922,127 @@ class _PostRowState extends ConsumerState<_PostRow> {
   void _editPost(BuildContext context, WidgetRef ref) {
     final titleCtrl = TextEditingController(text: post.title);
     final contentCtrl = TextEditingController(text: post.content);
+    final existingUrls = List<String>.from(post.imageUrls);
+    final newImages = <Uint8List>[];
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useRootNavigator: true,
       backgroundColor: C.bg,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 18, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(isKorean ? '게시글 수정' : 'Edit post', style: T.h3),
-                const Spacer(),
-                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
-              ],
-            ),
-            const SizedBox(height: 10),
-            TextField(controller: titleCtrl, decoration: InputDecoration(labelText: isKorean ? '제목' : 'Title')),
-            const SizedBox(height: 10),
-            TextField(controller: contentCtrl, maxLines: 4, decoration: InputDecoration(labelText: isKorean ? '내용' : 'Content')),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () async {
-                  final t = titleCtrl.text.trim();
-                  final c = contentCtrl.text.trim();
-                  if (t.isEmpty || c.isEmpty) return;
-                  await runWithMoriLoadingDialog<void>(
-                    ctx,
-                    message: isKorean ? '수정하는 중입니다.' : 'Updating...',
-                    subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
-                    task: () => ref.read(postRepositoryProvider).updatePost(post.id, title: t, content: c),
-                  );
-                  if (ctx.mounted) Navigator.pop(ctx);
-                },
-                child: Text(isKorean ? '수정 완료' : 'Save changes'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => Padding(
+          padding: EdgeInsets.fromLTRB(20, 18, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(isKorean ? '게시글 수정' : 'Edit post', style: T.h3),
+                  const Spacer(),
+                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                ],
               ),
-            ),
-          ],
+              const SizedBox(height: 10),
+              TextField(controller: titleCtrl, decoration: InputDecoration(labelText: isKorean ? '제목' : 'Title')),
+              const SizedBox(height: 10),
+              TextField(controller: contentCtrl, maxLines: 4, decoration: InputDecoration(labelText: isKorean ? '내용' : 'Content')),
+              const SizedBox(height: 10),
+              if (existingUrls.isNotEmpty || newImages.isNotEmpty) ...[
+                SizedBox(
+                  height: 76,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      ...existingUrls.asMap().entries.map((e) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.network(e.value, width: 76, height: 76, fit: BoxFit.cover, errorBuilder: (_, _, _) => const SizedBox.shrink()),
+                            ),
+                            Positioned(
+                              top: 0, right: 0,
+                              child: GestureDetector(
+                                onTap: () => setState(() => existingUrls.removeAt(e.key)),
+                                child: Container(
+                                  decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                                  padding: const EdgeInsets.all(2),
+                                  child: const Icon(Icons.close, size: 12, color: Colors.white),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )),
+                      ...newImages.asMap().entries.map((e) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.memory(e.value, width: 76, height: 76, fit: BoxFit.cover),
+                            ),
+                            Positioned(
+                              top: 0, right: 0,
+                              child: GestureDetector(
+                                onTap: () => setState(() => newImages.removeAt(e.key)),
+                                child: Container(
+                                  decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                                  padding: const EdgeInsets.all(2),
+                                  child: const Icon(Icons.close, size: 12, color: Colors.white),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+              OutlinedButton.icon(
+                onPressed: (existingUrls.length + newImages.length) >= 4
+                    ? null
+                    : () async {
+                        final picker = ImagePicker();
+                        final limit = 4 - existingUrls.length - newImages.length;
+                        final picked = await picker.pickMultiImage(imageQuality: 80, limit: limit);
+                        for (final f in picked) { newImages.add(await f.readAsBytes()); }
+                        setState(() {});
+                      },
+                icon: const Icon(Icons.add_photo_alternate_rounded),
+                label: Text(() { final count = existingUrls.length + newImages.length; return isKorean ? (count > 0 ? '사진 추가 +$count' : '사진 추가') : (count > 0 ? 'Add photo +$count' : 'Add photo'); }()),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    final t = titleCtrl.text.trim();
+                    final c = contentCtrl.text.trim();
+                    if (t.isEmpty || c.isEmpty) return;
+                    await runWithMoriLoadingDialog<void>(
+                      ctx,
+                      message: isKorean ? '수정하는 중입니다.' : 'Updating...',
+                      subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+                      task: () async {
+                        final repo = ref.read(postRepositoryProvider);
+                        final uid = ref.read(authStateProvider).valueOrNull?.uid ?? '';
+                        final uploaded = newImages.isEmpty ? <String>[] : await repo.uploadImages(uid, newImages);
+                        await repo.updatePost(post.id, title: t, content: c, imageUrls: [...existingUrls, ...uploaded]);
+                      },
+                    );
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
+                  child: Text(isKorean ? '수정 완료' : 'Save changes'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1025,49 +1105,127 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
   void _editPost(BuildContext context, WidgetRef ref) {
     final titleCtrl = TextEditingController(text: widget.post.title);
     final contentCtrl = TextEditingController(text: widget.post.content);
+    final existingUrls = List<String>.from(widget.post.imageUrls);
+    final newImages = <Uint8List>[];
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useRootNavigator: true,
       backgroundColor: C.bg,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 18, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(widget.isKorean ? '게시글 수정' : 'Edit post', style: T.h3),
-                const Spacer(),
-                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
-              ],
-            ),
-            const SizedBox(height: 10),
-            TextField(controller: titleCtrl, decoration: InputDecoration(labelText: widget.isKorean ? '제목' : 'Title')),
-            const SizedBox(height: 10),
-            TextField(controller: contentCtrl, maxLines: 4, decoration: InputDecoration(labelText: widget.isKorean ? '내용' : 'Content')),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () async {
-                  final t = titleCtrl.text.trim();
-                  final c = contentCtrl.text.trim();
-                  if (t.isEmpty || c.isEmpty) return;
-                  await runWithMoriLoadingDialog<void>(
-                    ctx,
-                    message: widget.isKorean ? '수정하는 중입니다.' : 'Updating...',
-                    subtitle: widget.isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
-                    task: () => ref.read(postRepositoryProvider).updatePost(widget.post.id, title: t, content: c),
-                  );
-                  if (ctx.mounted) Navigator.pop(ctx);
-                },
-                child: Text(widget.isKorean ? '수정 완료' : 'Save changes'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => Padding(
+          padding: EdgeInsets.fromLTRB(20, 18, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(widget.isKorean ? '게시글 수정' : 'Edit post', style: T.h3),
+                  const Spacer(),
+                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                ],
               ),
-            ),
-          ],
+              const SizedBox(height: 10),
+              TextField(controller: titleCtrl, decoration: InputDecoration(labelText: widget.isKorean ? '제목' : 'Title')),
+              const SizedBox(height: 10),
+              TextField(controller: contentCtrl, maxLines: 4, decoration: InputDecoration(labelText: widget.isKorean ? '내용' : 'Content')),
+              const SizedBox(height: 10),
+              if (existingUrls.isNotEmpty || newImages.isNotEmpty) ...[
+                SizedBox(
+                  height: 76,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      ...existingUrls.asMap().entries.map((e) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.network(e.value, width: 76, height: 76, fit: BoxFit.cover, errorBuilder: (_, _, _) => const SizedBox.shrink()),
+                            ),
+                            Positioned(
+                              top: 0, right: 0,
+                              child: GestureDetector(
+                                onTap: () => setState(() => existingUrls.removeAt(e.key)),
+                                child: Container(
+                                  decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                                  padding: const EdgeInsets.all(2),
+                                  child: const Icon(Icons.close, size: 12, color: Colors.white),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )),
+                      ...newImages.asMap().entries.map((e) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.memory(e.value, width: 76, height: 76, fit: BoxFit.cover),
+                            ),
+                            Positioned(
+                              top: 0, right: 0,
+                              child: GestureDetector(
+                                onTap: () => setState(() => newImages.removeAt(e.key)),
+                                child: Container(
+                                  decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                                  padding: const EdgeInsets.all(2),
+                                  child: const Icon(Icons.close, size: 12, color: Colors.white),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+              OutlinedButton.icon(
+                onPressed: (existingUrls.length + newImages.length) >= 4
+                    ? null
+                    : () async {
+                        final picker = ImagePicker();
+                        final limit = 4 - existingUrls.length - newImages.length;
+                        final picked = await picker.pickMultiImage(imageQuality: 80, limit: limit);
+                        for (final f in picked) { newImages.add(await f.readAsBytes()); }
+                        setState(() {});
+                      },
+                icon: const Icon(Icons.add_photo_alternate_rounded),
+                label: Text(() { final count = existingUrls.length + newImages.length; return widget.isKorean ? (count > 0 ? '사진 추가 +$count' : '사진 추가') : (count > 0 ? 'Add photo +$count' : 'Add photo'); }()),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    final t = titleCtrl.text.trim();
+                    final c = contentCtrl.text.trim();
+                    if (t.isEmpty || c.isEmpty) return;
+                    await runWithMoriLoadingDialog<void>(
+                      ctx,
+                      message: widget.isKorean ? '수정하는 중입니다.' : 'Updating...',
+                      subtitle: widget.isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+                      task: () async {
+                        final repo = ref.read(postRepositoryProvider);
+                        final uid = ref.read(authStateProvider).valueOrNull?.uid ?? '';
+                        final uploaded = newImages.isEmpty ? <String>[] : await repo.uploadImages(uid, newImages);
+                        await repo.updatePost(widget.post.id, title: t, content: c, imageUrls: [...existingUrls, ...uploaded]);
+                      },
+                    );
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
+                  child: Text(widget.isKorean ? '수정 완료' : 'Save changes'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1117,8 +1275,21 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
                         onPressed: () => _editPost(context, ref),
                       ),
                       IconButton(
-                        icon: Icon(Icons.delete_outline, color: C.og, size: 20),
+                        icon: Icon(Icons.delete_outline_rounded, color: C.og, size: 20),
                         onPressed: () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: Text(widget.isKorean ? '게시글 삭제' : 'Delete Post'),
+                              content: Text(widget.isKorean ? '정말 삭제할까요? 복구할 수 없어요.' : 'Are you sure? This cannot be undone.'),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(widget.isKorean ? '취소' : 'Cancel')),
+                                TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(widget.isKorean ? '삭제' : 'Delete', style: const TextStyle(color: Colors.red))),
+                              ],
+                            ),
+                          );
+                          if (confirm != true) return;
+                          if (!context.mounted) return;
                           await runWithMoriLoadingDialog<void>(
                             context,
                             message: widget.isKorean ? '삭제하는 중입니다.' : 'Deleting...',
@@ -1133,7 +1304,10 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
                         },
                       ),
                     ],
-                    IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(widget.isKorean ? '닫기' : 'Close', style: T.body.copyWith(color: C.mu)),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),

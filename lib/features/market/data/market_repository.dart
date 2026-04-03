@@ -13,35 +13,35 @@ class MarketRepository {
 
   CollectionReference<Map<String, dynamic>> get _items => _db.collection('market_items');
 
+  bool _isVisible(MarketItem item) {
+    // status 필드가 없는 기존 문서는 fromFirestore에서 'approved' 기본값으로 처리됨
+    // 'pending' / 'rejected' 만 숨김
+    return item.status != 'pending' && item.status != 'rejected';
+  }
+
   Stream<List<MarketItem>> watchItems() {
-    return _items.where('status', whereIn: ['approved', 'active']).snapshots().map((snapshot) {
-      final items = snapshot.docs.map(MarketItem.fromFirestore).toList();
+    return _items.snapshots().map((snapshot) {
+      final items = snapshot.docs.map(MarketItem.fromFirestore).where(_isVisible).toList();
       items.sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
       return items;
     });
   }
 
   /// 도안 카테고리 인기순 (viewCount 내림차순, 최대 10개)
+  /// category 필터를 클라이언트 사이드에서 제거 — 기존 문서에 category 필드가 없어도 표시
   Stream<List<MarketItem>> watchPopularPatterns() {
-    return _items
-        .where('status', whereIn: ['approved', 'active'])
-        .where('category', isEqualTo: 'pattern')
-        .snapshots()
-        .map((s) {
-      final items = s.docs.map(MarketItem.fromFirestore).toList();
+    return _items.snapshots().map((s) {
+      final items = s.docs.map(MarketItem.fromFirestore).where(_isVisible).where((item) => item.category == 'pattern' || item.category.isEmpty).toList();
       items.sort((a, b) => b.viewCount.compareTo(a.viewCount));
       return items.take(10).toList();
     });
   }
 
   /// 도안 카테고리 최신순 (createdAt 내림차순, 최대 10개)
+  /// category 필터 클라이언트 사이드 적용 — 기존 문서(category 필드 없음)도 포함
   Stream<List<MarketItem>> watchLatestPatterns() {
-    return _items
-        .where('status', whereIn: ['approved', 'active'])
-        .where('category', isEqualTo: 'pattern')
-        .snapshots()
-        .map((s) {
-      final items = s.docs.map(MarketItem.fromFirestore).toList();
+    return _items.snapshots().map((s) {
+      final items = s.docs.map(MarketItem.fromFirestore).where(_isVisible).where((item) => item.category == 'pattern' || item.category.isEmpty).toList();
       items.sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
       return items.take(10).toList();
     });

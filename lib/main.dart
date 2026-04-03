@@ -14,6 +14,7 @@ import 'core/theme/app_theme.dart';
 import 'firebase_options.dart';
 import 'providers/theme_provider.dart';
 
+
 void main() async {
   if (kIsWeb) usePathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
@@ -66,6 +67,7 @@ class MoriKnitApp extends ConsumerWidget {
       localeResolutionCallback: (deviceLocale, supportedLocales) {
         return resolveSupportedLocale(deviceLocale);
       },
+      builder: null,
     );
   }
 }

@@ -27,12 +27,52 @@ import '../../swatch/presentation/swatch_input_screen.dart';
 import '../../../core/router/routes.dart';
 import '../domain/project_model.dart';
 import '../domain/project_step.dart';
-import 'project_input_screen.dart';
-
-class ProjectDetailScreen extends ConsumerWidget {
+class ProjectDetailScreen extends ConsumerStatefulWidget {
   final String projectId;
 
   const ProjectDetailScreen({super.key, required this.projectId});
+
+  @override
+  ConsumerState<ProjectDetailScreen> createState() => _ProjectDetailScreenState();
+}
+
+class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
+  bool _isEditing = false;
+  bool _isCardEditMode = false;
+  final TextEditingController _titleCtrl = TextEditingController();
+  final TextEditingController _descCtrl = TextEditingController();
+  String _editStatus = '';
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _descCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveEdit(ProjectModel project) async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () => ref.read(projectRepositoryProvider).updateProject(
+          project.copyWith(
+            title: _titleCtrl.text.trim(),
+            description: _descCtrl.text.trim(),
+            status: _editStatus,
+          ),
+        ),
+      );
+      if (!mounted) return;
+      setState(() { _isEditing = false; _isCardEditMode = false; });
+      showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '저장됐어요.' : 'Saved.');
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
 
   void _confirmDelete(BuildContext context, WidgetRef ref, String id) {
     final isKorean = ref.read(appLanguageProvider).isKorean;
@@ -141,9 +181,11 @@ class ProjectDetailScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  @override
+  Widget build(BuildContext context) {
     final t = ref.watch(appStringsProvider);
-    final projectAsync = ref.watch(projectByIdProvider(projectId));
+    final isKorean = ref.watch(appLanguageProvider).isKorean;
+    final projectAsync = ref.watch(projectByIdProvider(widget.projectId));
 
     return Scaffold(
       backgroundColor: C.bg,
@@ -155,48 +197,70 @@ class ProjectDetailScreen extends ConsumerWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: const MoriKnitTitle(fontSize: 18),
-        actions: [
-          projectAsync.whenOrNull(
-                data: (project) => project == null
-                    ? null
-                    : PopupMenuButton<String>(
-                        icon: Icon(Icons.more_vert, color: C.tx),
-                        onSelected: (value) async {
-                          if (value == 'edit') {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ProjectInputScreen(
-                                  projectId: project.id,
-                                  initialProject: project,
-                                ),
-                              ),
-                            );
-                          } else if (value == 'copy') {
-                            _duplicateProject(context, ref, project);
-                          } else if (value == 'delete') {
-                            _confirmDelete(context, ref, project.id);
-                          }
-                        },
-                        itemBuilder: (_) {
-                          final isKorean = ref.read(appLanguageProvider).isKorean;
-                          return [
-                            PopupMenuItem(value: 'edit', child: Text(isKorean ? '수정' : 'Edit')),
-                            PopupMenuItem(value: 'copy', child: Text(isKorean ? '복사' : 'Duplicate')),
-                            PopupMenuItem(value: 'delete', child: Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og))),
-                          ];
-                        },
-                      ),
-              ) ??
-              const SizedBox.shrink(),
-        ],
+        actions: _isEditing
+            ? [
+                IconButton(
+                  icon: Icon(Icons.close, color: C.tx),
+                  onPressed: () => setState(() { _isEditing = false; _isCardEditMode = false; }),
+                ),
+                projectAsync.whenOrNull(
+                      data: (project) => project == null
+                          ? null
+                          : TextButton(
+                              onPressed: () => _saveEdit(project),
+                              child: Text(isKorean ? '저장' : 'Save', style: TextStyle(color: C.lv, fontWeight: FontWeight.w700)),
+                            ),
+                    ) ??
+                    const SizedBox.shrink(),
+              ]
+            : [
+                projectAsync.whenOrNull(
+                      data: (project) => project == null
+                          ? null
+                          : PopupMenuButton<String>(
+                              icon: Icon(Icons.more_vert, color: C.tx),
+                              onSelected: (value) async {
+                                if (value == 'edit') {
+                                  setState(() {
+                                    _isEditing = true;
+                                    _isCardEditMode = true;
+                                    _titleCtrl.text = project.title;
+                                    _descCtrl.text = project.description;
+                                    _editStatus = project.status;
+                                  });
+                                } else if (value == 'copy') {
+                                  _duplicateProject(context, ref, project);
+                                } else if (value == 'delete') {
+                                  _confirmDelete(context, ref, project.id);
+                                }
+                              },
+                              itemBuilder: (_) {
+                                final isKorean = ref.read(appLanguageProvider).isKorean;
+                                return [
+                                  PopupMenuItem(value: 'edit', child: Text(isKorean ? '수정' : 'Edit')),
+                                  PopupMenuItem(value: 'copy', child: Text(isKorean ? '복사' : 'Duplicate')),
+                                  PopupMenuItem(value: 'delete', child: Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og))),
+                                ];
+                              },
+                            ),
+                    ) ??
+                    const SizedBox.shrink(),
+              ],
       ),
       body: projectAsync.when(
         data: (project) {
           if (project == null) {
             return Center(child: Text(t.projectNotFound, style: T.body));
           }
-          return _ProjectBody(project: project);
+          return _ProjectBody(
+            project: project,
+            isEditing: _isEditing,
+            isCardEditMode: _isCardEditMode,
+            titleCtrl: _titleCtrl,
+            descCtrl: _descCtrl,
+            editStatus: _editStatus,
+            onStatusChanged: (s) => setState(() => _editStatus = s),
+          );
         },
         loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
         error: (e, _) => Center(
@@ -209,8 +273,22 @@ class ProjectDetailScreen extends ConsumerWidget {
 
 class _ProjectBody extends ConsumerWidget {
   final ProjectModel project;
+  final bool isEditing;
+  final bool isCardEditMode;
+  final TextEditingController titleCtrl;
+  final TextEditingController descCtrl;
+  final String editStatus;
+  final ValueChanged<String> onStatusChanged;
 
-  const _ProjectBody({required this.project});
+  const _ProjectBody({
+    required this.project,
+    required this.isEditing,
+    required this.isCardEditMode,
+    required this.titleCtrl,
+    required this.descCtrl,
+    required this.editStatus,
+    required this.onStatusChanged,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -236,29 +314,85 @@ class _ProjectBody extends ConsumerWidget {
                   errorBuilder: (_, _, _) => const SizedBox.shrink(),
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 8),
+              Text(
+                isKorean ? '상세한 수정은 우측 상단의 점세개 메뉴에 있어요' : 'For detailed editing, use the ⋮ menu at the top right.',
+                style: T.caption.copyWith(color: C.mu),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 6),
             ],
             GlassCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          project.title.isEmpty ? t.untitledProject : project.title,
-                          style: T.h2,
-                        ),
+                  if (isEditing) ...[
+                    TextField(
+                      controller: titleCtrl,
+                      style: T.h2,
+                      decoration: InputDecoration(
+                        labelText: isKorean ? '프로젝트 이름' : 'Project title',
+                        fillColor: C.gx,
+                        filled: true,
                       ),
-                      MoriChip(
-                        label: project.statusEnum.localizedLabel(isKorean),
-                        type: ChipType.lavender,
-                      ),
-                    ],
-                  ),
-                  if (project.description.isNotEmpty) ...[
+                    ),
                     const SizedBox(height: 8),
-                    Text(project.description, style: T.body.copyWith(color: C.mu)),
+                    TextField(
+                      controller: descCtrl,
+                      style: T.body,
+                      maxLines: 3,
+                      decoration: InputDecoration(
+                        labelText: isKorean ? '설명' : 'Description',
+                        fillColor: C.gx,
+                        filled: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: ProjectStatus.values.map((s) {
+                        final isSelected = editStatus == s.value;
+                        return GestureDetector(
+                          onTap: () => onStatusChanged(s.value),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isSelected ? C.lv : C.lvL,
+                              border: Border.all(color: isSelected ? C.lv : C.lv.withValues(alpha: 0.20)),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              s.localizedLabel(isKorean),
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : C.lvD,
+                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ] else ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            project.title.isEmpty ? t.untitledProject : project.title,
+                            style: T.h2,
+                          ),
+                        ),
+                        MoriChip(
+                          label: project.statusEnum.localizedLabel(isKorean),
+                          type: ChipType.lavender,
+                        ),
+                      ],
+                    ),
+                    if (project.description.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(project.description, style: T.body.copyWith(color: C.mu)),
+                    ],
                   ],
                   const SizedBox(height: 12),
                   _ProgressSection(project: project),
@@ -267,139 +401,244 @@ class _ProjectBody extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
             // 실(Yarn) 카드
-            InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: () => context.push('/yarn-list'),
-              child: GlassCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.bolt_rounded, color: C.pk, size: 18),
-                        const SizedBox(width: 6),
-                        Text(isKorean ? '실 정보' : 'Yarn', style: T.bodyBold),
-                        const Spacer(),
-                        Icon(Icons.chevron_right, color: C.mu, size: 18),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _MaterialThumbnail(
-                          photoUrl: ref.watch(yarnListProvider).valueOrNull
-                              ?.firstWhere(
-                                (y) => project.yarnBrandName.isNotEmpty
-                                    ? y.brandName == project.yarnBrandName
-                                    : false,
-                                orElse: () => YarnModel.empty(uid: ''),
-                              )
-                              .photoUrl ?? '',
-                          defaultIcon: Icons.bolt_rounded,
-                          iconColor: C.pk,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _InfoRow(label: t.yarnBrand, value: project.yarnBrandName.isEmpty ? t.brandNotSet : project.yarnBrandName),
-                              _InfoRow(label: t.yarnName, value: project.yarnName.isEmpty ? t.notAvailable : project.yarnName),
-                            ],
+            Builder(builder: (context) {
+              final yarns = ref.watch(yarnListProvider).valueOrNull ?? [];
+              final matchedYarn = yarns.cast<YarnModel?>().firstWhere(
+                (y) => y != null && project.yarnBrandName.isNotEmpty && y.brandName == project.yarnBrandName,
+                orElse: () => null,
+              );
+              final hasYarn = project.yarnBrandName.isNotEmpty || project.yarnName.isNotEmpty;
+              return InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: isCardEditMode ? null : () {
+                  if (matchedYarn != null && matchedYarn.id.isNotEmpty) {
+                    context.push('/yarn-detail/${matchedYarn.id}');
+                  } else {
+                    context.push('/yarn-list');
+                  }
+                },
+                child: GlassCard(
+                  color: C.bg,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.bolt_rounded, color: C.pk, size: 18),
+                          const SizedBox(width: 6),
+                          Text(isKorean ? '실 정보' : 'Yarn', style: T.bodyBold),
+                          const Spacer(),
+                          if (isCardEditMode && hasYarn)
+                            IconButton(
+                              icon: Icon(Icons.link_off, color: C.og, size: 18),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              tooltip: isKorean ? '연결 해제' : 'Unlink',
+                              onPressed: () async {
+                                await runWithMoriLoadingDialog<void>(
+                                  context,
+                                  message: isKorean ? '연결 해제 중입니다.' : 'Unlinking...',
+                                  subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+                                  task: () => ref.read(projectRepositoryProvider).updateProject(
+                                    project.copyWith(yarnBrandName: '', yarnName: '', yarnColor: ''),
+                                  ),
+                                );
+                                if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '연결이 해제됐어요.' : 'Unlinked.');
+                              },
+                            ),
+                          if (!isCardEditMode) Icon(Icons.chevron_right, color: C.mu, size: 18),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _MaterialThumbnail(
+                            photoUrl: matchedYarn?.photoUrl ?? '',
+                            defaultIcon: Icons.bolt_rounded,
+                            iconColor: C.pk,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _InfoRow(label: t.yarnBrand, value: project.yarnBrandName.isEmpty ? t.brandNotSet : project.yarnBrandName),
+                                _InfoRow(label: t.yarnName, value: project.yarnName.isEmpty ? t.notAvailable : project.yarnName),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (!hasYarn) ...[
+                        const SizedBox(height: 10),
+                        Center(
+                          child: Text(
+                            isKorean ? '연결된 실 없어요.' : 'No linked yarn.',
+                            style: T.body.copyWith(color: C.mu),
+                            textAlign: TextAlign.center,
                           ),
                         ),
+                        const SizedBox(height: 10),
+                        _CardEditActions(
+                          isKorean: isKorean,
+                          onLinkFromWork: () => _linkExistingYarn(context, ref),
+                          onCreateNew: () => context.push('/yarn-list'),
+                        ),
+                      ] else if (isCardEditMode) ...[
+                        const SizedBox(height: 10),
+                        _CardEditActions(
+                          isKorean: isKorean,
+                          onLinkFromWork: () => _linkExistingYarn(context, ref),
+                          onCreateNew: () => context.push('/yarn-list'),
+                        ),
                       ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ),
+              );
+            }),
             const SizedBox(height: 12),
             // 바늘(Needle) 카드
-            InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: () => context.push(Routes.needles),
-              child: GlassCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.edit_rounded, color: C.lv, size: 18),
-                        const SizedBox(width: 6),
-                        Text(isKorean ? '바늘 정보' : 'Needle', style: T.bodyBold),
-                        const Spacer(),
-                        Icon(Icons.chevron_right, color: C.mu, size: 18),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _MaterialThumbnail(
-                          photoUrl: ref.watch(needleListProvider).valueOrNull
-                              ?.firstWhere(
-                                (n) => project.needleBrandName.isNotEmpty
-                                    ? n.brandName == project.needleBrandName
-                                    : project.needleSize > 0 && n.size == project.needleSize,
-                                orElse: () => NeedleModel.empty(uid: ''),
-                              )
-                              .photoUrl ?? '',
-                          defaultIcon: Icons.edit_rounded,
-                          iconColor: C.lv,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _InfoRow(label: t.needle, value: project.needleSize > 0 ? t.needleSize(project.needleSize) : t.needleNotSet),
-                              _InfoRow(label: t.needleBrand, value: project.needleBrandName.isEmpty ? t.brandNotSet : project.needleBrandName),
-                            ],
+            Builder(builder: (context) {
+              final needles = ref.watch(needleListProvider).valueOrNull ?? [];
+              final linkedNeedle = needles.cast<NeedleModel?>().firstWhere(
+                (n) => n != null && (project.needleBrandName.isNotEmpty
+                    ? n.brandName == project.needleBrandName
+                    : project.needleSize > 0 && n.size == project.needleSize),
+                orElse: () => null,
+              );
+              final hasNeedle = project.needleSize > 0 || project.needleBrandName.isNotEmpty;
+              return InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: isCardEditMode ? null : (hasNeedle && linkedNeedle != null && linkedNeedle.id.isNotEmpty)
+                    ? () => context.push('/needle-detail/${linkedNeedle.id}')
+                    : null,
+                child: GlassCard(
+                  color: C.bg,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.straighten_rounded, color: C.lv, size: 18),
+                          const SizedBox(width: 6),
+                          Text(isKorean ? '바늘 정보' : 'Needle', style: T.bodyBold),
+                          const Spacer(),
+                          if (isCardEditMode && hasNeedle)
+                            IconButton(
+                              icon: Icon(Icons.link_off, color: C.og, size: 18),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              tooltip: isKorean ? '연결 해제' : 'Unlink',
+                              onPressed: () async {
+                                await runWithMoriLoadingDialog<void>(
+                                  context,
+                                  message: isKorean ? '연결 해제 중입니다.' : 'Unlinking...',
+                                  subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+                                  task: () => ref.read(projectRepositoryProvider).updateProject(
+                                    project.copyWith(needleSize: 0.0, needleBrandName: ''),
+                                  ),
+                                );
+                                if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '연결이 해제됐어요.' : 'Unlinked.');
+                              },
+                            ),
+                          if (!isCardEditMode && hasNeedle) Icon(Icons.chevron_right, color: C.mu, size: 18),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _MaterialThumbnail(
+                            photoUrl: linkedNeedle?.photoUrl ?? '',
+                            defaultIcon: Icons.straighten_rounded,
+                            iconColor: C.lv,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _InfoRow(label: t.needle, value: project.needleSize > 0 ? t.needleSize(project.needleSize) : t.needleNotSet),
+                                _InfoRow(label: t.needleBrand, value: project.needleBrandName.isEmpty ? t.brandNotSet : project.needleBrandName),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (!hasNeedle) ...[
+                        const SizedBox(height: 10),
+                        Center(
+                          child: Text(
+                            isKorean ? '연결된 바늘 없어요.' : 'No linked needle.',
+                            style: T.body.copyWith(color: C.mu),
+                            textAlign: TextAlign.center,
                           ),
                         ),
+                        const SizedBox(height: 10),
+                        _CardEditActions(
+                          isKorean: isKorean,
+                          onLinkFromWork: () => _linkExistingNeedle(context, ref),
+                          onCreateNew: () => context.push(Routes.needles),
+                        ),
+                      ] else if (isCardEditMode) ...[
+                        const SizedBox(height: 10),
+                        _CardEditActions(
+                          isKorean: isKorean,
+                          onLinkFromWork: () => _linkExistingNeedle(context, ref),
+                          onCreateNew: () => context.push(Routes.needles),
+                        ),
                       ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ),
-            // #112: 연결된 스와치 섹션 (단일, 스와치 추가 버튼 포함)
+              );
+            }),
+            // 스와치 정보 섹션
             const SizedBox(height: 12),
             GlassCard(
+              color: C.bg,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+                      Icon(Icons.grid_view_rounded, color: C.lmD, size: 18),
+                      const SizedBox(width: 6),
                       Text(
-                        isKorean ? '연결된 스와치' : 'Linked Swatches',
+                        isKorean ? '스와치 정보' : 'Swatch Info',
                         style: T.bodyBold,
                       ),
-                      TextButton(
-                        onPressed: () => _addSwatch(context, ref, isKorean),
-                        child: Text(isKorean ? '스와치 추가' : 'Add swatch'),
-                      ),
+                      const Spacer(),
+                      if (!isCardEditMode && linkedSwatches.isNotEmpty) Icon(Icons.chevron_right, color: C.mu, size: 18),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  if (linkedSwatches.isEmpty)
-                    Text(
-                      isKorean ? '연결된 스와치가 없어요.' : 'No linked swatches yet.',
-                      style: T.body.copyWith(color: C.mu),
-                    )
-                  else
+                  if (linkedSwatches.isEmpty) ...[
+                    Center(
+                      child: Text(
+                        isKorean ? '연결된 스와치 없어요.' : 'No linked swatches.',
+                        style: T.body.copyWith(color: C.mu),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _CardEditActions(
+                      isKorean: isKorean,
+                      onLinkFromWork: () => _linkExistingSwatch(context, ref),
+                      onCreateNew: () => _addSwatch(context, ref, isKorean),
+                    ),
+                  ] else
                     ...linkedSwatches.map(
                       (s) => InkWell(
                         borderRadius: BorderRadius.circular(12),
-                        onTap: () => context.push('${Routes.swatchList}/${s.id}'),
+                        onTap: isCardEditMode ? null : () => context.push('${Routes.swatchList}/${s.id}'),
                         child: Container(
                           margin: const EdgeInsets.only(bottom: 8),
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                           decoration: BoxDecoration(
-                            color: C.lmG,
+                            color: C.bg,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Row(
@@ -422,90 +661,103 @@ class _ProjectBody extends ConsumerWidget {
                                   style: T.bodyBold,
                                 ),
                               ),
-                              Text(
-                                '${s.beforeStitchCount}코×${s.beforeRowCount}단',
-                                style: T.caption.copyWith(color: C.mu),
-                              ),
-                              const SizedBox(width: 4),
-                              Icon(Icons.chevron_right, size: 16, color: C.mu),
+                              if (isCardEditMode)
+                                IconButton(
+                                  icon: Icon(Icons.link_off, color: C.og, size: 18),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  tooltip: isKorean ? '연결 해제' : 'Unlink',
+                                  onPressed: () async {
+                                    await runWithMoriLoadingDialog<void>(
+                                      context,
+                                      message: isKorean ? '연결 해제 중입니다.' : 'Unlinking...',
+                                      subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+                                      task: () => ref.read(swatchRepositoryProvider).updateSwatch(s.copyWith(projectId: '')),
+                                    );
+                                    if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '연결이 해제됐어요.' : 'Unlinked.');
+                                  },
+                                )
+                              else ...[
+                                Text(
+                                  '${s.beforeStitchCount}코×${s.beforeRowCount}단',
+                                  style: T.caption.copyWith(color: C.mu),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(Icons.chevron_right, size: 16, color: C.mu),
+                              ],
                             ],
                           ),
                         ),
                       ),
                     ),
+                  if (isCardEditMode) ...[
+                    const SizedBox(height: 10),
+                    _CardEditActions(
+                      isKorean: isKorean,
+                      onLinkFromWork: () => _linkExistingSwatch(context, ref),
+                      onCreateNew: () => _addSwatch(context, ref, isKorean),
+                    ),
+                  ],
                 ],
               ),
             ),
             const SizedBox(height: 12),
             GlassCard(
+              color: C.bg,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+                      Icon(Icons.tune_rounded, color: C.lmD, size: 18),
+                      const SizedBox(width: 6),
                       Text(t.counters, style: T.bodyBold),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          TextButton(
-                            onPressed: () => _linkExistingCounter(context, ref),
-                            child: Text(isKorean ? '기존 연결' : 'Link'),
-                          ),
-                          TextButton(onPressed: () => _addCounter(context, ref), child: Text(t.add)),
-                        ],
-                      ),
+                      const Spacer(),
+                      if (countersAsync.valueOrNull?.isNotEmpty ?? false) Icon(Icons.chevron_right, color: C.mu, size: 18),
                     ],
                   ),
                   const SizedBox(height: 8),
                   countersAsync.when(
                     data: (counters) {
                       if (counters.isEmpty) {
-                        return Text(t.noCountersConnectedYet, style: T.body.copyWith(color: C.mu));
+                        return Column(
+                          children: [
+                            Center(
+                              child: Text(
+                                isKorean ? '연결된 카운터 없어요.' : 'No linked counters.',
+                                style: T.body.copyWith(color: C.mu),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            _CardEditActions(
+                              isKorean: isKorean,
+                              onLinkFromWork: () => _linkExistingCounter(context, ref),
+                              onCreateNew: () => _addCounter(context, ref),
+                            ),
+                          ],
+                        );
                       }
-                      // 단수 진행률 집계 (targetRowCount > 0인 카운터만)
-                      final rowTargetCounters = counters.where((c) => c.targetRowCount > 0).toList();
-                      final totalRows = rowTargetCounters.fold<int>(0, (acc, c) => acc + c.rowCount);
-                      final totalTargetRows = rowTargetCounters.fold<int>(0, (acc, c) => acc + c.targetRowCount);
-                      final rowRatio = totalTargetRows > 0 ? (totalRows / totalTargetRows).clamp(0.0, 1.0) : 0.0;
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (totalTargetRows > 0) ...[
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(Icons.straighten_rounded, color: C.pk, size: 14),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        isKorean
-                                            ? '전체 단수 진행률: $totalRows / $totalTargetRows 단 (${(rowRatio * 100).toStringAsFixed(0)}%)'
-                                            : 'Total rows: $totalRows / $totalTargetRows rows (${(rowRatio * 100).toStringAsFixed(0)}%)',
-                                        style: T.caption.copyWith(color: C.pk),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(99),
-                                    child: LinearProgressIndicator(
-                                      value: rowRatio,
-                                      minHeight: 6,
-                                      backgroundColor: C.pk.withValues(alpha: 0.12),
-                                      valueColor: AlwaysStoppedAnimation(C.pk),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
                           ...counters.map((counter) => _CounterTile(
                                 counter: counter,
-                                onTap: () => context.push('/counter/${counter.id}'),
+                                onTap: isCardEditMode ? null : () => context.push('/counter/${counter.id}'),
+                                onUnlink: isCardEditMode
+                                    ? () async {
+                                        await runWithMoriLoadingDialog<void>(
+                                          context,
+                                          message: isKorean ? '연결 해제 중입니다.' : 'Unlinking...',
+                                          subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+                                          task: () async {
+                                            await ref.read(counterRepositoryProvider).updateCounter(counter.copyWith(projectId: ''));
+                                            await ref.read(projectRepositoryProvider).removeCounter(project.id, counter.id);
+                                          },
+                                        );
+                                        if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '연결이 해제됐어요.' : 'Unlinked.');
+                                      }
+                                    : null,
                               )),
                         ],
                       );
@@ -516,11 +768,19 @@ class _ProjectBody extends ConsumerWidget {
                       style: T.body.copyWith(color: C.og),
                     ),
                   ),
+                  if (isCardEditMode) ...[
+                    const SizedBox(height: 10),
+                    _CardEditActions(
+                      isKorean: isKorean,
+                      onLinkFromWork: () => _linkExistingCounter(context, ref),
+                      onCreateNew: () => _addCounter(context, ref),
+                    ),
+                  ],
                 ],
               ),
             ),
             const SizedBox(height: 12),
-            _StepsSection(project: project),
+            _StepsSection(project: project, isCardEditMode: isCardEditMode),
             if (project.memo.isNotEmpty) ...[
               const SizedBox(height: 12),
               GlassCard(
@@ -542,6 +802,192 @@ class _ProjectBody extends ConsumerWidget {
     );
   }
 
+  void _linkExistingYarn(BuildContext context, WidgetRef ref) {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final yarns = ref.read(yarnListProvider).valueOrNull ?? [];
+    if (yarns.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(isKorean ? '등록된 실이 없어요.' : 'No yarns available.'),
+      ));
+      return;
+    }
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isKorean ? '내 실에서 연결' : 'Link from My Yarns', style: T.h3),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: yarns.length,
+            itemBuilder: (_, i) {
+              final yarn = yarns[i];
+              return ListTile(
+                title: Text('${yarn.brandName}  ${yarn.name}', style: T.body),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await runWithMoriLoadingDialog<void>(
+                    context,
+                    message: isKorean ? '연결하는 중입니다.' : 'Linking...',
+                    subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+                    task: () => ref.read(projectRepositoryProvider).updateProject(
+                      project.copyWith(yarnBrandName: yarn.brandName, yarnName: yarn.name, yarnColor: yarn.color),
+                    ),
+                  );
+                  if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '연결됐어요.' : 'Linked.');
+                },
+              );
+            },
+          ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(isKorean ? '닫기' : 'Close'))],
+      ),
+    );
+  }
+
+  void _linkExistingNeedle(BuildContext context, WidgetRef ref) {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final needles = ref.read(needleListProvider).valueOrNull ?? [];
+    if (needles.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(isKorean ? '등록된 바늘이 없어요.' : 'No needles available.'),
+      ));
+      return;
+    }
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isKorean ? '내 바늘에서 연결' : 'Link from My Needles', style: T.h3),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: needles.length,
+            itemBuilder: (_, i) {
+              final needle = needles[i];
+              return ListTile(
+                title: Text('${needle.size}mm  ${needle.brandName}', style: T.body),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await runWithMoriLoadingDialog<void>(
+                    context,
+                    message: isKorean ? '연결하는 중입니다.' : 'Linking...',
+                    subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+                    task: () => ref.read(projectRepositoryProvider).updateProject(
+                      project.copyWith(needleSize: needle.size, needleBrandName: needle.brandName),
+                    ),
+                  );
+                  if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '연결됐어요.' : 'Linked.');
+                },
+              );
+            },
+          ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(isKorean ? '닫기' : 'Close'))],
+      ),
+    );
+  }
+
+  void _linkExistingSwatch(BuildContext context, WidgetRef ref) {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Consumer(
+        builder: (ctx, cRef, _) {
+          final allSwatches = cRef.watch(swatchListProvider).valueOrNull ?? [];
+          return SafeArea(
+            child: DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.5,
+              maxChildSize: 0.9,
+              minChildSize: 0.3,
+              builder: (_, scrollCtrl) => Column(
+                children: [
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: C.bd2,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: Text(
+                      isKorean ? '내 스와치에서 연결' : 'Link from My Swatches',
+                      style: T.h3,
+                    ),
+                  ),
+                  if (allSwatches.isEmpty)
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          isKorean ? '등록된 스와치가 없어요.' : 'No swatches available.',
+                          style: T.body.copyWith(color: C.mu),
+                        ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: ListView.builder(
+                        controller: scrollCtrl,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        itemCount: allSwatches.length,
+                        itemBuilder: (_, i) {
+                          final swatch = allSwatches[i];
+                          final name = swatch.swatchName.isNotEmpty
+                              ? swatch.swatchName
+                              : swatch.yarnName;
+                          return ListTile(
+                            title: Text(
+                              name.isNotEmpty
+                                  ? name
+                                  : (isKorean ? '이름 없음' : 'Untitled'),
+                              style: T.body,
+                            ),
+                            onTap: () async {
+                              Navigator.pop(ctx);
+                              await runWithMoriLoadingDialog<void>(
+                                context,
+                                message: isKorean ? '연결하는 중입니다.' : 'Linking...',
+                                subtitle: isKorean
+                                    ? '잠시만 기다려 주세요.'
+                                    : 'Please wait.',
+                                task: () => ref
+                                    .read(swatchRepositoryProvider)
+                                    .updateSwatch(
+                                      swatch.copyWith(projectId: project.id),
+                                    ),
+                              );
+                              if (context.mounted) {
+                                showSavedSnackBar(
+                                  ScaffoldMessenger.of(context),
+                                  message: isKorean ? '연결됐어요.' : 'Linked.',
+                                );
+                              }
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   void _addSwatch(BuildContext context, WidgetRef ref, bool isKorean) {
     Navigator.push(
       context,
@@ -556,63 +1002,113 @@ class _ProjectBody extends ConsumerWidget {
 
   void _linkExistingCounter(BuildContext context, WidgetRef ref) {
     final isKorean = ref.read(appLanguageProvider).isKorean;
-    final t = ref.read(appStringsProvider);
-    final allCounters = ref.read(counterListProvider).valueOrNull ?? [];
-    final unlinked = allCounters.where((c) => c.projectId != project.id).toList();
 
-    if (unlinked.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(isKorean ? '연결할 수 있는 카운터가 없어요.' : 'No available counters to link.')),
-      );
-      return;
-    }
-
-    showDialog<void>(
+    showModalBottomSheet<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(isKorean ? '기존 카운터 연결' : 'Link Existing Counter', style: T.h3),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: unlinked.length,
-            itemBuilder: (_, i) {
-              final counter = unlinked[i];
-              return ListTile(
-                leading: Icon(Icons.tune_rounded, color: C.lv),
-                title: Text(counter.name, style: T.body),
-                subtitle: Text('S ${counter.stitchCount}  R ${counter.rowCount}', style: T.caption.copyWith(color: C.mu)),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  await runWithMoriLoadingDialog<void>(
-                    context,
-                    message: isKorean ? '연결하는 중입니다.' : 'Linking...',
-                    subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
-                    task: () async {
-                      await ref.read(counterRepositoryProvider).updateCounter(counter.copyWith(projectId: project.id));
-                      await ref.read(projectRepositoryProvider).addCounter(project.id, counter.id);
-                    },
-                  );
-                  if (context.mounted) {
-                    showSavedSnackBar(
-                      ScaffoldMessenger.of(context),
-                      message: isKorean ? '연결됐어요.' : 'Linked.',
-                    );
-                  }
-                },
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(t.cancel)),
-        ],
+      isScrollControlled: true,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Consumer(
+        builder: (ctx, cRef, _) {
+          final allCounters = cRef.watch(counterListProvider).valueOrNull ?? [];
+          final availableCounters =
+              allCounters.where((c) => c.projectId != project.id).toList();
+          return SafeArea(
+            child: DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.5,
+              maxChildSize: 0.9,
+              minChildSize: 0.3,
+              builder: (_, scrollCtrl) => Column(
+                children: [
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: C.bd2,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: Text(
+                      isKorean ? '내 작업에서 연결' : 'Link from My Counters',
+                      style: T.h3,
+                    ),
+                  ),
+                  if (availableCounters.isEmpty)
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          isKorean
+                              ? '연결할 수 있는 카운터가 없어요.'
+                              : 'No available counters to link.',
+                          style: T.body.copyWith(color: C.mu),
+                        ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: ListView.builder(
+                        controller: scrollCtrl,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        itemCount: availableCounters.length,
+                        itemBuilder: (_, i) {
+                          final counter = availableCounters[i];
+                          return ListTile(
+                            leading: Icon(Icons.tune_rounded, color: C.lv),
+                            title: Text(counter.name, style: T.body),
+                            subtitle: Text(
+                              'S ${counter.stitchCount}  R ${counter.rowCount}',
+                              style: T.caption.copyWith(color: C.mu),
+                            ),
+                            onTap: () async {
+                              Navigator.pop(ctx);
+                              await runWithMoriLoadingDialog<void>(
+                                context,
+                                message: isKorean ? '연결하는 중입니다.' : 'Linking...',
+                                subtitle: isKorean
+                                    ? '잠시만 기다려 주세요.'
+                                    : 'Please wait a moment.',
+                                task: () async {
+                                  await ref
+                                      .read(counterRepositoryProvider)
+                                      .updateCounter(
+                                        counter.copyWith(projectId: project.id),
+                                      );
+                                  await ref
+                                      .read(projectRepositoryProvider)
+                                      .addCounter(project.id, counter.id);
+                                },
+                              );
+                              if (context.mounted) {
+                                showSavedSnackBar(
+                                  ScaffoldMessenger.of(context),
+                                  message: isKorean ? '연결됐어요.' : 'Linked.',
+                                );
+                              }
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
 
   void _addCounter(BuildContext context, WidgetRef ref) {
     final t = ref.read(appStringsProvider);
+    final isKorean = ref.read(appLanguageProvider).isKorean;
     final nameCtrl = TextEditingController();
     showDialog<void>(
       context: context,
@@ -642,7 +1138,12 @@ class _ProjectBody extends ConsumerWidget {
                   await ref.read(projectRepositoryProvider).addCounter(project.id, saved.id);
                 },
               );
-              if (context.mounted) context.push('/counter/${saved.id}');
+              if (context.mounted) {
+                showSavedSnackBar(
+                  ScaffoldMessenger.of(context),
+                  message: isKorean ? '카운터가 생성됐어요.' : 'Counter created.',
+                );
+              }
             },
             child: Text(t.create),
           ),
@@ -654,38 +1155,98 @@ class _ProjectBody extends ConsumerWidget {
 
 class _StepsSection extends ConsumerWidget {
   final ProjectModel project;
-  const _StepsSection({required this.project});
+  final bool isCardEditMode;
+  const _StepsSection({required this.project, this.isCardEditMode = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = ref.watch(appStringsProvider);
     final stepsAsync = ref.watch(projectStepsProvider(project.id));
 
+    final currentSteps = stepsAsync.valueOrNull ?? [];
+    final isKoreanHeader = ref.watch(appLanguageProvider).isKorean;
+
     return GlassCard(
+      color: C.bg,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(t.stepLog, style: T.bodyBold),
-              TextButton(onPressed: () => _addStep(context, ref), child: Text(t.add)),
+              Icon(Icons.format_list_numbered_rounded, color: C.lmD, size: 18),
+              const SizedBox(width: 6),
+              Text(
+                isKoreanHeader ? '템플릿' : 'Template',
+                style: T.bodyBold,
+              ),
+              const Spacer(),
+              if (isCardEditMode && currentSteps.isNotEmpty)
+                IconButton(
+                  icon: Icon(Icons.link_off, color: C.og, size: 18),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: isKoreanHeader ? '템플릿 연결 해제' : 'Unlink template',
+                  onPressed: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: Text(isKoreanHeader ? '템플릿 연결 해제' : 'Unlink Template', style: T.h3),
+                        content: Text(
+                          isKoreanHeader
+                              ? '모든 단계(${currentSteps.length}개)가 삭제됩니다. 계속할까요?'
+                              : 'All ${currentSteps.length} steps will be deleted. Continue?',
+                        ),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(isKoreanHeader ? '취소' : 'Cancel')),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: Text(isKoreanHeader ? '삭제' : 'Delete', style: TextStyle(color: C.og)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed != true) return;
+                    if (!context.mounted) return;
+                    await runWithMoriLoadingDialog<void>(
+                      context,
+                      message: isKoreanHeader ? '단계를 삭제하는 중입니다.' : 'Deleting steps...',
+                      subtitle: isKoreanHeader ? '잠시만 기다려 주세요.' : 'Please wait.',
+                      task: () async {
+                        final stepRepo = ref.read(projectStepRepositoryProvider);
+                        for (final step in currentSteps) {
+                          await stepRepo.deleteStep(project.id, step.id);
+                        }
+                      },
+                    );
+                    if (context.mounted) {
+                      showSavedSnackBar(
+                        ScaffoldMessenger.of(context),
+                        message: isKoreanHeader ? '모든 단계가 삭제됐어요.' : 'All steps deleted.',
+                      );
+                    }
+                  },
+                ),
             ],
           ),
           const SizedBox(height: 4),
           stepsAsync.when(
             data: (steps) {
               if (steps.isEmpty) {
+                final isKorean = ref.read(appLanguageProvider).isKorean;
                 return Column(
                   children: [
-                    Text(t.noStepsYet, style: T.body.copyWith(color: C.mu)),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        onPressed: () => _showTemplateSheet(context, ref),
-                        child: const Text('템플릿으로 시작하기'),
+                    Center(
+                      child: Text(
+                        isKorean ? '연결된 단계로그 없어요.' : 'No linked steps.',
+                        style: T.body.copyWith(color: C.mu),
+                        textAlign: TextAlign.center,
                       ),
+                    ),
+                    const SizedBox(height: 10),
+                    _CardEditActions(
+                      isKorean: isKorean,
+                      onLinkFromWork: () => _showTemplateSheet(context, ref),
+                      onCreateNew: () => _addStep(context, ref),
                     ),
                   ],
                 );
@@ -714,16 +1275,21 @@ class _StepsSection extends ConsumerWidget {
                     style: T.caption.copyWith(color: C.mu),
                   ),
                   const SizedBox(height: 8),
-                  ...steps
-                      .map(
-                        (step) => _StepTile(
+                  ...steps.asMap().entries.map((entry) {
+                        final i = entry.key;
+                        final step = entry.value;
+                        return _StepTile(
                           step: step,
                           projectId: project.id,
+                          isCardEditMode: isCardEditMode,
                           onToggle: () => ref.read(projectStepRepositoryProvider).toggleStep(project.id, step),
                           onEdit: () => _editStep(context, ref, step),
                           onDelete: () => _deleteStep(context, ref, step),
-                        ),
-                      ),
+                          onMoveUp: i > 0 ? () => _reorderSteps(context, ref, steps, i, i - 1) : null,
+                          onMoveDown: i < steps.length - 1 ? () => _reorderSteps(context, ref, steps, i, i + 1) : null,
+                          onInsertAfter: isCardEditMode ? () => _insertStepAfter(context, ref, steps, i) : null,
+                        );
+                      }),
                 ],
               );
             },
@@ -733,6 +1299,14 @@ class _StepsSection extends ConsumerWidget {
               style: T.body.copyWith(color: C.og),
             ),
           ),
+          if (isCardEditMode) ...[
+            const SizedBox(height: 10),
+            _CardEditActions(
+              isKorean: ref.read(appLanguageProvider).isKorean,
+              onLinkFromWork: () => _showTemplateSheet(context, ref),
+              onCreateNew: () => _addStep(context, ref),
+            ),
+          ],
         ],
       ),
     );
@@ -770,31 +1344,8 @@ class _StepsSection extends ConsumerWidget {
                   const SizedBox(height: 12),
                   Text(isKorean ? '템플릿 선택' : 'Select Template', style: T.h3),
                   const SizedBox(height: 12),
-                  // 기본 템플릿
-                  Text(isKorean ? '기본 템플릿' : 'Built-in', style: T.caption.copyWith(color: C.mu)),
-                  const SizedBox(height: 6),
-                  ...builtins.map((tpl) => ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Container(
-                      width: 40, height: 40,
-                      decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-                      child: Icon(tpl.$3, color: C.lv, size: 20),
-                    ),
-                    title: Text(tpl.$2, style: T.body),
-                    trailing: Icon(Icons.chevron_right_rounded, color: C.mu, size: 18),
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      runWithMoriLoadingDialog<void>(
-                        context,
-                        message: isKorean ? '단계 추가 중...' : 'Adding steps...',
-                        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
-                        task: () => ref.read(projectStepRepositoryProvider).addTemplateSteps(project.id, tpl.$1),
-                      );
-                    },
-                  )),
-                  // 커스텀 템플릿
+                  // 커스텀 템플릿 (먼저)
                   if (customTemplates.isNotEmpty) ...[
-                    const SizedBox(height: 12),
                     Text(isKorean ? '나의 커스텀 템플릿' : 'My Custom Templates', style: T.caption.copyWith(color: C.mu)),
                     const SizedBox(height: 6),
                     ...customTemplates.map((tmpl) => ListTile(
@@ -830,7 +1381,30 @@ class _StepsSection extends ConsumerWidget {
                         );
                       },
                     )),
+                    const SizedBox(height: 12),
                   ],
+                  // 기본 템플릿
+                  Text(isKorean ? '기본 템플릿' : 'Built-in', style: T.caption.copyWith(color: C.mu)),
+                  const SizedBox(height: 6),
+                  ...builtins.map((tpl) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Container(
+                      width: 40, height: 40,
+                      decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                      child: Icon(tpl.$3, color: C.lv, size: 20),
+                    ),
+                    title: Text(tpl.$2, style: T.body),
+                    trailing: Icon(Icons.chevron_right_rounded, color: C.mu, size: 18),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      runWithMoriLoadingDialog<void>(
+                        context,
+                        message: isKorean ? '단계 추가 중...' : 'Adding steps...',
+                        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+                        task: () => ref.read(projectStepRepositoryProvider).addTemplateSteps(project.id, tpl.$1),
+                      );
+                    },
+                  )),
                   const SizedBox(height: 8),
                 ],
               ),
@@ -841,8 +1415,22 @@ class _StepsSection extends ConsumerWidget {
     );
   }
 
+  Future<void> _reorderSteps(BuildContext context, WidgetRef ref, List<ProjectStep> steps, int fromIndex, int toIndex) async {
+    final stepA = steps[fromIndex];
+    final stepB = steps[toIndex];
+    await ref.read(projectStepRepositoryProvider).swapStepOrders(
+      project.id,
+      stepA.id, stepB.order,
+      stepB.id, stepA.order,
+    );
+  }
+
   void _addStep(BuildContext context, WidgetRef ref) {
     _showStepDialog(context, ref);
+  }
+
+  void _insertStepAfter(BuildContext context, WidgetRef ref, List<ProjectStep> steps, int afterIndex) {
+    _showStepDialog(context, ref, insertAfterIndex: afterIndex, allSteps: steps);
   }
 
   void _editStep(BuildContext context, WidgetRef ref, ProjectStep step) {
@@ -891,7 +1479,7 @@ class _StepsSection extends ConsumerWidget {
     );
   }
 
-  void _showStepDialog(BuildContext context, WidgetRef ref, {ProjectStep? existingStep}) {
+  void _showStepDialog(BuildContext context, WidgetRef ref, {ProjectStep? existingStep, int? insertAfterIndex, List<ProjectStep>? allSteps}) {
     final isKorean = ref.read(appLanguageProvider).isKorean;
     final t = ref.read(appStringsProvider);
     final nameCtrl = TextEditingController(text: existingStep?.name ?? '');
@@ -985,13 +1573,7 @@ class _StepsSection extends ConsumerWidget {
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                nameCtrl.dispose();
-                descCtrl.dispose();
-                noteCtrl.dispose();
-                targetRowCtrl.dispose();
-                Navigator.pop(ctx);
-              },
+              onPressed: () => Navigator.pop(ctx),
               child: Text(t.cancel),
             ),
             ElevatedButton(
@@ -1001,10 +1583,6 @@ class _StepsSection extends ConsumerWidget {
                 final note = noteCtrl.text.trim();
                 final targetRow = int.tryParse(targetRowCtrl.text.trim()) ?? 0;
                 final blockType = selectedBlockType;
-                nameCtrl.dispose();
-                descCtrl.dispose();
-                noteCtrl.dispose();
-                targetRowCtrl.dispose();
                 Navigator.pop(ctx);
                 if (name.isEmpty) return;
                 Future.microtask(() async {
@@ -1037,8 +1615,21 @@ class _StepsSection extends ConsumerWidget {
                       }
                     }
                   } else {
-                    final stepsAsync = ref.read(projectStepsProvider(project.id));
-                    final order = stepsAsync.valueOrNull?.length ?? 0;
+                    // insertAfterIndex가 있으면 해당 위치 이후에 삽입, 없으면 맨 끝에 추가
+                    int order;
+                    if (insertAfterIndex != null && allSteps != null && insertAfterIndex < allSteps.length) {
+                      // 삽입 위치 이후의 단계 order를 +1씩 증가시키고, 새 단계를 사이에 삽입
+                      final insertOrder = allSteps[insertAfterIndex].order + 1;
+                      order = insertOrder;
+                      // 이후 단계들의 order를 +1씩 증가
+                      final stepRepo = ref.read(projectStepRepositoryProvider);
+                      for (int k = insertAfterIndex + 1; k < allSteps.length; k++) {
+                        await stepRepo.updateStepOrder(project.id, allSteps[k].id, allSteps[k].order + 1);
+                      }
+                    } else {
+                      final stepsAsync = ref.read(projectStepsProvider(project.id));
+                      order = stepsAsync.valueOrNull?.length ?? 0;
+                    }
                     await runWithMoriLoadingDialog<void>(
                       context,
                       message: t.addingStep,
@@ -1053,6 +1644,37 @@ class _StepsSection extends ConsumerWidget {
                         blockType: blockType,
                       ),
                     );
+                    // 템플릿 업데이트 팝업
+                    if (context.mounted) {
+                      final customTemplates = ref.read(userTemplateListProvider).valueOrNull ?? [];
+                      if (customTemplates.isNotEmpty) {
+                        showDialog<void>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: Text(isKorean ? '템플릿도 업데이트할까요?' : 'Update template too?', style: T.h3),
+                            content: Text(
+                              isKorean
+                                  ? '연결된 커스텀 템플릿에 이 단계를 추가할 수 있어요.'
+                                  : 'You can add this step to a linked custom template.',
+                              style: T.body,
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                child: Text(isKorean ? '건너뛰기' : 'Skip'),
+                              ),
+                              ElevatedButton(
+                                onPressed: () {
+                                  Navigator.pop(ctx);
+                                  _showTemplateUpdateSheet(context, ref, name, desc);
+                                },
+                                child: Text(isKorean ? '업데이트' : 'Update'),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                    }
                   }
                 });
               },
@@ -1063,20 +1685,94 @@ class _StepsSection extends ConsumerWidget {
       ),
     );
   }
+
+  void _showTemplateUpdateSheet(BuildContext context, WidgetRef ref, String stepName, String stepDesc) {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final customTemplates = ref.read(userTemplateListProvider).valueOrNull ?? [];
+    if (customTemplates.isEmpty) return;
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              Text(isKorean ? '업데이트할 템플릿 선택' : 'Select template to update', style: T.h3),
+              const SizedBox(height: 12),
+              ...customTemplates.map((tmpl) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(10)),
+                  child: Icon(Icons.folder_special_rounded, color: C.lvD, size: 18),
+                ),
+                title: Text(tmpl.title, style: T.body),
+                subtitle: Text(
+                  isKorean ? '${tmpl.stepTitles.length}개 단계' : '${tmpl.stepTitles.length} steps',
+                  style: T.caption.copyWith(color: C.mu),
+                ),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    await runWithMoriLoadingDialog<void>(
+                      context,
+                      message: isKorean ? '템플릿 업데이트 중...' : 'Updating template...',
+                      subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+                      task: () => ref.read(templateRepositoryProvider).addStepToTemplate(tmpl.id, stepName, stepDesc),
+                    );
+                    if (context.mounted) {
+                      showSavedSnackBar(
+                        ScaffoldMessenger.of(context),
+                        message: isKorean ? '템플릿이 업데이트됐어요.' : 'Template updated.',
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+                    }
+                  }
+                },
+              )),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _StepTile extends ConsumerStatefulWidget {
   final ProjectStep step;
   final String projectId;
+  final bool isCardEditMode;
   final VoidCallback onToggle;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback? onMoveUp;
+  final VoidCallback? onMoveDown;
+  final VoidCallback? onInsertAfter;
   const _StepTile({
     required this.step,
     required this.projectId,
+    this.isCardEditMode = false,
     required this.onToggle,
     required this.onEdit,
     required this.onDelete,
+    this.onMoveUp,
+    this.onMoveDown,
+    this.onInsertAfter,
   });
 
   @override
@@ -1136,8 +1832,11 @@ class _StepTileState extends ConsumerState<_StepTile> {
   @override
   Widget build(BuildContext context) {
     final step = widget.step;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+      margin: const EdgeInsets.only(bottom: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1179,6 +1878,30 @@ class _StepTileState extends ConsumerState<_StepTile> {
                           ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: C.lv))
                           : Icon(Icons.add_photo_alternate_outlined, size: 18, color: C.mu),
                     ),
+                    if (widget.onMoveUp != null || widget.onMoveDown != null) ...[
+                      const SizedBox(width: 2),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          GestureDetector(
+                            onTap: widget.onMoveUp,
+                            child: Icon(
+                              Icons.arrow_drop_up,
+                              size: 20,
+                              color: widget.onMoveUp != null ? C.mu : C.mu.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: widget.onMoveDown,
+                            child: Icon(
+                              Icons.arrow_drop_down,
+                              size: 20,
+                              color: widget.onMoveDown != null ? C.mu : C.mu.withValues(alpha: 0.3),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(width: 4),
                     PopupMenuButton<String>(
                       icon: Icon(Icons.more_vert, size: 18, color: C.mu),
@@ -1255,6 +1978,32 @@ class _StepTileState extends ConsumerState<_StepTile> {
           ),
         ],
       ),
+        ),
+        if (widget.isCardEditMode && widget.onInsertAfter != null)
+          GestureDetector(
+            onTap: widget.onInsertAfter,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              height: 28,
+              decoration: BoxDecoration(
+                color: C.lvL,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: C.lv.withValues(alpha: 0.3), style: BorderStyle.solid),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.add_rounded, size: 14, color: C.lvD),
+                  const SizedBox(width: 4),
+                  Text(
+                    ref.read(appLanguageProvider).isKorean ? '여기에 단계 삽입' : 'Insert step here',
+                    style: T.caption.copyWith(color: C.lvD, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -1282,8 +2031,9 @@ class _InfoRow extends StatelessWidget {
 class _CounterTile extends StatelessWidget {
   final CounterModel counter;
   final VoidCallback? onTap;
+  final VoidCallback? onUnlink;
 
-  const _CounterTile({required this.counter, this.onTap});
+  const _CounterTile({required this.counter, this.onTap, this.onUnlink});
 
   @override
   Widget build(BuildContext context) {
@@ -1295,18 +2045,26 @@ class _CounterTile extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(12)),
+        decoration: BoxDecoration(color: C.bg, borderRadius: BorderRadius.circular(12)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(Icons.tune_rounded, color: C.lvD),
-                const SizedBox(width: 10),
                 Expanded(child: Text(counter.name, style: T.bodyBold)),
-                Text('S ${counter.stitchCount}  R ${counter.rowCount}', style: T.caption.copyWith(color: C.mu)),
-                const SizedBox(width: 4),
-                Icon(Icons.chevron_right, size: 16, color: C.mu),
+                if (onUnlink != null)
+                  IconButton(
+                    icon: Icon(Icons.link_off, color: C.og, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    tooltip: '연결 해제',
+                    onPressed: onUnlink,
+                  )
+                else ...[
+                  Text('S ${counter.stitchCount}  R ${counter.rowCount}', style: T.caption.copyWith(color: C.mu)),
+                  const SizedBox(width: 4),
+                  Icon(Icons.chevron_right, size: 16, color: C.mu),
+                ],
               ],
             ),
             if (hasRowTarget) ...[
@@ -1766,6 +2524,52 @@ class _ProgressSectionState extends ConsumerState<_ProgressSection> {
         ),
         const SizedBox(height: 6),
         Text(progressLabel, style: T.caption.copyWith(color: C.lvD)),
+      ],
+    );
+  }
+}
+
+// ── 카드 수정모드 액션 버튼 (내작업에서 연결 / 새로만들기) ──────────────
+class _CardEditActions extends StatelessWidget {
+  final bool isKorean;
+  final VoidCallback onLinkFromWork;
+  final VoidCallback onCreateNew;
+
+  const _CardEditActions({
+    required this.isKorean,
+    required this.onLinkFromWork,
+    required this.onCreateNew,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: onLinkFromWork,
+            icon: const Icon(Icons.link_rounded, size: 16),
+            label: Text(isKorean ? '내작업에서 연결' : 'Link from work', style: const TextStyle(fontSize: 12)),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              foregroundColor: C.lv,
+              side: BorderSide(color: C.lv.withValues(alpha: 0.4)),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: onCreateNew,
+            icon: const Icon(Icons.add_rounded, size: 16),
+            label: Text(isKorean ? '새로만들기' : 'Create new', style: const TextStyle(fontSize: 12)),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              foregroundColor: C.lvD,
+              side: BorderSide(color: C.lvD.withValues(alpha: 0.4)),
+            ),
+          ),
+        ),
       ],
     );
   }

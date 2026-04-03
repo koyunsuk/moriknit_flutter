@@ -98,12 +98,14 @@ class PostRepository {
     await _posts.doc(postId).delete();
   }
 
-  Future<void> updatePost(String postId, {required String title, required String content}) async {
-    await _posts.doc(postId).update({
+  Future<void> updatePost(String postId, {required String title, required String content, List<String>? imageUrls}) async {
+    final data = <String, dynamic>{
       'title': title,
       'content': content,
       'updatedAt': FieldValue.serverTimestamp(),
-    });
+    };
+    if (imageUrls != null) data['imageUrls'] = imageUrls;
+    await _posts.doc(postId).update(data);
   }
 
   Future<void> toggleLike(String postId, String uid) async {

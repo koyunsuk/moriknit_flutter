@@ -56,6 +56,22 @@ class ProjectCard extends StatelessWidget {
                   SizedBox(height: compact ? 6 : 8),
                   Row(children: [if (project.needleSize > 0) ...[Icon(Icons.circle_outlined, size: 12, color: C.mu), const SizedBox(width: 3), Text(project.needleSize % 1 == 0 ? '${project.needleSize.toInt()}mm' : '${project.needleSize}mm', style: T.caption.copyWith(color: C.mu)), const SizedBox(width: 10)], if (project.yarnBrandName.isNotEmpty) ...[Icon(Icons.texture, size: 12, color: C.mu), const SizedBox(width: 3), Text(project.yarnBrandName, style: T.caption.copyWith(color: C.mu))]]),
                 ],
+                if (project.yarnColor.isNotEmpty || project.yarnName.isNotEmpty) ...[
+                  SizedBox(height: compact ? 4 : 6),
+                  Row(children: [
+                    if (project.yarnColor.isNotEmpty) ...[
+                      Icon(Icons.circle, size: 10, color: C.pk),
+                      const SizedBox(width: 4),
+                      Text(project.yarnColor, style: T.caption.copyWith(color: C.mu)),
+                      if (project.yarnName.isNotEmpty) const SizedBox(width: 10),
+                    ],
+                    if (project.yarnName.isNotEmpty) ...[
+                      Icon(Icons.fiber_manual_record_rounded, size: 10, color: C.mu),
+                      const SizedBox(width: 4),
+                      Flexible(child: Text(project.yarnName, style: T.caption.copyWith(color: C.mu), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    ],
+                  ]),
+                ],
               ]),
             ),
           ],
@@ -79,7 +95,7 @@ class ProjectCard extends StatelessWidget {
     switch (status) {
       case ProjectStatus.planning: return C.mu;
       case ProjectStatus.swatching: return C.lv;
-      case ProjectStatus.inProgress: return C.lm;
+      case ProjectStatus.inProgress: return C.lmD;
       case ProjectStatus.blocking: return C.og;
       case ProjectStatus.finished: return C.pk;
     }
