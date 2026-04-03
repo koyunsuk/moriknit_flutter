@@ -4958,7 +4958,7 @@ class _BuiltinTemplateAdminTab extends ConsumerWidget {
                 }
                 return ListView.separated(
                   itemCount: templates.length,
-                  separatorBuilder: (_, __) => Divider(color: C.bd2, height: 1),
+                  separatorBuilder: (_, _) => Divider(color: C.bd2, height: 1),
                   itemBuilder: (ctx, i) {
                     final tmpl = templates[i];
                     final icon = _iconFromName(tmpl.iconName);
