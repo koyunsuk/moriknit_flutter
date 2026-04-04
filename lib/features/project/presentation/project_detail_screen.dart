@@ -1812,20 +1812,61 @@ class _StepTileState extends ConsumerState<_StepTile> {
   }
 
   Future<void> _pickPhoto() async {
-    final source = await _showImageSourceDialog();
-    if (source == null) return;
-    final picked = await ImagePicker().pickImage(source: source, imageQuality: 85);
-    if (picked == null || !mounted) return;
-    setState(() => _uploading = true);
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final messenger = ScaffoldMessenger.of(context);
+
     try {
-      final storageRef = FirebaseStorage.instance
-          .ref()
-          .child('projects/${widget.projectId}/steps/${widget.step.id}_${DateTime.now().millisecondsSinceEpoch}.jpg');
-      await storageRef.putFile(File(picked.path));
-      final url = await storageRef.getDownloadURL();
-      await ref.read(projectStepRepositoryProvider).updateStepPhoto(widget.projectId, widget.step.id, url);
-    } finally {
-      if (mounted) setState(() => _uploading = false);
+      final source = await _showImageSourceDialog();
+      if (source == null) return;
+
+      final picked = await ImagePicker().pickImage(
+        source: source,
+        imageQuality: 85,
+        maxWidth: 1600,
+      );
+      if (picked == null || !mounted) return;
+
+      setState(() => _uploading = true);
+
+      try {
+        final storageRef = FirebaseStorage.instance
+            .ref()
+            .child('projects/${widget.projectId}/steps/${widget.step.id}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+        await storageRef.putFile(File(picked.path));
+        final url = await storageRef.getDownloadURL();
+        await ref.read(projectStepRepositoryProvider).updateStepPhoto(
+          widget.projectId,
+          widget.step.id,
+          url,
+        );
+      } catch (error) {
+        if (!mounted) return;
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              isKorean
+                  ? '단계 사진 업로드에 실패했어요: $error'
+                  : 'Failed to upload the step photo: $error',
+            ),
+            backgroundColor: C.og,
+          ),
+        );
+      } finally {
+        if (mounted) setState(() => _uploading = false);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            isKorean
+                ? '카메라를 여는 중 오류가 발생했어요. 다시 시도해주세요.'
+                : 'Something went wrong while opening the camera. Please try again.',
+          ),
+          backgroundColor: C.og,
+        ),
+      );
+      debugPrint('Step photo pick failed: $error');
     }
   }
 
