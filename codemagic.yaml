@@ -1,0 +1,27 @@
+workflows:
+  ios-app-store:
+    name: iOS App Store IPA
+    max_build_duration: 120
+    integrations:
+      app_store_connect: apple-moriknit
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.moriknit.moriknitFlutter
+    scripts:
+      - name: Show Flutter version
+        script: flutter --version
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Install CocoaPods
+        script: find . -name "Podfile" -execdir pod install \;
+      - name: Apply signing profiles to Xcode project
+        script: xcode-project use-profiles
+      - name: Build signed IPA
+        script: flutter build ipa --release
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
