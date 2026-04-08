@@ -1,12 +1,10 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:hive/hive.dart';
 
 import '../../../core/constants/subscription_constants.dart';
 import '../../../core/localization/app_language.dart';
-import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -28,7 +26,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _loading = false;
   bool _obscure = true;
   bool _rememberMe = true;
-  bool _adminMode = false;
   String? _error;
 
   @override
@@ -111,13 +108,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       obscure: _obscure,
                       rememberMe: _rememberMe,
                       error: _error,
-                      adminMode: _adminMode,
                       onToggleObscure: () => setState(() => _obscure = !_obscure),
                       onRememberMeChanged: (v) {
                         setState(() => _rememberMe = v);
                         _saveRememberMe(v);
                       },
-                      onAdminModeChanged: (v) => setState(() => _adminMode = v),
                       onLoginEmail: _loginEmail,
                       onLoginGoogle: _loginGoogle,
                       onShowSignUp: () => showSignUpSheet(context, ref, mounted),
@@ -186,7 +181,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             email: _emailCtrl.text.trim(),
             password: _pwCtrl.text,
           );
-      if (mounted && _adminMode) context.go(Routes.admin);
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -201,7 +195,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
     try {
       await ref.read(authRepositoryProvider).signInWithGoogle();
-      if (mounted && _adminMode) context.go(Routes.admin);
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -343,9 +336,6 @@ class LoginPanel extends ConsumerWidget {
   final bool showOverlayIntro;
   final String? title;
   final String? message;
-  final bool adminMode;
-  final ValueChanged<bool>? onAdminModeChanged;
-
   const LoginPanel({
     super.key,
     required this.emailCtrl,
@@ -362,8 +352,6 @@ class LoginPanel extends ConsumerWidget {
     this.showOverlayIntro = false,
     this.title,
     this.message,
-    this.adminMode = false,
-    this.onAdminModeChanged,
   });
 
   @override
@@ -543,23 +531,6 @@ class LoginPanel extends ConsumerWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(t.rememberMe, style: T.caption.copyWith(color: C.tx2)),
-                    if (kIsWeb && onAdminModeChanged != null) ...[
-                      const SizedBox(width: 16),
-                      SizedBox(
-                        width: 32,
-                        height: 32,
-                        child: Checkbox(
-                          value: adminMode,
-                          activeColor: C.og,
-                          checkColor: Colors.white,
-                          side: BorderSide(color: C.mu.withValues(alpha: 0.5), width: 1.5),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                          onChanged: (v) => onAdminModeChanged!(v ?? false),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text('관리자', style: T.caption.copyWith(color: adminMode ? C.og : C.mu, fontSize: 11)),
-                    ],
                   ],
                 ),
                 const SizedBox(height: 4),
