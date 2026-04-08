@@ -1,5 +1,6 @@
 ﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/constants/subscription_constants.dart';
@@ -32,21 +33,14 @@ final isLoggedInProvider = Provider<bool>((ref) {
   return ref.watch(authStateProvider).valueOrNull != null;
 });
 
-/// Firestore users/{uid}.isAdmin 필드를 실시간으로 읽습니다.
+/// Firebase Custom Claims 기반으로 isAdmin을 실시간 확인합니다.
+/// idTokenChanges()는 로그인/로그아웃/토큰 갱신 시 발생합니다.
 final isAdminProvider = StreamProvider<bool>((ref) {
-  final authState = ref.watch(authStateProvider);
-  return authState.when(
-    data: (user) {
-      if (user == null) return Stream.value(false);
-      return FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .snapshots()
-          .map((doc) => (doc.data()?['isAdmin'] as bool?) ?? false);
-    },
-    loading: () => Stream.value(false),
-    error: (_, _) => Stream.value(false),
-  );
+  return FirebaseAuth.instance.idTokenChanges().asyncMap((user) async {
+    if (user == null) return false;
+    final result = await user.getIdTokenResult(false);
+    return result.claims?['admin'] == true;
+  });
 });
 
 // 앱 전체에 관리자가 한 명도 없는지 확인 (최초 관리자 설정용)

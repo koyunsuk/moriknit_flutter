@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:moriknit_flutter/core/widgets/main_shell.dart';
-import 'package:moriknit_flutter/features/admin/presentation/admin_screen.dart';
 import 'package:moriknit_flutter/features/auth/presentation/login_screen.dart';
 import 'package:moriknit_flutter/features/auth/presentation/splash_screen.dart';
 import 'package:moriknit_flutter/features/landing/presentation/landing_screen.dart';
@@ -36,6 +35,7 @@ import 'package:moriknit_flutter/features/swatch/presentation/swatch_list_screen
 import 'package:moriknit_flutter/features/tools/presentation/tools_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/tool_memo_screen.dart';
 import 'package:moriknit_flutter/features/ravelry/presentation/ravelry_screen.dart';
+import 'package:moriknit_flutter/features/etsy/presentation/etsy_screen.dart';
 import 'package:moriknit_flutter/features/yarn/domain/yarn_model.dart';
 import 'package:moriknit_flutter/features/yarn/presentation/yarn_input_screen.dart';
 import 'package:moriknit_flutter/features/yarn/presentation/yarn_detail_screen.dart';
@@ -48,8 +48,6 @@ import 'routes.dart';
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authRepository = ref.watch(authRepositoryProvider);
   final authRefresh = GoRouterRefreshStream(authRepository.authStateChanges);
-  // isAdmin 변경 시에도 라우터 refresh 트리거
-  ref.listen(isAdminProvider, (_, _) => authRefresh.refresh());
   ref.onDispose(authRefresh.dispose);
 
   return GoRouter(
@@ -58,19 +56,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
     redirect: (context, state) {
       final isLoggedIn = authRepository.currentUser != null;
-      final isAdmin = ref.read(isAdminProvider).valueOrNull ?? false;
       final location = state.matchedLocation;
       final isSplash = location == Routes.splash;
       final isLogin = location == Routes.login;
       final isLanding = location == Routes.landing;
-      final isAdminRoute = location == Routes.admin;
       final isPublicWebRoute = kIsWeb && (location == Routes.market || location == Routes.community || location == Routes.projectList);
 
       if (isSplash) {
         return null; // SplashScreen handles its own navigation after animation
-      }
-      if (isAdminRoute && !isLoggedIn) {
-        return Routes.login;
       }
       if (!isLoggedIn && !isLogin && !isLanding && !isPublicWebRoute) {
         return kIsWeb ? Routes.landing : Routes.login;
@@ -80,7 +73,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final from = state.uri.queryParameters['from'];
           if (from != null && from.isNotEmpty) return from;
         }
-        return isAdmin ? Routes.admin : Routes.home;
+        return Routes.home;
       }
       return null;
     },
@@ -132,6 +125,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(path: 'encyclopedia', builder: (_, _) => const EncyclopediaScreen()),
               GoRoute(path: 'memo', builder: (_, _) => const ToolMemoScreen()),
               GoRoute(path: 'ravelry', builder: (_, _) => const RavelryScreen()),
+              GoRoute(path: 'etsy', builder: (_, _) => const EtsyScreen()),
             ],
           ),
           GoRoute(path: Routes.community, builder: (_, _) => const CommunityScreen()),
@@ -177,7 +171,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
-      GoRoute(path: Routes.admin, builder: (_, _) => const AdminScreen()),
     ],
     errorBuilder: (_, state) {
       if (state.uri.toString().contains('oauth-callback/ravelry')) {

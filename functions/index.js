@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const admin = require('firebase-admin');
 const { onRequest } = require('firebase-functions/v2/https');
+const { onDocumentCreated, onDocumentDeleted } = require('firebase-functions/v2/firestore');
 const { defineSecret } = require('firebase-functions/params');
 
 admin.initializeApp();
@@ -163,6 +164,7 @@ async function getValidConnection(uid) {
   const refreshed = await tokenRequest({
     grant_type: 'refresh_token',
     refresh_token: data.refreshToken,
+    redirect_uri: APP_CALLBACK_URI,
   });
 
   const next = {
@@ -186,10 +188,38 @@ async function withUser(req, res, fn) {
     await fn(decoded);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown server error.';
-    const status = message.includes('Missing Firebase ID token') ? 401 : 400;
+    // 연결 끊김·토큰 만료 관련 오류는 401 반환 → 클라이언트가 재연결 유도 가능
+    const isAuthError =
+      message.includes('Missing Firebase ID token') ||
+      message.includes('not connected') ||
+      message.includes('refresh token') ||
+      message.includes('Ravelry refresh token') ||
+      message.includes('refresh_failed');
+    const status = isAuthError ? 401 : 400;
     res.status(status).json({ error: message });
   }
 }
+
+// admins/{uid} 문서 생성 시 Custom Claims admin:true 설정
+// Firestore DB가 asia-northeast3(서울)이므로 트리거 리전도 동일하게 설정
+exports.onAdminCreated = onDocumentCreated(
+  { document: 'admins/{uid}', region: 'asia-northeast3' },
+  async (event) => {
+    const uid = event.params.uid;
+    await admin.auth().setCustomUserClaims(uid, { admin: true });
+    console.log(`Admin claim set for uid: ${uid}`);
+  },
+);
+
+// admins/{uid} 문서 삭제 시 Custom Claims 제거
+exports.onAdminDeleted = onDocumentDeleted(
+  { document: 'admins/{uid}', region: 'asia-northeast3' },
+  async (event) => {
+    const uid = event.params.uid;
+    await admin.auth().setCustomUserClaims(uid, { admin: false });
+    console.log(`Admin claim removed for uid: ${uid}`);
+  },
+);
 
 exports.ravelryAuthStart = onRequest(
   { region: REGION, secrets: [ravelryClientSecret] },
@@ -211,6 +241,7 @@ exports.ravelryAuthStart = onRequest(
       authUrl.searchParams.set('client_id', RAVELRY_CLIENT_ID);
       authUrl.searchParams.set('redirect_uri', CALLBACK_URL);
       authUrl.searchParams.set('state', state);
+      authUrl.searchParams.set('scope', 'offline');
 
       res.json({ authUrl: authUrl.toString() });
     });
@@ -314,6 +345,28 @@ exports.ravelrySession = onRequest(
         return;
       }
       const data = snap.data() || {};
+
+      // 토큰 만료 여부 확인 (5분 여유)
+      const expiresAt = typeof data.expiresAt === 'number' ? data.expiresAt : 0;
+      const isTokenExpired = !data.accessToken || expiresAt <= Date.now() + 5 * 60 * 1000;
+
+      // refresh_token이 없고 토큰이 만료된 경우 → 재연결 필요
+      if (isTokenExpired && !data.refreshToken) {
+        res.json({ isLoggedIn: false, reason: 'token_expired_no_refresh' });
+        return;
+      }
+
+      // refresh_token이 있으면 미리 갱신 시도
+      if (isTokenExpired && data.refreshToken) {
+        try {
+          await getValidConnection(decoded.uid);
+        } catch (refreshError) {
+          console.error('Ravelry session pre-refresh failed:', refreshError);
+          res.json({ isLoggedIn: false, reason: 'refresh_failed' });
+          return;
+        }
+      }
+
       res.json({
         isLoggedIn: true,
         username: data.username || null,
@@ -378,7 +431,9 @@ exports.ravelryLibrary = onRequest(
       req,
       res,
       (username) => [
+        { path: `/people/${username}/library.json`, query: { page_size: 50 } },
         { path: `/people/${username}/library/search.json`, query: { page_size: 50 } },
+        { path: `/people/${username}/library/volumes.json`, query: { page_size: 50 } },
       ],
       'library',
     );

@@ -71,10 +71,10 @@ final _supportConfigProvider = StreamProvider<Map<String, dynamic>>((ref) {
 
 final _memberAdminFlagProvider = StreamProvider.family<bool, String>((ref, uid) {
   return FirebaseFirestore.instance
-      .collection('users')
+      .collection('admins')
       .doc(uid)
       .snapshots()
-      .map((doc) => doc.data()?['isAdmin'] == true);
+      .map((doc) => doc.exists);
 });
 
 final _memberBlockedFlagProvider = StreamProvider.family<bool, String>((ref, uid) {
@@ -912,6 +912,7 @@ class _CollectionWithImportTabState extends ConsumerState<_CollectionWithImportT
                               doc: docs[index],
                               collection: widget.collection,
                               isKorean: widget.isKorean,
+                              index: index,
                             ),
                           ),
                   ),
@@ -1143,11 +1144,13 @@ class _CollectionDocRow extends StatelessWidget {
   final QueryDocumentSnapshot<Map<String, dynamic>> doc;
   final String collection;
   final bool isKorean;
+  final int index;
 
   const _CollectionDocRow({
     required this.doc,
     required this.collection,
     required this.isKorean,
+    this.index = 0,
   });
 
   String _primaryLabel() {
@@ -1217,18 +1220,31 @@ class _CollectionDocRow extends StatelessWidget {
       case 'encyclopedia':
         final term = data['term'] as String? ?? _primaryLabel();
         final category = data['category'] as String? ?? '';
+        final order = (data['order'] as num?)?.toInt() ?? (index + 1);
         rowContent = Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            // 순서번호
+            SizedBox(
+              width: 40,
+              child: Text(
+                '$order',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.w700),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            Container(width: 1, height: 36, color: Colors.grey.shade300),
+            const SizedBox(width: 10),
+            // 제목
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(term, style: T.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
                   if (category.isNotEmpty) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(category, style: T.caption.copyWith(color: C.mu)),
                   ],
-                  const SizedBox(height: 4),
                   Text('ID: ${doc.id}', style: T.caption.copyWith(color: C.mu, fontSize: 10)),
                 ],
               ),
@@ -2424,10 +2440,17 @@ class _MemberDetailDialogState extends ConsumerState<_MemberDetailDialog> {
                           value: isAdmin,
                           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           onChanged: isSelf ? null : (value) async {
-                            await FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(user.uid)
-                                .set({'isAdmin': value}, SetOptions(merge: true));
+                            final adminDoc = FirebaseFirestore.instance
+                                .collection('admins')
+                                .doc(user.uid);
+                            if (value) {
+                              await adminDoc.set({
+                                'role': 'admin',
+                                'addedAt': FieldValue.serverTimestamp(),
+                              });
+                            } else {
+                              await adminDoc.delete();
+                            }
                           },
                         ),
                       ],
@@ -4219,7 +4242,7 @@ class _EncyclopediaTabState extends State<_EncyclopediaTab> with SingleTickerPro
           child: TabBarView(
             controller: _tabCtrl,
             children: [
-              _EncyclopediaItemsTab(isKorean: widget.isKorean),
+              _EncyclopediaItemsTab(isKorean: widget.isKorean, adminUid: widget.adminUid),
               _CollectionWithImportTab(
                 collection: 'encyclopedia',
                 title: '뜨개백과',
@@ -4239,7 +4262,8 @@ class _EncyclopediaTabState extends State<_EncyclopediaTab> with SingleTickerPro
 
 class _EncyclopediaItemsTab extends StatefulWidget {
   final bool isKorean;
-  const _EncyclopediaItemsTab({required this.isKorean});
+  final String adminUid;
+  const _EncyclopediaItemsTab({required this.isKorean, required this.adminUid});
 
   @override
   State<_EncyclopediaItemsTab> createState() => _EncyclopediaItemsTabState();
@@ -4258,16 +4282,20 @@ class _EncyclopediaItemsTabState extends State<_EncyclopediaItemsTab> {
 
   Future<void> _loadDocs() async {
     setState(() => _loading = true);
-    final snap = await FirebaseFirestore.instance
-        .collection('encyclopedia')
-        .orderBy('term_ko')
-        .limit(200)
-        .get();
-    if (mounted) {
-      setState(() {
-        _docs = snap.docs;
-        _loading = false;
-      });
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('encyclopedia')
+          .orderBy('order')
+          .limit(500)
+          .get();
+      if (mounted) setState(() { _docs = snap.docs; _loading = false; });
+    } catch (_) {
+      // order 필드 없는 경우 fallback
+      final snap = await FirebaseFirestore.instance
+          .collection('encyclopedia')
+          .limit(500)
+          .get();
+      if (mounted) setState(() { _docs = snap.docs; _loading = false; });
     }
   }
 
@@ -4275,110 +4303,307 @@ class _EncyclopediaItemsTabState extends State<_EncyclopediaItemsTab> {
     if (_searchQuery.isEmpty) return _docs;
     final q = _searchQuery.toLowerCase();
     return _docs.where((d) {
-      final term = (d.data()['term_ko'] as String? ?? '').toLowerCase();
-      return term.contains(q);
+      final data = d.data();
+      final term = (data['term'] as String? ?? data['term_ko'] as String? ?? '').toLowerCase();
+      final abbr = (data['abbreviation'] as String? ?? '').toLowerCase();
+      return term.contains(q) || abbr.contains(q);
     }).toList();
   }
 
+  // ── 단일 항목 추가/수정 다이얼로그 ────────────────────────────────────────────
+
   void _showEditDialog(BuildContext context, [Map<String, dynamic>? data, String? docId]) {
-    final termKeyCtrl = TextEditingController(text: data?['term_key'] as String? ?? '');
-    final termKoCtrl = TextEditingController(text: data?['term_ko'] as String? ?? '');
-    final termEnCtrl = TextEditingController(text: data?['term_en'] as String? ?? '');
-    final categoryCtrl = TextEditingController(text: data?['category_key'] as String? ?? '');
-    final descKoCtrl = TextEditingController(text: data?['description_ko'] as String? ?? '');
-    final descEnCtrl = TextEditingController(text: data?['description_en'] as String? ?? '');
-    bool isPublic = data?['isPublic'] as bool? ?? true;
+    // 필드값 읽기 (구 필드명 fallback 포함)
+    final abbrCtrl    = TextEditingController(text: data?['abbreviation'] as String? ?? '');
+    final termCtrl    = TextEditingController(text: data?['term'] as String? ?? data?['term_ko'] as String? ?? '');
+    final termEnCtrl  = TextEditingController(text: data?['termEn'] as String? ?? data?['term_en'] as String? ?? '');
+    final descCtrl    = TextEditingController(text: data?['description'] as String? ?? data?['description_ko'] as String? ?? '');
+    final descEnCtrl  = TextEditingController(text: data?['descriptionEn'] as String? ?? data?['description_en'] as String? ?? '');
+    final categoryCtrl = TextEditingController(text: data?['category'] as String? ?? data?['category_key'] as String? ?? 'abbreviation');
+    final symbolCtrl  = TextEditingController(text: data?['symbol'] as String? ?? '');
+    final orderCtrl   = TextEditingController(text: (data?['order'] as num?)?.toInt().toString() ?? '');
     final isNew = docId == null;
 
     showDialog<void>(
       context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isNew ? '새 항목 추가' : '항목 수정'),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(children: [
+                  Expanded(
+                    flex: 2,
+                    child: TextField(controller: abbrCtrl, decoration: const InputDecoration(labelText: '영문 약어 (abbreviation) *')),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: orderCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: '순서 (order)'),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(child: TextField(controller: termCtrl, decoration: const InputDecoration(labelText: '한글 용어 (term) *'))),
+                  const SizedBox(width: 12),
+                  Expanded(child: TextField(controller: termEnCtrl, decoration: const InputDecoration(labelText: '영문 용어 (termEn)'))),
+                ]),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: descCtrl,
+                  maxLines: 3,
+                  decoration: const InputDecoration(labelText: '한글 설명 (description)'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: descEnCtrl,
+                  maxLines: 3,
+                  decoration: const InputDecoration(labelText: '영문 설명 (descriptionEn)'),
+                ),
+                const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(child: TextField(controller: categoryCtrl, decoration: const InputDecoration(labelText: '카테고리 (category)'))),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: symbolCtrl,
+                      decoration: const InputDecoration(
+                        labelText: '기호 (symbol)',
+                        hintText: '□ 또는 이미지 URL',
+                      ),
+                    ),
+                  ),
+                ]),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+          ElevatedButton(
+            onPressed: () async {
+              final abbr = abbrCtrl.text.trim();
+              final term = termCtrl.text.trim();
+              if (abbr.isEmpty || term.isEmpty) return;
+              final fields = <String, dynamic>{
+                'abbreviation': abbr,
+                'term': term,
+                'termEn': termEnCtrl.text.trim(),
+                'description': descCtrl.text.trim().isEmpty ? term : descCtrl.text.trim(),
+                'descriptionEn': descEnCtrl.text.trim().isEmpty ? termEnCtrl.text.trim() : descEnCtrl.text.trim(),
+                'category': categoryCtrl.text.trim().isEmpty ? 'abbreviation' : categoryCtrl.text.trim(),
+                'symbol': symbolCtrl.text.trim(),
+                'order': int.tryParse(orderCtrl.text.trim()) ?? 0,
+                'status': 'approved',
+                'createdBy': widget.adminUid,
+                'approvedBy': widget.adminUid,
+              };
+              try {
+                await runWithMoriLoadingDialog<void>(
+                  ctx,
+                  message: '저장하는 중입니다.',
+                  subtitle: '잠시만 기다려 주세요.',
+                  task: () async {
+                    if (isNew) {
+                      await FirebaseFirestore.instance.collection('encyclopedia').add({
+                        ...fields,
+                        'createdAt': FieldValue.serverTimestamp(),
+                      });
+                    } else {
+                      await FirebaseFirestore.instance.collection('encyclopedia').doc(docId).update(fields);
+                    }
+                  },
+                );
+                if (ctx.mounted) Navigator.pop(ctx);
+                _loadDocs();
+              } catch (e) {
+                if (ctx.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '$e');
+              }
+            },
+            child: const Text('저장'),
+          ),
+        ],
+      ),
+    ).whenComplete(() {
+      abbrCtrl.dispose(); termCtrl.dispose(); termEnCtrl.dispose();
+      descCtrl.dispose(); descEnCtrl.dispose(); categoryCtrl.dispose();
+      symbolCtrl.dispose(); orderCtrl.dispose();
+    });
+  }
+
+  // ── 붙여넣기 일괄 등록 다이얼로그 ─────────────────────────────────────────────
+
+  void _showPasteImportDialog(BuildContext context) {
+    final textCtrl = TextEditingController();
+
+    showDialog<void>(
+      context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, ss) => AlertDialog(
-          title: Text(isNew ? '새 항목 추가' : '항목 수정'),
-          content: SizedBox(
-            width: 480,
-            child: SingleChildScrollView(
+        builder: (ctx, ss) {
+          int? previewCount;
+
+          List<Map<String, dynamic>> parseRows(String text) {
+            final lines = text.trim().split('\n').where((l) => l.trim().isNotEmpty).toList();
+            final result = <Map<String, dynamic>>[];
+            for (final line in lines) {
+              final cols = line.split('\t');
+              if (cols.length < 3) continue;
+              // 형식: No.\t약어\tEnglish\tKorean\tSymbol\t비고
+              // 또는 2컬럼 이상이면 약어/영문/한글 순으로 파싱
+              final String abbr, termEn, term, symbol;
+              if (cols.length >= 4) {
+                // No. 컬럼 있는 경우 (4+ 컬럼)
+                final firstIsNum = int.tryParse(cols[0].trim()) != null;
+                if (firstIsNum) {
+                  abbr    = cols.length > 1 ? cols[1].trim() : '';
+                  termEn  = cols.length > 2 ? cols[2].trim() : '';
+                  term    = cols.length > 3 ? cols[3].trim() : '';
+                  symbol  = cols.length > 4 ? cols[4].trim() : '';
+                  final order = int.tryParse(cols[0].trim()) ?? 0;
+                  if (abbr.isEmpty || term.isEmpty) continue;
+                  result.add({
+                    'abbreviation': abbr, 'term': term, 'termEn': termEn,
+                    'description': term, 'descriptionEn': termEn,
+                    'category': 'abbreviation', 'symbol': symbol,
+                    'order': order, 'status': 'approved',
+                    'createdBy': widget.adminUid, 'approvedBy': widget.adminUid,
+                  });
+                } else {
+                  abbr   = cols[0].trim();
+                  termEn = cols[1].trim();
+                  term   = cols[2].trim();
+                  symbol = cols.length > 3 ? cols[3].trim() : '';
+                  if (abbr.isEmpty || term.isEmpty) continue;
+                  result.add({
+                    'abbreviation': abbr, 'term': term, 'termEn': termEn,
+                    'description': term, 'descriptionEn': termEn,
+                    'category': 'abbreviation', 'symbol': symbol,
+                    'order': result.length + 1, 'status': 'approved',
+                    'createdBy': widget.adminUid, 'approvedBy': widget.adminUid,
+                  });
+                }
+              } else {
+                // 3컬럼: 약어\t영문\t한글
+                abbr   = cols[0].trim();
+                termEn = cols[1].trim();
+                term   = cols[2].trim();
+                if (abbr.isEmpty || term.isEmpty) continue;
+                result.add({
+                  'abbreviation': abbr, 'term': term, 'termEn': termEn,
+                  'description': term, 'descriptionEn': termEn,
+                  'category': 'abbreviation', 'symbol': '',
+                  'order': result.length + 1, 'status': 'approved',
+                  'createdBy': widget.adminUid, 'approvedBy': widget.adminUid,
+                });
+              }
+            }
+            return result;
+          }
+
+          return AlertDialog(
+            title: const Text('붙여넣기 일괄 등록'),
+            content: SizedBox(
+              width: 620,
+              height: 420,
               child: Column(
-                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TextField(controller: termKeyCtrl, decoration: const InputDecoration(labelText: 'term_key (영문 키) *')),
-                  const SizedBox(height: 8),
-                  TextField(controller: termKoCtrl, decoration: const InputDecoration(labelText: 'term_ko (한글 용어) *')),
-                  const SizedBox(height: 8),
-                  TextField(controller: termEnCtrl, decoration: const InputDecoration(labelText: 'term_en (영문 용어)')),
-                  const SizedBox(height: 8),
-                  TextField(controller: categoryCtrl, decoration: const InputDecoration(labelText: 'category_key (카테고리)')),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: descKoCtrl,
-                    maxLines: 4,
-                    decoration: const InputDecoration(labelText: 'description_ko (한글 설명)'),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: const Text(
+                      '엑셀/워드에서 복사한 표를 붙여넣으세요.\n'
+                      '형식: No.(선택)\t약어\t영문 의미\t한글 설명\t기호(선택)\n'
+                      '예: 1\tk\tknit\t겉뜨기',
+                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: descEnCtrl,
-                    maxLines: 4,
-                    decoration: const InputDecoration(labelText: 'description_en (영문 설명)'),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: textCtrl,
+                      maxLines: null,
+                      expands: true,
+                      textAlignVertical: TextAlignVertical.top,
+                      decoration: InputDecoration(
+                        hintText: '여기에 표 데이터를 붙여넣으세요...',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        contentPadding: const EdgeInsets.all(12),
+                      ),
+                      onChanged: (v) {
+                        ss(() => previewCount = parseRows(v).length);
+                      },
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    const Text('공개 (isPublic)'),
-                    const Spacer(),
-                    Switch(value: isPublic, onChanged: (v) => ss(() => isPublic = v)),
-                  ]),
+                  if (previewCount != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '인식된 항목: $previewCount개',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: previewCount! > 0 ? Colors.green.shade700 : Colors.red.shade400,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
-            ElevatedButton(
-              onPressed: () async {
-                final key = termKeyCtrl.text.trim();
-                final ko = termKoCtrl.text.trim();
-                if (key.isEmpty || ko.isEmpty) return;
-                final fields = {
-                  'term_key': key,
-                  'term_ko': ko,
-                  'term_en': termEnCtrl.text.trim(),
-                  'category_key': categoryCtrl.text.trim(),
-                  'description_ko': descKoCtrl.text.trim(),
-                  'description_en': descEnCtrl.text.trim(),
-                  'isPublic': isPublic,
-                };
-                try {
-                  await runWithMoriLoadingDialog<void>(
-                    ctx,
-                    message: widget.isKorean ? '저장하는 중입니다.' : 'Saving...',
-                    subtitle: widget.isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
-                    task: () async {
-                      if (isNew) {
-                        await FirebaseFirestore.instance.collection('encyclopedia').add({
-                          ...fields,
-                          'createdAt': FieldValue.serverTimestamp(),
-                        });
-                      } else {
-                        await FirebaseFirestore.instance.collection('encyclopedia').doc(docId).update(fields);
-                      }
-                    },
-                  );
-                  if (ctx.mounted) Navigator.pop(ctx);
-                  _loadDocs();
-                } catch (e) {
-                  if (ctx.mounted) {
-                    showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '$e');
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+              ElevatedButton(
+                onPressed: () async {
+                  final rows = parseRows(textCtrl.text);
+                  if (rows.isEmpty) return;
+                  try {
+                    await runWithMoriLoadingDialog<void>(
+                      ctx,
+                      message: '${rows.length}개 항목 등록 중...',
+                      subtitle: '잠시만 기다려 주세요.',
+                      task: () async {
+                        const chunkSize = 490;
+                        final db = FirebaseFirestore.instance;
+                        for (var i = 0; i < rows.length; i += chunkSize) {
+                          final chunk = rows.sublist(i, (i + chunkSize).clamp(0, rows.length));
+                          final batch = db.batch();
+                          for (final row in chunk) {
+                            batch.set(db.collection('encyclopedia').doc(), {
+                              ...row,
+                              'createdAt': FieldValue.serverTimestamp(),
+                            });
+                          }
+                          await batch.commit();
+                        }
+                      },
+                    );
+                    if (ctx.mounted) {
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        SnackBar(content: Text('${rows.length}개 항목이 등록됐습니다.')),
+                      );
+                    }
+                    _loadDocs();
+                  } catch (e) {
+                    if (ctx.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '$e');
                   }
-                }
-              },
-              child: const Text('저장'),
-            ),
-          ],
-        ),
+                },
+                child: Text('${previewCount ?? 0}개 등록'),
+              ),
+            ],
+          );
+        },
       ),
-    ).whenComplete(() {
-      termKeyCtrl.dispose(); termKoCtrl.dispose(); termEnCtrl.dispose();
-      categoryCtrl.dispose(); descKoCtrl.dispose(); descEnCtrl.dispose();
-    });
+    ).whenComplete(() => textCtrl.dispose());
   }
 
   Future<void> _confirmDelete(BuildContext context, String docId) async {
@@ -4414,7 +4639,7 @@ class _EncyclopediaItemsTabState extends State<_EncyclopediaItemsTab> {
               Expanded(
                 child: TextField(
                   decoration: InputDecoration(
-                    hintText: 'term_ko 검색',
+                    hintText: '약어 또는 한글 용어 검색',
                     prefixIcon: const Icon(Icons.search, size: 18),
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(vertical: 8),
@@ -4423,7 +4648,13 @@ class _EncyclopediaItemsTabState extends State<_EncyclopediaItemsTab> {
                   onChanged: (v) => setState(() => _searchQuery = v),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: () => _showPasteImportDialog(context),
+                icon: const Icon(Icons.content_paste_rounded, size: 16),
+                label: const Text('붙여넣기 일괄 등록'),
+              ),
+              const SizedBox(width: 4),
               TextButton.icon(
                 onPressed: () => _showEditDialog(context),
                 icon: const Icon(Icons.add, size: 16),
@@ -4432,6 +4663,19 @@ class _EncyclopediaItemsTabState extends State<_EncyclopediaItemsTab> {
             ],
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              Text('총 ${_docs.length}개', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+              if (_searchQuery.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Text('검색 결과: ${_filtered.length}개', style: TextStyle(fontSize: 12, color: Colors.blue.shade600)),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
@@ -4473,11 +4717,14 @@ class _EncyclopediaDocRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final termKo = data['term_ko'] as String? ?? '(용어 없음)';
-    final categoryKey = data['category_key'] as String? ?? '';
+    final abbr    = data['abbreviation'] as String? ?? '';
+    final term    = data['term'] as String? ?? data['term_ko'] as String? ?? '(용어 없음)';
+    final termEn  = data['termEn'] as String? ?? data['term_en'] as String? ?? '';
+    final category = data['category'] as String? ?? data['category_key'] as String? ?? '';
+    final order   = (data['order'] as num?)?.toInt();
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
@@ -4485,30 +4732,44 @@ class _EncyclopediaDocRow extends StatelessWidget {
       ),
       child: Row(
         children: [
+          if (order != null)
+            SizedBox(
+              width: 32,
+              child: Text('$order', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+            ),
+          if (abbr.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFF4ADE80).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: const Color(0xFF4ADE80).withValues(alpha: 0.4)),
+              ),
+              child: Text(abbr, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF16A34A))),
+            ),
           Expanded(
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(termKo, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                if (categoryKey.isNotEmpty) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: Colors.grey.shade300),
-                    ),
-                    child: Text(categoryKey, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                  ),
-                ],
+                Text(term, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                if (termEn.isNotEmpty)
+                  Text(termEn, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
               ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.edit_rounded, size: 16),
-            onPressed: onEdit,
-            tooltip: '수정',
-          ),
+          if (category.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.only(right: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Text(category, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+            ),
+          IconButton(icon: const Icon(Icons.edit_rounded, size: 16), onPressed: onEdit, tooltip: '수정'),
           IconButton(
             icon: Icon(Icons.delete_rounded, size: 16, color: Colors.red.shade400),
             onPressed: onDelete,

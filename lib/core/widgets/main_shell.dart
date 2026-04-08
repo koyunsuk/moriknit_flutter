@@ -4,7 +4,6 @@ import 'dart:math';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -40,6 +39,13 @@ class _MainShellState extends ConsumerState<MainShell> with TickerProviderStateM
 
   // ── 스파클 ───────────────────────────────────────────────────────────────
   static const _sparkleEmojis = ['❤️', '🩷', '♪', '♫', '✨', '💜', '🎵', '🧶'];
+  static const _particleEmojis = {
+    'mori': ['✨', '✨', '✨', '🧶', '💜', '🎵'],
+    'heart': ['💕', '💕', '💕', '❤️', '🩷', '💖'],
+    'cat': ['🐱', '🐶', '🐰', '🦊', '🐼', '🐨', '🐸', '🦁'],
+    'star': ['⭐', '⭐', '⭐', '🌟', '✨', '💫'],
+    'rainbow': ['🌈', '🌈', '🌈', '🎨', '🦄', '🌸'],
+  };
   final _rng = Random();
   final _particles = <_MobileParticle>[];
   Timer? _sparkleTimer;
@@ -58,16 +64,20 @@ class _MainShellState extends ConsumerState<MainShell> with TickerProviderStateM
   }
 
   void _startSparkle() {
-    _sparkleTimer = Timer.periodic(const Duration(milliseconds: 900), (_) => _spawnSparkle());
+    _sparkleTimer = Timer.periodic(const Duration(milliseconds: 900), (_) {
+      if (ref.read(fabSettingsProvider).particleEnabled) _spawnSparkle();
+    });
   }
 
   void _spawnSparkle() {
     if (!mounted) return;
+    final particleType = ref.read(fabSettingsProvider).particleType;
+    final emojis = _particleEmojis[particleType] ?? _sparkleEmojis;
     final ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600));
     final p = _MobileParticle(
       controller: ctrl,
       x: _rng.nextDouble(),
-      emoji: _sparkleEmojis[_rng.nextInt(_sparkleEmojis.length)],
+      emoji: emojis[_rng.nextInt(emojis.length)],
       drift: (_rng.nextDouble() - 0.5) * 22,
       size: 13 + _rng.nextDouble() * 9,
     );
@@ -341,8 +351,6 @@ class _WebShell extends ConsumerWidget {
         ? profile!.displayName
         : ((authUser?.displayName?.isNotEmpty ?? false) ? authUser!.displayName! : (authUser?.email ?? 'Maker'));
     final avatarUrl = (profile?.photoURL.isNotEmpty == true) ? profile!.photoURL : (authUser?.photoURL ?? '');
-    final isAdmin = ref.watch(isAdminProvider).valueOrNull == true;
-
     final navItems = [
       _WebNavItem(Icons.home_rounded, t.home, C.pk, Routes.home),
       _WebNavItem(Icons.folder_special_rounded, t.projectsTabLabel, C.lv, Routes.tools),
@@ -350,7 +358,6 @@ class _WebShell extends ConsumerWidget {
       _WebNavItem(Icons.chat_bubble_outline_rounded, t.messengerTabLabel, C.lmD, Routes.messenger),
       _WebNavItem(Icons.storefront_rounded, t.market, C.lvD, Routes.market),
       _WebNavItem(Icons.person_rounded, t.my, C.tx2, Routes.my),
-      if (isAdmin) _WebNavItem(Icons.admin_panel_settings_rounded, t.adminLabel, const Color(0xFF1A1A2E), Routes.admin),
     ];
 
     final sidebarContent = _buildSidebarContent(context, ref, t, navItems, displayName, avatarUrl, avatarPreset, authUser);
@@ -455,11 +462,7 @@ class _WebShell extends ConsumerWidget {
               borderRadius: BorderRadius.circular(10),
               onTap: () {
                 Navigator.of(context).maybePop(); // close drawer if open
-                if (kIsWeb && item.route == Routes.admin) {
-                  launchUrl(Uri.base.resolve(Routes.admin), webOnlyWindowName: '_blank');
-                } else {
-                  context.go(item.route);
-                }
+                context.go(item.route);
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
