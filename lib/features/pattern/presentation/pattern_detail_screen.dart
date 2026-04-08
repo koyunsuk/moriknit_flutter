@@ -151,12 +151,15 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
             ),
       );
       if (context.mounted) {
+        // ignore: use_build_context_synchronously
         showSavedSnackBar(ScaffoldMessenger.of(context),
             message: isKorean ? '이미지가 교체됐어요.' : 'Image replaced.');
+        // ignore: use_build_context_synchronously
         Navigator.pop(context);
       }
     } catch (e) {
       if (context.mounted) {
+        // ignore: use_build_context_synchronously
         showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
       }
     }

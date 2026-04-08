@@ -6,6 +6,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/yarn_provider.dart';
+import '../../ravelry/data/ravelry_auth_provider.dart';
+import '../../ravelry/data/ravelry_repository.dart';
+import '../../ravelry/domain/ravelry_models.dart';
 import 'yarn_detail_screen.dart';
 import 'yarn_input_screen.dart';
 
@@ -24,7 +27,7 @@ class _YarnListScreenState extends ConsumerState<YarnListScreen> {
     final count = ref.watch(yarnCountProvider);
 
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           const BgOrbs(),
@@ -43,21 +46,81 @@ class _YarnListScreenState extends ConsumerState<YarnListScreen> {
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
                     children: [
-                      // 통계 GlassCard
+                      // 실 요약 카드 (MoriKnit + Ravelry 뱃지)
                       GlassCard(
-                        child: _YarnStatCell(
-                          label: isKorean ? '보유 실' : 'Total yarns',
-                          value: yarnListAsync.maybeWhen(
-                            data: (y) => '${y.length}',
-                            orElse: () => '$count',
-                          ),
-                          color: C.lmD,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: C.pk.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text('MoriKnit', style: T.caption.copyWith(color: C.pkD, fontWeight: FontWeight.w700)),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    yarnListAsync.maybeWhen(data: (y) => '${y.length}', orElse: () => '$count'),
+                                    style: T.h3.copyWith(color: C.pkD),
+                                  ),
+                                  Text(isKorean ? '보유 실' : 'My yarns', style: T.caption.copyWith(color: C.mu)),
+                                ],
+                              ),
+                            ),
+                            Container(width: 1, height: 40, color: C.bd),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: C.lv.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text('Ravelry', style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w700)),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Consumer(
+                                    builder: (ctx, ref2, _) {
+                                      final stashAsync = ref2.watch(ravelryStashProvider);
+                                      return Text(
+                                        stashAsync.maybeWhen(data: (s) => '${s.length}', orElse: () => '-'),
+                                        style: T.h3.copyWith(color: C.lv),
+                                      );
+                                    },
+                                  ),
+                                  Text(isKorean ? '스태시' : 'Stash', style: T.caption.copyWith(color: C.mu)),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 16),
-                      // 목록 GlassCard
+                      // 모리니트 실 목록
                       GlassCard(
-                        child: yarnListAsync.when(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(color: C.pk.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+                                  child: Text('MoriKnit', style: T.caption.copyWith(color: C.pkD, fontWeight: FontWeight.w700)),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(isKorean ? '나의 실' : 'My Yarns', style: T.bodyBold),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            yarnListAsync.when(
                           loading: () => Center(
                             child: Padding(
                               padding: const EdgeInsets.symmetric(vertical: 20),
@@ -75,35 +138,15 @@ class _YarnListScreenState extends ConsumerState<YarnListScreen> {
                           ),
                           data: (yarns) {
                             if (yarns.isEmpty) {
-                              return Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: C.lmG,
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      isKorean ? '아직 실이 없어요' : 'No yarns yet',
-                                      style: T.bodyBold.copyWith(color: C.lmD),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      isKorean
-                                          ? '보유 중인 실을 추가해서 나만의 실 라이브러리를 만들어 보세요.'
-                                          : 'Add your yarns to build your personal yarn library.',
-                                      style: T.caption.copyWith(color: C.lmD, height: 1.5),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    ElevatedButton.icon(
-                                      onPressed: () => _showYarnStartSheet(context),
-                                      icon: const Icon(Icons.add_rounded),
-                                      label: Text(isKorean ? '실 추가' : 'Add yarn'),
-                                    ),
-                                  ],
-                                ),
+                              return MoriEmptyState(
+                                icon: Icons.layers_rounded,
+                                iconColor: C.lmD,
+                                title: isKorean ? '아직 실이 없어요' : 'No yarns yet',
+                                subtitle: isKorean
+                                    ? '보유 중인 실을 추가해서 나만의 실 라이브러리를 만들어 보세요.'
+                                    : 'Add your yarns to build your personal yarn library.',
+                                buttonLabel: isKorean ? '실 추가' : 'Add yarn',
+                                onAction: () => _showYarnStartSheet(context),
                               );
                             }
                             return Column(
@@ -117,9 +160,9 @@ class _YarnListScreenState extends ConsumerState<YarnListScreen> {
                                         style: T.bodyBold,
                                       ),
                                     ),
-                                    TextButton.icon(
+                                    ElevatedButton.icon(
                                       onPressed: () => _showYarnStartSheet(context),
-                                      icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+                                      icon: const Icon(Icons.add_rounded),
                                       label: Text(isKorean ? '실 추가' : 'Add yarn'),
                                     ),
                                   ],
@@ -145,7 +188,12 @@ class _YarnListScreenState extends ConsumerState<YarnListScreen> {
                             );
                           },
                         ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(height: 16),
+                      // Ravelry 스태시 섹션
+                      _RavelryStashSection(isKorean: isKorean),
                     ],
                   ),
                 ),
@@ -306,7 +354,217 @@ class _YarnListScreenState extends ConsumerState<YarnListScreen> {
 
 }
 
+// ── Ravelry 스태시 섹션 ──────────────────────────────────
+class _RavelryStashSection extends ConsumerWidget {
+  final bool isKorean;
+  const _RavelryStashSection({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(ravelryAuthProvider);
+
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+                child: Text('Ravelry', style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w700)),
+              ),
+              const SizedBox(width: 8),
+              Text(isKorean ? '나의 스태시' : 'My Stash', style: T.bodyBold),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (!auth.isLoggedIn)
+            _RavelryConnectBanner(isKorean: isKorean)
+          else
+            _RavelryStashList(isKorean: isKorean),
+        ],
+      ),
+    );
+  }
+}
+
+class _RavelryStashList extends ConsumerWidget {
+  final bool isKorean;
+  const _RavelryStashList({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stashAsync = ref.watch(ravelryStashProvider);
+    return stashAsync.when(
+      loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
+      error: (e, _) => Text(isKorean ? '스태시를 불러올 수 없어요: $e' : 'Failed to load stash: $e',
+          style: T.caption.copyWith(color: C.og)),
+      data: (entries) {
+        if (entries.isEmpty) {
+          return Text(isKorean ? 'Ravelry 스태시가 비어있어요.' : 'Your Ravelry stash is empty.',
+              style: T.body.copyWith(color: C.mu));
+        }
+        return Column(
+          children: entries.map((e) => _RavelryStashCard(entry: e, isKorean: isKorean)).toList(),
+        );
+      },
+    );
+  }
+}
+
+class _RavelryStashCard extends StatelessWidget {
+  final RavelryStashEntry entry;
+  final bool isKorean;
+  const _RavelryStashCard({required this.entry, required this.isKorean});
+
+  void _showDetail(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 56, height: 56,
+                    decoration: BoxDecoration(
+                      color: C.lmG,
+                      borderRadius: BorderRadius.circular(12),
+                      image: entry.thumbnailUrl != null
+                          ? DecorationImage(image: NetworkImage(entry.thumbnailUrl!), fit: BoxFit.cover)
+                          : null,
+                    ),
+                    child: entry.thumbnailUrl == null
+                        ? Icon(Icons.layers_rounded, color: C.lmD, size: 28)
+                        : null,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(entry.name, style: T.h3),
+                        if (entry.brandName != null)
+                          Text(entry.brandName!, style: T.caption.copyWith(color: C.mu)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (entry.colorName != null)
+                _StashDetailRow(label: isKorean ? '색상' : 'Color', value: entry.colorName!),
+              if (entry.weightName != null)
+                _StashDetailRow(label: isKorean ? '굵기' : 'Weight', value: entry.weightName!),
+              if (entry.gramsTotal != null)
+                _StashDetailRow(label: isKorean ? '총 무게' : 'Total weight', value: '${entry.gramsTotal!.toStringAsFixed(0)}g'),
+              if (entry.yardsTotal != null)
+                _StashDetailRow(label: isKorean ? '총 야드' : 'Total yards', value: '${entry.yardsTotal!.toStringAsFixed(0)} yds'),
+              if (entry.notes != null && entry.notes!.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(isKorean ? '메모' : 'Notes', style: T.caption.copyWith(color: C.mu)),
+                const SizedBox(height: 4),
+                Text(entry.notes!, style: T.body),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _showDetail(context),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(color: C.gx, borderRadius: BorderRadius.circular(12), border: Border.all(color: C.bd)),
+        child: Row(
+          children: [
+            Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                color: C.lmG, borderRadius: BorderRadius.circular(10),
+                image: entry.thumbnailUrl != null
+                    ? DecorationImage(image: NetworkImage(entry.thumbnailUrl!), fit: BoxFit.cover)
+                    : null,
+              ),
+              child: entry.thumbnailUrl == null ? Icon(Icons.layers_rounded, color: C.lmD, size: 22) : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(entry.name, style: T.bodyBold, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 2),
+                  Row(children: [
+                    if (entry.brandName != null) ...[
+                      Text(entry.brandName!, style: T.caption.copyWith(color: C.mu)),
+                      const SizedBox(width: 6),
+                    ],
+                    if (entry.colorName != null) ...[
+                      Text(entry.colorName!, style: T.caption.copyWith(color: C.mu)),
+                      const SizedBox(width: 6),
+                    ],
+                    if (entry.weightName != null)
+                      Text(entry.weightName!, style: T.caption.copyWith(color: C.lmD)),
+                  ]),
+                  if (entry.gramsTotal != null || entry.yardsTotal != null)
+                    Row(children: [
+                      if (entry.gramsTotal != null)
+                        Text('${entry.gramsTotal!.toStringAsFixed(0)}g', style: T.caption.copyWith(color: C.mu)),
+                      if (entry.gramsTotal != null && entry.yardsTotal != null)
+                        Text('  ·  ', style: T.caption.copyWith(color: C.mu)),
+                      if (entry.yardsTotal != null)
+                        Text('${entry.yardsTotal!.toStringAsFixed(0)}yds', style: T.caption.copyWith(color: C.mu)),
+                    ]),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: C.mu, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RavelryConnectBanner extends StatelessWidget {
+  final bool isKorean;
+  const _RavelryConnectBanner({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.07), borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        children: [
+          Icon(Icons.link_rounded, color: C.lv, size: 20),
+          const SizedBox(width: 10),
+          Expanded(child: Text(
+            isKorean ? 'Ravelry 연결 시 스태시가 표시돼요' : 'Connect Ravelry to see your stash',
+            style: T.caption.copyWith(color: C.mu),
+          )),
+        ],
+      ),
+    );
+  }
+}
+
 // ── 통계 셀 ──────────────────────────────────────────────
+// ignore: unused_element
 class _YarnStatCell extends StatelessWidget {
   final String label;
   final String value;
@@ -422,6 +680,27 @@ class _YarnCard extends StatelessWidget {
             Icon(Icons.chevron_right_rounded, color: C.mu, size: 20),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── 스태시 상세 행 ─────────────────────────────────────────
+class _StashDetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _StashDetailRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Text(label, style: T.caption.copyWith(color: C.mu)),
+          const Spacer(),
+          Text(value, style: T.caption.copyWith(fontWeight: FontWeight.w600)),
+        ],
       ),
     );
   }

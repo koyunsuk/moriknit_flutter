@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -6,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
@@ -25,8 +28,14 @@ import '../../swatch/domain/swatch_model.dart';
 import '../../yarn/domain/yarn_model.dart';
 import '../../swatch/presentation/swatch_input_screen.dart';
 import '../../../core/router/routes.dart';
+import '../data/project_pdf_service.dart';
+import '../data/public_project_service.dart';
 import '../domain/project_model.dart';
 import '../domain/project_step.dart';
+import '../../pattern/data/pattern_repository.dart';
+import '../../pattern/domain/pattern_chart.dart';
+import 'widgets/project_progress_section.dart';
+import 'widgets/project_share_card.dart';
 class ProjectDetailScreen extends ConsumerStatefulWidget {
   final String projectId;
 
@@ -48,6 +57,85 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
     _titleCtrl.dispose();
     _descCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _publishToGallery(BuildContext context, WidgetRef ref, ProjectModel project) async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+
+    final service = ref.read(publicProjectServiceProvider);
+    final alreadyPublished = await service.isPublished(uid: user.uid, projectId: project.id);
+
+    if (!mounted) return;
+
+    // ignore: use_build_context_synchronously
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          alreadyPublished
+              ? (isKorean ? '갤러리에서 내리기' : 'Unpublish')
+              : (isKorean ? '갤러리에 공개' : 'Publish to gallery'),
+          style: T.h3,
+        ),
+        content: Text(
+          alreadyPublished
+              ? (isKorean ? '커뮤니티 갤러리에서 이 작품을 내릴까요?' : 'Remove this project from the gallery?')
+              : (isKorean ? '완성한 작품을 커뮤니티 갤러리에 공개할까요? 다른 유저가 볼 수 있어요.' : 'Share this project to the community gallery?'),
+          style: T.body,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(isKorean ? '취소' : 'Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(alreadyPublished ? (isKorean ? '내리기' : 'Unpublish') : (isKorean ? '공개' : 'Publish')),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    try {
+      // ignore: use_build_context_synchronously
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '처리하는 중입니다.' : 'Processing...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () async {
+          if (alreadyPublished) {
+            await service.unpublishProject(uid: user.uid, projectId: project.id);
+          } else {
+            final currentUser = ref.read(currentUserProvider).valueOrNull;
+            final ownerName = currentUser?.displayName ?? user.displayName ?? '';
+            final steps = ref.read(projectStepsProvider(project.id)).valueOrNull ?? [];
+            final completedStepTitles = steps.where((s) => s.isDone).map((s) => s.name).toList();
+            await service.publishProject(
+              uid: user.uid,
+              ownerName: ownerName,
+              project: project,
+              stepTitles: completedStepTitles,
+              photoUrls: project.photoUrls,
+            );
+          }
+        },
+      );
+      if (!mounted) return;
+      showSavedSnackBar(
+        messenger,
+        message: alreadyPublished
+            ? (isKorean ? '갤러리에서 내렸어요.' : 'Removed from gallery.')
+            : (isKorean ? '갤러리에 공개됐어요!' : 'Published to gallery!'),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(messenger, message: '$e');
+    }
   }
 
   Future<void> _saveEdit(ProjectModel project) async {
@@ -155,6 +243,143 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
     );
   }
 
+  Future<void> _exportPdf(BuildContext context, WidgetRef ref, ProjectModel project) async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final messenger = ScaffoldMessenger.of(context);
+    final userName = ref.read(currentUserProvider).valueOrNull?.displayName ?? '';
+    try {
+      final bytes = await runWithMoriLoadingDialog<List<int>>(
+        context,
+        message: isKorean ? 'PDF를 생성하는 중입니다.' : 'Generating PDF...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () async {
+          // 캐시된 값 우선, 없으면 future로 대기 (병렬 로드)
+          Future<V> awaitProvider<V>(AsyncValue<V> cached, Future<V> future) =>
+              cached.valueOrNull != null ? Future.value(cached.valueOrNull!) : future;
+
+          final rawResults = await Future.wait([
+            awaitProvider(
+              ref.read(projectStepsProvider(project.id)),
+              ref.read(projectStepsProvider(project.id).future),
+            ),
+            awaitProvider(
+              ref.read(counterListProvider),
+              ref.read(counterListProvider.future),
+            ),
+            awaitProvider(
+              ref.read(swatchListProvider),
+              ref.read(swatchListProvider.future),
+            ),
+            awaitProvider(
+              ref.read(patternListProvider),
+              ref.read(patternListProvider.future),
+            ),
+          ]);
+
+          final steps = rawResults[0] as List<ProjectStep>;
+          final allCounters = rawResults[1] as List<CounterModel>;
+          final allSwatches = rawResults[2] as List<SwatchModel>;
+          final allPatterns = rawResults[3] as List<PatternChart>;
+
+          final counters = allCounters.where((c) => project.counterIds.contains(c.id)).toList();
+          final swatches = project.swatchId.isNotEmpty
+              ? allSwatches.where((s) => s.id == project.swatchId).toList()
+              : <SwatchModel>[];
+
+          return ProjectPdfService.generateProjectPdfBytes(
+            project: project,
+            steps: steps,
+            swatches: swatches,
+            patterns: allPatterns,
+            counters: counters,
+            isKorean: isKorean,
+            userName: userName,
+          );
+        },
+      );
+      if (!mounted) return;
+      final dateStr = DateFormat('yyyyMMdd').format(DateTime.now());
+      final safeName = project.title.replaceAll(RegExp(r'[^\w가-힣]'), '_');
+      final rawUser = userName.trim().isEmpty ? '' : userName.trim();
+      final safeUser = rawUser.replaceAll(RegExp(r'[^\w가-힣]'), '_');
+      final filename = safeUser.isEmpty
+          ? '${safeName}_$dateStr.pdf'
+          : '${safeName}_${safeUser}_$dateStr.pdf';
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile.fromData(Uint8List.fromList(bytes), mimeType: 'application/pdf', name: filename)],
+          subject: isKorean ? '${project.title} 프로젝트 기록지' : '${project.title} - Project Record',
+        ),
+      );
+      if (!mounted) return;
+      showSavedSnackBar(messenger, message: isKorean ? 'PDF가 저장되었어요.' : 'PDF saved.');
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(messenger, message: '$e');
+    }
+  }
+
+  Future<void> _showShareCardDialog(BuildContext context, WidgetRef ref, ProjectModel project) async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final steps = ref.read(projectStepsProvider(project.id)).valueOrNull ?? [];
+    final cardKey = GlobalKey();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: C.bd2,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(isKorean ? '완성 기록지' : 'Completion Card', style: T.h3),
+              const SizedBox(height: 16),
+              Center(
+                child: SizedBox(
+                  width: 300,
+                  height: 300,
+                  child: ProjectShareCard(
+                    project: project,
+                    steps: steps,
+                    repaintKey: cardKey,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    // 시트 닫기 전에 이미지 캡처 (닫히면 repaintKey 무효화됨)
+                    await shareProjectCard(context, cardKey, project.title);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
+                  icon: const Icon(Icons.ios_share_rounded),
+                  label: Text(isKorean ? '이미지로 공유하기' : 'Share as image'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _duplicateProject(BuildContext context, WidgetRef ref, ProjectModel project) async {
     final isKorean = ref.read(appLanguageProvider).isKorean;
     try {
@@ -230,16 +455,37 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
                                   });
                                 } else if (value == 'copy') {
                                   _duplicateProject(context, ref, project);
+                                } else if (value == 'pdf') {
+                                  await _exportPdf(context, ref, project);
+                                } else if (value == 'share_card') {
+                                  await _showShareCardDialog(context, ref, project);
+                                } else if (value == 'publish') {
+                                  await _publishToGallery(context, ref, project);
                                 } else if (value == 'delete') {
                                   _confirmDelete(context, ref, project.id);
                                 }
                               },
                               itemBuilder: (_) {
                                 final isKorean = ref.read(appLanguageProvider).isKorean;
+                                PopupMenuItem<String> menuItem(String value, IconData icon, Color iconColor, String label, {TextStyle? textStyle}) {
+                                  return PopupMenuItem<String>(
+                                    value: value,
+                                    child: Row(children: [
+                                      Icon(icon, size: 18, color: iconColor),
+                                      const SizedBox(width: 10),
+                                      Text(label, style: textStyle),
+                                    ]),
+                                  );
+                                }
                                 return [
-                                  PopupMenuItem(value: 'edit', child: Text(isKorean ? '수정' : 'Edit')),
-                                  PopupMenuItem(value: 'copy', child: Text(isKorean ? '복사' : 'Duplicate')),
-                                  PopupMenuItem(value: 'delete', child: Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og))),
+                                  menuItem('edit', Icons.edit_rounded, C.lv, isKorean ? '수정' : 'Edit'),
+                                  menuItem('copy', Icons.copy_rounded, C.mu, isKorean ? '복사' : 'Duplicate'),
+                                  menuItem('pdf', Icons.picture_as_pdf_outlined, C.lv, isKorean ? 'PDF 내보내기' : 'Export PDF'),
+                                  if (project.isFinished)
+                                    menuItem('share_card', Icons.ios_share_rounded, C.pk, isKorean ? '완성 기록지 공유' : 'Share card'),
+                                  if (project.isFinished)
+                                    menuItem('publish', Icons.public_rounded, C.lv, isKorean ? '갤러리에 공개' : 'Publish to gallery'),
+                                  menuItem('delete', Icons.delete_rounded, C.og, isKorean ? '삭제' : 'Delete', textStyle: TextStyle(color: C.og)),
                                 ];
                               },
                             ),
@@ -271,7 +517,7 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
   }
 }
 
-class _ProjectBody extends ConsumerWidget {
+class _ProjectBody extends ConsumerStatefulWidget {
   final ProjectModel project;
   final bool isEditing;
   final bool isCardEditMode;
@@ -291,27 +537,138 @@ class _ProjectBody extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ProjectBody> createState() => _ProjectBodyState();
+}
+
+class _ProjectBodyState extends ConsumerState<_ProjectBody> {
+  final _scrollCtrl = ScrollController();
+  final _stepsAnchorKey = GlobalKey();
+
+  @override
+  void dispose() {
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  void _scrollToLastStep() {
+    final ctx = _stepsAnchorKey.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOut,
+      );
+    } else if (_scrollCtrl.hasClients) {
+      final maxExtent = _scrollCtrl.position.maxScrollExtent;
+      if (maxExtent > 0) {
+        _scrollCtrl.animateTo(maxExtent,
+            duration: const Duration(milliseconds: 400), curve: Curves.easeOut);
+      }
+    }
+  }
+
+  Future<void> _pickAndUpdateCover(BuildContext context, WidgetRef ref, ProjectModel project) async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final messenger = ScaffoldMessenger.of(context);
+    ImageSource? source;
+    await showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.camera_alt_rounded),
+            title: Text(isKorean ? '즉시 촬영' : 'Take photo'),
+            onTap: () { source = ImageSource.camera; Navigator.pop(ctx); },
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_rounded),
+            title: Text(isKorean ? '갤러리에서 선택' : 'Choose from gallery'),
+            onTap: () { source = ImageSource.gallery; Navigator.pop(ctx); },
+          ),
+        ]),
+      ),
+    );
+    if (source == null || !mounted) return;
+    final picked = await ImagePicker().pickImage(source: source!, imageQuality: 85, maxWidth: 1600);
+    if (picked == null || !mounted) return;
+
+    try {
+      // ignore: use_build_context_synchronously
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () async {
+          final repo = ref.read(projectRepositoryProvider);
+          final bytes = await picked.readAsBytes();
+          final ext = picked.name.split('.').last;
+          final fileName = '${project.id}_cover_${DateTime.now().millisecondsSinceEpoch}.$ext';
+          final storageRef = FirebaseStorage.instance.ref('project_covers/$fileName');
+          await storageRef.putData(bytes);
+          final url = await storageRef.getDownloadURL();
+          await repo.updateProject(project.copyWith(coverPhotoUrl: url));
+        },
+      );
+      if (!mounted) return;
+      showSavedSnackBar(messenger, message: isKorean ? '커버 이미지가 변경됐어요.' : 'Cover image updated.');
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(messenger, message: '$e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
     final t = ref.watch(appStringsProvider);
+    final project = widget.project;
+    final isEditing = widget.isEditing;
+    final isCardEditMode = widget.isCardEditMode;
+    final titleCtrl = widget.titleCtrl;
+    final descCtrl = widget.descCtrl;
+    final editStatus = widget.editStatus;
+    final onStatusChanged = widget.onStatusChanged;
     final countersAsync = ref.watch(countersByProjectProvider(project.id));
     final linkedSwatches = ref.watch(swatchesByProjectIdProvider(project.id));
+
 
     return Stack(
       children: [
         const BgOrbs(),
         ListView(
+          controller: _scrollCtrl,
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 160),
           children: [
             if (project.coverPhotoUrl.isNotEmpty) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: Image.network(
-                  project.coverPhotoUrl,
-                  width: double.infinity,
-                  height: 220,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              GestureDetector(
+                onTap: (isEditing && isCardEditMode) ? () => _pickAndUpdateCover(context, ref, project) : null,
+                child: Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 500),
+                        child: Image.network(
+                          project.coverPhotoUrl,
+                          width: double.infinity,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                        ),
+                      ),
+                    ),
+                    if (isEditing && isCardEditMode)
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.35),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Center(
+                            child: Icon(Icons.camera_alt_rounded, color: Colors.white, size: 36),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
               const SizedBox(height: 8),
@@ -395,7 +752,7 @@ class _ProjectBody extends ConsumerWidget {
                     ],
                   ],
                   const SizedBox(height: 12),
-                  _ProgressSection(project: project),
+                  ProjectProgressSection(project: project),
                 ],
               ),
             ),
@@ -780,7 +1137,7 @@ class _ProjectBody extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 12),
-            _StepsSection(project: project, isCardEditMode: isCardEditMode),
+            _StepsSection(project: project, isCardEditMode: isCardEditMode, lastAnchorKey: _stepsAnchorKey, onScrollToLastStep: _scrollToLastStep),
             if (project.memo.isNotEmpty) ...[
               const SizedBox(height: 12),
               GlassCard(
@@ -795,7 +1152,7 @@ class _ProjectBody extends ConsumerWidget {
               ),
             ],
             const SizedBox(height: 12),
-            _ProjectPhotosSection(project: project),
+            _ProjectPhotosSection(project: project, isCardEditMode: isCardEditMode),
           ],
         ),
       ],
@@ -831,7 +1188,7 @@ class _ProjectBody extends ConsumerWidget {
                     message: isKorean ? '연결하는 중입니다.' : 'Linking...',
                     subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
                     task: () => ref.read(projectRepositoryProvider).updateProject(
-                      project.copyWith(yarnBrandName: yarn.brandName, yarnName: yarn.name, yarnColor: yarn.color),
+                      widget.project.copyWith(yarnBrandName: yarn.brandName, yarnName: yarn.name, yarnColor: yarn.color),
                     ),
                   );
                   if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '연결됐어요.' : 'Linked.');
@@ -874,7 +1231,7 @@ class _ProjectBody extends ConsumerWidget {
                     message: isKorean ? '연결하는 중입니다.' : 'Linking...',
                     subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
                     task: () => ref.read(projectRepositoryProvider).updateProject(
-                      project.copyWith(needleSize: needle.size, needleBrandName: needle.brandName),
+                      widget.project.copyWith(needleSize: needle.size, needleBrandName: needle.brandName),
                     ),
                   );
                   if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '연결됐어요.' : 'Linked.');
@@ -965,7 +1322,7 @@ class _ProjectBody extends ConsumerWidget {
                                 task: () => ref
                                     .read(swatchRepositoryProvider)
                                     .updateSwatch(
-                                      swatch.copyWith(projectId: project.id),
+                                      swatch.copyWith(projectId: widget.project.id),
                                     ),
                               );
                               if (context.mounted) {
@@ -994,7 +1351,7 @@ class _ProjectBody extends ConsumerWidget {
       MaterialPageRoute(
         builder: (_) => SwatchInputScreen(
           initialSwatch: SwatchModel.empty(uid: ref.read(authStateProvider).valueOrNull?.uid ?? '')
-              .copyWith(projectId: project.id),
+              .copyWith(projectId: widget.project.id),
         ),
       ),
     );
@@ -1014,7 +1371,7 @@ class _ProjectBody extends ConsumerWidget {
         builder: (ctx, cRef, _) {
           final allCounters = cRef.watch(counterListProvider).valueOrNull ?? [];
           final availableCounters =
-              allCounters.where((c) => c.projectId != project.id).toList();
+              allCounters.where((c) => c.projectId != widget.project.id).toList();
           return SafeArea(
             child: DraggableScrollableSheet(
               expand: false,
@@ -1079,11 +1436,11 @@ class _ProjectBody extends ConsumerWidget {
                                   await ref
                                       .read(counterRepositoryProvider)
                                       .updateCounter(
-                                        counter.copyWith(projectId: project.id),
+                                        counter.copyWith(projectId: widget.project.id),
                                       );
                                   await ref
                                       .read(projectRepositoryProvider)
-                                      .addCounter(project.id, counter.id);
+                                      .addCounter(widget.project.id, counter.id);
                                 },
                               );
                               if (context.mounted) {
@@ -1127,7 +1484,7 @@ class _ProjectBody extends ConsumerWidget {
               final name = nameCtrl.text.trim();
               Navigator.pop(ctx);
               if (user == null || name.isEmpty) return;
-              final counter = CounterModel.empty(uid: user.uid, name: name).copyWith(projectId: project.id);
+              final counter = CounterModel.empty(uid: user.uid, name: name).copyWith(projectId: widget.project.id);
               late final CounterModel saved;
               await runWithMoriLoadingDialog<void>(
                 context,
@@ -1135,7 +1492,7 @@ class _ProjectBody extends ConsumerWidget {
                 subtitle: t.pleaseWaitMoment,
                 task: () async {
                   saved = await ref.read(counterRepositoryProvider).createCounter(counter);
-                  await ref.read(projectRepositoryProvider).addCounter(project.id, saved.id);
+                  await ref.read(projectRepositoryProvider).addCounter(widget.project.id, saved.id);
                 },
               );
               if (context.mounted) {
@@ -1156,7 +1513,9 @@ class _ProjectBody extends ConsumerWidget {
 class _StepsSection extends ConsumerWidget {
   final ProjectModel project;
   final bool isCardEditMode;
-  const _StepsSection({required this.project, this.isCardEditMode = false});
+  final GlobalKey? lastAnchorKey;
+  final VoidCallback? onScrollToLastStep;
+  const _StepsSection({required this.project, this.isCardEditMode = false, this.lastAnchorKey, this.onScrollToLastStep});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1180,6 +1539,38 @@ class _StepsSection extends ConsumerWidget {
                 style: T.bodyBold,
               ),
               const Spacer(),
+              if (!isCardEditMode && currentSteps.isNotEmpty) ...[
+                if (onScrollToLastStep != null)
+                  GestureDetector(
+                    onTap: onScrollToLastStep,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          isKoreanHeader ? '마지막 단계로' : 'Last step',
+                          style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(width: 2),
+                        Icon(Icons.arrow_downward_rounded, size: 14, color: C.lv),
+                      ],
+                    ),
+                  ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () => _saveAsMyTemplate(context, ref, currentSteps, isKoreanHeader),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.bookmark_add_outlined, size: 14, color: C.pk),
+                      const SizedBox(width: 2),
+                      Text(
+                        isKoreanHeader ? '내 템플릿 저장' : 'Save as template',
+                        style: T.caption.copyWith(color: C.pk, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               if (isCardEditMode && currentSteps.isNotEmpty)
                 IconButton(
                   icon: Icon(Icons.link_off, color: C.og, size: 18),
@@ -1281,6 +1672,7 @@ class _StepsSection extends ConsumerWidget {
                         return _StepTile(
                           step: step,
                           projectId: project.id,
+                          index: i,
                           isCardEditMode: isCardEditMode,
                           onToggle: () => ref.read(projectStepRepositoryProvider).toggleStep(project.id, step),
                           onEdit: () => _editStep(context, ref, step),
@@ -1290,6 +1682,8 @@ class _StepsSection extends ConsumerWidget {
                           onInsertAfter: isCardEditMode ? () => _insertStepAfter(context, ref, steps, i) : null,
                         );
                       }),
+                  // 마지막 단계 스크롤 앵커
+                  SizedBox(key: lastAnchorKey, height: 0),
                 ],
               );
             },
@@ -1310,6 +1704,55 @@ class _StepsSection extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _saveAsMyTemplate(BuildContext context, WidgetRef ref, List<ProjectStep> steps, bool isKorean) async {
+    final ctrl = TextEditingController(text: project.title);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isKorean ? '내 템플릿으로 저장' : 'Save as My Template', style: T.h3),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: isKorean ? '템플릿 이름' : 'Template name',
+            hintText: project.title,
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(isKorean ? '취소' : 'Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim().isEmpty ? project.title : ctrl.text.trim()),
+            child: Text(isKorean ? '저장' : 'Save', style: TextStyle(color: C.lv, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (name == null || !context.mounted) return;
+
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () => ref.read(templateRepositoryProvider).create(
+          title: name,
+          description: '',
+          stepTitles: steps.map((s) => s.name).toList(),
+          stepDescs: steps.map((s) => s.description).toList(),
+        ),
+      );
+      if (!context.mounted) return;
+      showSavedSnackBar(
+        ScaffoldMessenger.of(context),
+        message: isKorean ? '내 템플릿에 저장됐어요.' : 'Saved to My Templates.',
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
   }
 
   void _showTemplateSheet(BuildContext context, WidgetRef ref) {
@@ -1490,12 +1933,47 @@ class _StepsSection extends ConsumerWidget {
     );
     var selectedBlockType = existingStep?.blockType ?? StepBlockType.text;
     final isEdit = existingStep != null;
+    XFile? pickedImageFile;
+    String? existingPhotoUrl = existingStep?.photoUrl;
 
     final blockTypeLabels = <StepBlockType, String>{
       StepBlockType.text: isKorean ? '텍스트' : 'Text',
       StepBlockType.stitchCount: isKorean ? '코수' : 'Stitches',
       StepBlockType.patternLink: isKorean ? '도안' : 'Pattern',
     };
+
+    Future<XFile?> pickImageForDialog(BuildContext dialogCtx) async {
+      // dialogCtx 사용: 다이얼로그 위에 바텀시트가 표시되도록
+      final source = await showModalBottomSheet<ImageSource>(
+        context: dialogCtx,
+        backgroundColor: C.bg,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        builder: (sheetCtx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(2))),
+              ListTile(
+                leading: Icon(Icons.photo_library_outlined, color: C.lv),
+                title: Text(isKorean ? '갤러리에서 선택' : 'Choose from Gallery', style: T.body),
+                onTap: () => Navigator.pop(sheetCtx, ImageSource.gallery),
+              ),
+              ListTile(
+                leading: Icon(Icons.camera_alt_outlined, color: C.lv),
+                title: Text(isKorean ? '즉시 촬영' : 'Take a Photo', style: T.body),
+                onTap: () => Navigator.pop(sheetCtx, ImageSource.camera),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      );
+      if (source == null) return null;
+      // 바텀시트 닫힘 후 딜레이 (카메라 프리즈 방지)
+      await Future.delayed(const Duration(milliseconds: 350));
+      return ImagePicker().pickImage(source: source, imageQuality: 85, maxWidth: 1600);
+    }
 
     showDialog<void>(
       context: context,
@@ -1515,9 +1993,7 @@ class _StepsSection extends ConsumerWidget {
                 const SizedBox(height: 10),
                 TextField(
                   controller: descCtrl,
-                  decoration: InputDecoration(
-                    labelText: isKorean ? '소제목 (선택)' : 'Subtitle (optional)',
-                  ),
+                  decoration: InputDecoration(labelText: isKorean ? '소제목 (선택)' : 'Subtitle (optional)'),
                 ),
                 const SizedBox(height: 10),
                 TextField(
@@ -1568,6 +2044,42 @@ class _StepsSection extends ConsumerWidget {
                     );
                   }).toList(),
                 ),
+                const SizedBox(height: 14),
+                Text(isKorean ? '사진 (선택)' : 'Photo (optional)', style: TextStyle(fontSize: 12, color: C.mu, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () async {
+                    final file = await pickImageForDialog(ctx);
+                    if (file != null) setState(() { pickedImageFile = file; existingPhotoUrl = null; });
+                  },
+                  child: pickedImageFile != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.file(File(pickedImageFile!.path), width: double.infinity, height: 100, fit: BoxFit.cover),
+                        )
+                      : existingPhotoUrl != null && existingPhotoUrl!.isNotEmpty
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.network(existingPhotoUrl!, width: double.infinity, height: 100, fit: BoxFit.cover),
+                            )
+                          : Container(
+                              width: double.infinity,
+                              height: 72,
+                              decoration: BoxDecoration(
+                                color: C.gx,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: C.bd2),
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.add_photo_alternate_outlined, color: C.mu, size: 24),
+                                  const SizedBox(height: 4),
+                                  Text(isKorean ? '사진 추가' : 'Add photo', style: T.caption.copyWith(color: C.mu)),
+                                ],
+                              ),
+                            ),
+                ),
               ],
             ),
           ),
@@ -1593,15 +2105,25 @@ class _StepsSection extends ConsumerWidget {
                         context,
                         message: isKorean ? '저장하는 중입니다.' : 'Saving...',
                         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
-                        task: () => ref.read(projectStepRepositoryProvider).updateStep(
-                          project.id,
-                          existingStep.id,
-                          name: name,
-                          description: desc,
-                          note: note,
-                          targetRow: targetRow,
-                          blockType: blockType,
-                        ),
+                        task: () async {
+                          await ref.read(projectStepRepositoryProvider).updateStep(
+                            project.id,
+                            existingStep.id,
+                            name: name,
+                            description: desc,
+                            note: note,
+                            targetRow: targetRow,
+                            blockType: blockType,
+                          );
+                          if (pickedImageFile != null) {
+                            final storageRef = FirebaseStorage.instance
+                                .ref()
+                                .child('projects/${project.id}/steps/${existingStep.id}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+                            await storageRef.putFile(File(pickedImageFile!.path));
+                            final url = await storageRef.getDownloadURL();
+                            await ref.read(projectStepRepositoryProvider).updateStepPhoto(project.id, existingStep.id, url);
+                          }
+                        },
                       );
                       if (context.mounted) {
                         showSavedSnackBar(
@@ -1630,19 +2152,32 @@ class _StepsSection extends ConsumerWidget {
                       final stepsAsync = ref.read(projectStepsProvider(project.id));
                       order = stepsAsync.valueOrNull?.length ?? 0;
                     }
+                    if (!context.mounted) return;
                     await runWithMoriLoadingDialog<void>(
                       context,
                       message: t.addingStep,
                       subtitle: t.pleaseWaitMoment,
-                      task: () => ref.read(projectStepRepositoryProvider).addStep(
-                        project.id,
-                        name,
-                        order,
-                        description: desc,
-                        note: note,
-                        targetRow: targetRow,
-                        blockType: blockType,
-                      ),
+                      task: () async {
+                        String? uploadedPhotoUrl;
+                        if (pickedImageFile != null) {
+                          final tempId = DateTime.now().millisecondsSinceEpoch;
+                          final storageRef = FirebaseStorage.instance
+                              .ref()
+                              .child('projects/${project.id}/steps/new_$tempId.jpg');
+                          await storageRef.putFile(File(pickedImageFile!.path));
+                          uploadedPhotoUrl = await storageRef.getDownloadURL();
+                        }
+                        await ref.read(projectStepRepositoryProvider).addStep(
+                          project.id,
+                          name,
+                          order,
+                          description: desc,
+                          note: note,
+                          targetRow: targetRow,
+                          blockType: blockType,
+                          photoUrl: uploadedPhotoUrl,
+                        );
+                      },
                     );
                     // 템플릿 업데이트 팝업
                     if (context.mounted) {
@@ -1756,6 +2291,7 @@ class _StepsSection extends ConsumerWidget {
 class _StepTile extends ConsumerStatefulWidget {
   final ProjectStep step;
   final String projectId;
+  final int index;
   final bool isCardEditMode;
   final VoidCallback onToggle;
   final VoidCallback onEdit;
@@ -1766,6 +2302,7 @@ class _StepTile extends ConsumerStatefulWidget {
   const _StepTile({
     required this.step,
     required this.projectId,
+    required this.index,
     this.isCardEditMode = false,
     required this.onToggle,
     required this.onEdit,
@@ -1781,6 +2318,7 @@ class _StepTile extends ConsumerStatefulWidget {
 
 class _StepTileState extends ConsumerState<_StepTile> {
   bool _uploading = false;
+  bool _expanded = false;
 
   Future<ImageSource?> _showImageSourceDialog() {
     final isKorean = ref.read(appLanguageProvider).isKorean;
@@ -1818,6 +2356,10 @@ class _StepTileState extends ConsumerState<_StepTile> {
     try {
       final source = await _showImageSourceDialog();
       if (source == null) return;
+
+      // 바텀시트 닫힘 애니메이션 완료 후 카메라 실행 (즉시 실행 시 프리즈 방지)
+      await Future.delayed(const Duration(milliseconds: 350));
+      if (!mounted) return;
 
       final picked = await ImagePicker().pickImage(
         source: source,
@@ -1870,117 +2412,145 @@ class _StepTileState extends ConsumerState<_StepTile> {
     }
   }
 
+  void _showPhotoViewer(BuildContext context, String url) {
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.92),
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.pop(ctx),
+              child: InteractiveViewer(
+                child: Center(
+                  child: Image.network(url, fit: BoxFit.contain),
+                ),
+              ),
+            ),
+            Positioned(
+              top: MediaQuery.of(ctx).padding.top + 8,
+              right: 12,
+              child: Material(
+                color: Colors.transparent,
+                child: IconButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final step = widget.step;
+    final hasPhoto = step.photoUrl != null && step.photoUrl!.isNotEmpty;
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final hasDetails = step.description.isNotEmpty || step.note.isNotEmpty ||
+        step.targetRow > 0 || hasPhoto || widget.isCardEditMode;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // ── 기본 행 (항상 표시) ───────────────────────────
         Container(
-      margin: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: GestureDetector(
-              onTap: widget.onToggle,
-              child: Container(
-                width: 22,
-                height: 22,
+          margin: const EdgeInsets.only(bottom: 2),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // 체크박스
+              GestureDetector(
+                onTap: widget.onToggle,
+                child: Container(
+                  width: 22, height: 22,
+                  decoration: BoxDecoration(
+                    color: step.isDone ? C.lv : Colors.transparent,
+                    border: Border.all(color: step.isDone ? C.lv : C.bd, width: 1.5),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: step.isDone ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
+                ),
+              ),
+              const SizedBox(width: 6),
+              // 번호 배지
+              Container(
+                width: 22, height: 22,
                 decoration: BoxDecoration(
-                  color: step.isDone ? C.lv : Colors.transparent,
-                  border: Border.all(color: step.isDone ? C.lv : C.bd, width: 1.5),
+                  color: step.isDone ? C.lv.withValues(alpha: 0.15) : C.lv.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: step.isDone ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
+                child: Center(
+                  child: Text(
+                    '${widget.index + 1}',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                        color: step.isDone ? C.lv.withValues(alpha: 0.5) : C.lv),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 10),
+              // 이름 (탭 → 확장)
+              Expanded(
+                child: GestureDetector(
+                  onTap: hasDetails ? () => setState(() => _expanded = !_expanded) : null,
+                  child: Text(
+                    step.name,
+                    style: T.body.copyWith(
+                      color: step.isDone ? C.mu : C.tx,
+                      decoration: step.isDone ? TextDecoration.lineThrough : null,
+                    ),
+                  ),
+                ),
+              ),
+              // 사진 미리보기 (접힌 상태에서)
+              if (hasPhoto && !_expanded) ...[
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: () => _showPhotoViewer(context, step.photoUrl!),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.network(step.photoUrl!, width: 28, height: 28, fit: BoxFit.cover),
+                  ),
+                ),
+              ],
+              // 확장 화살표
+              if (hasDetails)
+                GestureDetector(
+                  onTap: () => setState(() => _expanded = !_expanded),
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Icon(
+                      _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                      size: 18, color: C.mu,
+                    ),
+                  ),
+                ),
+            ],
           ),
-          const SizedBox(width: 10),
-          Expanded(
+        ),
+
+        // ── 확장 패널 ────────────────────────────────────
+        if (_expanded)
+          Padding(
+            padding: const EdgeInsets.only(left: 58, bottom: 8, top: 4),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        step.name,
-                        style: T.body.copyWith(
-                          color: step.isDone ? C.mu : C.tx,
-                          decoration: step.isDone ? TextDecoration.lineThrough : null,
-                        ),
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: _uploading ? null : _pickPhoto,
-                      child: _uploading
-                          ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: C.lv))
-                          : Icon(Icons.add_photo_alternate_outlined, size: 18, color: C.mu),
-                    ),
-                    if (widget.onMoveUp != null || widget.onMoveDown != null) ...[
-                      const SizedBox(width: 2),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          GestureDetector(
-                            onTap: widget.onMoveUp,
-                            child: Icon(
-                              Icons.arrow_drop_up,
-                              size: 20,
-                              color: widget.onMoveUp != null ? C.mu : C.mu.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: widget.onMoveDown,
-                            child: Icon(
-                              Icons.arrow_drop_down,
-                              size: 20,
-                              color: widget.onMoveDown != null ? C.mu : C.mu.withValues(alpha: 0.3),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    const SizedBox(width: 4),
-                    PopupMenuButton<String>(
-                      icon: Icon(Icons.more_vert, size: 18, color: C.mu),
-                      padding: EdgeInsets.zero,
-                      onSelected: (v) {
-                        if (v == 'edit') widget.onEdit();
-                        if (v == 'delete') widget.onDelete();
-                      },
-                      itemBuilder: (ctx) {
-                        final isKorean = ref.read(appLanguageProvider).isKorean;
-                        return [
-                          PopupMenuItem(value: 'edit', child: Text(isKorean ? '수정' : 'Edit')),
-                          PopupMenuItem(value: 'delete', child: Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og))),
-                        ];
-                      },
-                    ),
-                  ],
-                ),
+                // 소제목
                 if (step.description.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      step.description,
-                      style: T.captionBold.copyWith(color: C.lv),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
+                  Text(step.description, style: T.captionBold.copyWith(color: C.lv)),
+                // 메모
                 if (step.note.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      step.note,
-                      style: T.caption.copyWith(color: C.mu),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    child: Text(step.note, style: T.caption.copyWith(color: C.mu)),
                   ),
+                // 목표단
                 if (step.targetRow > 0)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
@@ -1990,36 +2560,118 @@ class _StepTileState extends ConsumerState<_StepTile> {
                         color: C.lmD.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: Text(
-                        '목표: ${step.targetRow}단',
-                        style: T.caption.copyWith(color: C.lmD, fontSize: 11),
-                      ),
+                      child: Text('목표: ${step.targetRow}단',
+                          style: T.caption.copyWith(color: C.lmD, fontSize: 11)),
                     ),
                   ),
+                // 완료일
                 if (step.isDone && step.doneAt != null)
-                  Text(
-                    '완료: ${step.doneAt!.month}/${step.doneAt!.day}',
-                    style: T.caption.copyWith(color: C.mu),
-                  ),
-                if (step.photoUrl != null && step.photoUrl!.isNotEmpty)
                   Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        step.photoUrl!,
-                        height: 100,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text('완료: ${step.doneAt!.month}/${step.doneAt!.day}',
+                        style: T.caption.copyWith(color: C.mu)),
                   ),
+
+                // 사진 영역 (항상 접근 가능)
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: _uploading ? null : (hasPhoto ? () => _showPhotoViewer(context, step.photoUrl!) : _pickPhoto),
+                  child: _uploading
+                      ? Container(
+                          height: 48,
+                          decoration: BoxDecoration(color: C.gx, borderRadius: BorderRadius.circular(10)),
+                          child: const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+                        )
+                      : hasPhoto
+                          ? Stack(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Image.network(step.photoUrl!, width: double.infinity,
+                                      height: 110, fit: BoxFit.cover),
+                                ),
+                                Positioned(
+                                  top: 6, right: 6,
+                                  child: GestureDetector(
+                                    onTap: _pickPhoto,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(5),
+                                      decoration: BoxDecoration(
+                                          color: Colors.black54,
+                                          borderRadius: BorderRadius.circular(6)),
+                                      child: const Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Container(
+                              width: double.infinity, height: 44,
+                              decoration: BoxDecoration(
+                                color: C.lv.withValues(alpha: 0.07),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: C.lv.withValues(alpha: 0.25)),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.add_photo_alternate_outlined, size: 16, color: C.lv),
+                                  const SizedBox(width: 6),
+                                  Text(isKorean ? '사진 추가' : 'Add photo',
+                                      style: T.caption.copyWith(color: C.lv)),
+                                ],
+                              ),
+                            ),
+                ),
+
+                // 수정/삭제/순서변경 (수정모드에서만)
+                if (widget.isCardEditMode) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: widget.onEdit,
+                        icon: Icon(Icons.edit_outlined, size: 13, color: C.lvD),
+                        label: Text(isKorean ? '수정' : 'Edit',
+                            style: T.caption.copyWith(color: C.lvD, fontWeight: FontWeight.w600)),
+                        style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                      ),
+                      TextButton.icon(
+                        onPressed: widget.onDelete,
+                        icon: Icon(Icons.delete_outline_rounded, size: 13, color: C.og),
+                        label: Text(isKorean ? '삭제' : 'Delete',
+                            style: T.caption.copyWith(color: C.og, fontWeight: FontWeight.w600)),
+                        style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                      ),
+                      const Spacer(),
+                      if (widget.onMoveUp != null)
+                        IconButton(
+                          onPressed: widget.onMoveUp,
+                          icon: Icon(Icons.arrow_upward_rounded, size: 15, color: C.mu),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                          tooltip: isKorean ? '위로' : 'Move up',
+                        ),
+                      if (widget.onMoveDown != null)
+                        IconButton(
+                          onPressed: widget.onMoveDown,
+                          icon: Icon(Icons.arrow_downward_rounded, size: 15, color: C.mu),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                          tooltip: isKorean ? '아래로' : 'Move down',
+                        ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
-        ],
-      ),
-        ),
+
+        // ── 단계 삽입 버튼 (수정모드에서만) ───────────────
         if (widget.isCardEditMode && widget.onInsertAfter != null)
           GestureDetector(
             onTap: widget.onInsertAfter,
@@ -2029,17 +2681,15 @@ class _StepTileState extends ConsumerState<_StepTile> {
               decoration: BoxDecoration(
                 color: C.lvL,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: C.lv.withValues(alpha: 0.3), style: BorderStyle.solid),
+                border: Border.all(color: C.lv.withValues(alpha: 0.3)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.add_rounded, size: 14, color: C.lvD),
                   const SizedBox(width: 4),
-                  Text(
-                    ref.read(appLanguageProvider).isKorean ? '여기에 단계 삽입' : 'Insert step here',
-                    style: T.caption.copyWith(color: C.lvD, fontSize: 11),
-                  ),
+                  Text(isKorean ? '여기에 단계 삽입' : 'Insert step here',
+                      style: T.caption.copyWith(color: C.lvD, fontSize: 11)),
                 ],
               ),
             ),
@@ -2167,7 +2817,8 @@ class _CounterTile extends StatelessWidget {
 
 class _ProjectPhotosSection extends ConsumerStatefulWidget {
   final ProjectModel project;
-  const _ProjectPhotosSection({required this.project});
+  final bool isCardEditMode;
+  const _ProjectPhotosSection({required this.project, this.isCardEditMode = false});
 
   @override
   ConsumerState<_ProjectPhotosSection> createState() => _ProjectPhotosSectionState();
@@ -2292,7 +2943,7 @@ class _ProjectPhotosSectionState extends ConsumerState<_ProjectPhotosSection> {
               const SizedBox(width: 6),
               Text(isKorean ? '착용샷 / 사용샷' : 'Wearing / Usage', style: T.bodyBold.copyWith(color: C.pkD)),
               const Spacer(),
-              if (canAdd)
+              if (canAdd && widget.isCardEditMode)
                 GestureDetector(
                   onTap: _isUploading ? null : _pickAndUpload,
                   child: Container(
@@ -2367,22 +3018,23 @@ class _ProjectPhotosSectionState extends ConsumerState<_ProjectPhotosSection> {
                           ),
                         ),
                       ),
-                      Positioned(
-                        top: 4,
-                        right: 4,
-                        child: GestureDetector(
-                          onTap: () => _deletePhoto(url),
-                          child: Container(
-                            width: 24,
-                            height: 24,
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.55),
-                              shape: BoxShape.circle,
+                      if (widget.isCardEditMode)
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: GestureDetector(
+                            onTap: () => _deletePhoto(url),
+                            child: Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.55),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.close, color: Colors.white, size: 14),
                             ),
-                            child: const Icon(Icons.close, color: Colors.white, size: 14),
                           ),
                         ),
-                      ),
                     ],
                   ),
                 );
@@ -2467,105 +3119,6 @@ class _MaterialThumbnail extends StatelessWidget {
       child: photoUrl.isEmpty
           ? Icon(defaultIcon, color: iconColor, size: 22)
           : null,
-    );
-  }
-}
-
-// ── 진행률 섹션 (단계로그 | 카운터 모드 선택) ──────────────────
-class _ProgressSection extends ConsumerStatefulWidget {
-  final ProjectModel project;
-  const _ProgressSection({required this.project});
-
-  @override
-  ConsumerState<_ProgressSection> createState() => _ProgressSectionState();
-}
-
-class _ProgressSectionState extends ConsumerState<_ProgressSection> {
-  String _source = 'steps'; // 'steps' | 'counter'
-
-  @override
-  Widget build(BuildContext context) {
-    final isKorean = ref.watch(appLanguageProvider).isKorean;
-    final stepsAsync = ref.watch(projectStepsProvider(widget.project.id));
-    final countersAsync = ref.watch(countersByProjectProvider(widget.project.id));
-
-    double progressValue = widget.project.progressPercent / 100;
-    String progressLabel = widget.project.progressDisplay;
-
-    if (_source == 'steps') {
-      stepsAsync.whenData((steps) {
-        if (steps.isNotEmpty) {
-          final completed = steps.where((s) => s.isDone).length;
-          progressValue = completed / steps.length;
-          progressLabel = isKorean
-              ? '$completed/${steps.length} 완료 (${(progressValue * 100).toStringAsFixed(0)}%)'
-              : '$completed/${steps.length} done (${(progressValue * 100).toStringAsFixed(0)}%)';
-        }
-      });
-    } else {
-      countersAsync.whenData((counters) {
-        final withTarget = counters.where((c) => c.targetRowCount > 0);
-        if (withTarget.isNotEmpty) {
-          final c = withTarget.first;
-          progressValue = c.rowProgress;
-          progressLabel = isKorean
-              ? '${c.rowCount}/${c.targetRowCount}단 (${(progressValue * 100).toStringAsFixed(0)}%)'
-              : '${c.rowCount}/${c.targetRowCount} rows (${(progressValue * 100).toStringAsFixed(0)}%)';
-        } else {
-          progressLabel = isKorean ? '카운터에 목표단수를 설정해 주세요.' : 'Set target rows in counter.';
-        }
-      });
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(isKorean ? '진행률' : 'Progress', style: T.captionBold.copyWith(color: C.mu)),
-            const Spacer(),
-            for (final entry in [
-              ('steps', isKorean ? '단계' : 'Steps'),
-              ('counter', isKorean ? '카운터' : 'Counter'),
-            ])
-              GestureDetector(
-                onTap: () => setState(() => _source = entry.$1),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  margin: const EdgeInsets.only(left: 6),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _source == entry.$1 ? C.lv : C.lvL,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: _source == entry.$1 ? C.lv : C.lv.withValues(alpha: 0.20),
-                    ),
-                  ),
-                  child: Text(
-                    entry.$2,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: _source == entry.$1 ? FontWeight.w700 : FontWeight.w500,
-                      color: _source == entry.$1 ? Colors.white : C.lvD,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(99),
-          child: LinearProgressIndicator(
-            value: progressValue.clamp(0.0, 1.0),
-            minHeight: 8,
-            backgroundColor: C.lv.withValues(alpha: 0.12),
-            valueColor: AlwaysStoppedAnimation(C.lv),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(progressLabel, style: T.caption.copyWith(color: C.lvD)),
-      ],
     );
   }
 }

@@ -20,6 +20,7 @@ import '../domain/user_template.dart';
 // ---------------------------------------------------------------------------
 // 기본 템플릿 seed 데이터 (어드민 초기 데이터 입력용 — UI에는 미사용)
 // ---------------------------------------------------------------------------
+// ignore: unused_element
 final _builtinTemplateSeedData = [
   {'titleKo': '기본 스웨터', 'titleEn': 'Basic Sweater', 'descKo': '몸판 → 소매 → 마무리 단계 포함', 'descEn': 'Body → Sleeves → Finishing steps', 'iconName': 'checkroom_rounded', 'colorHex': '#B47EEB', 'order': 0, 'isActive': true, 'stepsKo': ['스와치 뜨기 & 게이지 확인', '실 & 재료 준비', '코잡기 & 시작단 뜨기', '몸판 뜨기 (앞/뒤)', '소매 뜨기', '연결 & 마무리 뜨기', '세탁 & 블로킹', '사진 촬영 & 기록'], 'stepsEn': ['Swatch & gauge check', 'Yarn & materials prep', 'Cast on & foundation', 'Body knitting (front/back)', 'Sleeve knitting', 'Joining & finishing', 'Washing & blocking', 'Photo & documentation']},
   {'titleKo': '넥워머 / 카울', 'titleEn': 'Neckwarmer / Cowl', 'descKo': '원형 뜨기 기본 단계 포함', 'descEn': 'Basic circular knitting steps', 'iconName': 'loop_rounded', 'colorHex': '#4ADE80', 'order': 1, 'isActive': true, 'stepsKo': ['스와치 & 게이지 확인', '실 & 재료 준비', '시작 코 잡기', '원형 뜨기', '무늬 & 패턴 진행', '마무리 단 뜨기', '세탁 & 블로킹', '사진 촬영 & 기록'], 'stepsEn': ['Swatch & gauge check', 'Yarn & materials prep', 'Cast on', 'Circular knitting', 'Pattern work', 'Finishing rows', 'Washing & blocking', 'Photo & documentation']},
@@ -199,10 +200,10 @@ class TemplateListScreen extends ConsumerWidget {
                   Row(
                     children: [
                       Expanded(child: SectionTitle(title: isKorean ? '나의 커스텀 템플릿' : 'My Custom Templates')),
-                      TextButton.icon(
+                      ElevatedButton.icon(
                         onPressed: () => context.push(Routes.templateEditor),
-                        icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
-                        label: Text(isKorean ? '새 템플릿' : 'New Template'),
+                        icon: const Icon(Icons.add_rounded, size: 18),
+                        label: Text(isKorean ? '추가' : 'Add'),
                       ),
                     ],
                   ),
@@ -224,6 +225,71 @@ class TemplateListScreen extends ConsumerWidget {
 class _CustomTemplateSection extends ConsumerWidget {
   final bool isKorean;
   const _CustomTemplateSection({required this.isKorean});
+
+  void _showTemplateDetail(BuildContext context, UserTemplate tmpl, bool isKorean) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 36, height: 36,
+                    decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                    child: Icon(Icons.folder_special_rounded, color: C.lvD, size: 18),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(tmpl.title, style: T.h3)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(isKorean ? '단계별 진행' : 'Steps', style: T.caption.copyWith(color: C.mu)),
+              const SizedBox(height: 8),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 320),
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: tmpl.stepTitles.asMap().entries.map((entry) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 26, height: 26,
+                            decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+                            child: Center(child: Text('${entry.key + 1}', style: T.caption.copyWith(color: C.lvD, fontWeight: FontWeight.w700))),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(entry.value, style: T.body),
+                                if (entry.key < tmpl.stepDescs.length && tmpl.stepDescs[entry.key].isNotEmpty)
+                                  Text(tmpl.stepDescs[entry.key], style: T.caption.copyWith(color: C.mu)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    )).toList(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Future<void> _delete(BuildContext context, WidgetRef ref, UserTemplate tmpl) async {
     final confirm = await showDialog<bool>(
@@ -419,6 +485,7 @@ class _CustomTemplateSection extends ConsumerWidget {
               margin: const EdgeInsets.only(bottom: 4),
               child: ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                onTap: () => _showTemplateDetail(context, tmpl, isKorean),
                 leading: Container(
                   width: 42, height: 42,
                   decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
