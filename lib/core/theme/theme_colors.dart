@@ -250,9 +250,19 @@ class AppThemeColors {
     bd2: Color(0x40A7E635),
   );
 
+  static const moriKnit = AppThemeColors(
+    pk: Color(0xFF8B7CF8), pkD: Color(0xFF5B47D6), pkL: Color(0x208B7CF8),
+    lv: Color(0xFF84CC16), lvD: Color(0xFF4D7C0F), lvL: Color(0x2084CC16),
+    lm: Color(0xFF94A3B8), lmD: Color(0xFF475569), lmG: Color(0x5794A3B8),
+    og: Color(0xFF64748B),
+    tx: Color(0xFF1E1E2E), tx2: Color(0xFF64748B), mu: Color(0xFF94A3B8),
+    bg: Color(0xFFFFFFFF), gx: Color(0xF8F9FAFE), bd: Color(0xE8E2E8F0), bd2: Color(0x308B7CF8),
+  );
+
   static AppThemeColors of(AppThemeMode mode) {
     switch (mode) {
       case AppThemeMode.lavender:    return lavender;
+      case AppThemeMode.moriKnit:    return moriKnit;
       case AppThemeMode.earthy:      return earthy;
       case AppThemeMode.monochrome:  return monochrome;
       case AppThemeMode.moyangi:     return moyangi;

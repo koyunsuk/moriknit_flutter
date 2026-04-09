@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'package:flutter/widgets.dart';
 import '../../core/constants/subscription_constants.dart';
+import '../../features/ravelry/data/ravelry_auth_provider.dart';
 import '../../features/swatch/data/swatch_repository.dart';
 import '../../features/project/data/project_repository.dart';
 import '../../features/counter/data/counter_repository.dart';
@@ -17,16 +18,19 @@ class SyncService with WidgetsBindingObserver {
   final ProjectRepository _projectRepo;
   final CounterRepository _counterRepo;
   final NeedleRepository _needleRepo;
+  final RavelryAuthNotifier? _ravelryAuthNotifier;
 
   SyncService({
     required SwatchRepository swatchRepo,
     required ProjectRepository projectRepo,
     required CounterRepository counterRepo,
     required NeedleRepository needleRepo,
+    RavelryAuthNotifier? ravelryAuthNotifier,
   })  : _swatchRepo = swatchRepo,
         _projectRepo = projectRepo,
         _counterRepo = counterRepo,
-        _needleRepo = needleRepo;
+        _needleRepo = needleRepo,
+        _ravelryAuthNotifier = ravelryAuthNotifier;
 
   void start() {
     WidgetsBinding.instance.addObserver(this);
@@ -45,6 +49,8 @@ class SyncService with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       syncAll();
+      // 포그라운드 복귀 시 Ravelry 세션 재검증 — 토큰 만료 조기 감지
+      _ravelryAuthNotifier?.refreshSession();
     }
   }
 

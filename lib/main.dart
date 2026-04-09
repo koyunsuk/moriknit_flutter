@@ -59,7 +59,7 @@ class MoriKnitApp extends ConsumerWidget {
       key: ValueKey(themeMode),
       title: 'MoriKnit',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
+      theme: AppTheme.current,
       routerConfig: router,
       locale: locale,
       supportedLocales: supportedAppLocales,
@@ -88,18 +88,28 @@ class _OAuthLinkListener extends ConsumerStatefulWidget {
   ConsumerState<_OAuthLinkListener> createState() => _OAuthLinkListenerState();
 }
 
-class _OAuthLinkListenerState extends ConsumerState<_OAuthLinkListener> {
+class _OAuthLinkListenerState extends ConsumerState<_OAuthLinkListener>
+    with WidgetsBindingObserver {
   static const _channel = MethodChannel('moriknit/deeplink');
   bool _handledInitialUri = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (!kIsWeb) {
       _channel.setMethodCallHandler(_handleMethodCall);
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         await _handleInitialUri();
       });
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // 포그라운드 복귀 시 Ravelry 세션 재검증 — 토큰 만료 조기 감지
+      ref.read(ravelryAuthProvider.notifier).refreshSession();
     }
   }
 
@@ -136,6 +146,7 @@ class _OAuthLinkListenerState extends ConsumerState<_OAuthLinkListener> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _channel.setMethodCallHandler(null);
     super.dispose();
   }

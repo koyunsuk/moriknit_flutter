@@ -146,6 +146,12 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                   uploading: _uploading,
                   t: t,
                   onTap: () => _pickCover(notifier),
+                  onRemove: (project.coverPhotoUrl.isNotEmpty || _localCoverPath != null)
+                      ? () {
+                          setState(() => _localCoverPath = null);
+                          notifier.setCoverPhoto('');
+                        }
+                      : null,
                 ),
                 const SizedBox(height: 20),
                 SectionTitle(title:t.projectTitle),
@@ -449,42 +455,96 @@ class _CoverImagePicker extends StatelessWidget {
   final bool uploading;
   final AppStrings t;
   final VoidCallback onTap;
+  final VoidCallback? onRemove;
 
-  const _CoverImagePicker({required this.photoUrl, this.localPath, required this.uploading, required this.t, required this.onTap});
+  const _CoverImagePicker({
+    required this.photoUrl,
+    this.localPath,
+    required this.uploading,
+    required this.t,
+    required this.onTap,
+    this.onRemove,
+  });
 
   @override
   Widget build(BuildContext context) {
     final hasPhoto = localPath != null || photoUrl.isNotEmpty;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 260),
-        child: AspectRatio(
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 260),
+      child: AspectRatio(
         aspectRatio: 4 / 3,
-        child: Container(
-          decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(18), border: Border.all(color: C.bd2)),
-          child: uploading
-              ? Center(child: CircularProgressIndicator(color: C.lv))
-              : hasPhoto
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: localPath != null
-                          ? Image.file(File(localPath!), fit: BoxFit.cover, width: double.infinity, height: double.infinity)
-                          : Image.network(photoUrl, fit: BoxFit.cover, width: double.infinity, height: double.infinity),
-                    )
-                  : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.add_photo_alternate_outlined, color: C.lv, size: 40),
-                        const SizedBox(height: 10),
-                        Text(t.addCoverImage, style: T.bodyBold.copyWith(color: C.lvD)),
-                        const SizedBox(height: 4),
-                        Text(t.coverImageHint, style: T.caption.copyWith(color: C.mu)),
-                      ],
+        child: Stack(
+          children: [
+            GestureDetector(
+              onTap: onTap,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: C.lvL,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: C.bd2),
+                ),
+                child: uploading
+                    ? Center(child: CircularProgressIndicator(color: C.lv))
+                    : hasPhoto
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(18),
+                            child: localPath != null
+                                ? Image.file(File(localPath!), fit: BoxFit.cover, width: double.infinity, height: double.infinity)
+                                : Image.network(photoUrl, fit: BoxFit.cover, width: double.infinity, height: double.infinity),
+                          )
+                        : Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.add_photo_alternate_outlined, color: C.lv, size: 40),
+                              const SizedBox(height: 10),
+                              Text(t.addCoverImage, style: T.bodyBold.copyWith(color: C.lvD)),
+                              const SizedBox(height: 4),
+                              Text(t.coverImageHint, style: T.caption.copyWith(color: C.mu)),
+                            ],
+                          ),
+              ),
+            ),
+            // 이미지가 있을 때 우상단 버튼들 표시
+            if (hasPhoto && !uploading) ...[
+              // X 버튼 (이미지 제거)
+              if (onRemove != null)
+                Positioned(
+                  top: 8,
+                  right: 48,
+                  child: GestureDetector(
+                    onTap: onRemove,
+                    child: Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.close, color: Colors.white, size: 16),
                     ),
+                  ),
+                ),
+              // 변경 버튼
+              Positioned(
+                top: 8,
+                right: 8,
+                child: GestureDetector(
+                  onTap: onTap,
+                  child: Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.edit, color: Colors.white, size: 16),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
-      ),
       ),
     );
   }

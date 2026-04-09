@@ -9,7 +9,6 @@ class _Palette {
   final Color og;
   final Color tx, tx2, mu;
   final Color bg, gx, bd, bd2;
-
   const _Palette({
     required this.pk,
     required this.pkD,
@@ -36,19 +35,21 @@ class C {
 
   static void apply(AppThemeMode mode) {
     switch (mode) {
-      case AppThemeMode.lavender:   _p = _lavender;  break;
-      case AppThemeMode.earthy:     _p = _earthy;    break;
-      case AppThemeMode.monochrome: _p = _mono;      break;
-      case AppThemeMode.moyangi:    _p = _moyangi;   break;
-      case AppThemeMode.jwiChuni:   _p = _jwiChuni;  break;
-      case AppThemeMode.todori:     _p = _todori;    break;
-      case AppThemeMode.pinkRabbit: _p = _pinkRabbit; break;
-      case AppThemeMode.creamSnail: _p = _creamSnail; break;
+      case AppThemeMode.lavender:    _p = _lavender;    break;
+      case AppThemeMode.moriKnit:    _p = _moriKnit;    break;
+      case AppThemeMode.earthy:      _p = _earthy;      break;
+      case AppThemeMode.monochrome:  _p = _mono;        break;
+      case AppThemeMode.moyangi:     _p = _moyangi;     break;
+      case AppThemeMode.jwiChuni:    _p = _jwiChuni;    break;
+      case AppThemeMode.todori:      _p = _todori;      break;
+      case AppThemeMode.pinkRabbit:  _p = _pinkRabbit;  break;
+      case AppThemeMode.creamSnail:  _p = _creamSnail;  break;
       case AppThemeMode.jimungmungi: _p = _jimungmungi; break;
       case AppThemeMode.chocoNyangi: _p = _chocoNyangi; break;
       case AppThemeMode.eunsulNyangi: _p = _eunsulNyangi; break;
     }
   }
+
 
   // Color getters
   static Color get pk => _p.pk;
@@ -347,6 +348,28 @@ class C {
     gx: Color(0xD9FFFDF9),
     bd: Color(0xE8E8DBCC),
     bd2: Color(0x40355C9A),
+  );
+
+  // 모리니트 테마 — 화이트 + 그레이 + 라임 + 라벤더 (클린 화이트 모드)
+  // 신호등 색상: pk=라벤더(보라), lv=라임그린, lm=그레이, og=진그레이
+  static const _Palette _moriKnit = _Palette(
+    pk: Color(0xFF8B7CF8),   // 라벤더 포인트
+    pkD: Color(0xFF5B47D6),
+    pkL: Color(0x208B7CF8),
+    lv: Color(0xFF84CC16),   // 라임 그린 (accent)
+    lvD: Color(0xFF4D7C0F),
+    lvL: Color(0x2084CC16),
+    lm: Color(0xFF94A3B8),   // 그레이 슬레이트
+    lmD: Color(0xFF475569),
+    lmG: Color(0x5794A3B8),
+    og: Color(0xFF64748B),   // 다크 슬레이트 (경고/삭제)
+    tx: Color(0xFF1E1E2E),
+    tx2: Color(0xFF64748B),
+    mu: Color(0xFF94A3B8),
+    bg: Color(0xFFFFFFFF),   // 순백
+    gx: Color(0xF8F9FAFE),
+    bd: Color(0xE8E2E8F0),
+    bd2: Color(0x308B7CF8),
   );
 
   static const _Palette _eunsulNyangi = _Palette(

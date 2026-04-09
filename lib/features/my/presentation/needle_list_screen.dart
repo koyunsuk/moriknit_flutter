@@ -97,43 +97,13 @@ class NeedleListScreen extends ConsumerWidget {
                             ),
                           )
                         else if (needles.isEmpty)
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: C.lvL,
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  t.noNeedlesYet,
-                                  style: T.bodyBold.copyWith(color: C.lvD),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  t.noNeedlesDescription,
-                                  style: T.caption.copyWith(color: C.lvD, height: 1.5),
-                                ),
-                                const SizedBox(height: 12),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    ElevatedButton.icon(
-                                      onPressed: () => _showNeedleStartSheet(context, ref),
-                                      icon: const Icon(Icons.add_rounded),
-                                      label: Text(t.addNeedle),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: C.lv,
-                                        foregroundColor: Colors.white,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
+                          MoriEmptyState(
+                            icon: Icons.straighten_rounded,
+                            iconColor: C.lmD,
+                            title: t.noNeedlesYet,
+                            subtitle: t.noNeedlesDescription,
+                            buttonLabel: t.addNeedle,
+                            onAction: () => _showNeedleStartSheet(context, ref),
                           )
                         else ...[
                           Row(
@@ -144,9 +114,9 @@ class NeedleListScreen extends ConsumerWidget {
                                   style: T.bodyBold,
                                 ),
                               ),
-                              TextButton.icon(
+                              ElevatedButton.icon(
                                 onPressed: () => _showNeedleStartSheet(context, ref),
-                                icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+                                icon: const Icon(Icons.add_rounded),
                                 label: Text(t.addNeedle),
                               ),
                             ],

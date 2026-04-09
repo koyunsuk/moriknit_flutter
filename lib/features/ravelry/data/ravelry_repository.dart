@@ -13,6 +13,10 @@ const _kFunctionsBase = String.fromEnvironment(
 );
 
 class RavelryRepository {
+  final Ref _ref;
+
+  RavelryRepository(this._ref);
+
   Future<List<RavelryStashEntry>> fetchStash() async {
     final data = await _get('/ravelryStash');
     final items = (data['stash'] as List<dynamic>?) ??
@@ -27,7 +31,9 @@ class RavelryRepository {
   Future<List<RavelryLibraryPattern>> fetchLibrary() async {
     final data = await _get('/ravelryLibrary');
     final volumes = (data['volumes'] as List<dynamic>?) ??
+        (data['library_volumes'] as List<dynamic>?) ??
         (data['patterns'] as List<dynamic>?) ??
+        (data['items'] as List<dynamic>?) ??
         (data['results'] as List<dynamic>?) ??
         const [];
     return volumes
@@ -38,6 +44,7 @@ class RavelryRepository {
   Future<List<RavelryProject>> fetchProjects() async {
     final data = await _get('/ravelryProjects');
     final projects = (data['projects'] as List<dynamic>?) ??
+        (data['items'] as List<dynamic>?) ??
         (data['results'] as List<dynamic>?) ??
         const [];
     return projects
@@ -57,6 +64,12 @@ class RavelryRepository {
       headers: {'Authorization': 'Bearer $idToken'},
     );
 
+    // 401/403 응답 시 인증 상태 초기화 → 화면에 재연결 안내 표시
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      _ref.read(ravelryAuthProvider.notifier).clearSession();
+      throw Exception('Ravelry 연결이 끊겼습니다. 다시 연결해 주세요.');
+    }
+
     if (response.statusCode != 200) {
       throw Exception('Ravelry API error ${response.statusCode}: ${response.body}');
     }
@@ -68,7 +81,7 @@ class RavelryRepository {
 final ravelryRepositoryProvider = Provider<RavelryRepository?>((ref) {
   final auth = ref.watch(ravelryAuthProvider);
   if (!auth.isLoggedIn) return null;
-  return RavelryRepository();
+  return RavelryRepository(ref);
 });
 
 final ravelryStashProvider = FutureProvider<List<RavelryStashEntry>>((ref) async {

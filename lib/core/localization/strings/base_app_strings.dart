@@ -6,6 +6,6 @@ abstract class BaseAppStrings extends AppStrings {
   @override
   String needleSize(double size) {
     if (size <= 0) return needleNotSet;
-    return size % 1 == 0 ? '${size.toInt()}mm' : '${size}mm';
+    return '${size.toStringAsFixed(2)}mm';
   }
 }

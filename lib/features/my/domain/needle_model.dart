@@ -48,7 +48,7 @@ class NeedleModel with _$NeedleModel {
 extension NeedleModelExt on NeedleModel {
   String get sizeDisplay {
     if (size == 0.0) return '셋트';
-    return size % 1 == 0 ? '${size.toInt()}mm' : '${size}mm';
+    return '${size.toStringAsFixed(2)}mm';
   }
 
   String localizedMaterialLabel(bool isKorean) {

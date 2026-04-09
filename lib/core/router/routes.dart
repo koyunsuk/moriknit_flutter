@@ -29,4 +29,5 @@ class Routes {
   static const yarnDetail = '/yarn-detail/:id';
   static const needleDetail = '/needle-detail/:id';
   static const ravelry = '/tools/ravelry';
+  static const etsy = '/tools/etsy';
 }

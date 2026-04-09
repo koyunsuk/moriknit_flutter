@@ -1,10 +1,14 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../features/counter/domain/counter_model.dart';
+import '../../../../providers/counter_provider.dart';
+import '../../../../providers/project_step_provider.dart';
 import '../../domain/project_model.dart';
 
-class ProjectCard extends StatelessWidget {
+class ProjectCard extends ConsumerWidget {
   final ProjectModel project;
   final VoidCallback onTap;
   final bool compact;
@@ -17,9 +21,34 @@ class ProjectCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isKorean = Localizations.localeOf(context).languageCode == 'ko';
     final statusColor = _statusColor(project.statusEnum);
+
+    // 단계 기반 진행률
+    final stepsAsync = ref.watch(projectStepsProvider(project.id));
+    final steps = stepsAsync.valueOrNull ?? [];
+    final hasSteps = steps.isNotEmpty;
+    final completedSteps = steps.where((s) => s.isDone).length;
+    final stepProgress = hasSteps ? completedSteps / steps.length : null;
+    final stepLabel = hasSteps
+        ? (isKorean ? '$completedSteps/${steps.length}단계 완료' : '$completedSteps/${steps.length} steps done')
+        : null;
+
+    // 카운터 기반 진행률
+    final countersAsync = ref.watch(countersByProjectProvider(project.id));
+    final counters = countersAsync.valueOrNull ?? [];
+    final counterWithTarget = counters.where((c) => c.targetRowCount > 0);
+    final hasCounter = counterWithTarget.isNotEmpty;
+    final counter = hasCounter ? counterWithTarget.first : null;
+    final counterProgress = counter?.rowProgress;
+    final counterLabel = counter == null ? null
+        : (isKorean ? '${counter.rowCount}/${counter.targetRowCount}단' : '${counter.rowCount}/${counter.targetRowCount} rows');
+
+    // 표시할 진행률: 단계 우선, 없으면 카운터, 둘 다 없으면 stored value
+    final displayProgress = stepProgress ?? counterProgress ?? (project.progressPercent / 100);
+    final displayLabel = stepLabel ?? counterLabel ?? project.progressDisplay;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -51,10 +80,15 @@ class ProjectCard extends StatelessWidget {
                 ]),
                 if (project.description.isNotEmpty) ...[const SizedBox(height: 4), Text(project.description, style: T.caption.copyWith(color: C.mu), maxLines: 1, overflow: TextOverflow.ellipsis)],
                 SizedBox(height: compact ? 8 : 10),
-                Row(children: [Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: project.progressPercent / 100, backgroundColor: C.lv.withValues(alpha: 0.15), valueColor: AlwaysStoppedAnimation(C.lv), minHeight: 5))), const SizedBox(width: 8), Text(project.progressDisplay, style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w600))]),
+                Row(children: [Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: displayProgress.clamp(0.0, 1.0), backgroundColor: C.lv.withValues(alpha: 0.15), valueColor: AlwaysStoppedAnimation(C.lv), minHeight: 5))), const SizedBox(width: 8), Text(displayLabel, style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w600))]),
+                // 단계와 카운터 둘 다 있으면 카운터도 추가 표시
+                if (hasSteps && hasCounter) ...[
+                  const SizedBox(height: 4),
+                  Row(children: [Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: counterProgress!.clamp(0.0, 1.0), backgroundColor: C.lmD.withValues(alpha: 0.15), valueColor: AlwaysStoppedAnimation(C.lmD), minHeight: 3))), const SizedBox(width: 8), Text(counterLabel!, style: T.caption.copyWith(color: C.lmD, fontSize: 10))]),
+                ],
                 if (project.needleSize > 0 || project.yarnBrandName.isNotEmpty) ...[
                   SizedBox(height: compact ? 6 : 8),
-                  Row(children: [if (project.needleSize > 0) ...[Icon(Icons.circle_outlined, size: 12, color: C.mu), const SizedBox(width: 3), Text(project.needleSize % 1 == 0 ? '${project.needleSize.toInt()}mm' : '${project.needleSize}mm', style: T.caption.copyWith(color: C.mu)), const SizedBox(width: 10)], if (project.yarnBrandName.isNotEmpty) ...[Icon(Icons.texture, size: 12, color: C.mu), const SizedBox(width: 3), Text(project.yarnBrandName, style: T.caption.copyWith(color: C.mu))]]),
+                  Row(children: [if (project.needleSize > 0) ...[Icon(Icons.circle_outlined, size: 12, color: C.mu), const SizedBox(width: 3), Text('${project.needleSize.toStringAsFixed(2)}mm', style: T.caption.copyWith(color: C.mu)), const SizedBox(width: 10)], if (project.yarnBrandName.isNotEmpty) ...[Icon(Icons.texture, size: 12, color: C.mu), const SizedBox(width: 3), Text(project.yarnBrandName, style: T.caption.copyWith(color: C.mu))]]),
                 ],
                 if (project.yarnColor.isNotEmpty || project.yarnName.isNotEmpty) ...[
                   SizedBox(height: compact ? 4 : 6),

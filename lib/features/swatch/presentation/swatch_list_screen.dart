@@ -45,129 +45,130 @@ class _SwatchListScreenState extends ConsumerState<SwatchListScreen> {
             ),
             // 스크롤 바디
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
-                children: [
-                  // 1단: 통계 GlassCard
-                  GlassCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+              child: swatchListAsync.when(
+                loading: () => Center(child: CircularProgressIndicator(color: C.lmD)),
+                error: (e, _) => Center(child: Text('$e', style: T.body)),
+                data: (swatches) {
+                  if (swatches.isEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Expanded(
-                              child: _SwatchStatCell(
-                                label: isKorean ? '보유 스와치' : 'Total swatches',
-                                value: swatchListAsync.maybeWhen(
-                                  data: (s) => '${s.length}',
-                                  orElse: () => '$count',
-                                ),
-                                color: C.lmD,
+                            Container(
+                              width: 72, height: 72,
+                              decoration: BoxDecoration(
+                                color: C.lmD.withValues(alpha: 0.10),
+                                borderRadius: BorderRadius.circular(20),
                               ),
+                              child: Icon(Icons.grid_view_rounded, color: C.lmD, size: 36),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              isKorean ? '아직 스와치가 없어요.' : 'No swatches yet.',
+                              style: T.bodyBold,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              isKorean
+                                  ? '게이지를 기록하면 나중에 같은 실을 쓸 때 참고할 수 있어요.'
+                                  : 'Record your gauge to reference later.',
+                              style: T.caption.copyWith(color: C.mu),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 20),
+                            ElevatedButton.icon(
+                              onPressed: isLimitReached ? null : () => _showSwatchStartSheet(context),
+                              icon: const Icon(Icons.add_rounded),
+                              label: Text(isKorean ? '스와치 추가' : 'Add swatch'),
                             ),
                           ],
                         ),
-                        if (gates.isFree) ...[
-                          const SizedBox(height: 12),
-                          SwatchLimitBar(
-                            current: count,
-                            max: 5,
-                            progress: progress,
-                            isReached: isLimitReached,
-                            onUpgrade: () {},
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // 2단: 리스트 GlassCard
-                  GlassCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        swatchListAsync.when(
-                          loading: () => Center(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 20),
-                              child: CircularProgressIndicator(color: C.lm),
-                            ),
-                          ),
-                          error: (e, _) => Center(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 20),
-                              child: Text(
-                                'Failed to load swatches: $e',
-                                style: T.body.copyWith(color: C.mu),
-                              ),
-                            ),
-                          ),
-                          data: (swatches) {
-                            if (swatches.isEmpty) {
-                              return MoriEmptyState(
-                                icon: Icons.grid_view_rounded,
-                                iconColor: C.lmD,
-                                title: isKorean ? '아직 스와치가 없어요' : 'No swatches yet',
-                                subtitle: isKorean ? '게이지를 기록하면 나중에 같은 실을 쓸 때 참고할 수 있어요.' : 'Record your gauge to reference later.',
-                                buttonLabel: isKorean ? '스와치 추가' : 'Add swatch',
-                                onAction: isLimitReached ? null : () => _showSwatchStartSheet(context),
-                              );
-                            }
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        isKorean ? '스와치 목록' : 'Swatch list',
-                                        style: T.bodyBold,
+                      ),
+                    );
+                  }
+
+                  return Stack(
+                    children: [
+                      const BgOrbs(),
+                      ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+                        itemCount: swatches.length + 1,
+                        separatorBuilder: (_, i) => i == 0 ? const SizedBox(height: 14) : const SizedBox(height: 10),
+                        itemBuilder: (context, index) {
+                          if (index == 0) {
+                            return GlassCard(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              isKorean ? '내 스와치 ${swatches.length}개' : '${swatches.length} Swatches',
+                                              style: T.bodyBold.copyWith(color: C.lmD),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              isKorean ? '게이지 스와치 목록' : 'Gauge swatch list',
+                                              style: T.caption.copyWith(color: C.mu),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                    TextButton.icon(
-                                      onPressed: isLimitReached
-                                          ? () => _showLimitDialog(isKorean)
-                                          : () => _showSwatchStartSheet(context),
-                                      icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
-                                      label: Text(isKorean ? '스와치 추가' : 'Add swatch'),
+                                      ElevatedButton.icon(
+                                        onPressed: isLimitReached
+                                            ? () => _showLimitDialog(isKorean)
+                                            : () => _showSwatchStartSheet(context),
+                                        icon: const Icon(Icons.add_rounded),
+                                        label: Text(isKorean ? '스와치 추가' : 'Add swatch'),
+                                      ),
+                                    ],
+                                  ),
+                                  if (gates.isFree) ...[
+                                    const SizedBox(height: 12),
+                                    SwatchLimitBar(
+                                      current: count,
+                                      max: 5,
+                                      progress: progress,
+                                      isReached: isLimitReached,
+                                      onUpgrade: () {},
                                     ),
                                   ],
-                                ),
-                                const SizedBox(height: 8),
-                                ...swatches.map(
-                                  (swatch) {
-                                    final projects = projectListAsync.valueOrNull ?? [];
-                                    final linked = projects.where((p) => p.id == swatch.projectId).firstOrNull;
-                                    return SwatchCard(
-                                    swatch: swatch,
-                                    projectName: linked?.title,
-                                    onTap: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            SwatchDetailScreen(swatchId: swatch.id),
-                                      ),
-                                    ),
-                                    onEdit: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            SwatchInputScreen(swatchId: swatch.id),
-                                      ),
-                                    ),
-                                    onDelete: () => _confirmDelete(ref, swatch.id, isKorean),
-                                    onDuplicate: () => _confirmDuplicate(ref, swatch, isKorean),
-                                  );
-                                  },
-                                ),
-                              ],
+                                ],
+                              ),
                             );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                          }
+                          final swatch = swatches[index - 1];
+                          final projects = projectListAsync.valueOrNull ?? [];
+                          final linked = projects.where((p) => p.id == swatch.projectId).firstOrNull;
+                          return SwatchCard(
+                            swatch: swatch,
+                            projectName: linked?.title,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => SwatchDetailScreen(swatchId: swatch.id),
+                              ),
+                            ),
+                            onEdit: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => SwatchInputScreen(swatchId: swatch.id),
+                              ),
+                            ),
+                            onDelete: () => _confirmDelete(ref, swatch.id, isKorean),
+                            onDuplicate: () => _confirmDuplicate(ref, swatch, isKorean),
+                          );
+                        },
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ],
@@ -181,11 +182,11 @@ class _SwatchListScreenState extends ConsumerState<SwatchListScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(isKorean ? '스와치 삭제' : 'Delete swatch', style: T.h3),
-        content: Text(isKorean ? '정말 삭제하시겠어요?' : 'Are you sure you want to delete?', style: T.body),
+        content: Text(isKorean ? '이 스와치를 삭제할까요? 되돌릴 수 없어요.' : 'Delete this swatch? This cannot be undone.', style: T.body),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(isKorean ? '취소' : 'Cancel')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade400, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: C.og, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(isKorean ? '삭제' : 'Delete'),
           ),
@@ -266,7 +267,7 @@ class _SwatchListScreenState extends ConsumerState<SwatchListScreen> {
                         Container(width: 48, height: 48, decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(14)), child: Icon(Icons.add_rounded, color: C.tx2)),
                         const SizedBox(width: 14),
                         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(isKorean ? '빈 스와치로 시작' : 'Start blank', style: T.bodyBold),
+                          Text(isKorean ? '새 스와치 만들기' : 'Create new swatch', style: T.bodyBold),
                           const SizedBox(height: 4),
                           Text(isKorean ? '처음부터 직접 게이지를 기록해요' : 'Record gauge from scratch', style: T.caption.copyWith(color: C.mu)),
                         ])),
@@ -369,58 +370,15 @@ class _SwatchListScreenState extends ConsumerState<SwatchListScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(
-          isKorean ? '스와치 한도 도달' : 'Swatch limit reached',
-          style: T.h3,
-        ),
+        title: Text(isKorean ? '스와치 한도 도달' : 'Swatch limit reached', style: T.h3),
         content: Text(gates.swatchLimitMessage(count), style: T.body),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(isKorean ? '닫기' : 'Close'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(isKorean ? '닫기' : 'Close')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: C.lm,
-              foregroundColor: const Color(0xFF1a3000),
-            ),
-            onPressed: () {
-              Navigator.pop(ctx);
-            },
+            style: ElevatedButton.styleFrom(backgroundColor: C.lm, foregroundColor: const Color(0xFF1a3000)),
+            onPressed: () => Navigator.pop(ctx),
             child: Text(isKorean ? '업그레이드' : 'Upgrade'),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SwatchStatCell extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-
-  const _SwatchStatCell({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.16)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: T.caption.copyWith(color: C.mu)),
-          const SizedBox(height: 4),
-          Text(value, style: T.bodyBold.copyWith(color: color)),
         ],
       ),
     );

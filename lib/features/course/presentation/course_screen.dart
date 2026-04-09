@@ -24,13 +24,25 @@ String? _extractVideoId(String url) {
   if (uri.host.contains('youtu.be')) {
     return uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
   }
+  // Shorts: youtube.com/shorts/VIDEO_ID
+  final segments = uri.pathSegments;
+  if (segments.length >= 2 && segments[segments.length - 2] == 'shorts') {
+    return segments.last;
+  }
   return uri.queryParameters['v'];
 }
 
-String _thumbnailUrl(String videoUrl) {
+String _youtubeThumbnail(String videoUrl) {
   final id = _extractVideoId(videoUrl);
   if (id == null) return '';
   return 'https://img.youtube.com/vi/$id/mqdefault.jpg';
+}
+
+/// YouTube 썸네일 우선, 없으면 item.thumbnailUrl 사용
+String _resolveThumb(String videoUrl, String fallbackThumbUrl) {
+  final yt = _youtubeThumbnail(videoUrl);
+  if (yt.isNotEmpty) return yt;
+  return fallbackThumbUrl;
 }
 
 class CourseScreen extends ConsumerStatefulWidget {
@@ -131,10 +143,10 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
                           children: [
                             Expanded(child: Text(isKorean ? '최근 강의' : 'Recent', style: T.h3.copyWith(color: C.lvD))),
                             if (user != null)
-                              TextButton.icon(
+                              ElevatedButton.icon(
                                 onPressed: () => _showCourseStartSheet(context, ref, isKorean),
-                                icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
-                                label: Text(isKorean ? '새 강의 추가' : 'Add class'),
+                                icon: const Icon(Icons.add_rounded, size: 18),
+                                label: Text(isKorean ? '추가' : 'Add'),
                               ),
                           ],
                         ),
@@ -439,7 +451,7 @@ class _RecentCourseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final thumbUrl = _thumbnailUrl(item.videoUrl);
+    final thumbUrl = _resolveThumb(item.videoUrl, item.thumbnailUrl);
 
     return GlassCard(
       padding: EdgeInsets.zero,
@@ -552,12 +564,7 @@ class _CourseTitleRow extends StatelessWidget {
 
   const _CourseTitleRow({required this.item, required this.isKorean, required this.onTap});
 
-  static String? _videoId(String url) {
-    final uri = Uri.tryParse(url);
-    if (uri == null) return null;
-    if (uri.host.contains('youtu.be')) return uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
-    return uri.queryParameters['v'];
-  }
+  static String? _videoId(String url) => _extractVideoId(url);
 
   static bool _isFirebaseUrl(String url) => url.contains('firebasestorage.googleapis.com');
 
@@ -973,7 +980,7 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final videoId = _extractVideoId(widget.item.videoUrl);
-    final thumbUrl = _thumbnailUrl(widget.item.videoUrl);
+    final thumbUrl = _resolveThumb(widget.item.videoUrl, widget.item.thumbnailUrl);
 
     Widget playerWidget;
     if (kIsWeb) {

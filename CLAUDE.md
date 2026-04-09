@@ -67,6 +67,8 @@ firebase deploy --only hosting                             # ❌ (스크립트 �
   ```
 
 ## 이슈 관리
+- **모든 작업 지시(기능 추가, 버그 수정, UI 변경, 긴급 수정 포함)는 예외 없이 즉시 GitHub 이슈 생성** (repo: koyunsuk/moriknit_flutter)
+- 이슈 미등록 상태로 작업 진행 절대 금지. 이슈 번호 없이 코드 수정 금지.
 - 작업 지시 → 즉시 GitHub 이슈 생성 (repo: koyunsuk/moriknit_flutter)
 - 이슈 생성 후 반드시 제목에 번호 포함되도록 title 업데이트:
   1. `gh issue create` → URL에서 번호 추출
@@ -111,10 +113,12 @@ firebase deploy --only hosting                             # ❌ (스크립트 �
 - **APK 설치 완료 시 무조건 실행**: 해당 작업의 모든 관련 이슈 상태를 🟢로 업데이트
 - `gh issue edit {N} --title "🟢 ..."` 명령으로 신호등 이모지 교체
 - 여러 이슈인 경우 병렬 실행
-- **설치 완료 후 반드시 오픈된 이슈 목록 기준으로 전체 체크리스트 보고 (상세 항목 포함)**
+- **작업 완료 메시지 전송 시마다 반드시 GitHub 이슈 신호등 업데이트 후 전체 이슈 현황 보고**
+  - 보고 순서: 🟢 완료 → 🟡 진행 중 → 🔴 긴급/차단 → 🟣 대기 → ⚪ 장기검토
   - 🟢 이번 빌드 포함 이슈: 앱에서 확인할 체크박스 항목 나열
-  - 🔵 진행 중/미완료 이슈: 잔여 구현 항목 명시
-  - 빌드/설치할 때마다 매번 이 형식으로 보고
+  - 🟣 대기 중 이슈: 목록 표로 정리
+  - ⚪ 장기 검토 이슈: 한줄 요약
+  - 빌드/설치/배포할 때마다 매번 이 형식으로 보고 (생략 금지)
 
 ## CLAUDE.md 동기화
 - 프로젝트 CLAUDE.md에 내용 추가 시 전역 CLAUDE.md에도 동일하게 반영.
@@ -181,3 +185,22 @@ firebase deploy --only hosting                             # ❌ (스크립트 �
 - **모든 상세 화면 AppBar**: 수정/삭제 아이콘을 개별 `IconButton`으로 두지 말고 `PopupMenuButton<String>(icon: Icons.more_vert)` 하나로 통합
 - 메뉴 항목: `수정` (기본색), `삭제` (color: C.og)
 - **기준 파일**: `counter_screen.dart`의 AppBar actions
+
+## 에러 제로화 규칙 (모든 작업 완료 시 필수 단계)
+
+### 규칙
+- **모든 작업 완료 후 반드시 에러 0개 확인 후 빌드/배포 진행**
+- `flutter analyze` 또는 IDE diagnostics에서 **error** 항목이 0개여야 함
+- warning/hint는 기존 것은 허용하나 **새로 추가된 warning은 수정 후 진행**
+
+### 확인 방법
+```bash
+flutter analyze lib/ 2>&1 | grep -E "^  error" | wc -l
+# 결과가 0이어야 진행 가능
+```
+
+### 적용 시점
+1. 코드 수정 완료 직후
+2. APK 빌드 전
+3. 웹 배포 전
+4. Firebase Functions 배포 전

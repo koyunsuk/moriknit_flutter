@@ -528,7 +528,22 @@ class _CounterListCard extends StatelessWidget {
               color: C.lmD.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(Icons.exposure_plus_1_rounded, color: C.lmD, size: 22),
+            child: Center(
+              child: Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: C.lmD,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Center(
+                  child: Text(
+                    '${counter.rowCount}',
+                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(

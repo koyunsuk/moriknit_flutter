@@ -11,7 +11,8 @@ import '../data/ravelry_repository.dart';
 import '../domain/ravelry_models.dart';
 
 class RavelryScreen extends ConsumerStatefulWidget {
-  const RavelryScreen({super.key});
+  final int initialTab;
+  const RavelryScreen({super.key, this.initialTab = 0});
 
   @override
   ConsumerState<RavelryScreen> createState() => _RavelryScreenState();
@@ -24,7 +25,7 @@ class _RavelryScreenState extends ConsumerState<RavelryScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 3, vsync: this, initialIndex: widget.initialTab);
   }
 
   @override
@@ -224,7 +225,7 @@ class _StashTab extends ConsumerWidget {
         return ListView.separated(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
           itemCount: items.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 10),
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
           itemBuilder: (_, i) => _StashCard(item: items[i], isKorean: isKorean),
         );
       },
@@ -249,7 +250,7 @@ class _StashCard extends StatelessWidget {
               height: 52,
               child: item.thumbnailUrl != null
                   ? CachedNetworkImage(imageUrl: item.thumbnailUrl!, fit: BoxFit.cover,
-                      errorWidget: (_, __, ___) => Container(color: C.lvL, child: Icon(Icons.texture, color: C.lv)))
+                      errorWidget: (_, _, _) => Container(color: C.lvL, child: Icon(Icons.texture, color: C.lv)))
                   : Container(color: C.lvL, child: Icon(Icons.texture, color: C.lv)),
             ),
           ),
@@ -305,7 +306,7 @@ class _LibraryTab extends ConsumerWidget {
         return ListView.separated(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
           itemCount: items.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 10),
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
           itemBuilder: (_, i) => _PatternCard(item: items[i], isKorean: isKorean),
         );
       },
@@ -330,7 +331,7 @@ class _PatternCard extends StatelessWidget {
               height: 52,
               child: item.thumbnailUrl != null
                   ? CachedNetworkImage(imageUrl: item.thumbnailUrl!, fit: BoxFit.cover,
-                      errorWidget: (_, __, ___) => Container(color: C.pkL, child: Icon(Icons.menu_book_rounded, color: C.pk)))
+                      errorWidget: (_, _, _) => Container(color: C.pkL, child: Icon(Icons.menu_book_rounded, color: C.pk)))
                   : Container(color: C.pkL, child: Icon(Icons.menu_book_rounded, color: C.pk)),
             ),
           ),
@@ -387,7 +388,7 @@ class _ProjectsTab extends ConsumerWidget {
         return ListView.separated(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
           itemCount: items.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 10),
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
           itemBuilder: (_, i) => _RavelryProjectCard(item: items[i], isKorean: isKorean),
         );
       },
@@ -412,7 +413,7 @@ class _RavelryProjectCard extends StatelessWidget {
               height: 52,
               child: item.thumbnailUrl != null
                   ? CachedNetworkImage(imageUrl: item.thumbnailUrl!, fit: BoxFit.cover,
-                      errorWidget: (_, __, ___) => Container(color: C.lvL, child: Icon(Icons.folder_special_rounded, color: C.lv)))
+                      errorWidget: (_, _, _) => Container(color: C.lvL, child: Icon(Icons.folder_special_rounded, color: C.lv)))
                   : Container(color: C.lvL, child: Icon(Icons.folder_special_rounded, color: C.lv)),
             ),
           ),

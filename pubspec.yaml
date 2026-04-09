@@ -93,3 +93,5 @@ flutter:
     - assets/app_icon.png
     - assets/login_logo.png
     - assets/splash_cat.png
+    - assets/fonts/NotoSansKR-Regular.ttf
+    - assets/fonts/NotoSansKR-Bold.ttf

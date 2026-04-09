@@ -111,6 +111,11 @@ class RavelryAuthNotifier extends StateNotifier<RavelryAuthState> {
     );
   }
 
+  /// 서버 disconnect 없이 로컬 인증 상태만 초기화 (401/403 응답 등 토큰 만료 시 호출)
+  void clearSession() {
+    state = const RavelryAuthState();
+  }
+
   Future<void> logout() async {
     try {
       await _authorizedPost('/ravelryDisconnect');

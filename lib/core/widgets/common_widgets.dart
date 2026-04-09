@@ -1074,6 +1074,82 @@ class MoriOptionChips<V> extends StatelessWidget {
   }
 }
 
+/// 라이브러리 공통 카드 — Ravelry 스타일 기준 (도안/실 목록에 사용)
+class MoriLibraryCard extends StatelessWidget {
+  final String title;
+  final String? subtitle1;
+  final String? subtitle2;
+  final Color? subtitle2Color;
+  final String? thumbnailUrl;
+  final IconData? fallbackIcon;
+  final Color fallbackIconBg;
+  final Color fallbackIconColor;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  const MoriLibraryCard({
+    super.key,
+    required this.title,
+    this.subtitle1,
+    this.subtitle2,
+    this.subtitle2Color,
+    this.thumbnailUrl,
+    this.fallbackIcon,
+    this.fallbackIconBg = const Color(0xFFEDE9FF),
+    this.fallbackIconColor = const Color(0xFF7C5CBF),
+    this.trailing,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: C.gx,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: C.bd),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: fallbackIconBg,
+                borderRadius: BorderRadius.circular(10),
+                image: thumbnailUrl != null
+                    ? DecorationImage(image: NetworkImage(thumbnailUrl!), fit: BoxFit.cover)
+                    : null,
+              ),
+              child: (thumbnailUrl == null && fallbackIcon != null)
+                  ? Icon(fallbackIcon, color: fallbackIconColor, size: 22)
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: T.bodyBold, overflow: TextOverflow.ellipsis),
+                  if (subtitle1 != null)
+                    Text(subtitle1!, style: T.caption.copyWith(color: C.mu), overflow: TextOverflow.ellipsis),
+                  if (subtitle2 != null)
+                    Text(subtitle2!, style: T.caption.copyWith(color: subtitle2Color ?? C.lv), overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+            if (trailing != null) trailing!,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// 컴팩트 목록 행 — leading 아이콘 + title/subtitle + trailing(팝업 등) + 화살표
 class MoriCompactRow extends StatelessWidget {
   final VoidCallback onTap;

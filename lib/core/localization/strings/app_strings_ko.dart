@@ -47,7 +47,7 @@ class AppStringsKo extends BaseAppStrings {
   @override String get ecosystemHub => '생태계 허브';
   @override String get editorialPicks => '추천 정보';
   @override String get communityPosts => '커뮤니티 글';
-  @override String get marketListings => '마켓 등록수정';
+  @override String get marketListings => '마켓 상품 수';
   @override String get myProjectsLabel => '내 프로젝트';
   @override String get knittingLetter => '뜨개레터';
   @override String get curatedPicks => '추천 큐레이션';

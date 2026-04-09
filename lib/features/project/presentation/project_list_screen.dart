@@ -11,10 +11,14 @@ import 'package:moriknit_flutter/core/widgets/common_widgets.dart';
 import 'package:moriknit_flutter/features/project/presentation/project_detail_screen.dart';
 import 'package:moriknit_flutter/features/project/presentation/project_input_screen.dart';
 import 'package:moriknit_flutter/features/project/presentation/widgets/project_list_sections.dart';
+import 'package:moriknit_flutter/features/project/presentation/widgets/project_progress_section.dart';
 import 'package:moriknit_flutter/providers/auth_provider.dart';
 import 'package:moriknit_flutter/providers/project_provider.dart';
 import 'package:moriknit_flutter/providers/ui_copy_provider.dart';
 import 'package:moriknit_flutter/providers/template_provider.dart';
+import 'package:moriknit_flutter/features/ravelry/data/ravelry_auth_provider.dart';
+import 'package:moriknit_flutter/features/ravelry/data/ravelry_repository.dart';
+import 'package:moriknit_flutter/features/ravelry/domain/ravelry_models.dart';
 
 
 class ProjectListScreen extends ConsumerWidget {
@@ -112,6 +116,8 @@ class ProjectListScreen extends ConsumerWidget {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    _ProjectSummaryCard(projects: projects, isKorean: isKorean),
+                                    const SizedBox(height: 16),
                                     Row(
                                       children: [
                                         Expanded(child: Text(t.activeProjects, style: T.h3)),
@@ -133,40 +139,15 @@ class ProjectListScreen extends ConsumerWidget {
                                         childAspectRatio: isExtraWideWeb ? 1.72 : 1.58,
                                       ),
                                       itemCount: projects.length,
-                                      itemBuilder: (_, i) => Stack(
-                                        children: [
-                                          ProjectCard(
-                                            project: projects[i],
-                                            compact: true,
-                                            onTap: () => Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) => ProjectDetailScreen(projectId: projects[i].id),
-                                              ),
-                                            ),
+                                      itemBuilder: (_, i) => ProjectCard(
+                                        project: projects[i],
+                                        compact: true,
+                                        onTap: () => Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => ProjectDetailScreen(projectId: projects[i].id),
                                           ),
-                                          Positioned(
-                                            top: 2,
-                                            right: 2,
-                                            child: PopupMenuButton<String>(
-                                              icon: Icon(Icons.more_vert, size: 18, color: C.mu),
-                                              onSelected: (v) {
-                                                if (v == 'edit') {
-                                                  Navigator.push(context, MaterialPageRoute(
-                                                    builder: (_) => ProjectInputScreen(projectId: projects[i].id, initialProject: projects[i]),
-                                                  ));
-                                                }
-                                                if (v == 'copy') _duplicateProject(context, ref, projects[i], isKorean);
-                                                if (v == 'delete') _confirmDeleteFromList(context, ref, projects[i], isKorean);
-                                              },
-                                              itemBuilder: (_) => [
-                                                PopupMenuItem(value: 'edit', child: Text(isKorean ? '수정' : 'Edit')),
-                                                PopupMenuItem(value: 'copy', child: Text(isKorean ? '복사' : 'Duplicate')),
-                                                PopupMenuItem(value: 'delete', child: Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og))),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -580,36 +561,15 @@ class _MobileProjectList extends StatelessWidget {
   Widget _projectCard(BuildContext context, dynamic project) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Stack(
-        children: [
-          ProjectCard(
-            project: project,
-            compact: false,
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ProjectDetailScreen(projectId: project.id),
-              ),
-            ),
+      child: ProjectCard(
+        project: project,
+        compact: false,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProjectDetailScreen(projectId: project.id),
           ),
-          Positioned(
-            top: 4,
-            right: 4,
-            child: PopupMenuButton<String>(
-              icon: Icon(Icons.more_vert, size: 20, color: C.mu),
-              onSelected: (v) {
-                if (v == 'edit') onEdit(project);
-                if (v == 'copy') onDuplicate(project);
-                if (v == 'delete') onDelete(project);
-              },
-              itemBuilder: (_) => [
-                PopupMenuItem(value: 'edit', child: Text(isKorean ? '수정' : 'Edit')),
-                PopupMenuItem(value: 'copy', child: Text(isKorean ? '복사' : 'Duplicate')),
-                PopupMenuItem(value: 'delete', child: Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og))),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -618,14 +578,72 @@ class _MobileProjectList extends StatelessWidget {
   Widget build(BuildContext context) {
     final active = projects.where((p) => p.status != 'finished').toList();
     final done = projects.where((p) => p.status == 'finished').toList();
+    // 진행중(in_progress) 프로젝트 중 첫 번째를 요약카드로 표시
+    final featured = projects.where((p) => p.status == 'in_progress').firstOrNull;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
       physics: const AlwaysScrollableScrollPhysics(),
       children: [
         const SizedBox(height: 8),
+        _ProjectSummaryCard(projects: projects, isKorean: isKorean),
+        const SizedBox(height: 16),
+        // ── 진행중 프로젝트 요약카드 ──────────────────────────────
+        if (featured != null) ...[
+          GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => ProjectDetailScreen(projectId: featured.id)),
+            ),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              decoration: C.glassCard,
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: C.lmD.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            isKorean ? '진행 중' : 'In Progress',
+                            style: TextStyle(fontSize: 11, color: C.lmD, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            featured.title.isEmpty ? (isKorean ? '제목 없음' : 'Untitled') : featured.title,
+                            style: T.bodyBold,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Icon(Icons.chevron_right_rounded, size: 18, color: C.mu),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    ProjectProgressSection(project: featured),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
         Row(
           children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(color: C.pk.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+              child: Text('MoriKnit', style: T.caption.copyWith(color: C.pkD, fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox(width: 8),
             Expanded(child: Text(isKorean ? '진행 중인 프로젝트' : 'Active Projects', style: T.h3)),
             TextButton.icon(
               onPressed: onAddTap,
@@ -646,10 +664,19 @@ class _MobileProjectList extends StatelessWidget {
           )
         else
           ...active.map((project) => _projectCard(context, project)),
+        // Ravelry 프로젝트 섹션
+        const SizedBox(height: 16),
+        _RavelryProjectSection(isKorean: isKorean),
         if (done.isNotEmpty) ...[
           const SizedBox(height: 16),
           Row(
             children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: C.pk.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+                child: Text('MoriKnit', style: T.caption.copyWith(color: C.pkD, fontWeight: FontWeight.w700)),
+              ),
+              const SizedBox(width: 8),
               Expanded(child: Text(isKorean ? '완료된 프로젝트' : 'Completed Projects', style: T.h3.copyWith(color: C.mu))),
               Text('${done.length}', style: T.caption.copyWith(color: C.mu)),
             ],
@@ -682,20 +709,7 @@ class _MobileProjectList extends StatelessWidget {
                                 : Container(width: 22, height: 22, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(5)), child: Icon(Icons.folder_rounded, color: C.lv, size: 13)),
                             const SizedBox(width: 10),
                             Expanded(child: Text(project.title, style: T.body, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                            PopupMenuButton<String>(
-                              icon: Icon(Icons.more_vert_rounded, size: 16, color: C.mu),
-                              padding: EdgeInsets.zero,
-                              onSelected: (v) {
-                                if (v == 'edit') onEdit(project);
-                                if (v == 'copy') onDuplicate(project);
-                                if (v == 'delete') onDelete(project);
-                              },
-                              itemBuilder: (_) => [
-                                PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: C.lvD), const SizedBox(width: 8), Text(isKorean ? '수정' : 'Edit')])),
-                                PopupMenuItem(value: 'copy', child: Row(children: [Icon(Icons.copy_rounded, size: 18, color: C.lmD), const SizedBox(width: 8), Text(isKorean ? '복사하기' : 'Duplicate')])),
-                                PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline_rounded, size: 18, color: C.og), const SizedBox(width: 8), Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og))])),
-                              ],
-                            ),
+                            Icon(Icons.chevron_right_rounded, size: 16, color: C.mu),
                           ],
                         ),
                       ),
@@ -710,6 +724,294 @@ class _MobileProjectList extends StatelessWidget {
     );
   }
 
+}
+
+// ── Ravelry 프로젝트 섹션 ─────────────────────────────────
+class _RavelryProjectSection extends ConsumerWidget {
+  final bool isKorean;
+  const _RavelryProjectSection({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(ravelryAuthProvider);
+
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+                child: Text('Ravelry', style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w700)),
+              ),
+              const SizedBox(width: 8),
+              Text(isKorean ? '나의 프로젝트' : 'My Projects', style: T.bodyBold),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (!auth.isLoggedIn)
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.07), borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                children: [
+                  Icon(Icons.link_rounded, color: C.lv, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(
+                    isKorean ? 'Ravelry 연결 시 프로젝트가 표시돼요' : 'Connect Ravelry to see your projects',
+                    style: T.caption.copyWith(color: C.mu),
+                  )),
+                ],
+              ),
+            )
+          else
+            _RavelryProjectList(isKorean: isKorean),
+        ],
+      ),
+    );
+  }
+}
+
+class _RavelryProjectList extends ConsumerWidget {
+  final bool isKorean;
+  const _RavelryProjectList({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final projectsAsync = ref.watch(ravelryProjectsProvider);
+    return projectsAsync.when(
+      loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
+      error: (e, _) => Text(isKorean ? '프로젝트를 불러올 수 없어요: $e' : 'Failed to load projects: $e',
+          style: T.caption.copyWith(color: C.og)),
+      data: (projects) {
+        if (projects.isEmpty) {
+          return Text(isKorean ? 'Ravelry 프로젝트가 없어요.' : 'No Ravelry projects found.',
+              style: T.body.copyWith(color: C.mu));
+        }
+        return Column(
+          children: projects.map((p) => _RavelryProjectCard(project: p, isKorean: isKorean)).toList(),
+        );
+      },
+    );
+  }
+}
+
+class _RavelryProjectCard extends StatelessWidget {
+  final RavelryProject project;
+  final bool isKorean;
+  const _RavelryProjectCard({required this.project, required this.isKorean});
+
+  void _showDetail(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: C.bg,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.55,
+        maxChildSize: 0.85,
+        minChildSize: 0.35,
+        builder: (_, sc) => ListView(
+          controller: sc,
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+          children: [
+            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 16),
+            if (project.thumbnailUrl != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image.network(project.thumbnailUrl!, height: 180, width: double.infinity, fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => const SizedBox.shrink()),
+              ),
+            const SizedBox(height: 16),
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+                child: Text('Ravelry', style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w700)),
+              ),
+              const SizedBox(width: 8),
+              Expanded(child: Text(project.name, style: T.h3, overflow: TextOverflow.ellipsis)),
+            ]),
+            if (project.patternName != null) ...[
+              const SizedBox(height: 6),
+              Text(project.patternName!, style: T.body.copyWith(color: C.mu)),
+            ],
+            const SizedBox(height: 12),
+            if (project.status != null)
+              _DetailRow(icon: Icons.flag_rounded, label: isKorean ? '상태' : 'Status',
+                  value: isKorean ? project.statusKo : (project.status ?? '')),
+            if (project.startedAt != null)
+              _DetailRow(icon: Icons.calendar_today_rounded, label: isKorean ? '시작일' : 'Started',
+                  value: '${project.startedAt!.year}.${project.startedAt!.month.toString().padLeft(2,'0')}.${project.startedAt!.day.toString().padLeft(2,'0')}'),
+            if (project.completedAt != null)
+              _DetailRow(icon: Icons.check_circle_outline_rounded, label: isKorean ? '완성일' : 'Completed',
+                  value: '${project.completedAt!.year}.${project.completedAt!.month.toString().padLeft(2,'0')}.${project.completedAt!.day.toString().padLeft(2,'0')}'),
+            if (project.notes != null && project.notes!.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(isKorean ? '노트' : 'Notes', style: T.bodyBold),
+              const SizedBox(height: 4),
+              Text(project.notes!, style: T.body.copyWith(color: C.mu)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _showDetail(context),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(color: C.gx, borderRadius: BorderRadius.circular(12), border: Border.all(color: C.bd)),
+        child: Row(
+          children: [
+            Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                color: C.lvL, borderRadius: BorderRadius.circular(10),
+                image: project.thumbnailUrl != null
+                    ? DecorationImage(image: NetworkImage(project.thumbnailUrl!), fit: BoxFit.cover)
+                    : null,
+              ),
+              child: project.thumbnailUrl == null ? Icon(Icons.folder_rounded, color: C.lv, size: 22) : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(project.name, style: T.bodyBold, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 2),
+                  Row(children: [
+                    if (project.patternName != null) ...[
+                      Flexible(child: Text(project.patternName!, style: T.caption.copyWith(color: C.mu), overflow: TextOverflow.ellipsis)),
+                      const SizedBox(width: 6),
+                    ],
+                    if (project.status != null)
+                      Text(isKorean ? project.statusKo : project.status!, style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w600)),
+                  ]),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: C.mu, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProjectSummaryCard extends ConsumerWidget {
+  final List projects;
+  final bool isKorean;
+  const _ProjectSummaryCard({required this.projects, required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final active = projects.where((p) => p.status != 'finished').length;
+    final done = projects.where((p) => p.status == 'finished').length;
+    final auth = ref.watch(ravelryAuthProvider);
+    final ravelryProjectsAsync = auth.isLoggedIn ? ref.watch(ravelryProjectsProvider) : null;
+    final ravelryCount = ravelryProjectsAsync?.maybeWhen(data: (p) => p.length, orElse: () => 0) ?? 0;
+
+    return GlassCard(
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: C.pk.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+                  child: Text('MoriKnit', style: T.caption.copyWith(color: C.pkD, fontWeight: FontWeight.w700)),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    _ProjStatChip(label: isKorean ? '전체' : 'Total', value: '${projects.length}', color: C.pkD),
+                    const SizedBox(width: 8),
+                    _ProjStatChip(label: isKorean ? '진행' : 'Active', value: '$active', color: C.lv),
+                    const SizedBox(width: 8),
+                    _ProjStatChip(label: isKorean ? '완료' : 'Done', value: '$done', color: C.lmD),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Container(width: 1, height: 40, color: C.bd),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+                  child: Text('Ravelry', style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w700)),
+                ),
+                const SizedBox(height: 6),
+                if (!auth.isLoggedIn)
+                  Text(isKorean ? '연결 안 됨' : 'Not connected', style: T.caption.copyWith(color: C.mu))
+                else
+                  Row(children: [
+                    _ProjStatChip(label: isKorean ? '프로젝트' : 'Projects', value: '$ravelryCount', color: C.lv),
+                  ]),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProjStatChip extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  const _ProjStatChip({required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(value, style: T.bodyBold.copyWith(color: color)),
+        Text(label, style: T.caption.copyWith(color: C.mu, fontSize: 10)),
+      ],
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _DetailRow({required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: C.mu),
+          const SizedBox(width: 8),
+          Text(label, style: T.caption.copyWith(color: C.mu)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(value, style: T.body, overflow: TextOverflow.ellipsis)),
+        ],
+      ),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -889,27 +1191,22 @@ class ProjectAllListScreen extends ConsumerWidget {
                     Row(
                       children: [
                         Expanded(child: Text(isKorean ? '프로젝트 목록' : 'Projects', style: T.h3)),
-                        TextButton.icon(
+                        ElevatedButton.icon(
                           onPressed: () => context.push(Routes.projectInput),
-                          icon: const Icon(Icons.add_circle_outline_rounded, size: 16),
+                          icon: const Icon(Icons.add_rounded),
                           label: Text(isKorean ? '새 프로젝트' : 'New project'),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
                     if (projects.isEmpty)
-                      GlassCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Icon(Icons.folder_open_rounded, color: C.mu, size: 36),
-                            const SizedBox(height: 8),
-                            Text(
-                              isKorean ? '프로젝트를 시작해보세요' : 'Start your first project',
-                              style: T.bodyBold.copyWith(color: C.tx2),
-                            ),
-                          ],
-                        ),
+                      MoriEmptyState(
+                        icon: Icons.folder_open_rounded,
+                        iconColor: C.lv,
+                        title: isKorean ? '프로젝트를 시작해보세요' : 'Start your first project',
+                        subtitle: isKorean ? '새 프로젝트를 추가해보세요.' : 'Add a new project to get started.',
+                        buttonLabel: isKorean ? '새 프로젝트' : 'New project',
+                        onAction: () => context.push(Routes.projectInput),
                       )
                     else
                       ...projects.map((project) => Padding(

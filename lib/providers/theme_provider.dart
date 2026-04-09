@@ -6,6 +6,7 @@ import '../core/constants/subscription_constants.dart';
 
 enum AppThemeMode {
   lavender,
+  moriKnit,
   earthy,
   monochrome,
   moyangi,
@@ -22,6 +23,8 @@ extension AppThemeModeExt on AppThemeMode {
   String get label {
     switch (this) {
       case AppThemeMode.lavender:
+        return '모리컬러 테마';
+      case AppThemeMode.moriKnit:
         return '모리니트 테마';
       case AppThemeMode.earthy:
         return '달곰이의 테마';
@@ -49,6 +52,8 @@ extension AppThemeModeExt on AppThemeMode {
   String get labelEn {
     switch (this) {
       case AppThemeMode.lavender:
+        return 'MoriColor Theme';
+      case AppThemeMode.moriKnit:
         return 'MoriKnit Theme';
       case AppThemeMode.earthy:
         return 'Dalgomi Theme';

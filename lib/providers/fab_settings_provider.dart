@@ -7,15 +7,21 @@ import '../core/constants/subscription_constants.dart';
 class FabSettings {
   final bool transparent;
   final double bottomOffset; // body Stack 하단 기준 px
+  final bool particleEnabled; // 헤더 파티클 효과 on/off
+  final String particleType; // 파티클 종류: 'mori', 'heart', 'cat', 'star', 'rainbow'
 
   const FabSettings({
     this.transparent = true,
     this.bottomOffset = 24.0,
+    this.particleEnabled = true,
+    this.particleType = 'mori',
   });
 
-  FabSettings copyWith({bool? transparent, double? bottomOffset}) => FabSettings(
+  FabSettings copyWith({bool? transparent, double? bottomOffset, bool? particleEnabled, String? particleType}) => FabSettings(
         transparent: transparent ?? this.transparent,
         bottomOffset: bottomOffset ?? this.bottomOffset,
+        particleEnabled: particleEnabled ?? this.particleEnabled,
+        particleType: particleType ?? this.particleType,
       );
 }
 
@@ -31,6 +37,8 @@ class FabSettingsNotifier extends StateNotifier<FabSettings> {
       return FabSettings(
         transparent: raw['transparent'] as bool? ?? true,
         bottomOffset: (raw['bottom_offset'] as num?)?.toDouble() ?? 24.0,
+        particleEnabled: raw['particle_enabled'] as bool? ?? true,
+        particleType: raw['particle_type'] as String? ?? 'mori',
       );
     } catch (_) {
       return const FabSettings();
@@ -43,6 +51,8 @@ class FabSettingsNotifier extends StateNotifier<FabSettings> {
     await box.put('fab_settings', {
       'transparent': state.transparent,
       'bottom_offset': state.bottomOffset,
+      'particle_enabled': state.particleEnabled,
+      'particle_type': state.particleType,
     });
   }
 
@@ -59,6 +69,16 @@ class FabSettingsNotifier extends StateNotifier<FabSettings> {
 
   Future<void> setBottomOffset(double value) async {
     state = state.copyWith(bottomOffset: value.clamp(8.0, 550.0));
+    await _save();
+  }
+
+  Future<void> setParticleEnabled(bool value) async {
+    state = state.copyWith(particleEnabled: value);
+    await _save();
+  }
+
+  Future<void> setParticleType(String type) async {
+    state = state.copyWith(particleType: type);
     await _save();
   }
 }

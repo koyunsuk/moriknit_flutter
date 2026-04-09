@@ -119,6 +119,82 @@ class T {
 }
 
 class AppTheme {
+  static ThemeData get current => light;
+
+  static ThemeData get dark => ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: C.bg,
+        colorScheme: ColorScheme.dark(
+          primary: C.lv,
+          secondary: C.pk,
+          tertiary: C.lm,
+          surface: C.gx,
+          error: const Color(0xFFDC2626),
+        ),
+        appBarTheme: AppBarTheme(
+          backgroundColor: C.bg,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          titleTextStyle: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: C.tx,
+            fontFamilyFallback: T.fallbackFonts,
+          ),
+          iconTheme: IconThemeData(color: C.tx, size: 22),
+        ),
+        textTheme: TextTheme(
+          bodyLarge: T.body,
+          bodyMedium: T.body,
+          bodySmall: T.caption,
+          titleLarge: T.h1,
+          titleMedium: T.h2,
+          titleSmall: T.h3,
+          labelLarge: T.bodyBold,
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: C.lv,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            textStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, fontFamilyFallback: T.fallbackFonts),
+          ),
+        ),
+        floatingActionButtonTheme: FloatingActionButtonThemeData(
+          backgroundColor: C.lm,
+          foregroundColor: const Color(0xFF1a3000),
+          elevation: 6,
+          shape: const StadiumBorder(),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: C.gx,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: C.bd2)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: C.bd)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: C.lv, width: 1.6)),
+          hintStyle: T.body.copyWith(color: C.mu),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        ),
+        switchTheme: SwitchThemeData(
+          thumbColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? C.lv : Colors.white),
+          trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? C.lv.withValues(alpha: 0.4) : C.bd2),
+        ),
+        snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: C.gx,
+          contentTextStyle: TextStyle(color: C.tx),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        dialogTheme: DialogThemeData(
+          backgroundColor: C.gx,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          elevation: 0,
+        ),
+      );
+
   static ThemeData get light => ThemeData(
         useMaterial3: true,
         scaffoldBackgroundColor: C.bg,

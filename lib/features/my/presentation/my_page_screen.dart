@@ -719,6 +719,79 @@ class _FabSettingsCard extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 16),
+          // 스노우 효과 토글
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(isKorean ? '스노우 효과' : 'Snow Effect', style: T.bodyBold),
+                    Text(
+                      isKorean ? '상단 스노우 효과를 켜거나 끌 수 있어요' : 'Toggle the snow effect at the top',
+                      style: T.caption.copyWith(color: C.mu),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: settings.particleEnabled,
+                onChanged: (v) => ref.read(fabSettingsProvider.notifier).setParticleEnabled(v),
+                activeThumbColor: C.lv,
+                activeTrackColor: C.lvL,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // 파티클 종류 선택
+          Opacity(
+            opacity: settings.particleEnabled ? 1.0 : 0.4,
+            child: IgnorePointer(
+              ignoring: !settings.particleEnabled,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(isKorean ? '효과 종류' : 'Effect Type', style: T.bodyBold),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final entry in const [
+                        ('mori', '✨ 모리'),
+                        ('heart', '💕 하트'),
+                        ('cat', '🐾 동물'),
+                        ('star', '⭐ 별'),
+                        ('rainbow', '🌈 레인보우'),
+                      ])
+                        GestureDetector(
+                          onTap: () => ref.read(fabSettingsProvider.notifier).setParticleType(entry.$1),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: settings.particleType == entry.$1 ? C.lv : C.lvL,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: settings.particleType == entry.$1 ? C.lv : C.lv.withValues(alpha: 0.20),
+                              ),
+                            ),
+                            child: Text(
+                              entry.$2,
+                              style: T.body.copyWith(
+                                color: settings.particleType == entry.$1 ? Colors.white : C.lvD,
+                                fontWeight: settings.particleType == entry.$1 ? FontWeight.w700 : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           // 위치 프리셋
           Text(isKorean ? '기본 위치' : 'Default Position', style: T.bodyBold),
           const SizedBox(height: 8),
