@@ -70,6 +70,7 @@ class HomeScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // 1. 오늘 요약
                     _EcosystemHero(
                       t: t,
                       isKorean: isKorean,
@@ -78,70 +79,54 @@ class HomeScreen extends ConsumerWidget {
                       itemsAsync: itemsAsync,
                       publicProjectsAsync: publicProjectsAsync,
                     ),
-                    const SizedBox(height: 18),
-                    SectionTitle(
-                      title: isKorean ? '인기도안 TOP5' : 'Top 5 Patterns',
-                      trailing: GestureDetector(
-                        onTap: () => context.push(Routes.market),
-                        child: Text(isKorean ? '더보기' : 'More', style: T.caption.copyWith(color: C.lmD)),
+                    const SizedBox(height: 20),
+                    // 2. 커뮤니티 그룹 카드
+                    _SectionGroupCard(
+                      label: isKorean ? '커뮤니티' : 'Community',
+                      icon: Icons.people_rounded,
+                      color: C.pk,
+                      onMoreTap: () => context.go(Routes.community),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _SubSectionLabel(title: isKorean ? '커뮤니티 게시글' : 'Posts', color: C.pk),
+                          const SizedBox(height: 8),
+                          _CommunityPreview(isKorean: isKorean),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 14),
+                            child: Divider(height: 1, thickness: 0.5),
+                          ),
+                          _SubSectionLabel(title: isKorean ? '방명록' : 'Guestbook', color: C.pkD),
+                          const SizedBox(height: 8),
+                          _HomeGuestbookSection(isKorean: isKorean),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 14),
+                            child: Divider(height: 1, thickness: 0.5),
+                          ),
+                          _SubSectionLabel(title: isKorean ? '완성 갤러리' : 'Gallery', color: C.lv),
+                          const SizedBox(height: 8),
+                          _HomeGallerySection(isKorean: isKorean),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    _MarketPreview(isKorean: isKorean),
-                    const SizedBox(height: 18),
-                    SectionTitle(
-                      title: isKorean ? '인기 마켓 상품' : 'Market Items',
-                      trailing: GestureDetector(
-                        onTap: () => context.push(Routes.market),
-                        child: Text(isKorean ? '더보기' : 'More', style: T.caption.copyWith(color: C.lmD)),
-                      ),
+                    const SizedBox(height: 20),
+                    // 3. 강의실
+                    _SectionGroupCard(
+                      label: isKorean ? '강의실' : 'Course',
+                      icon: Icons.play_lesson_rounded,
+                      color: C.lv,
+                      onMoreTap: () => context.push(Routes.toolsCourse),
+                      child: const _PopularCourseSection(),
                     ),
-                    const SizedBox(height: 10),
-                    _RandomMarketPreview(isKorean: isKorean),
-                    const SizedBox(height: 18),
-                    SectionTitle(
-                      title: isKorean ? '방명록' : 'Guestbook',
-                      trailing: GestureDetector(
-                        onTap: () => context.go(Routes.community),
-                        child: Text(isKorean ? '더보기' : 'More', style: T.caption.copyWith(color: C.pkD)),
-                      ),
+                    const SizedBox(height: 20),
+                    // 4. 다른 사람의 프로젝트 (랜덤)
+                    _SectionGroupCard(
+                      label: isKorean ? '다른 사람들의 프로젝트' : "Others' Projects",
+                      icon: Icons.grid_view_rounded,
+                      color: C.lvD,
+                      onMoreTap: () => context.go(Routes.community),
+                      child: _OthersProjectSection(isKorean: isKorean),
                     ),
-                    const SizedBox(height: 10),
-                    _HomeGuestbookSection(isKorean: isKorean),
-                    const SizedBox(height: 18),
-                    SectionTitle(
-                      title: t.homeCommunityHighlights,
-                      trailing: GestureDetector(
-                        onTap: () => context.go(Routes.community),
-                        child: Text(t.homeMore, style: T.caption.copyWith(color: C.pkD)),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _CommunityPreview(isKorean: isKorean),
-                    const SizedBox(height: 18),
-                    SectionTitle(
-                      title: isKorean ? '다른사람들이 많이 본 영상' : 'Popular Videos',
-                      trailing: GestureDetector(
-                        onTap: () => context.push(Routes.toolsCourse),
-                        child: Text(isKorean ? '더보기' : 'More', style: T.caption.copyWith(color: C.lvD)),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    const _PopularCourseSection(),
-                    const SizedBox(height: 18),
-                    SectionTitle(
-                      title: isKorean ? '완성 갤러리' : 'Finished Gallery',
-                      trailing: GestureDetector(
-                        onTap: () => context.go(Routes.community),
-                        child: Text(isKorean ? '더보기' : 'More', style: T.caption.copyWith(color: C.lv)),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _HomeGallerySection(isKorean: isKorean),
-                    const SizedBox(height: 18),
-                    SectionTitle(title: isKorean ? '오늘의 Knitting 소식' : "Today's Knitting News"),
-                    const SizedBox(height: 10),
-                    _EditorialBoard(isKorean: isKorean, t: t),
                   ],
                 ),
               ),
@@ -1203,7 +1188,7 @@ class _HomeGallerySection extends ConsumerWidget {
     final projectsAsync = ref.watch(publicProjectsProvider);
     return projectsAsync.when(
       loading: () => const SizedBox(height: 100, child: Center(child: CircularProgressIndicator())),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
       data: (entries) {
         if (entries.isEmpty) {
           return GlassCard(
@@ -1223,7 +1208,7 @@ class _HomeGallerySection extends ConsumerWidget {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: entries.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
             itemBuilder: (ctx, i) {
               final entry = entries[i];
               return GestureDetector(
@@ -1241,7 +1226,7 @@ class _HomeGallerySection extends ConsumerWidget {
                         borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                         child: entry.coverPhotoUrl.isNotEmpty
                             ? Image.network(entry.coverPhotoUrl, width: 110, height: 80, fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(width: 110, height: 80, color: C.lvL, child: Icon(Icons.grid_view_rounded, color: C.lv)))
+                                errorBuilder: (_, _, _) => Container(width: 110, height: 80, color: C.lvL, child: Icon(Icons.grid_view_rounded, color: C.lv)))
                             : Container(width: 110, height: 80, color: C.lvL, child: Icon(Icons.grid_view_rounded, color: C.lv)),
                       ),
                       Expanded(
@@ -1310,7 +1295,7 @@ void _showGalleryDetail(BuildContext context, WidgetRef ref, PublicProjectEntry 
                   ClipRRect(
                     borderRadius: BorderRadius.circular(14),
                     child: Image.network(entry.coverPhotoUrl, width: double.infinity, height: 200, fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(height: 200, color: C.lvL)),
+                        errorBuilder: (_, _, _) => Container(height: 200, color: C.lvL)),
                   ),
                 const SizedBox(height: 16),
                 Row(
@@ -1402,7 +1387,7 @@ void _showGalleryDetail(BuildContext context, WidgetRef ref, PublicProjectEntry 
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: Image.network(url, fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(color: C.lvL)),
+                            errorBuilder: (_, _, _) => Container(color: C.lvL)),
                       ),
                     ).toList(),
                   ),
@@ -1434,6 +1419,185 @@ class _HomeDetailRow extends StatelessWidget {
         SizedBox(width: 64, child: Text(label, style: T.caption.copyWith(color: C.mu, fontWeight: FontWeight.w600))),
         Expanded(child: Text(value, style: T.caption.copyWith(color: C.tx))),
       ],
+    );
+  }
+}
+
+// ── 섹션 그룹 카드 (헤더 + 내용 + 더보기) ─────────────────────
+class _SectionGroupCard extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onMoreTap;
+  final Widget child;
+
+  const _SectionGroupCard({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.child,
+    this.onMoreTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.75),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.15)),
+        boxShadow: [
+          BoxShadow(color: color.withValues(alpha: 0.08), blurRadius: 16, offset: const Offset(0, 6)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: color, size: 18),
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: Text(label, style: T.bodyBold)),
+                if (onMoreTap != null)
+                  GestureDetector(
+                    onTap: onMoreTap,
+                    child: Text('더보기', style: T.caption.copyWith(color: color, fontWeight: FontWeight.w600)),
+                  ),
+              ],
+            ),
+          ),
+          Divider(height: 1, thickness: 0.5, color: color.withValues(alpha: 0.12)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+            child: child,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── 서브섹션 레이블 (왼쪽 컬러 바 + 텍스트) ──────────────────
+class _SubSectionLabel extends StatelessWidget {
+  final String title;
+  final Color color;
+
+  const _SubSectionLabel({required this.title, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 3,
+          height: 14,
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+        ),
+        const SizedBox(width: 7),
+        Text(title, style: T.captionBold.copyWith(color: color)),
+      ],
+    );
+  }
+}
+
+// ── 다른 사람들의 프로젝트 (랜덤 3×2 그리드) ─────────────────
+class _OthersProjectSection extends ConsumerWidget {
+  final bool isKorean;
+  const _OthersProjectSection({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final projectsAsync = ref.watch(publicProjectsProvider);
+    return projectsAsync.when(
+      loading: () => const SizedBox(height: 80, child: Center(child: CircularProgressIndicator())),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (entries) {
+        if (entries.isEmpty) {
+          return Text(
+            isKorean ? '아직 공개된 프로젝트가 없어요.' : 'No projects yet.',
+            style: T.caption.copyWith(color: C.mu),
+          );
+        }
+        final shuffled = List.of(entries)..shuffle(Random());
+        final picks = shuffled.take(6).toList();
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: 0.85,
+          ),
+          itemCount: picks.length,
+          itemBuilder: (_, i) {
+            final entry = picks[i];
+            return GestureDetector(
+              onTap: () => _showGalleryDetail(context, ref, entry),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: C.gx,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: C.bd),
+                ),
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                        child: entry.coverPhotoUrl.isNotEmpty
+                            ? Image.network(
+                                entry.coverPhotoUrl,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => Container(color: C.lvL, child: Icon(Icons.grid_view_rounded, color: C.lv)),
+                              )
+                            : Container(color: C.lvL, child: Icon(Icons.grid_view_rounded, color: C.lv)),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(6, 4, 6, 6),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            entry.title,
+                            style: T.caption.copyWith(fontWeight: FontWeight.w600, fontSize: 11),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Row(children: [
+                            Icon(Icons.person_outline_rounded, size: 9, color: C.mu),
+                            const SizedBox(width: 2),
+                            Expanded(
+                              child: Text(
+                                entry.ownerName,
+                                style: T.caption.copyWith(fontSize: 9, color: C.mu),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ]),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

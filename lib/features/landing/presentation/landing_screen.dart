@@ -2376,6 +2376,8 @@ class _FeatureSection extends StatelessWidget {
       (Icons.people_alt_rounded, '커뮤니티', '뜨개인들과 작업물을 나누고 소통해요', Color(0xFFA3E635)),
       (Icons.menu_book_rounded, '뜨개백과사전', '뜨개 용어와 기법을 언제든 찾아보세요', Color(0xFFFB923C)),
       (Icons.calculate_rounded, '게이지 계산기', '게이지에 맞는 코수와 단수를 계산해요', Color(0xFF34D399)),
+      (Icons.search_rounded, 'Ravelry 연동', 'Ravelry 실·도안을 앱 안에서 바로 검색하세요', Color(0xFF60A5FA)),
+      (Icons.shopping_bag_rounded, 'Etsy 연동', 'Etsy 마켓에 내 도안을 손쉽게 등록·판매하세요', Color(0xFFFF8C00)),
     ];
 
     final width = MediaQuery.of(context).size.width;
