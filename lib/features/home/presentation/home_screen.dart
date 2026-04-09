@@ -127,6 +127,14 @@ class HomeScreen extends ConsumerWidget {
                       onMoreTap: () => context.go(Routes.community),
                       child: _OthersProjectSection(isKorean: isKorean),
                     ),
+                    const SizedBox(height: 20),
+                    // 5. 오늘의 뜨개 소식 (모리채널 포함)
+                    _SectionGroupCard(
+                      label: isKorean ? '오늘의 Knitting 소식' : "Today's Knitting News",
+                      icon: Icons.newspaper_rounded,
+                      color: C.pk,
+                      child: _EditorialBoard(isKorean: isKorean, t: t),
+                    ),
                   ],
                 ),
               ),
