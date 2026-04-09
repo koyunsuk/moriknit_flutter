@@ -74,5 +74,18 @@
 	<string>작품 사진을 즉시 촬영하기 위해 카메라에 접근합니다.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>GIDClientID</key>
+	<string>683285854424-pt9koaoptj7inqdp1u37c1nuscnp7dae.apps.googleusercontent.com</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.683285854424-pt9koaoptj7inqdp1u37c1nuscnp7dae</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
