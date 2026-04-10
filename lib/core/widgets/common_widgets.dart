@@ -125,7 +125,7 @@ class LimitBar extends StatelessWidget {
       decoration: isReached
           ? C.limitBar
           : BoxDecoration(
-              color: C.lv.withValues(alpha: 0.06),
+              color: C.tint(C.lv, 0.06),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: C.bd2),
             ),
@@ -462,7 +462,7 @@ class MoriEcosystemBackdrop extends StatelessWidget {
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      C.lv.withValues(alpha: 0.14),
+                      C.tint(C.lv, 0.14),
                       Colors.transparent,
                     ],
                   ),
@@ -618,10 +618,10 @@ class MoriBrandHeader extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.84),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: C.lv.withValues(alpha: 0.18)),
+                  border: Border.all(color: C.tint(C.lv, 0.18)),
                   boxShadow: [
                     BoxShadow(
-                      color: C.lv.withValues(alpha: 0.06),
+                      color: C.tint(C.lv, 0.06),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -696,15 +696,11 @@ class MoriPageHeaderShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final headerTone = C.isBW
-        ? C.bg
-        : Color.alphaBlend(
-            C.lv.withValues(alpha: 0.10),
-            Color.alphaBlend(C.pk.withValues(alpha: 0.05), C.bg),
-          );
-    final headerBorder = C.isBW
-        ? BorderSide(color: C.bd, width: 1)
-        : BorderSide(color: C.lv.withValues(alpha: 0.38), width: 1.2);
+    final headerTone = Color.alphaBlend(
+      C.tint(C.lv, 0.10),
+      Color.alphaBlend(C.tint(C.pk, 0.05), C.bg),
+    );
+    final headerBorder = BorderSide(color: C.isBW ? C.bd : C.lv.withValues(alpha: 0.38), width: C.isBW ? 1.0 : 1.2);
 
     return Container(
       width: double.infinity,

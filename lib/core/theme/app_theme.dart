@@ -228,7 +228,7 @@ class AppTheme {
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: C.accent,
+            backgroundColor: C.lv,
             foregroundColor: Colors.white,
             elevation: 0,
             shape:
@@ -242,8 +242,8 @@ class AppTheme {
           ),
         ),
         floatingActionButtonTheme: FloatingActionButtonThemeData(
-          backgroundColor: C.isBW ? Colors.black : C.lm,
-          foregroundColor: Colors.white,
+          backgroundColor: C.lm,
+          foregroundColor: const Color(0xFF1a3000),
           elevation: 6,
           shape: const StadiumBorder(),
         ),
