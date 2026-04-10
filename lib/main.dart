@@ -41,7 +41,7 @@ void main() async {
   );
 
   if (!kIsWeb) {
-    kakao.KakaoSdk.init(nativeAppKey: '6b1aebe506588f959dfac10254c7281d');
+    kakao.KakaoSdk.init(nativeAppKey: 'de107e8c3aa2ecdb5271c1a48a7da0d7');
   }
 
   runApp(

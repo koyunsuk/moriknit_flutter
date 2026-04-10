@@ -458,7 +458,7 @@ exports.ravelryProjects = onRequest(
 
 // ── 카카오 커스텀 토큰 발급 ─────────────────────────────────
 exports.kakaoCustomToken = onRequest(
-  { region: REGION },
+  { region: REGION, serviceAccount: 'firebase-adminsdk-fbsvc@moriknit-ceea9.iam.gserviceaccount.com' },
   async (req, res) => {
     setCors(res);
     if (req.method === 'OPTIONS') { res.status(204).send(''); return; }

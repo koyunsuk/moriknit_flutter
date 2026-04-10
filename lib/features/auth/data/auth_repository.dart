@@ -158,10 +158,11 @@ class AuthRepository {
     final docRef = _db.collection('users').doc(firebaseUser.uid);
     final doc = await docRef.get().timeout(const Duration(seconds: 12));
     final profileUpdates = <String, dynamic>{
-      'email': firebaseUser.email ?? '',
-      'displayName': firebaseUser.displayName ?? '',
-      'photoURL': firebaseUser.photoURL ?? '',
       'lastActiveAt': FieldValue.serverTimestamp(),
+      // 빈 값으로 기존 데이터 덮어쓰지 않음 (카카오 등 커스텀 토큰 로그인 보호)
+      if ((firebaseUser.email ?? '').isNotEmpty) 'email': firebaseUser.email,
+      if ((firebaseUser.displayName ?? '').isNotEmpty) 'displayName': firebaseUser.displayName,
+      if ((firebaseUser.photoURL ?? '').isNotEmpty) 'photoURL': firebaseUser.photoURL,
     };
 
     if (doc.exists) {
