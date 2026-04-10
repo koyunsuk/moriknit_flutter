@@ -433,6 +433,7 @@ class BgOrbs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (C.isBW) return const SizedBox.shrink();
     return Positioned.fill(
       child: IgnorePointer(
         child: CustomPaint(painter: _BgPatternPainter()),
@@ -1142,7 +1143,7 @@ class MoriLibraryCard extends StatelessWidget {
                 ],
               ),
             ),
-            if (trailing != null) trailing!,
+            ?trailing,
           ],
         ),
       ),

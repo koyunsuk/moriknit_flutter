@@ -32,8 +32,12 @@ class _Palette {
 
 class C {
   static _Palette _p = _lavender;
+  static AppThemeMode _mode = AppThemeMode.lavender;
+
+  static bool get isBW => _mode == AppThemeMode.blackWhite;
 
   static void apply(AppThemeMode mode) {
+    _mode = mode;
     switch (mode) {
       case AppThemeMode.lavender:    _p = _lavender;    break;
       case AppThemeMode.moriKnit:    _p = _moriKnit;    break;
@@ -77,11 +81,13 @@ class C {
   static Color get bd2 => _p.bd2;
 
   // Gradient getters
-  static LinearGradient get bgGradient => LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [_p.bg, Color.alphaBlend(_p.lv.withValues(alpha: 0.08), _p.bg)],
-      );
+  static LinearGradient get bgGradient => isBW
+      ? LinearGradient(colors: [_p.bg, _p.bg])
+      : LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_p.bg, Color.alphaBlend(_p.lv.withValues(alpha: 0.08), _p.bg)],
+        );
 
   static LinearGradient get pkLvGradient => LinearGradient(
         colors: [_p.pk, _p.lv],
@@ -104,7 +110,7 @@ class C {
         color: _p.gx,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _p.bd, width: 1),
-        boxShadow: [
+        boxShadow: isBW ? null : [
           BoxShadow(
             color: _p.lv.withValues(alpha: 0.09),
             blurRadius: 16,
@@ -125,7 +131,7 @@ class C {
   static BoxDecoration get tabBarDeco => BoxDecoration(
         color: _p.gx,
         border: Border(top: BorderSide(color: _p.bd2, width: 1)),
-        boxShadow: [
+        boxShadow: isBW ? null : [
           BoxShadow(
             color: _p.lv.withValues(alpha: 0.08),
             blurRadius: 20,
