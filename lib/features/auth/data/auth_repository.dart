@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -7,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:http/http.dart' as http;
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' as kakao;
 
 import '../domain/user_model.dart';
@@ -107,16 +109,48 @@ class AuthRepository {
     }
   }
 
+  static const _kakaoFunctionUrl =
+      'https://us-central1-moriknit-ceea9.cloudfunctions.net/kakaoCustomToken';
+
   Future<UserModel?> signInWithKakao() async {
     try {
+      // 1. 카카오 로그인
+      final kakao.OAuthToken token;
       if (await kakao.isKakaoTalkInstalled()) {
-        await kakao.UserApi.instance.loginWithKakaoTalk();
+        token = await kakao.UserApi.instance.loginWithKakaoTalk();
       } else {
-        await kakao.UserApi.instance.loginWithKakaoAccount();
+        token = await kakao.UserApi.instance.loginWithKakaoAccount();
       }
-      throw UnimplementedError('Kakao login requires Firebase custom token integration.');
+
+      // 2. Firebase Function으로 커스텀 토큰 발급
+      final response = await http.post(
+        Uri.parse(_kakaoFunctionUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'accessToken': token.accessToken}),
+      ).timeout(const Duration(seconds: 20));
+
+      if (response.statusCode != 200) {
+        throw Exception('Custom token request failed: ${response.body}');
+      }
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final customToken = data['customToken'] as String?;
+      if (customToken == null || customToken.isEmpty) {
+        throw Exception('No custom token returned');
+      }
+
+      // 3. Firebase 로그인
+      final credential = await _auth
+          .signInWithCustomToken(customToken)
+          .timeout(const Duration(seconds: 20));
+      if (credential.user == null) throw Exception('Firebase user was not returned.');
+
+      return await _getOrCreateUser(credential.user!);
+    } on kakao.KakaoAuthException catch (e) {
+      throw Exception('카카오 인증 실패: ${e.error.name}');
+    } on TimeoutException {
+      throw Exception('카카오 로그인 시간이 초과됐습니다. 다시 시도해 주세요.');
     } catch (e) {
-      throw Exception('Kakao login failed: $e');
+      rethrow;
     }
   }
 

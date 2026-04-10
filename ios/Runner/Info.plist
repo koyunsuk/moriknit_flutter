@@ -86,6 +86,21 @@
 				<string>com.googleusercontent.apps.683285854424-pt9koaoptj7inqdp1u37c1nuscnp7dae</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>kakao6b1aebe506588f959dfac10254c7281d</string>
+			</array>
+		</dict>
+	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>kakaokompassauth</string>
+		<string>storykompassauth</string>
+		<string>kakaolink</string>
+		<string>kakaotalk</string>
 	</array>
 </dict>
 </plist>

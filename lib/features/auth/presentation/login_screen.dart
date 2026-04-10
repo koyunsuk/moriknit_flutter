@@ -115,6 +115,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       },
                       onLoginEmail: _loginEmail,
                       onLoginGoogle: _loginGoogle,
+                      onLoginKakao: _loginKakao,
                       onShowSignUp: () => showSignUpSheet(context, ref, mounted),
                     ),
                   ),
@@ -160,6 +161,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     },
                     onLoginEmail: _loginEmail,
                     onLoginGoogle: _loginGoogle,
+                    onLoginKakao: _loginKakao,
                     onShowSignUp: () => showSignUpSheet(context, ref, mounted),
                   ),
                 ),
@@ -189,12 +191,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _loginGoogle() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    setState(() { _loading = true; _error = null; });
     try {
       await ref.read(authRepositoryProvider).signInWithGoogle();
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loginKakao() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      await ref.read(authRepositoryProvider).signInWithKakao();
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -271,6 +281,7 @@ class _LoginOverlayCardState extends ConsumerState<_LoginOverlayCard> {
               onRememberMeChanged: (v) => setState(() => _rememberMe = v),
               onLoginEmail: _loginEmail,
               onLoginGoogle: _loginGoogle,
+              onLoginKakao: _loginKakao,
               onShowSignUp: () => showSignUpSheet(context, ref, mounted),
             ),
           ),
@@ -306,12 +317,21 @@ class _LoginOverlayCardState extends ConsumerState<_LoginOverlayCard> {
   }
 
   Future<void> _loginGoogle() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    setState(() { _loading = true; _error = null; });
     try {
       await ref.read(authRepositoryProvider).signInWithGoogle();
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loginKakao() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      await ref.read(authRepositoryProvider).signInWithKakao();
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
@@ -332,6 +352,7 @@ class LoginPanel extends ConsumerWidget {
   final ValueChanged<bool> onRememberMeChanged;
   final VoidCallback onLoginEmail;
   final VoidCallback onLoginGoogle;
+  final VoidCallback onLoginKakao;
   final VoidCallback onShowSignUp;
   final bool showOverlayIntro;
   final String? title;
@@ -348,6 +369,7 @@ class LoginPanel extends ConsumerWidget {
     required this.onRememberMeChanged,
     required this.onLoginEmail,
     required this.onLoginGoogle,
+    required this.onLoginKakao,
     required this.onShowSignUp,
     this.showOverlayIntro = false,
     this.title,
@@ -403,12 +425,12 @@ class LoginPanel extends ConsumerWidget {
             onTap: onLoginGoogle,
           ),
           const SizedBox(height: 8),
-          _ComingSoonButton(
+          SocialLoginButton(
             color: const Color(0xFFFEE500),
             textColor: const Color(0xFF191919),
             label: t.continueWithKakao,
             leading: const _KakaoIcon(),
-            badgeLabel: t.preparing,
+            onTap: onLoginKakao,
           ),
           const SizedBox(height: 8),
           _ComingSoonButton(

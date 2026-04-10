@@ -455,3 +455,71 @@ exports.ravelryProjects = onRequest(
     );
   },
 );
+
+// ── 카카오 커스텀 토큰 발급 ─────────────────────────────────
+exports.kakaoCustomToken = onRequest(
+  { region: REGION },
+  async (req, res) => {
+    setCors(res);
+    if (req.method === 'OPTIONS') { res.status(204).send(''); return; }
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Method Not Allowed' }); return; }
+
+    const { accessToken } = req.body;
+    if (!accessToken) { res.status(400).json({ error: 'accessToken is required' }); return; }
+
+    try {
+      // 카카오 사용자 정보 조회
+      const kakaoRes = await fetch('https://kapi.kakao.com/v2/user/me', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!kakaoRes.ok) {
+        res.status(401).json({ error: 'Invalid Kakao access token' });
+        return;
+      }
+      const kakaoUser = await kakaoRes.json();
+      const kakaoId = String(kakaoUser.id);
+
+      const profile = kakaoUser.kakao_account?.profile ?? {};
+      const email = kakaoUser.kakao_account?.email ?? '';
+      const displayName = profile.nickname ?? '';
+      const photoURL = profile.profile_image_url ?? '';
+
+      // Firebase 커스텀 토큰 생성
+      const uid = `kakao_${kakaoId}`;
+      const customToken = await admin.auth().createCustomToken(uid, {
+        provider: 'kakao',
+        displayName,
+        email,
+        photoURL,
+      });
+
+      // Firestore 사용자 문서 upsert (신규 가입 처리)
+      const userRef = db.collection('users').doc(uid);
+      const userDoc = await userRef.get();
+      if (!userDoc.exists) {
+        await userRef.set({
+          uid,
+          email,
+          displayName,
+          photoURL,
+          provider: 'kakao',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          lastActiveAt: admin.firestore.FieldValue.serverTimestamp(),
+          moriBalance: 10000,
+          subscription: { planId: 'pro', status: 'active' },
+          usage: { swatchCount: 0, projectCount: 0, counterCount: 0, editorSaveCount: 0, postsThisMonth: 0 },
+        });
+      } else {
+        await userRef.set(
+          { displayName, photoURL, email, lastActiveAt: admin.firestore.FieldValue.serverTimestamp() },
+          { merge: true },
+        );
+      }
+
+      res.status(200).json({ customToken });
+    } catch (err) {
+      console.error('kakaoCustomToken error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  },
+);

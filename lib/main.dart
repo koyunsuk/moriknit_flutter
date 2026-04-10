@@ -9,6 +9,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' as kakao;
+
 import 'core/constants/subscription_constants.dart';
 import 'core/localization/app_language.dart';
 import 'core/router/app_router.dart';
@@ -37,6 +39,10 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  if (!kIsWeb) {
+    kakao.KakaoSdk.init(nativeAppKey: '6b1aebe506588f959dfac10254c7281d');
+  }
 
   runApp(
     const ProviderScope(
