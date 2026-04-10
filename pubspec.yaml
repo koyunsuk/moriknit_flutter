@@ -2,7 +2,7 @@ name: moriknit_flutter
 description: "MoriKnit - knitting record app"
 publish_to: 'none'
 
-version: 0.9.3+2003
+version: 0.9.3+2004
 
 environment:
   sdk: ^3.11.1
