@@ -36,6 +36,10 @@ class C {
 
   static bool get isBW => _mode == AppThemeMode.blackWhite;
 
+  // B&W 모드에서 버튼·선택 강조용 검정색 (lv/pk는 tint용 흰색이므로 대신 사용)
+  static Color get accent => isBW ? _p.lvD : _p.lv;
+  static Color get accentDark => isBW ? _p.pkD : _p.pk;
+
   static void apply(AppThemeMode mode) {
     _mode = mode;
     switch (mode) {
@@ -400,17 +404,18 @@ class C {
   );
 
   // 블랙&화이트 테마 — 순백 배경 + 순흑 텍스트 + 그레이 구분선만
+  // lv/pk = 흰색(투명 tint 효과), lvD/pkD = 검정(버튼·선택 강조에 직접 사용)
   static const _Palette _blackWhite = _Palette(
-    pk: Color(0xFF000000),   // 순흑 (버튼, 선택 강조)
-    pkD: Color(0xFF000000),
-    pkL: Color(0x0F000000),  // 거의 투명 — 배경 강조 최소화
-    lv: Color(0xFF000000),   // 순흑 (secondary accent도 흑)
-    lvD: Color(0xFF000000),
-    lvL: Color(0x0F000000),
-    lm: Color(0xFFBBBBBB),   // 연그레이 (보조 텍스트)
-    lmD: Color(0xFF888888),
-    lmG: Color(0x30BBBBBB),
-    og: Color(0xFF555555),   // 경고/삭제 — 중간 그레이
+    pk: Color(0xFFFFFFFF),   // 흰색 — tint용(배경에 alpha 적용 시 투명)
+    pkD: Color(0xFF000000),  // 순흑 — 버튼·강조 직접 색상
+    pkL: Color(0x00FFFFFF),  // 완전 투명
+    lv: Color(0xFFFFFFFF),   // 흰색 — tint용
+    lvD: Color(0xFF000000),  // 순흑 — UI 강조 직접 색상
+    lvL: Color(0x00FFFFFF),  // 완전 투명
+    lm: Color(0xFFCCCCCC),   // 연그레이
+    lmD: Color(0xFF888888),  // 미드 그레이
+    lmG: Color(0x00FFFFFF),  // 완전 투명
+    og: Color(0xFF555555),   // 경고/삭제
     tx: Color(0xFF000000),   // 순흑 텍스트
     tx2: Color(0xFF444444),
     mu: Color(0xFFAAAAAA),
