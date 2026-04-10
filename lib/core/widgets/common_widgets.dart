@@ -696,17 +696,11 @@ class MoriPageHeaderShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final headerTone = Color.alphaBlend(
-      C.tint(C.lv, 0.10),
-      Color.alphaBlend(C.tint(C.pk, 0.05), C.bg),
-    );
-    final headerBorder = BorderSide(color: C.isBW ? C.bd : C.lv.withValues(alpha: 0.38), width: C.isBW ? 1.0 : 1.2);
-
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: headerTone,
-        border: Border(bottom: headerBorder),
+        color: C.headerBg,
+        border: Border(bottom: BorderSide(color: C.headerBorder, width: 1.2)),
       ),
       child: Align(
         alignment: alignment,

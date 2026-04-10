@@ -111,12 +111,12 @@ class AppThemeColors {
   );
 
   static const jwiChuni = AppThemeColors(
-    pk: Color(0xFF2C5282), pkD: Color(0xFF1A365D), pkL: Color(0x202C5282),
-    lv: Color(0xFFC4996A), lvD: Color(0xFF8B6340), lvL: Color(0x20C4996A),
-    lm: Color(0xFFE8D5BC), lmD: Color(0xFFB08A63), lmG: Color(0x57E8D5BC),
+    pk: Color(0xFF4A6FA5), pkD: Color(0xFF2D4E7E), pkL: Color(0x204A6FA5),
+    lv: Color(0xFFB87C52), lvD: Color(0xFF8B5C35), lvL: Color(0x20B87C52),
+    lm: Color(0xFFE2D0B8), lmD: Color(0xFFA8896A), lmG: Color(0x57E2D0B8),
     og: Color(0xFFB84C2E),
-    tx: Color(0xFF1A1A2A), tx2: Color(0xFF5C5470), mu: Color(0xFF9C90A8),
-    bg: Color(0xFFF8F4EE), gx: Color(0xD9FDF9F4), bd: Color(0xE8DDD0BC), bd2: Color(0x302C5282),
+    tx: Color(0xFF1C1C2C), tx2: Color(0xFF5A5470), mu: Color(0xFF9C90A8),
+    bg: Color(0xFFF6F2EA), gx: Color(0xD9FBF8F2), bd: Color(0xE8DDD0BC), bd2: Color(0x304A6FA5),
   );
 
   static const todori = AppThemeColors(

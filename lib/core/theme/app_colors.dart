@@ -40,6 +40,21 @@ class C {
   static Color tint(Color base, double alpha) =>
       isBW ? Colors.transparent : base.withValues(alpha: alpha);
 
+  // 테마별 헤더 배경색 (확실한 강조색)
+  static Color get headerBg {
+    if (isBW) return _p.bg; // B&W: 순백
+    if (_mode == AppThemeMode.creamSnail) return _p.bg; // 크림팽이: 크림색 고정
+    // 그 외: pk 강조색을 30% 블렌드 → 확실한 테마 색상
+    return Color.alphaBlend(_p.pk.withValues(alpha: 0.28), _p.bg);
+  }
+
+  // 헤더 하단 구분선 색
+  static Color get headerBorder {
+    if (isBW) return _p.bd;
+    if (_mode == AppThemeMode.creamSnail) return _p.bd;
+    return _p.pk.withValues(alpha: 0.35);
+  }
+
   static void apply(AppThemeMode mode) {
     _mode = mode;
     switch (mode) {
@@ -239,25 +254,25 @@ class C {
     bd2: Color(0x308E7BFF),
   );
 
-  // 쥐춘이 테마 — 딥네이비 + 따뜻한 베이지 (토도리처럼 대비 명확)
+  // 쥐춘이 테마 — 슬레이트블루(포인트) + 크리미베이지(배경) + 웜브라운(액센트)
   static const _Palette _jwiChuni = _Palette(
-    pk: Color(0xFF2C5282),   // 딥네이비 (강한 포인트)
-    pkD: Color(0xFF1A365D),
-    pkL: Color(0x202C5282),
-    lv: Color(0xFFC4996A),   // 따뜻한 카라멜 베이지
-    lvD: Color(0xFF8B6340),
-    lvL: Color(0x20C4996A),
-    lm: Color(0xFFE8D5BC),   // 밝은 크림
-    lmD: Color(0xFFB08A63),
-    lmG: Color(0x57E8D5BC),
-    og: Color(0xFFB84C2E),   // 테라코타 (경고/삭제)
-    tx: Color(0xFF1A1A2A),
-    tx2: Color(0xFF5C5470),
+    pk: Color(0xFF4A6FA5),   // 선명한 슬레이트 블루 (헤더 강조)
+    pkD: Color(0xFF2D4E7E),
+    pkL: Color(0x204A6FA5),
+    lv: Color(0xFFB87C52),   // 웜 브라운 오렌지 (secondary)
+    lvD: Color(0xFF8B5C35),
+    lvL: Color(0x20B87C52),
+    lm: Color(0xFFE2D0B8),   // 크리미 베이지
+    lmD: Color(0xFFA8896A),
+    lmG: Color(0x57E2D0B8),
+    og: Color(0xFFB84C2E),   // 테라코타 (경고)
+    tx: Color(0xFF1C1C2C),
+    tx2: Color(0xFF5A5470),
     mu: Color(0xFF9C90A8),
-    bg: Color(0xFFF8F4EE),   // 따뜻한 아이보리
-    gx: Color(0xD9FDF9F4),
+    bg: Color(0xFFF6F2EA),   // 따뜻한 아이보리 배경
+    gx: Color(0xD9FBF8F2),
     bd: Color(0xE8DDD0BC),
-    bd2: Color(0x302C5282),
+    bd2: Color(0x304A6FA5),
   );
 
   // 토도리테마 — 골드넛 + 메이플브라운 + 올리브
