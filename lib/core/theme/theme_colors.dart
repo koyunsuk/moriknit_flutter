@@ -250,6 +250,15 @@ class AppThemeColors {
     bd2: Color(0x40A7E635),
   );
 
+  static const blackWhite = AppThemeColors(
+    pk: Color(0xFF000000), pkD: Color(0xFF000000), pkL: Color(0x18000000),
+    lv: Color(0xFF333333), lvD: Color(0xFF111111), lvL: Color(0x18333333),
+    lm: Color(0xFF888888), lmD: Color(0xFF555555), lmG: Color(0x40888888),
+    og: Color(0xFF444444),
+    tx: Color(0xFF000000), tx2: Color(0xFF555555), mu: Color(0xFF999999),
+    bg: Color(0xFFFFFFFF), gx: Color(0xFFFAFAFA), bd: Color(0xE8E0E0E0), bd2: Color(0x30000000),
+  );
+
   static const moriKnit = AppThemeColors(
     pk: Color(0xFF8B7CF8), pkD: Color(0xFF5B47D6), pkL: Color(0x208B7CF8),
     lv: Color(0xFF84CC16), lvD: Color(0xFF4D7C0F), lvL: Color(0x2084CC16),
@@ -273,6 +282,7 @@ class AppThemeColors {
       case AppThemeMode.jimungmungi: return jimungmungi;
       case AppThemeMode.chocoNyangi: return chocoNyangi;
       case AppThemeMode.eunsulNyangi: return eunsulNyangi;
+      case AppThemeMode.blackWhite:   return blackWhite;
     }
   }
 }

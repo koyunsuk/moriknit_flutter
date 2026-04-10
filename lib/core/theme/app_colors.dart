@@ -47,6 +47,7 @@ class C {
       case AppThemeMode.jimungmungi: _p = _jimungmungi; break;
       case AppThemeMode.chocoNyangi: _p = _chocoNyangi; break;
       case AppThemeMode.eunsulNyangi: _p = _eunsulNyangi; break;
+      case AppThemeMode.blackWhite:   _p = _blackWhite;   break;
     }
   }
 
@@ -390,5 +391,26 @@ class C {
     gx: Color(0xD9FEFFF9),
     bd: Color(0xE8DFF0D3),
     bd2: Color(0x40FF9F1C),
+  );
+
+  // 블랙&화이트 테마 — 순흑 + 순백 + 그레이 (미니멀 심플)
+  static const _Palette _blackWhite = _Palette(
+    pk: Color(0xFF000000),   // 순흑 포인트
+    pkD: Color(0xFF000000),
+    pkL: Color(0x18000000),
+    lv: Color(0xFF333333),   // 다크 그레이 (secondary)
+    lvD: Color(0xFF111111),
+    lvL: Color(0x18333333),
+    lm: Color(0xFF888888),   // 미드 그레이
+    lmD: Color(0xFF555555),
+    lmG: Color(0x40888888),
+    og: Color(0xFF444444),   // 경고/삭제용 다크 그레이
+    tx: Color(0xFF000000),   // 순흑 텍스트
+    tx2: Color(0xFF555555),
+    mu: Color(0xFF999999),
+    bg: Color(0xFFFFFFFF),   // 순백 배경
+    gx: Color(0xFFFAFAFA),
+    bd: Color(0xE8E0E0E0),
+    bd2: Color(0x30000000),
   );
 }

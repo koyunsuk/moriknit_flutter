@@ -17,6 +17,7 @@ enum AppThemeMode {
   jimungmungi,
   chocoNyangi,
   eunsulNyangi,
+  blackWhite,
 }
 
 extension AppThemeModeExt on AppThemeMode {
@@ -46,6 +47,8 @@ extension AppThemeModeExt on AppThemeMode {
         return '초코냥이 테마';
       case AppThemeMode.eunsulNyangi:
         return '은설이냥 테마';
+      case AppThemeMode.blackWhite:
+        return '블랙&화이트 테마';
     }
   }
 
@@ -75,6 +78,8 @@ extension AppThemeModeExt on AppThemeMode {
         return 'Choco Nyangi Theme';
       case AppThemeMode.eunsulNyangi:
         return 'Eunsul Nyangi Theme';
+      case AppThemeMode.blackWhite:
+        return 'Black & White Theme';
     }
   }
 }
