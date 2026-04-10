@@ -40,19 +40,21 @@ class C {
   static Color tint(Color base, double alpha) =>
       isBW ? Colors.transparent : base.withValues(alpha: alpha);
 
-  // 테마별 헤더 배경색 (확실한 강조색)
+  // 테마별 헤더 배경색
   static Color get headerBg {
-    if (isBW) return _p.bg; // B&W: 순백
-    if (_mode == AppThemeMode.creamSnail) return _p.bg; // 크림팽이: 크림색 고정
-    // 그 외: pk 강조색을 30% 블렌드 → 확실한 테마 색상
-    return Color.alphaBlend(_p.pk.withValues(alpha: 0.28), _p.bg);
+    if (isBW) return _p.bg;
+    if (_mode == AppThemeMode.creamSnail) return _p.bg; // 크림팽이: 크림색
+    if (_mode == AppThemeMode.jwiChuni)   return Color.alphaBlend(_p.pk.withValues(alpha: 0.28), _p.bg); // 쥐춘이: 강조색
+    // 그 외 원래 공식
+    return Color.alphaBlend(_p.lv.withValues(alpha: 0.10), Color.alphaBlend(_p.pk.withValues(alpha: 0.05), _p.bg));
   }
 
   // 헤더 하단 구분선 색
   static Color get headerBorder {
     if (isBW) return _p.bd;
     if (_mode == AppThemeMode.creamSnail) return _p.bd;
-    return _p.pk.withValues(alpha: 0.35);
+    if (_mode == AppThemeMode.jwiChuni)   return _p.pk.withValues(alpha: 0.35);
+    return _p.lv.withValues(alpha: 0.38);
   }
 
   static void apply(AppThemeMode mode) {
