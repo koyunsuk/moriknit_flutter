@@ -239,25 +239,25 @@ class C {
     bd2: Color(0x308E7BFF),
   );
 
-  // 쥐춘이 테마 — 슬리피블루 + 베이지 + 밤색
+  // 쥐춘이 테마 — 딥네이비 + 따뜻한 베이지 (토도리처럼 대비 명확)
   static const _Palette _jwiChuni = _Palette(
-    pk: Color(0xFF8FA9D8),
-    pkD: Color(0xFF536F9F),
-    pkL: Color(0x208FA9D8),
-    lv: Color(0xFFB9A289),
-    lvD: Color(0xFF7C6248),
-    lvL: Color(0x20B9A289),
-    lm: Color(0xFFD7C2A3),
-    lmD: Color(0xFF9F805B),
-    lmG: Color(0x57D7C2A3),
-    og: Color(0xFFB17C57),
-    tx: Color(0xFF221A1A),
-    tx2: Color(0xFF685C63),
-    mu: Color(0xFFA1979D),
-    bg: Color(0xFFF5F3F0),
-    gx: Color(0xD9FCFBFA),
-    bd: Color(0xE8DDD7D1),
-    bd2: Color(0x308FA9D8),
+    pk: Color(0xFF2C5282),   // 딥네이비 (강한 포인트)
+    pkD: Color(0xFF1A365D),
+    pkL: Color(0x202C5282),
+    lv: Color(0xFFC4996A),   // 따뜻한 카라멜 베이지
+    lvD: Color(0xFF8B6340),
+    lvL: Color(0x20C4996A),
+    lm: Color(0xFFE8D5BC),   // 밝은 크림
+    lmD: Color(0xFFB08A63),
+    lmG: Color(0x57E8D5BC),
+    og: Color(0xFFB84C2E),   // 테라코타 (경고/삭제)
+    tx: Color(0xFF1A1A2A),
+    tx2: Color(0xFF5C5470),
+    mu: Color(0xFF9C90A8),
+    bg: Color(0xFFF8F4EE),   // 따뜻한 아이보리
+    gx: Color(0xD9FDF9F4),
+    bd: Color(0xE8DDD0BC),
+    bd2: Color(0x302C5282),
   );
 
   // 토도리테마 — 골드넛 + 메이플브라운 + 올리브
@@ -301,24 +301,25 @@ class C {
     bd2: Color(0x30FF6FB5),
   );
 
+  // 크림팽이 테마 — 크림 배경 + 딥블루 포인트 (대비 명확)
   static const _Palette _creamSnail = _Palette(
-    pk: Color(0xFF4B6FD6),
-    pkD: Color(0xFF2447A8),
-    pkL: Color(0x204B6FD6),
-    lv: Color(0xFF79B8FF),
-    lvD: Color(0xFF2D7FEA),
-    lvL: Color(0x2479B8FF),
-    lm: Color(0xFFF6EDD9),
-    lmD: Color(0xFFD6C29A),
-    lmG: Color(0x57F6EDD9),
-    og: Color(0xFF8EA7E8),
-    tx: Color(0xFF24314F),
-    tx2: Color(0xFF6B7691),
-    mu: Color(0xFFA3A9B8),
-    bg: Color(0xFFFFFCF5),
-    gx: Color(0xD9FFFDFC),
-    bd: Color(0xE879B8FF),
-    bd2: Color(0x5079B8FF),
+    pk: Color(0xFF1D4ED8),   // 딥 블루 (강한 포인트)
+    pkD: Color(0xFF1E3A8A),
+    pkL: Color(0x201D4ED8),
+    lv: Color(0xFF2563EB),   // 미디엄 블루 (secondary)
+    lvD: Color(0xFF1D4ED8),
+    lvL: Color(0x202563EB),
+    lm: Color(0xFFF5E6C8),   // 크림 옐로우
+    lmD: Color(0xFFD4A853),
+    lmG: Color(0x57F5E6C8),
+    og: Color(0xFFDC6F2D),   // 따뜻한 오렌지 (경고/삭제)
+    tx: Color(0xFF1A1A2E),
+    tx2: Color(0xFF4A5568),
+    mu: Color(0xFF94A3B8),
+    bg: Color(0xFFFFF8E8),   // 크림 배경
+    gx: Color(0xD9FFFCF0),
+    bd: Color(0xE8E8D8B8),
+    bd2: Color(0x301D4ED8),
   );
 
   static const _Palette _jimungmungi = _Palette(
