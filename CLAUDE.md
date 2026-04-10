@@ -204,6 +204,18 @@ firebase deploy --only hosting                             # ❌ (스크립트 �
 - 메뉴 항목: `수정` (기본색), `삭제` (color: C.og)
 - **기준 파일**: `counter_screen.dart`의 AppBar actions
 
+## 플랫폼별 네이티브 설정 체크리스트 (신규 기능 추가 시 필수)
+- **OAuth/소셜 로그인 등 네이티브 연동 기능 추가 시 Android·iOS 양쪽 설정을 한 번에 완료할 것**
+- 한 플랫폼만 설정하고 넘어가는 것 절대 금지
+- **iOS 체크 항목**:
+  - `Info.plist` URL Scheme / LSApplicationQueriesSchemes
+  - `SceneDelegate.swift` openURLContexts 핸들러
+  - `AppDelegate.swift` 필요 시 핸들러
+- **Android 체크 항목**:
+  - `AndroidManifest.xml` intent-filter / queries
+  - 키 해시 등록 (카카오 등)
+- 이전 사고: 카카오 로그인 구현 시 Android만 설정하고 iOS SceneDelegate URL 핸들러 누락 → iOS 로그인 불가 (2026-04-10)
+
 ## 에러 제로화 규칙 (모든 작업 완료 시 필수 단계)
 
 ### 규칙
