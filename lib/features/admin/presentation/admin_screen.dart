@@ -411,7 +411,7 @@ class _AdminConsoleState extends State<_AdminConsole> {
 
   Widget _buildContent() {
     switch (_selectedIndex) {
-      case 0:  return _DashboardTab(isKorean: widget.isKorean);
+      case 0:  return _DashboardTab(isKorean: widget.isKorean, onTabChange: (i) => setState(() => _selectedIndex = i));
       case 1:  return _EncyclopediaTab(isKorean: widget.isKorean, adminUid: widget.user.uid);
       case 2:  return _BrandTab(collection: 'yarn_brands', title: '실 브랜드');
       case 3:  return _BrandTab(collection: 'needle_brands', title: '바늘 브랜드');
@@ -426,7 +426,7 @@ class _AdminConsoleState extends State<_AdminConsole> {
       case 12: return const _EditorialAdminTab();
       case 13: return const _BuiltinTemplateAdminTab();
       case 14: return _SettingsTab(isKorean: widget.isKorean);
-      default: return _DashboardTab(isKorean: widget.isKorean);
+      default: return _DashboardTab(isKorean: widget.isKorean, onTabChange: (i) => setState(() => _selectedIndex = i));
     }
   }
 }
@@ -1815,8 +1815,9 @@ class _CollectionDocRow extends StatelessWidget {
 
 class _DashboardTab extends ConsumerWidget {
   final bool isKorean;
+  final void Function(int)? onTabChange;
 
-  const _DashboardTab({required this.isKorean});
+  const _DashboardTab({required this.isKorean, this.onTabChange});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1831,10 +1832,10 @@ class _DashboardTab extends ConsumerWidget {
               spacing: 12,
               runSpacing: 12,
               children: [
-                _CountCard(label: isKorean ? '회원' : 'Users', value: '${data['users'] ?? 0}', accent: C.lvD),
-                _CountCard(label: isKorean ? '마켓/도안' : 'Market', value: '${data['market'] ?? 0}', accent: C.pkD),
-                _CountCard(label: isKorean ? '백과사전' : 'Encyclopedia', value: '${data['encyclopedia'] ?? 0}', accent: C.lmD),
-                _CountCard(label: isKorean ? '커뮤니티 글' : 'Posts', value: '${data['posts'] ?? 0}', accent: C.og),
+                _CountCard(label: isKorean ? '회원' : 'Users', value: '${data['users'] ?? 0}', accent: C.lvD, onTap: () => onTabChange?.call(4)),
+                _CountCard(label: isKorean ? '마켓/도안' : 'Market', value: '${data['market'] ?? 0}', accent: C.pkD, onTap: () => onTabChange?.call(8)),
+                _CountCard(label: isKorean ? '백과사전' : 'Encyclopedia', value: '${data['encyclopedia'] ?? 0}', accent: C.lmD, onTap: () => onTabChange?.call(1)),
+                _CountCard(label: isKorean ? '커뮤니티 글' : 'Posts', value: '${data['posts'] ?? 0}', accent: C.og, onTap: () => onTabChange?.call(9)),
               ],
             ),
           ),
@@ -1874,22 +1875,22 @@ class _DashboardTab extends ConsumerWidget {
                 runSpacing: 10,
                 children: [
                   OutlinedButton.icon(
-                    onPressed: null,
+                    onPressed: () => onTabChange?.call(11),
                     icon: Icon(Icons.bug_report_rounded, size: 16, color: C.og),
                     label: Text(isKorean ? '버그 리포트' : 'Bug reports', style: T.caption.copyWith(color: C.og)),
                   ),
                   OutlinedButton.icon(
-                    onPressed: null,
+                    onPressed: () => onTabChange?.call(10),
                     icon: Icon(Icons.text_fields_rounded, size: 16, color: C.lvD),
                     label: Text(isKorean ? '문구 관리' : 'Copy mgmt', style: T.caption.copyWith(color: C.lvD)),
                   ),
                   OutlinedButton.icon(
-                    onPressed: null,
+                    onPressed: () => onTabChange?.call(4),
                     icon: Icon(Icons.people_rounded, size: 16, color: C.lv),
                     label: Text(isKorean ? '회원 관리' : 'Members', style: T.caption.copyWith(color: C.lv)),
                   ),
                   OutlinedButton.icon(
-                    onPressed: null,
+                    onPressed: () => onTabChange?.call(8),
                     icon: Icon(Icons.storefront_rounded, size: 16, color: C.pkD),
                     label: Text(isKorean ? '마켓 상품' : 'Market', style: T.caption.copyWith(color: C.pkD)),
                   ),
@@ -2110,31 +2111,66 @@ class _ExportButtonState extends State<_ExportButton> {
   }
 }
 
-class _CountCard extends StatelessWidget {
+class _CountCard extends StatefulWidget {
   final String label;
   final String value;
   final Color accent;
+  final VoidCallback? onTap;
 
-  const _CountCard({required this.label, required this.value, required this.accent});
+  const _CountCard({required this.label, required this.value, required this.accent, this.onTap});
+
+  @override
+  State<_CountCard> createState() => _CountCardState();
+}
+
+class _CountCardState extends State<_CountCard> {
+  bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 200,
-      height: 90,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: accent.withValues(alpha: 0.16)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: T.captionBold.copyWith(color: accent)),
-          Text(value, style: T.h2.copyWith(color: accent)),
-        ],
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: widget.onTap != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 200,
+          height: 90,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _hovered
+                ? widget.accent.withValues(alpha: 0.16)
+                : widget.accent.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _hovered
+                  ? widget.accent.withValues(alpha: 0.5)
+                  : widget.accent.withValues(alpha: 0.16),
+              width: _hovered ? 1.5 : 1,
+            ),
+            boxShadow: _hovered
+                ? [BoxShadow(color: widget.accent.withValues(alpha: 0.15), blurRadius: 8, offset: const Offset(0, 3))]
+                : [],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Text(widget.label, style: T.captionBold.copyWith(color: widget.accent)),
+                  if (widget.onTap != null) ...[
+                    const Spacer(),
+                    Icon(Icons.arrow_forward_ios_rounded, size: 11, color: widget.accent.withValues(alpha: 0.6)),
+                  ],
+                ],
+              ),
+              Text(widget.value, style: T.h2.copyWith(color: widget.accent)),
+            ],
+          ),
+        ),
       ),
     );
   }
