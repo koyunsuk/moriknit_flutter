@@ -421,6 +421,12 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                       children: AppThemeMode.values.map((mode) {
                         final tc = AppThemeColors.of(mode);
                         final isSelected = mode == currentTheme;
+                        // 헤더 미리보기 색 계산
+                        final headerPreview = (mode == AppThemeMode.blackWhite || mode == AppThemeMode.creamSnail)
+                            ? tc.bg
+                            : mode == AppThemeMode.jwiChuni
+                                ? Color.alphaBlend(tc.pk.withValues(alpha: 0.28), tc.bg)
+                                : Color.alphaBlend(tc.lv.withValues(alpha: 0.10), Color.alphaBlend(tc.pk.withValues(alpha: 0.05), tc.bg));
                         return GestureDetector(
                           onTap: () => ref.read(appThemeProvider.notifier).setTheme(mode),
                           child: AnimatedContainer(
@@ -437,13 +443,60 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                             ),
                             child: Row(
                               children: [
-                                // 컬러 점 3개
-                                Container(width: 14, height: 14, decoration: BoxDecoration(color: tc.pk, shape: BoxShape.circle)),
+                                // 미니 테마 프리뷰 (헤더 + 바디 + 포인트)
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: SizedBox(
+                                    width: 48,
+                                    height: 32,
+                                    child: Column(
+                                      children: [
+                                        // 헤더 색
+                                        Container(height: 10, color: headerPreview),
+                                        // 바디 영역
+                                        Expanded(
+                                          child: Container(
+                                            color: tc.bg,
+                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                            child: Row(
+                                              children: [
+                                                // 포인트(버튼) 색
+                                                Container(
+                                                  width: 16, height: 8,
+                                                  decoration: BoxDecoration(
+                                                    color: tc.pk,
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 3),
+                                                // 폰트 색 미리보기
+                                                Expanded(
+                                                  child: Column(
+                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Container(height: 2, color: tc.tx),
+                                                      const SizedBox(height: 2),
+                                                      Container(height: 2, width: 14, color: tc.tx2),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                // 신호등 도트 (헤더색, 포인트색, lv색)
+                                const SizedBox(width: 10),
+                                Container(width: 10, height: 10, decoration: BoxDecoration(color: headerPreview, shape: BoxShape.circle, border: Border.all(color: C.bd, width: 0.5))),
                                 const SizedBox(width: 4),
-                                Container(width: 14, height: 14, decoration: BoxDecoration(color: tc.lv, shape: BoxShape.circle)),
+                                Container(width: 10, height: 10, decoration: BoxDecoration(color: tc.pk, shape: BoxShape.circle)),
                                 const SizedBox(width: 4),
-                                Container(width: 14, height: 14, decoration: BoxDecoration(color: tc.lmD, shape: BoxShape.circle)),
-                                const SizedBox(width: 12),
+                                Container(width: 10, height: 10, decoration: BoxDecoration(color: tc.lv, shape: BoxShape.circle)),
+                                const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
                                     isKorean ? mode.label : mode.labelEn,
