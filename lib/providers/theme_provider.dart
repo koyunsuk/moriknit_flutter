@@ -6,80 +6,51 @@ import '../core/constants/subscription_constants.dart';
 
 enum AppThemeMode {
   lavender,
-  moriKnit,
   earthy,
-  monochrome,
   moyangi,
   jwiChuni,
   todori,
   pinkRabbit,
-  creamSnail,
-  jimungmungi,
   chocoNyangi,
-  eunsulNyangi,
-  blackWhite,
+  moriRed,
+  moriGreen,
+  moriYellow,
+  moriNavy,
+  moriMono,
 }
 
 extension AppThemeModeExt on AppThemeMode {
   String get label {
     switch (this) {
-      case AppThemeMode.lavender:
-        return '모리컬러 테마';
-      case AppThemeMode.moriKnit:
-        return '모리니트 테마';
-      case AppThemeMode.earthy:
-        return '달곰이의 테마';
-      case AppThemeMode.monochrome:
-        return '김도치쌤 테마';
-      case AppThemeMode.moyangi:
-        return '모냥이의 테마';
-      case AppThemeMode.jwiChuni:
-        return '쥐춘이의 테마';
-      case AppThemeMode.todori:
-        return '토도리의 테마';
-      case AppThemeMode.pinkRabbit:
-        return '핑크 왕자테마';
-      case AppThemeMode.creamSnail:
-        return '크림팽이 테마';
-      case AppThemeMode.jimungmungi:
-        return '지멍뭉이 테마';
-      case AppThemeMode.chocoNyangi:
-        return '초코냥이 테마';
-      case AppThemeMode.eunsulNyangi:
-        return '은설이냥 테마';
-      case AppThemeMode.blackWhite:
-        return '블랙&화이트 테마';
+      case AppThemeMode.lavender:    return '모리라벤더';
+      case AppThemeMode.earthy:      return '모리테라코타';
+      case AppThemeMode.moyangi:     return '모리피치';
+      case AppThemeMode.jwiChuni:    return '모리스틸';
+      case AppThemeMode.todori:      return '모리골드';
+      case AppThemeMode.pinkRabbit:  return '모리핑크';
+      case AppThemeMode.chocoNyangi: return '모리초코';
+      case AppThemeMode.moriRed:     return '모리레드';
+      case AppThemeMode.moriGreen:   return '모리그린';
+      case AppThemeMode.moriYellow:  return '모리옐로우';
+      case AppThemeMode.moriNavy:    return '모리네이비';
+      case AppThemeMode.moriMono:    return '모리모노';
     }
   }
 
   String get labelEn {
     switch (this) {
-      case AppThemeMode.lavender:
-        return 'MoriColor Theme';
-      case AppThemeMode.moriKnit:
-        return 'MoriKnit Theme';
-      case AppThemeMode.earthy:
-        return 'Dalgomi Theme';
-      case AppThemeMode.monochrome:
-        return 'Kimdochi Theme';
-      case AppThemeMode.moyangi:
-        return 'Moyangi Theme';
-      case AppThemeMode.jwiChuni:
-        return 'Jwichuni Theme';
-      case AppThemeMode.todori:
-        return 'Todori Theme';
-      case AppThemeMode.pinkRabbit:
-        return 'Pink Prince Theme';
-      case AppThemeMode.creamSnail:
-        return 'Cream Snail Theme';
-      case AppThemeMode.jimungmungi:
-        return 'Jimungmungi Theme';
-      case AppThemeMode.chocoNyangi:
-        return 'Choco Nyangi Theme';
-      case AppThemeMode.eunsulNyangi:
-        return 'Eunsul Nyangi Theme';
-      case AppThemeMode.blackWhite:
-        return 'Black & White Theme';
+      case AppThemeMode.lavender:    return 'MoriLavender';
+      case AppThemeMode.earthy:      return 'MoriTerra';
+      case AppThemeMode.moyangi:     return 'MoriPeach';
+      case AppThemeMode.jwiChuni:    return 'MoriSteel';
+      case AppThemeMode.todori:      return 'MoriGold';
+      case AppThemeMode.pinkRabbit:  return 'MoriPink';
+      case AppThemeMode.chocoNyangi: return 'MoriChoco';
+      case AppThemeMode.moriRed:     return 'MoriRed';
+      case AppThemeMode.moriGreen:   return 'MoriGreen';
+      case AppThemeMode.moriYellow:  return 'MoriYellow';
+      case AppThemeMode.moriNavy:    return 'MoriNavy';
+      case AppThemeMode.moriMono:    return 'MoriMono';
     }
   }
 }

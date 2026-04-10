@@ -377,7 +377,7 @@ class _WebShell extends ConsumerWidget {
               onPressed: () => Scaffold.of(ctx).openDrawer(),
             ),
           ),
-          title: const MoriKnitTitle(fontSize: 18),
+          title: MoriKnitTitle(fontSize: 18),
           centerTitle: false,
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1),
@@ -449,7 +449,7 @@ class _WebShell extends ConsumerWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 22, 20, 16),
-          child: const MoriKnitTitle(fontSize: 22),
+          child: MoriKnitTitle(fontSize: 22),
         ),
         Divider(height: 1, color: C.bd2),
         const SizedBox(height: 8),

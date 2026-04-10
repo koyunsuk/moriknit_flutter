@@ -433,7 +433,6 @@ class BgOrbs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (C.isBW) return const SizedBox.shrink();
     return Positioned.fill(
       child: IgnorePointer(
         child: CustomPaint(painter: _BgPatternPainter()),
@@ -604,7 +603,7 @@ class MoriBrandHeader extends StatelessWidget {
                 fit: BoxFit.contain,
               ),
               const SizedBox(height: 0),
-              const MoriKnitTitle(fontSize: 19, width: 174),
+              MoriKnitTitle(fontSize: 19, width: 174),
             ],
           ),
           if (subtitle != null)
@@ -616,6 +615,7 @@ class MoriBrandHeader extends StatelessWidget {
                 margin: const EdgeInsets.fromLTRB(12, 0, 12, 0),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                 decoration: BoxDecoration(
+                  // B&W: 연회색 헤더 위 흰 카드 → 구분 명확
                   color: Colors.white.withValues(alpha: 0.84),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: C.tint(C.lv, 0.18)),

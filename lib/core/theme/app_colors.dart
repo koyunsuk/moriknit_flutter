@@ -34,45 +34,41 @@ class C {
   static _Palette _p = _lavender;
   static AppThemeMode _mode = AppThemeMode.lavender;
 
-  static bool get isBW => _mode == AppThemeMode.blackWhite;
-
-  // B&W 모드에서 tint(배경 alpha 색) → 완전 투명 반환
-  static Color tint(Color base, double alpha) =>
-      isBW ? Colors.transparent : base.withValues(alpha: alpha);
+  // tint: alpha 색상 반환
+  static Color tint(Color base, double alpha) => base.withValues(alpha: alpha);
 
   // 테마별 헤더 배경색
   static Color get headerBg {
-    if (isBW) return _p.bg;
-    if (_mode == AppThemeMode.creamSnail) return _p.bg; // 크림팽이: 크림색
-    if (_mode == AppThemeMode.jwiChuni)   return Color.alphaBlend(_p.pk.withValues(alpha: 0.28), _p.bg); // 쥐춘이: 강조색
-    // 그 외 원래 공식
-    return Color.alphaBlend(_p.lv.withValues(alpha: 0.10), Color.alphaBlend(_p.pk.withValues(alpha: 0.05), _p.bg));
+    // 모리모노: 순백 배경 위 그레이 헤더
+    if (_mode == AppThemeMode.moriMono) return _p.bd;
+    // 쥐춘이: 슬레이트블루 강조
+    if (_mode == AppThemeMode.jwiChuni) return Color.alphaBlend(_p.pk.withValues(alpha: 0.28), _p.bg);
+    // 토도리 컨셉: pk 색을 0.22 alpha로 bg에 오버레이 → 테마 고유 색상이 헤더에 드러남
+    return Color.alphaBlend(_p.pk.withValues(alpha: 0.22), _p.bg);
   }
 
   // 헤더 하단 구분선 색
   static Color get headerBorder {
-    if (isBW) return _p.bd;
-    if (_mode == AppThemeMode.creamSnail) return _p.bd;
-    if (_mode == AppThemeMode.jwiChuni)   return _p.pk.withValues(alpha: 0.35);
-    return _p.lv.withValues(alpha: 0.38);
+    if (_mode == AppThemeMode.moriMono) return _p.lm;
+    if (_mode == AppThemeMode.jwiChuni) return _p.pk.withValues(alpha: 0.35);
+    return _p.pk.withValues(alpha: 0.30);
   }
 
   static void apply(AppThemeMode mode) {
     _mode = mode;
     switch (mode) {
       case AppThemeMode.lavender:    _p = _lavender;    break;
-      case AppThemeMode.moriKnit:    _p = _moriKnit;    break;
       case AppThemeMode.earthy:      _p = _earthy;      break;
-      case AppThemeMode.monochrome:  _p = _mono;        break;
       case AppThemeMode.moyangi:     _p = _moyangi;     break;
       case AppThemeMode.jwiChuni:    _p = _jwiChuni;    break;
       case AppThemeMode.todori:      _p = _todori;      break;
       case AppThemeMode.pinkRabbit:  _p = _pinkRabbit;  break;
-      case AppThemeMode.creamSnail:  _p = _creamSnail;  break;
-      case AppThemeMode.jimungmungi: _p = _jimungmungi; break;
       case AppThemeMode.chocoNyangi: _p = _chocoNyangi; break;
-      case AppThemeMode.eunsulNyangi: _p = _eunsulNyangi; break;
-      case AppThemeMode.blackWhite:   _p = _blackWhite;   break;
+      case AppThemeMode.moriRed:     _p = _moriRed;     break;
+      case AppThemeMode.moriGreen:   _p = _moriGreen;   break;
+      case AppThemeMode.moriYellow:  _p = _moriYellow;  break;
+      case AppThemeMode.moriNavy:    _p = _moriNavy;    break;
+      case AppThemeMode.moriMono:    _p = _moriMono;    break;
     }
   }
 
@@ -102,13 +98,11 @@ class C {
   static Color get bd2 => _p.bd2;
 
   // Gradient getters
-  static LinearGradient get bgGradient => isBW
-      ? LinearGradient(colors: [_p.bg, _p.bg])
-      : LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [_p.bg, Color.alphaBlend(_p.lv.withValues(alpha: 0.08), _p.bg)],
-        );
+  static LinearGradient get bgGradient => LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [_p.bg, Color.alphaBlend(_p.lv.withValues(alpha: 0.08), _p.bg)],
+    );
 
   static LinearGradient get pkLvGradient => LinearGradient(
         colors: [_p.pk, _p.lv],
@@ -131,7 +125,7 @@ class C {
         color: _p.gx,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _p.bd, width: 1),
-        boxShadow: isBW ? null : [
+        boxShadow: [
           BoxShadow(
             color: _p.lv.withValues(alpha: 0.09),
             blurRadius: 16,
@@ -152,7 +146,7 @@ class C {
   static BoxDecoration get tabBarDeco => BoxDecoration(
         color: _p.gx,
         border: Border(top: BorderSide(color: _p.bd2, width: 1)),
-        boxShadow: isBW ? null : [
+        boxShadow: [
           BoxShadow(
             color: _p.lv.withValues(alpha: 0.08),
             blurRadius: 20,
@@ -175,24 +169,25 @@ class C {
 
   // ── Palettes ─────────────────────────────────────────────────────────────
 
+  // 모리라벤더 — 전체 라벤더/연보라 계열
   static const _Palette _lavender = _Palette(
-    pk: Color(0xFFF472B6),
-    pkD: Color(0xFFBE185D),
-    pkL: Color(0x21F472B6),
-    lv: Color(0xFFC084FC),
+    pk: Color(0xFF9061F9),   // 미디엄 라벤더
+    pkD: Color(0xFF6D28D9),
+    pkL: Color(0x249061F9),
+    lv: Color(0xFFA78BFA),   // 연한 라벤더
     lvD: Color(0xFF7C3AED),
-    lvL: Color(0x21C084FC),
-    lm: Color(0xFFA3E635),
-    lmD: Color(0xFF65A30D),
-    lmG: Color(0x57A3E635),
-    og: Color(0xFFFB923C),
-    tx: Color(0xFF1A1A2E),
-    tx2: Color(0xFF6B7280),
-    mu: Color(0xFF9CA3AF),
-    bg: Color(0xFFFCF0FF),
-    gx: Color(0xD9FFFAFF),
-    bd: Color(0xE8EDE9F5),
-    bd2: Color(0x30C084FC),
+    lvL: Color(0x24A78BFA),
+    lm: Color(0xFFDDD6FE),   // 아주 연한 라벤더
+    lmD: Color(0xFFC4B5FD),
+    lmG: Color(0x57DDD6FE),
+    og: Color(0xFFEC4899),   // 핑크 (대비/경고)
+    tx: Color(0xFF1E1B4B),   // 딥 인디고
+    tx2: Color(0xFF5B4E8A),
+    mu: Color(0xFF9575CD),
+    bg: Color(0xFFFCFAFF),   // 더 연한 라벤더 배경
+    gx: Color(0xD9FAF8FF),
+    bd: Color(0xE8E0D5F5),
+    bd2: Color(0x309061F9),
   );
 
   static const _Palette _earthy = _Palette(
@@ -215,65 +210,45 @@ class C {
     bd2: Color(0x308E9A6E),
   );
 
-  static const _Palette _mono = _Palette(
-    pk: Color(0xFF444444),
-    pkD: Color(0xFF111111),
-    pkL: Color(0x20444444),
-    lv: Color(0xFF777777),
-    lvD: Color(0xFF333333),
-    lvL: Color(0x20777777),
-    lm: Color(0xFFAAAAAA),
-    lmD: Color(0xFF666666),
-    lmG: Color(0x57AAAAAA),
-    og: Color(0xFF888888),
-    tx: Color(0xFF111111),
-    tx2: Color(0xFF666666),
-    mu: Color(0xFF999999),
-    bg: Color(0xFFFAFAFA),
-    gx: Color(0xD9FFFFFF),
-    bd: Color(0xE8E0E0E0),
-    bd2: Color(0x30777777),
-  );
-
-  // 모냥이 테마 — 살구핑크 + 캣라벤더 + 민트
+  // 모리피치 — 전체 복숭아/살구 계열
   static const _Palette _moyangi = _Palette(
-    pk: Color(0xFFFF8FB1),
-    pkD: Color(0xFFD94F7D),
-    pkL: Color(0x20FF8FB1),
-    lv: Color(0xFF8E7BFF),
-    lvD: Color(0xFF5E43D6),
-    lvL: Color(0x208E7BFF),
-    lm: Color(0xFF78DCC3),
-    lmD: Color(0xFF2C9B7F),
-    lmG: Color(0x5778DCC3),
-    og: Color(0xFFFFB36B),
-    tx: Color(0xFF25131B),
-    tx2: Color(0xFF7B5566),
-    mu: Color(0xFFB18A98),
-    bg: Color(0xFFFFF1F6),
-    gx: Color(0xD9FFF9FC),
-    bd: Color(0xE8F3D9E4),
-    bd2: Color(0x308E7BFF),
+    pk: Color(0xFFFF8C69),   // 살몬 오렌지
+    pkD: Color(0xFFE25C35),
+    pkL: Color(0x24FF8C69),
+    lv: Color(0xFFFFB39A),   // 연한 피치
+    lvD: Color(0xFFFF7043),
+    lvL: Color(0x24FFB39A),
+    lm: Color(0xFFFFD9C8),   // 아주 연한 피치
+    lmD: Color(0xFFFFAA8A),
+    lmG: Color(0x57FFD9C8),
+    og: Color(0xFFFF6B35),   // 브라이트 오렌지
+    tx: Color(0xFF3D1505),   // 딥 브라운-레드
+    tx2: Color(0xFF7A3020),
+    mu: Color(0xFFBB8070),
+    bg: Color(0xFFFFF5F0),   // 아주 연한 피치 배경
+    gx: Color(0xD9FFF8F5),
+    bd: Color(0xE8FFDDD0),
+    bd2: Color(0x30FF8C69),
   );
 
-  // 쥐춘이 테마 — 슬레이트블루(포인트) + 크리미베이지(배경) + 웜브라운(액센트)
+  // 쥐춘이 테마 — 슬레이트블루(포인트) + 쿨 그레이(배경) — 크림팽이 웜크림과 온도 대비
   static const _Palette _jwiChuni = _Palette(
-    pk: Color(0xFF4A6FA5),   // 선명한 슬레이트 블루 (헤더 강조)
+    pk: Color(0xFF4A6FA5),   // 슬레이트 블루 — 메인 컨셉 컬러
     pkD: Color(0xFF2D4E7E),
     pkL: Color(0x204A6FA5),
-    lv: Color(0xFFB87C52),   // 웜 브라운 오렌지 (secondary)
-    lvD: Color(0xFF8B5C35),
-    lvL: Color(0x20B87C52),
-    lm: Color(0xFFE2D0B8),   // 크리미 베이지
-    lmD: Color(0xFFA8896A),
-    lmG: Color(0x57E2D0B8),
-    og: Color(0xFFB84C2E),   // 테라코타 (경고)
-    tx: Color(0xFF1C1C2C),
-    tx2: Color(0xFF5A5470),
-    mu: Color(0xFF9C90A8),
-    bg: Color(0xFFF6F2EA),   // 따뜻한 아이보리 배경
-    gx: Color(0xD9FBF8F2),
-    bd: Color(0xE8DDD0BC),
+    lv: Color(0xFF6A8EBF),   // 미디엄 스틸 블루 (보조)
+    lvD: Color(0xFF3D5E88),
+    lvL: Color(0x206A8EBF),
+    lm: Color(0xFFB0C4DE),   // 라이트 스틸 블루
+    lmD: Color(0xFF708BA8),
+    lmG: Color(0x57B0C4DE),
+    og: Color(0xFFE07B52),   // 테라코타 (경고)
+    tx: Color(0xFF1A2030),
+    tx2: Color(0xFF4A5870),
+    mu: Color(0xFF8A9BB0),
+    bg: Color(0xFFF0F3F7),   // 쿨 블루-그레이 배경 (크림팽이 웜크림과 명확히 대비)
+    gx: Color(0xD9F5F7FB),
+    bd: Color(0xE8CDD6E8),
     bd2: Color(0x304A6FA5),
   );
 
@@ -318,127 +293,129 @@ class C {
     bd2: Color(0x30FF6FB5),
   );
 
-  // 크림팽이 테마 — 크림 배경 + 딥블루 포인트 (대비 명확)
-  static const _Palette _creamSnail = _Palette(
-    pk: Color(0xFF1D4ED8),   // 딥 블루 (강한 포인트)
-    pkD: Color(0xFF1E3A8A),
-    pkL: Color(0x201D4ED8),
-    lv: Color(0xFF2563EB),   // 미디엄 블루 (secondary)
-    lvD: Color(0xFF1D4ED8),
-    lvL: Color(0x202563EB),
-    lm: Color(0xFFF5E6C8),   // 크림 옐로우
-    lmD: Color(0xFFD4A853),
-    lmG: Color(0x57F5E6C8),
-    og: Color(0xFFDC6F2D),   // 따뜻한 오렌지 (경고/삭제)
-    tx: Color(0xFF1A1A2E),
-    tx2: Color(0xFF4A5568),
-    mu: Color(0xFF94A3B8),
-    bg: Color(0xFFFFF8E8),   // 크림 배경
-    gx: Color(0xD9FFFCF0),
-    bd: Color(0xE8E8D8B8),
-    bd2: Color(0x301D4ED8),
-  );
-
-  static const _Palette _jimungmungi = _Palette(
-    pk: Color(0xFF7B4DFF),
-    pkD: Color(0xFF4322A3),
-    pkL: Color(0x247B4DFF),
-    lv: Color(0xFF1E1E24),
-    lvD: Color(0xFF000000),
-    lvL: Color(0x1F1E1E24),
-    lm: Color(0xFFF4F2FF),
-    lmD: Color(0xFFD8D2F0),
-    lmG: Color(0x57F4F2FF),
-    og: Color(0xFFA987FF),
-    tx: Color(0xFF18141F),
-    tx2: Color(0xFF5D5670),
-    mu: Color(0xFF9B93AE),
-    bg: Color(0xFFF7F4FF),
-    gx: Color(0xD9FFFEFF),
-    bd: Color(0xE8DED7F8),
-    bd2: Color(0x407B4DFF),
-  );
-
   static const _Palette _chocoNyangi = _Palette(
     pk: Color(0xFF7B4A2F),
     pkD: Color(0xFF4A2919),
     pkL: Color(0x247B4A2F),
-    lv: Color(0xFF355C9A),
-    lvD: Color(0xFF213B66),
-    lvL: Color(0x20355C9A),
+    lv: Color(0xFF9B6B52),
+    lvD: Color(0xFF7B4A2F),
+    lvL: Color(0x209B6B52),
     lm: Color(0xFFF6EEDF),
     lmD: Color(0xFFD9C3A3),
     lmG: Color(0x57F6EEDF),
-    og: Color(0xFF5B2E1A),
+    og: Color(0xFF3D1508),
     tx: Color(0xFF2C1A13),
     tx2: Color(0xFF6E5A52),
     mu: Color(0xFFA4938B),
     bg: Color(0xFFFFFBF4),
     gx: Color(0xD9FFFDF9),
     bd: Color(0xE8E8DBCC),
-    bd2: Color(0x40355C9A),
+    bd2: Color(0x407B4A2F),
   );
 
-  // 모리니트 테마 — 화이트 + 그레이 + 라임 + 라벤더 (클린 화이트 모드)
-  // 신호등 색상: pk=라벤더(보라), lv=라임그린, lm=그레이, og=진그레이
-  static const _Palette _moriKnit = _Palette(
-    pk: Color(0xFF8B7CF8),   // 라벤더 포인트
-    pkD: Color(0xFF5B47D6),
-    pkL: Color(0x208B7CF8),
-    lv: Color(0xFF84CC16),   // 라임 그린 (accent)
-    lvD: Color(0xFF4D7C0F),
-    lvL: Color(0x2084CC16),
-    lm: Color(0xFF94A3B8),   // 그레이 슬레이트
-    lmD: Color(0xFF475569),
-    lmG: Color(0x5794A3B8),
-    og: Color(0xFF64748B),   // 다크 슬레이트 (경고/삭제)
-    tx: Color(0xFF1E1E2E),
-    tx2: Color(0xFF64748B),
-    mu: Color(0xFF94A3B8),
+  // 모리레드 — 크림 배경 + 딥레드 포인트 + 검정 폰트
+  static const _Palette _moriRed = _Palette(
+    pk: Color(0xFFDC2626),   // 선명한 레드
+    pkD: Color(0xFF991B1B),
+    pkL: Color(0x20DC2626),
+    lv: Color(0xFFEF4444),   // 코랄 레드
+    lvD: Color(0xFFB91C1C),
+    lvL: Color(0x20EF4444),
+    lm: Color(0xFFFEE2E2),   // 연한 핑크-레드
+    lmD: Color(0xFFFCA5A5),
+    lmG: Color(0x57FEE2E2),
+    og: Color(0xFFB45309),   // 앰버 (경고)
+    tx: Color(0xFF111111),   // 순검정
+    tx2: Color(0xFF555555),
+    mu: Color(0xFF999999),
+    bg: Color(0xFFFFF8E8),   // 크림 배경
+    gx: Color(0xFFFFFCF5),
+    bd: Color(0xFFEDE0CC),
+    bd2: Color(0x30DC2626),
+  );
+
+  // 모리옐로우 — 전체 앰버/옐로우 계열
+  static const _Palette _moriYellow = _Palette(
+    pk: Color(0xFFF59E0B),   // amber-500
+    pkD: Color(0xFFB45309),
+    pkL: Color(0x20F59E0B),
+    lv: Color(0xFFFBBF24),   // amber-400
+    lvD: Color(0xFFD97706),
+    lvL: Color(0x20FBBF24),
+    lm: Color(0xFFFDE68A),   // amber-200
+    lmD: Color(0xFFFCD34D),
+    lmG: Color(0x57FDE68A),
+    og: Color(0xFFD97706),   // amber-600
+    tx: Color(0xFF1C1917),   // stone-950
+    tx2: Color(0xFF44403C),
+    mu: Color(0xFF78716C),
+    bg: Color(0xFFFFFBEB),   // amber-50
+    gx: Color(0xD9FFFDF5),
+    bd: Color(0xE8FDE68A),
+    bd2: Color(0x30F59E0B),
+  );
+
+  // 모리네이비 — 딥블루/네이비 계열
+  static const _Palette _moriNavy = _Palette(
+    pk: Color(0xFF1E40AF),   // blue-800
+    pkD: Color(0xFF1E3A8A),
+    pkL: Color(0x201E40AF),
+    lv: Color(0xFF2563EB),   // blue-600
+    lvD: Color(0xFF1D4ED8),
+    lvL: Color(0x202563EB),
+    lm: Color(0xFFBFDBFE),   // blue-200
+    lmD: Color(0xFF93C5FD),
+    lmG: Color(0x57BFDBFE),
+    og: Color(0xFF0369A1),   // sky-700
+    tx: Color(0xFF0F172A),   // 거의 블랙
+    tx2: Color(0xFF1E3A8A),
+    mu: Color(0xFF60A5FA),   // blue-400
+    bg: Color(0xFFF0F6FF),   // 아주 연한 블루
+    gx: Color(0xD9F5F9FF),
+    bd: Color(0xE8BFDBFE),
+    bd2: Color(0x301E40AF),
+  );
+
+  // 모리모노 — 순백 배경 + 그레이 헤더 (모노크롬)
+  static const _Palette _moriMono = _Palette(
+    pk: Color(0xFF374151),   // gray-700
+    pkD: Color(0xFF1F2937),
+    pkL: Color(0x20374151),
+    lv: Color(0xFF6B7280),   // gray-500
+    lvD: Color(0xFF4B5563),
+    lvL: Color(0x206B7280),
+    lm: Color(0xFFD1D5DB),   // gray-300
+    lmD: Color(0xFF9CA3AF),
+    lmG: Color(0x57D1D5DB),
+    og: Color(0xFF4B5563),   // gray-600
+    tx: Color(0xFF111827),   // gray-900
+    tx2: Color(0xFF374151),
+    mu: Color(0xFF9CA3AF),
     bg: Color(0xFFFFFFFF),   // 순백
-    gx: Color(0xF8F9FAFE),
-    bd: Color(0xE8E2E8F0),
-    bd2: Color(0x308B7CF8),
-  );
-
-  static const _Palette _eunsulNyangi = _Palette(
-    pk: Color(0xFFFF9F1C),
-    pkD: Color(0xFFC96A00),
-    pkL: Color(0x24FF9F1C),
-    lv: Color(0xFFA7E635),
-    lvD: Color(0xFF6AA300),
-    lvL: Color(0x24A7E635),
-    lm: Color(0xFF2FAF5B),
-    lmD: Color(0xFF1E7A3F),
-    lmG: Color(0x572FAF5B),
-    og: Color(0xFFFFC35C),
-    tx: Color(0xFF21301D),
-    tx2: Color(0xFF5F715A),
-    mu: Color(0xFF9AAA93),
-    bg: Color(0xFFFBFFF5),
-    gx: Color(0xD9FEFFF9),
-    bd: Color(0xE8DFF0D3),
-    bd2: Color(0x40FF9F1C),
-  );
-
-  // 블랙&화이트 테마 — 순백 배경 + 순흑 텍스트 + 그레이 구분선만
-  static const _Palette _blackWhite = _Palette(
-    pk: Color(0xFF000000),
-    pkD: Color(0xFF000000),
-    pkL: Color(0x00000000),  // 완전 투명 — 배경 tint 없음
-    lv: Color(0xFF000000),
-    lvD: Color(0xFF000000),
-    lvL: Color(0x00000000),  // 완전 투명
-    lm: Color(0xFFCCCCCC),
-    lmD: Color(0xFF888888),
-    lmG: Color(0x00000000),  // 완전 투명
-    og: Color(0xFF555555),
-    tx: Color(0xFF000000),
-    tx2: Color(0xFF444444),
-    mu: Color(0xFFAAAAAA),
-    bg: Color(0xFFFFFFFF),
     gx: Color(0xFFFFFFFF),
-    bd: Color(0xFFE8E8E8),
-    bd2: Color(0xFFD0D0D0),
+    bd: Color(0xFFE5E7EB),   // gray-200 — 헤더 색으로 사용
+    bd2: Color(0xFFD1D5DB),
   );
+
+  // 모리그린 — 전체 그린 계열 (모리핑크 스타일)
+  static const _Palette _moriGreen = _Palette(
+    pk: Color(0xFF16A34A),   // 비비드 그린
+    pkD: Color(0xFF14532D),
+    pkL: Color(0x2416A34A),
+    lv: Color(0xFF4ADE80),   // 라이트 그린
+    lvD: Color(0xFF15803D),
+    lvL: Color(0x244ADE80),
+    lm: Color(0xFFBBF7D0),   // 아주 연한 그린
+    lmD: Color(0xFF86EFAC),
+    lmG: Color(0x57BBF7D0),
+    og: Color(0xFF65A30D),   // 옐로우-그린 (경고)
+    tx: Color(0xFF052E16),   // 딥 다크 그린
+    tx2: Color(0xFF166534),
+    mu: Color(0xFF6EBF8A),
+    bg: Color(0xFFF0FDF4),   // 아주 연한 그린 배경
+    gx: Color(0xD9F0FFF4),
+    bd: Color(0xE8BBF7D0),
+    bd2: Color(0x3016A34A),
+  );
+
 }

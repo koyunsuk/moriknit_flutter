@@ -272,7 +272,7 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
               ),
                       if (_profileExpanded) ...[
                         const SizedBox(height: 16),
-                        GlassCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t.profileOverview, style: T.bodyBold), const SizedBox(height: 12), _InfoRow(label: t.displayName, value: name), _InfoRow(label: t.userId, value: user.uid.isEmpty ? t.notAvailable : user.uid), _InfoRow(label: t.email, value: user.email.isEmpty ? t.notConnected : user.email), _InfoRow(label: t.joined, value: joinedDate == null ? t.unknown : _formatDate(joinedDate)), _InfoRow(label: t.lastActive, value: user.lastActiveAt == null ? t.unknown : _formatDate(user.lastActiveAt!))])),
+                        GlassCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t.profileOverview, style: T.bodyBold), const SizedBox(height: 12), _InfoRow(label: t.displayName, value: name), _InfoRow(label: t.email, value: user.email.isEmpty ? t.notConnected : user.email), _InfoRow(label: t.joined, value: joinedDate == null ? t.unknown : _formatDate(joinedDate)), _InfoRow(label: t.lastActive, value: user.lastActiveAt == null ? t.unknown : _formatDate(user.lastActiveAt!))])),
                         const SizedBox(height: 16),
                         GlassCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t.accountConnections, style: T.bodyBold), const SizedBox(height: 12), _InfoRow(label: t.plan, value: _planLabel(t, user.subscription.planId)), _InfoRow(label: t.status, value: user.subscription.status), _InfoRow(label: t.profilePhoto, value: photo.isEmpty ? t.usingDefaultAvatar : t.importedFromSocial), _InfoRow(label: t.signInSync, value: _socialSyncLabel(t, photo: photo, displayName: user.displayName, email: user.email))])),
                       ],
@@ -421,12 +421,12 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                       children: AppThemeMode.values.map((mode) {
                         final tc = AppThemeColors.of(mode);
                         final isSelected = mode == currentTheme;
-                        // 헤더 미리보기 색 계산
-                        final headerPreview = (mode == AppThemeMode.blackWhite || mode == AppThemeMode.creamSnail)
-                            ? tc.bg
+                        // 헤더 미리보기 색 계산 (C.headerBg 로직과 동기화)
+                        final headerPreview = mode == AppThemeMode.moriMono
+                            ? tc.bd
                             : mode == AppThemeMode.jwiChuni
                                 ? Color.alphaBlend(tc.pk.withValues(alpha: 0.28), tc.bg)
-                                : Color.alphaBlend(tc.lv.withValues(alpha: 0.10), Color.alphaBlend(tc.pk.withValues(alpha: 0.05), tc.bg));
+                                : Color.alphaBlend(tc.pk.withValues(alpha: 0.22), tc.bg);
                         return GestureDetector(
                           onTap: () => ref.read(appThemeProvider.notifier).setTheme(mode),
                           child: AnimatedContainer(

@@ -631,9 +631,9 @@ class _MoriRavelryCapsuleCard extends ConsumerWidget {
     final libraryAsync = auth.isLoggedIn ? ref.watch(ravelryLibraryProvider) : null;
     final ravelryProjectsAsync = auth.isLoggedIn ? ref.watch(ravelryProjectsProvider) : null;
 
-    final stashCount = stashAsync?.maybeWhen(data: (s) => s.length, orElse: () => null) ?? null;
-    final libraryCount = libraryAsync?.maybeWhen(data: (p) => p.length, orElse: () => null) ?? null;
-    final ravelryProjectCount = ravelryProjectsAsync?.maybeWhen(data: (p) => p.length, orElse: () => null) ?? null;
+    final stashCount = stashAsync?.maybeWhen(data: (s) => s.length, orElse: () => null);
+    final libraryCount = libraryAsync?.maybeWhen(data: (p) => p.length, orElse: () => null);
+    final ravelryProjectCount = ravelryProjectsAsync?.maybeWhen(data: (p) => p.length, orElse: () => null);
     final isRavelryLoading = auth.isLoggedIn && (
       stashAsync?.isLoading == true ||
       libraryAsync?.isLoading == true ||
@@ -660,7 +660,7 @@ class _MoriRavelryCapsuleCard extends ConsumerWidget {
             child: Row(
               children: [
                 SizedBox(
-                  width: 64,
+                  width: 76,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
@@ -694,7 +694,7 @@ class _MoriRavelryCapsuleCard extends ConsumerWidget {
             child: Row(
               children: [
                 SizedBox(
-                  width: 64,
+                  width: 76,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(

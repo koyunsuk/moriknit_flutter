@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -8,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/localization/app_language.dart';
@@ -304,10 +304,14 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
       final safeUser = rawUser.replaceAll(RegExp(r'[^\w가-힣]'), '_');
       final filename = safeUser.isEmpty
           ? '${safeName}_$dateStr.pdf'
-          : '${safeName}_${safeUser}_$dateStr.pdf';
+          : '${safeName}_${dateStr}_${safeUser}.pdf';
+      // 임시 디렉토리에 파일명으로 저장 후 공유 (XFile.fromData는 UUID로 저장되는 문제 방지)
+      final dir = await getTemporaryDirectory();
+      final tmpFile = File('${dir.path}/$filename');
+      await tmpFile.writeAsBytes(bytes);
       await SharePlus.instance.share(
         ShareParams(
-          files: [XFile.fromData(Uint8List.fromList(bytes), mimeType: 'application/pdf', name: filename)],
+          files: [XFile(tmpFile.path, mimeType: 'application/pdf', name: filename)],
           subject: isKorean ? '${project.title} 프로젝트 기록지' : '${project.title} - Project Record',
         ),
       );

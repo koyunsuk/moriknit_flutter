@@ -31,23 +31,12 @@ class AppThemeColors {
   });
 
   static const lavender = AppThemeColors(
-    pk: Color(0xFFF472B6),
-    pkD: Color(0xFFBE185D),
-    pkL: Color(0x21F472B6),
-    lv: Color(0xFFC084FC),
-    lvD: Color(0xFF7C3AED),
-    lvL: Color(0x21C084FC),
-    lm: Color(0xFFA3E635),
-    lmD: Color(0xFF65A30D),
-    lmG: Color(0x57A3E635),
-    og: Color(0xFFFB923C),
-    tx: Color(0xFF1A1A2E),
-    tx2: Color(0xFF6B7280),
-    mu: Color(0xFF9CA3AF),
-    bg: Color(0xFFFCF0FF),
-    gx: Color(0xD9FFFAFF),
-    bd: Color(0xE8EDE9F5),
-    bd2: Color(0x30C084FC),
+    pk: Color(0xFF9061F9), pkD: Color(0xFF6D28D9), pkL: Color(0x249061F9),
+    lv: Color(0xFFA78BFA), lvD: Color(0xFF7C3AED), lvL: Color(0x24A78BFA),
+    lm: Color(0xFFDDD6FE), lmD: Color(0xFFC4B5FD), lmG: Color(0x57DDD6FE),
+    og: Color(0xFFEC4899),
+    tx: Color(0xFF1E1B4B), tx2: Color(0xFF5B4E8A), mu: Color(0xFF9575CD),
+    bg: Color(0xFFFCFAFF), gx: Color(0xD9FAF8FF), bd: Color(0xE8E0D5F5), bd2: Color(0x309061F9),
   );
 
   static const earthy = AppThemeColors(
@@ -70,53 +59,22 @@ class AppThemeColors {
     bd2: Color(0x30BCA58D),
   );
 
-  static const monochrome = AppThemeColors(
-    pk: Color(0xFF111111),
-    pkD: Color(0xFF000000),
-    pkL: Color(0x21111111),
-    lv: Color(0xFF444444),
-    lvD: Color(0xFF222222),
-    lvL: Color(0x21444444),
-    lm: Color(0xFF888888),
-    lmD: Color(0xFF555555),
-    lmG: Color(0x57888888),
-    og: Color(0xFF333333),
-    tx: Color(0xFF0A0A0A),
-    tx2: Color(0xFF555555),
-    mu: Color(0xFF888888),
-    bg: Color(0xFFF8F8F8),
-    gx: Color(0xD9FFFFFF),
-    bd: Color(0xE8E0E0E0),
-    bd2: Color(0x30999999),
-  );
-
   static const moyangi = AppThemeColors(
-    pk: Color(0xFFFF8FB1),
-    pkD: Color(0xFFD94F7D),
-    pkL: Color(0x20FF8FB1),
-    lv: Color(0xFF8E7BFF),
-    lvD: Color(0xFF5E43D6),
-    lvL: Color(0x208E7BFF),
-    lm: Color(0xFF78DCC3),
-    lmD: Color(0xFF2C9B7F),
-    lmG: Color(0x5778DCC3),
-    og: Color(0xFFFFB36B),
-    tx: Color(0xFF25131B),
-    tx2: Color(0xFF7B5566),
-    mu: Color(0xFFB18A98),
-    bg: Color(0xFFFFF1F6),
-    gx: Color(0xD9FFF9FC),
-    bd: Color(0xE8F3D9E4),
-    bd2: Color(0x308E7BFF),
+    pk: Color(0xFFFF8C69), pkD: Color(0xFFE25C35), pkL: Color(0x24FF8C69),
+    lv: Color(0xFFFFB39A), lvD: Color(0xFFFF7043), lvL: Color(0x24FFB39A),
+    lm: Color(0xFFFFD9C8), lmD: Color(0xFFFFAA8A), lmG: Color(0x57FFD9C8),
+    og: Color(0xFFFF6B35),
+    tx: Color(0xFF3D1505), tx2: Color(0xFF7A3020), mu: Color(0xFFBB8070),
+    bg: Color(0xFFFFF5F0), gx: Color(0xD9FFF8F5), bd: Color(0xE8FFDDD0), bd2: Color(0x30FF8C69),
   );
 
   static const jwiChuni = AppThemeColors(
     pk: Color(0xFF4A6FA5), pkD: Color(0xFF2D4E7E), pkL: Color(0x204A6FA5),
-    lv: Color(0xFFB87C52), lvD: Color(0xFF8B5C35), lvL: Color(0x20B87C52),
-    lm: Color(0xFFE2D0B8), lmD: Color(0xFFA8896A), lmG: Color(0x57E2D0B8),
-    og: Color(0xFFB84C2E),
-    tx: Color(0xFF1C1C2C), tx2: Color(0xFF5A5470), mu: Color(0xFF9C90A8),
-    bg: Color(0xFFF6F2EA), gx: Color(0xD9FBF8F2), bd: Color(0xE8DDD0BC), bd2: Color(0x304A6FA5),
+    lv: Color(0xFF6A8EBF), lvD: Color(0xFF3D5E88), lvL: Color(0x206A8EBF),
+    lm: Color(0xFFB0C4DE), lmD: Color(0xFF708BA8), lmG: Color(0x57B0C4DE),
+    og: Color(0xFFE07B52),
+    tx: Color(0xFF1A2030), tx2: Color(0xFF4A5870), mu: Color(0xFF8A9BB0),
+    bg: Color(0xFFF0F3F7), gx: Color(0xD9F5F7FB), bd: Color(0xE8CDD6E8), bd2: Color(0x304A6FA5),
   );
 
   static const todori = AppThemeColors(
@@ -159,108 +117,85 @@ class AppThemeColors {
     bd2: Color(0x30FF6FB5),
   );
 
-  static const creamSnail = AppThemeColors(
-    pk: Color(0xFF1D4ED8), pkD: Color(0xFF1E3A8A), pkL: Color(0x201D4ED8),
-    lv: Color(0xFF2563EB), lvD: Color(0xFF1D4ED8), lvL: Color(0x202563EB),
-    lm: Color(0xFFF5E6C8), lmD: Color(0xFFD4A853), lmG: Color(0x57F5E6C8),
-    og: Color(0xFFDC6F2D),
-    tx: Color(0xFF1A1A2E), tx2: Color(0xFF4A5568), mu: Color(0xFF94A3B8),
-    bg: Color(0xFFFFF8E8), gx: Color(0xD9FFFCF0), bd: Color(0xE8E8D8B8), bd2: Color(0x301D4ED8),
-  );
-
-  static const jimungmungi = AppThemeColors(
-    pk: Color(0xFF7B4DFF),
-    pkD: Color(0xFF4322A3),
-    pkL: Color(0x247B4DFF),
-    lv: Color(0xFF1E1E24),
-    lvD: Color(0xFF000000),
-    lvL: Color(0x1F1E1E24),
-    lm: Color(0xFFF4F2FF),
-    lmD: Color(0xFFD8D2F0),
-    lmG: Color(0x57F4F2FF),
-    og: Color(0xFFA987FF),
-    tx: Color(0xFF18141F),
-    tx2: Color(0xFF5D5670),
-    mu: Color(0xFF9B93AE),
-    bg: Color(0xFFF7F4FF),
-    gx: Color(0xD9FFFEFF),
-    bd: Color(0xE8DED7F8),
-    bd2: Color(0x407B4DFF),
-  );
-
   static const chocoNyangi = AppThemeColors(
     pk: Color(0xFF7B4A2F),
     pkD: Color(0xFF4A2919),
     pkL: Color(0x247B4A2F),
-    lv: Color(0xFF355C9A),
-    lvD: Color(0xFF213B66),
-    lvL: Color(0x20355C9A),
+    lv: Color(0xFF9B6B52),
+    lvD: Color(0xFF7B4A2F),
+    lvL: Color(0x209B6B52),
     lm: Color(0xFFF6EEDF),
     lmD: Color(0xFFD9C3A3),
     lmG: Color(0x57F6EEDF),
-    og: Color(0xFF5B2E1A),
+    og: Color(0xFF3D1508),
     tx: Color(0xFF2C1A13),
     tx2: Color(0xFF6E5A52),
     mu: Color(0xFFA4938B),
     bg: Color(0xFFFFFBF4),
     gx: Color(0xD9FFFDF9),
     bd: Color(0xE8E8DBCC),
-    bd2: Color(0x40355C9A),
+    bd2: Color(0x407B4A2F),
   );
 
-  static const eunsulNyangi = AppThemeColors(
-    pk: Color(0xFFFF9F1C),
-    pkD: Color(0xFFC96A00),
-    pkL: Color(0x24FF9F1C),
-    lv: Color(0xFFA7E635),
-    lvD: Color(0xFF6AA300),
-    lvL: Color(0x24A7E635),
-    lm: Color(0xFF2FAF5B),
-    lmD: Color(0xFF1E7A3F),
-    lmG: Color(0x572FAF5B),
-    og: Color(0xFFFFC35C),
-    tx: Color(0xFF21301D),
-    tx2: Color(0xFF5F715A),
-    mu: Color(0xFF9AAA93),
-    bg: Color(0xFFFBFFF5),
-    gx: Color(0xD9FEFFF9),
-    bd: Color(0xE8D6EDBE),
-    bd2: Color(0x40A7E635),
+  static const moriYellow = AppThemeColors(
+    pk: Color(0xFFF59E0B), pkD: Color(0xFFB45309), pkL: Color(0x20F59E0B),
+    lv: Color(0xFFFBBF24), lvD: Color(0xFFD97706), lvL: Color(0x20FBBF24),
+    lm: Color(0xFFFDE68A), lmD: Color(0xFFFCD34D), lmG: Color(0x57FDE68A),
+    og: Color(0xFFD97706),
+    tx: Color(0xFF1C1917), tx2: Color(0xFF44403C), mu: Color(0xFF78716C),
+    bg: Color(0xFFFFFBEB), gx: Color(0xD9FFFDF5), bd: Color(0xE8FDE68A), bd2: Color(0x30F59E0B),
   );
 
-  static const blackWhite = AppThemeColors(
-    pk: Color(0xFF000000), pkD: Color(0xFF000000), pkL: Color(0x00000000),
-    lv: Color(0xFF000000), lvD: Color(0xFF000000), lvL: Color(0x00000000),
-    lm: Color(0xFFCCCCCC), lmD: Color(0xFF888888), lmG: Color(0x00000000),
-    og: Color(0xFF555555),
-    tx: Color(0xFF000000), tx2: Color(0xFF444444), mu: Color(0xFFAAAAAA),
-    bg: Color(0xFFFFFFFF), gx: Color(0xFFFFFFFF), bd: Color(0xFFE8E8E8), bd2: Color(0xFFD0D0D0),
+  static const moriNavy = AppThemeColors(
+    pk: Color(0xFF1E40AF), pkD: Color(0xFF1E3A8A), pkL: Color(0x201E40AF),
+    lv: Color(0xFF2563EB), lvD: Color(0xFF1D4ED8), lvL: Color(0x202563EB),
+    lm: Color(0xFFBFDBFE), lmD: Color(0xFF93C5FD), lmG: Color(0x57BFDBFE),
+    og: Color(0xFF0369A1),
+    tx: Color(0xFF0F172A), tx2: Color(0xFF1E3A8A), mu: Color(0xFF60A5FA),
+    bg: Color(0xFFF0F6FF), gx: Color(0xD9F5F9FF), bd: Color(0xE8BFDBFE), bd2: Color(0x301E40AF),
   );
 
-  static const moriKnit = AppThemeColors(
-    pk: Color(0xFF8B7CF8), pkD: Color(0xFF5B47D6), pkL: Color(0x208B7CF8),
-    lv: Color(0xFF84CC16), lvD: Color(0xFF4D7C0F), lvL: Color(0x2084CC16),
-    lm: Color(0xFF94A3B8), lmD: Color(0xFF475569), lmG: Color(0x5794A3B8),
-    og: Color(0xFF64748B),
-    tx: Color(0xFF1E1E2E), tx2: Color(0xFF64748B), mu: Color(0xFF94A3B8),
-    bg: Color(0xFFFFFFFF), gx: Color(0xF8F9FAFE), bd: Color(0xE8E2E8F0), bd2: Color(0x308B7CF8),
+  static const moriMono = AppThemeColors(
+    pk: Color(0xFF374151), pkD: Color(0xFF1F2937), pkL: Color(0x20374151),
+    lv: Color(0xFF6B7280), lvD: Color(0xFF4B5563), lvL: Color(0x206B7280),
+    lm: Color(0xFFD1D5DB), lmD: Color(0xFF9CA3AF), lmG: Color(0x57D1D5DB),
+    og: Color(0xFF4B5563),
+    tx: Color(0xFF111827), tx2: Color(0xFF374151), mu: Color(0xFF9CA3AF),
+    bg: Color(0xFFFFFFFF), gx: Color(0xFFFFFFFF), bd: Color(0xFFE5E7EB), bd2: Color(0xFFD1D5DB),
   );
 
   static AppThemeColors of(AppThemeMode mode) {
     switch (mode) {
       case AppThemeMode.lavender:    return lavender;
-      case AppThemeMode.moriKnit:    return moriKnit;
       case AppThemeMode.earthy:      return earthy;
-      case AppThemeMode.monochrome:  return monochrome;
       case AppThemeMode.moyangi:     return moyangi;
       case AppThemeMode.jwiChuni:    return jwiChuni;
       case AppThemeMode.todori:      return todori;
       case AppThemeMode.pinkRabbit:  return pinkRabbit;
-      case AppThemeMode.creamSnail:  return creamSnail;
-      case AppThemeMode.jimungmungi: return jimungmungi;
       case AppThemeMode.chocoNyangi: return chocoNyangi;
-      case AppThemeMode.eunsulNyangi: return eunsulNyangi;
-      case AppThemeMode.blackWhite:   return blackWhite;
+      case AppThemeMode.moriRed:     return moriRed;
+      case AppThemeMode.moriGreen:   return moriGreen;
+      case AppThemeMode.moriYellow:  return moriYellow;
+      case AppThemeMode.moriNavy:    return moriNavy;
+      case AppThemeMode.moriMono:    return moriMono;
     }
   }
+
+  static const moriRed = AppThemeColors(
+    pk: Color(0xFFDC2626), pkD: Color(0xFF991B1B), pkL: Color(0x20DC2626),
+    lv: Color(0xFFEF4444), lvD: Color(0xFFB91C1C), lvL: Color(0x20EF4444),
+    lm: Color(0xFFFEE2E2), lmD: Color(0xFFFCA5A5), lmG: Color(0x57FEE2E2),
+    og: Color(0xFFB45309),
+    tx: Color(0xFF111111), tx2: Color(0xFF555555), mu: Color(0xFF999999),
+    bg: Color(0xFFFFF8E8), gx: Color(0xFFFFFCF5), bd: Color(0xFFEDE0CC), bd2: Color(0x30DC2626),
+  );
+
+  static const moriGreen = AppThemeColors(
+    pk: Color(0xFF16A34A), pkD: Color(0xFF14532D), pkL: Color(0x2416A34A),
+    lv: Color(0xFF4ADE80), lvD: Color(0xFF15803D), lvL: Color(0x244ADE80),
+    lm: Color(0xFFBBF7D0), lmD: Color(0xFF86EFAC), lmG: Color(0x57BBF7D0),
+    og: Color(0xFF65A30D),
+    tx: Color(0xFF052E16), tx2: Color(0xFF166534), mu: Color(0xFF6EBF8A),
+    bg: Color(0xFFF0FDF4), gx: Color(0xD9F0FFF4), bd: Color(0xE8BBF7D0), bd2: Color(0x3016A34A),
+  );
 }
