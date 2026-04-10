@@ -251,12 +251,12 @@ class AppThemeColors {
   );
 
   static const blackWhite = AppThemeColors(
-    pk: Color(0xFF000000), pkD: Color(0xFF000000), pkL: Color(0x18000000),
-    lv: Color(0xFF333333), lvD: Color(0xFF111111), lvL: Color(0x18333333),
-    lm: Color(0xFF888888), lmD: Color(0xFF555555), lmG: Color(0x40888888),
-    og: Color(0xFF444444),
-    tx: Color(0xFF000000), tx2: Color(0xFF555555), mu: Color(0xFF999999),
-    bg: Color(0xFFFFFFFF), gx: Color(0xFFFAFAFA), bd: Color(0xE8E0E0E0), bd2: Color(0x30000000),
+    pk: Color(0xFF000000), pkD: Color(0xFF000000), pkL: Color(0x0F000000),
+    lv: Color(0xFF000000), lvD: Color(0xFF000000), lvL: Color(0x0F000000),
+    lm: Color(0xFFBBBBBB), lmD: Color(0xFF888888), lmG: Color(0x30BBBBBB),
+    og: Color(0xFF555555),
+    tx: Color(0xFF000000), tx2: Color(0xFF444444), mu: Color(0xFFAAAAAA),
+    bg: Color(0xFFFFFFFF), gx: Color(0xFFFFFFFF), bd: Color(0xFFE8E8E8), bd2: Color(0xFFD0D0D0),
   );
 
   static const moriKnit = AppThemeColors(
