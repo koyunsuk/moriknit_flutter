@@ -107,6 +107,13 @@ firebase deploy --only hosting                             # ❌ (스크립트 �
   4. 해당 이슈 상태 🟢로 업데이트: `gh issue edit {N} --title "🟢 #N [카테고리] 제목"`
 - 빌드/설치 완료 후 결과만 보고. 중간에 확인 요청 금지.
 
+## iOS TestFlight 빌드 번호 규칙 (절대 준수)
+- **Codemagic으로 iOS 빌드 전 반드시 `pubspec.yaml`의 빌드 번호를 +1 올릴 것**
+- 현재 번호 확인: `grep "version:" pubspec.yaml`
+- 번호 올리기: `sed -i 's/version: X.X.X+NNNN/version: X.X.X+NNNNN/' pubspec.yaml`
+- 변경 후 커밋·푸시까지 완료 후 Codemagic 빌드 시작
+- 같은 번호로 업로드 시 App Store Connect에서 거부됨 (이전 사고: 2004 중복)
+
 ## 웹 빌드·배포 → 상단 ⛔ 절대 규칙 섹션 참조
 
 ## 이슈 상태 업데이트 (절대 준수)
