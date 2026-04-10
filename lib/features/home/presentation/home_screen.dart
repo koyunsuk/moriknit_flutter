@@ -1,4 +1,6 @@
-﻿import 'dart:math';
+﻿import 'dart:async';
+import 'dart:math';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -89,6 +91,13 @@ class HomeScreen extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          _SubSectionLabel(title: isKorean ? '방명록' : 'Guestbook', color: C.pkD),
+                          const SizedBox(height: 8),
+                          _HomeGuestbookFadeTicker(isKorean: isKorean),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 14),
+                            child: Divider(height: 1, thickness: 0.5),
+                          ),
                           _SubSectionLabel(title: isKorean ? '커뮤니티 게시글' : 'Posts', color: C.pk),
                           const SizedBox(height: 8),
                           _CommunityPreview(isKorean: isKorean),
@@ -96,16 +105,9 @@ class HomeScreen extends ConsumerWidget {
                             padding: EdgeInsets.symmetric(vertical: 14),
                             child: Divider(height: 1, thickness: 0.5),
                           ),
-                          _SubSectionLabel(title: isKorean ? '방명록' : 'Guestbook', color: C.pkD),
-                          const SizedBox(height: 8),
-                          _HomeGuestbookSection(isKorean: isKorean),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 14),
-                            child: Divider(height: 1, thickness: 0.5),
-                          ),
                           _SubSectionLabel(title: isKorean ? '완성 갤러리' : 'Gallery', color: C.lv),
                           const SizedBox(height: 8),
-                          _HomeGallerySection(isKorean: isKorean),
+                          _HomeGalleryVerticalSection(isKorean: isKorean),
                         ],
                       ),
                     ),
@@ -1409,6 +1411,195 @@ void _showGalleryDetail(BuildContext context, WidgetRef ref, PublicProjectEntry 
   );
 }
 
+// ── 방명록 페이드 티커 (한 항목씩 3초마다 교체) ──────────────
+class _HomeGuestbookFadeTicker extends ConsumerStatefulWidget {
+  final bool isKorean;
+  const _HomeGuestbookFadeTicker({required this.isKorean});
+
+  @override
+  ConsumerState<_HomeGuestbookFadeTicker> createState() => _HomeGuestbookFadeTickerState();
+}
+
+class _HomeGuestbookFadeTickerState extends ConsumerState<_HomeGuestbookFadeTicker>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _fade;
+  int _index = 0;
+  Timer? _timer;
+  List<dynamic> _entries = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
+    _ctrl.forward();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    if (_entries.length <= 1) return;
+    _timer = Timer.periodic(const Duration(seconds: 4), (_) async {
+      await _ctrl.reverse();
+      if (!mounted) return;
+      setState(() => _index = (_index + 1) % _entries.length);
+      _ctrl.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final entriesAsync = ref.watch(guestbookListProvider);
+    return entriesAsync.when(
+      loading: () => const SizedBox(height: 40, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (entries) {
+        if (entries.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              widget.isKorean ? '아직 방명록이 없어요.' : 'No guestbook entries yet.',
+              style: T.caption.copyWith(color: C.mu),
+            ),
+          );
+        }
+        if (_entries.length != entries.length) {
+          _entries = entries;
+          _index = _index.clamp(0, entries.length - 1);
+          WidgetsBinding.instance.addPostFrameCallback((_) => _startTimer());
+        }
+        final e = entries[_index.clamp(0, entries.length - 1)];
+        return GestureDetector(
+          onTap: () => context.go(Routes.community),
+          behavior: HitTestBehavior.opaque,
+          child: FadeTransition(
+            opacity: _fade,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              decoration: BoxDecoration(
+                color: C.pk.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: C.pk.withValues(alpha: 0.1)),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 14,
+                    backgroundColor: C.pkL,
+                    backgroundImage: e.avatarUrl.isNotEmpty ? NetworkImage(e.avatarUrl) : null,
+                    child: e.avatarUrl.isEmpty
+                        ? Text(
+                            e.displayName.isNotEmpty ? e.displayName.characters.first.toUpperCase() : '?',
+                            style: TextStyle(fontSize: 11, color: C.pkD, fontWeight: FontWeight.w700),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: RichText(
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      text: TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '${e.displayName.isNotEmpty ? e.displayName : (widget.isKorean ? '익명' : 'Anon')}: ',
+                            style: T.captionBold.copyWith(color: C.tx),
+                          ),
+                          TextSpan(text: e.message, style: T.body.copyWith(fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(Icons.chevron_right_rounded, size: 16, color: C.mu),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ── 완성 갤러리 세로 목록 ─────────────────────────────────────
+class _HomeGalleryVerticalSection extends ConsumerWidget {
+  final bool isKorean;
+  const _HomeGalleryVerticalSection({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final projectsAsync = ref.watch(publicProjectsProvider);
+    return projectsAsync.when(
+      loading: () => const SizedBox(height: 80, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (entries) {
+        if (entries.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              isKorean ? '아직 공개된 작품이 없어요.' : 'No public projects yet.',
+              style: T.caption.copyWith(color: C.mu),
+            ),
+          );
+        }
+        final visible = entries.take(5).toList();
+        return ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: visible.length,
+          separatorBuilder: (_, _) => const Divider(height: 10, thickness: 0.5),
+          itemBuilder: (_, i) {
+            final entry = visible[i];
+            return GestureDetector(
+              onTap: () => _showGalleryDetail(context, ref, entry),
+              behavior: HitTestBehavior.opaque,
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: entry.coverPhotoUrl.isNotEmpty
+                        ? Image.network(entry.coverPhotoUrl, width: 52, height: 52, fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => Container(width: 52, height: 52, color: C.lvL, child: Icon(Icons.grid_view_rounded, color: C.lv, size: 18)))
+                        : Container(width: 52, height: 52, color: C.lvL, child: Icon(Icons.grid_view_rounded, color: C.lv, size: 18)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(entry.title, style: T.captionBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 2),
+                        Row(children: [
+                          Icon(Icons.person_outline_rounded, size: 11, color: C.mu),
+                          const SizedBox(width: 2),
+                          Text(entry.ownerName, style: T.caption.copyWith(fontSize: 11, color: C.mu), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          const SizedBox(width: 8),
+                          Icon(Icons.favorite_rounded, size: 11, color: C.pk),
+                          const SizedBox(width: 2),
+                          Text('${entry.likeCount}', style: T.caption.copyWith(fontSize: 11, color: C.mu)),
+                        ]),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, size: 16, color: C.mu),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
 class _HomeDetailRow extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
@@ -1550,6 +1741,10 @@ class _OthersProjectSection extends ConsumerWidget {
           itemCount: picks.length,
           itemBuilder: (_, i) {
             final entry = picks[i];
+            // photoUrls(단계로그 이미지) 우선, 없으면 coverPhotoUrl
+            final imgUrl = entry.photoUrls.isNotEmpty
+                ? entry.photoUrls[i % entry.photoUrls.length]
+                : entry.coverPhotoUrl;
             return GestureDetector(
               onTap: () => _showGalleryDetail(context, ref, entry),
               child: Container(
@@ -1563,12 +1758,15 @@ class _OthersProjectSection extends ConsumerWidget {
                     Expanded(
                       child: ClipRRect(
                         borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                        child: entry.coverPhotoUrl.isNotEmpty
-                            ? Image.network(
-                                entry.coverPhotoUrl,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => Container(color: C.lvL, child: Icon(Icons.grid_view_rounded, color: C.lv)),
+                        child: imgUrl.isNotEmpty
+                            ? ImageFiltered(
+                                imageFilter: ImageFilter.blur(sigmaX: 3.0, sigmaY: 3.0),
+                                child: Image.network(
+                                  imgUrl,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => Container(color: C.lvL, child: Icon(Icons.grid_view_rounded, color: C.lv)),
+                                ),
                               )
                             : Container(color: C.lvL, child: Icon(Icons.grid_view_rounded, color: C.lv)),
                       ),

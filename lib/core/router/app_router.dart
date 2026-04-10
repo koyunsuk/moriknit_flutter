@@ -45,6 +45,17 @@ import 'package:moriknit_flutter/providers/auth_provider.dart';
 export 'routes.dart';
 import 'routes.dart';
 
+// ── 페이지 전환 헬퍼 ─────────────────────────────────────────
+Page<void> _noTransitionPage(Widget child) => NoTransitionPage(child: child);
+
+Page<void> _fadePage(Widget child) => CustomTransitionPage(
+  child: child,
+  transitionDuration: const Duration(milliseconds: 220),
+  reverseTransitionDuration: const Duration(milliseconds: 180),
+  transitionsBuilder: (_, animation, __, child) =>
+      FadeTransition(opacity: CurvedAnimation(parent: animation, curve: Curves.easeInOut), child: child),
+);
+
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authRepository = ref.watch(authRepositoryProvider);
   final authRefresh = GoRouterRefreshStream(authRepository.authStateChanges);
@@ -79,96 +90,93 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: Routes.splash, builder: (_, _) => const SplashScreen()),
-      GoRoute(path: Routes.landing, builder: (_, _) => const LandingScreen()),
-      GoRoute(path: Routes.login, builder: (_, _) => const LoginScreen()),
+      GoRoute(path: Routes.landing, pageBuilder: (_, _) => _fadePage(const LandingScreen())),
+      GoRoute(path: Routes.login, pageBuilder: (_, _) => _fadePage(const LoginScreen())),
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),
         routes: [
-          GoRoute(path: Routes.home, builder: (_, _) => const HomeScreen()),
+          GoRoute(path: Routes.home, pageBuilder: (_, _) => _noTransitionPage(const HomeScreen())),
           GoRoute(
             path: Routes.projectList,
-            builder: (_, _) => const ProjectListScreen(),
+            pageBuilder: (_, _) => _noTransitionPage(const ProjectListScreen()),
             routes: [
-              GoRoute(path: 'input', builder: (_, _) => const ProjectInputScreen()),
-              GoRoute(path: 'patterns', builder: (_, _) => const ProjectPatternsScreen()),
-              GoRoute(path: ':id', builder: (_, state) => ProjectDetailScreen(projectId: state.pathParameters['id']!)),
+              GoRoute(path: 'input', pageBuilder: (_, _) => _fadePage(const ProjectInputScreen())),
+              GoRoute(path: 'patterns', pageBuilder: (_, _) => _fadePage(const ProjectPatternsScreen())),
+              GoRoute(path: ':id', pageBuilder: (_, state) => _fadePage(ProjectDetailScreen(projectId: state.pathParameters['id']!))),
             ],
           ),
           GoRoute(
             path: Routes.swatchList,
-            builder: (_, _) => const SwatchListScreen(),
+            pageBuilder: (_, _) => _noTransitionPage(const SwatchListScreen()),
             routes: [
-              GoRoute(path: 'input', builder: (_, _) => const SwatchInputScreen()),
-              GoRoute(path: ':id', builder: (_, state) => SwatchDetailScreen(swatchId: state.pathParameters['id']!)),
+              GoRoute(path: 'input', pageBuilder: (_, _) => _fadePage(const SwatchInputScreen())),
+              GoRoute(path: ':id', pageBuilder: (_, state) => _fadePage(SwatchDetailScreen(swatchId: state.pathParameters['id']!))),
             ],
           ),
           GoRoute(
             path: Routes.tools,
-            builder: (_, _) => const ToolsScreen(),
+            pageBuilder: (_, _) => _noTransitionPage(const ToolsScreen()),
             routes: [
-              GoRoute(
-                path: 'patterns',
-                builder: (_, _) => const PatternListScreen(),
-              ),
+              GoRoute(path: 'patterns', pageBuilder: (_, _) => _fadePage(const PatternListScreen())),
               GoRoute(
                 path: 'pattern',
-                builder: (_, _) => const PatternEditorScreen(),
+                pageBuilder: (_, _) => _fadePage(const PatternEditorScreen()),
                 routes: [
                   GoRoute(
                     path: ':id',
-                    builder: (_, state) => PatternEditorScreen(patternId: state.pathParameters['id']),
+                    pageBuilder: (_, state) => _fadePage(PatternEditorScreen(patternId: state.pathParameters['id'])),
                   ),
                 ],
               ),
-              GoRoute(path: 'gauge', builder: (_, _) => const GaugeCalculatorScreen()),
-              GoRoute(path: 'course', builder: (_, _) => const CourseScreen()),
-              GoRoute(path: 'encyclopedia', builder: (_, _) => const EncyclopediaScreen()),
-              GoRoute(path: 'memo', builder: (_, _) => const ToolMemoScreen()),
-              GoRoute(path: 'ravelry', builder: (_, _) => const RavelryScreen()),
-              GoRoute(path: 'etsy', builder: (_, _) => const EtsyScreen()),
+              GoRoute(path: 'gauge', pageBuilder: (_, _) => _fadePage(const GaugeCalculatorScreen())),
+              GoRoute(path: 'course', pageBuilder: (_, _) => _fadePage(const CourseScreen())),
+              GoRoute(path: 'encyclopedia', pageBuilder: (_, _) => _fadePage(const EncyclopediaScreen())),
+              GoRoute(path: 'memo', pageBuilder: (_, _) => _fadePage(const ToolMemoScreen())),
+              GoRoute(path: 'ravelry', pageBuilder: (_, _) => _fadePage(const RavelryScreen())),
+              GoRoute(path: 'etsy', pageBuilder: (_, _) => _fadePage(const EtsyScreen())),
             ],
           ),
-          GoRoute(path: Routes.community, builder: (_, _) => const CommunityScreen()),
-          GoRoute(path: Routes.messenger, builder: (_, _) => const MessengerScreen()),
-          GoRoute(path: Routes.market, builder: (_, _) => const MarketScreen()),
+          GoRoute(path: Routes.community, pageBuilder: (_, _) => _noTransitionPage(const CommunityScreen())),
+          GoRoute(path: Routes.messenger, pageBuilder: (_, _) => _noTransitionPage(const MessengerScreen())),
+          GoRoute(path: Routes.market, pageBuilder: (_, _) => _noTransitionPage(const MarketScreen())),
           GoRoute(
             path: Routes.my,
-            builder: (_, _) => const MyPageScreen(),
-            routes: [GoRoute(path: 'needles', builder: (_, _) => const NeedleListScreen())],
+            pageBuilder: (_, _) => _noTransitionPage(const MyPageScreen()),
+            routes: [GoRoute(path: 'needles', pageBuilder: (_, _) => _fadePage(const NeedleListScreen()))],
           ),
-          GoRoute(path: Routes.counterList, builder: (_, _) => const CounterListScreen()),
+          GoRoute(path: Routes.counterList, pageBuilder: (_, _) => _noTransitionPage(const CounterListScreen())),
           GoRoute(
             path: Routes.templateList,
-            builder: (_, _) => const TemplateListScreen(),
+            pageBuilder: (_, _) => _noTransitionPage(const TemplateListScreen()),
             routes: [
               GoRoute(
                 path: 'editor',
-                builder: (_, state) {
+                pageBuilder: (_, state) {
                   final extra = state.extra as Map<String, dynamic>?;
-                  return TemplateEditorScreen(
+                  return _fadePage(TemplateEditorScreen(
                     templateId: extra?['templateId'] as String?,
                     initialTitle: extra?['title'] as String?,
                     initialSteps: (extra?['steps'] as List?)?.map((e) => e.toString()).toList(),
                     initialStepDescs: (extra?['stepDescs'] as List?)?.map((e) => e.toString()).toList(),
-                  );
+                  ));
                 },
               ),
             ],
           ),
         ],
       ),
-      GoRoute(path: '/counter/:id', builder: (_, state) => CounterScreen(counterId: state.pathParameters['id']!)),
-      GoRoute(path: '/yarn-list', builder: (_, _) => const YarnListScreen()),
-      GoRoute(path: '/yarn-detail/:id', builder: (_, state) => YarnDetailScreen(yarnId: state.pathParameters['id']!)),
-      GoRoute(path: '/needle-detail/:id', builder: (_, state) => NeedleDetailScreen(needleId: state.pathParameters['id']!)),
+      GoRoute(path: '/counter/:id', pageBuilder: (_, state) => _fadePage(CounterScreen(counterId: state.pathParameters['id']!))),
+      GoRoute(path: '/yarn-list', pageBuilder: (_, _) => _fadePage(const YarnListScreen())),
+      GoRoute(path: '/yarn-detail/:id', pageBuilder: (_, state) => _fadePage(YarnDetailScreen(yarnId: state.pathParameters['id']!))),
+      GoRoute(path: '/needle-detail/:id', pageBuilder: (_, state) => _fadePage(NeedleDetailScreen(needleId: state.pathParameters['id']!))),
       GoRoute(
         path: '/yarn-input',
-        builder: (context, state) {
+        pageBuilder: (_, state) {
           final extra = state.extra as Map<String, dynamic>?;
-          return YarnInputScreen(
+          return _fadePage(YarnInputScreen(
             yarnId: extra?['yarnId'] as String?,
             initialYarn: extra?['initialYarn'] as YarnModel?,
-          );
+          ));
         },
       ),
     ],
