@@ -1361,6 +1361,10 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull;
+    final currentUserModel = ref.watch(currentUserProvider).valueOrNull;
+    final resolvedName = (currentUserModel?.displayName.isNotEmpty == true)
+        ? currentUserModel!.displayName
+        : (user?.displayName?.isNotEmpty == true ? user!.displayName! : (widget.isKorean ? '익명' : 'Anonymous'));
     final commentsAsync = ref.watch(commentsProvider(widget.post.id));
     final isMyPost = user?.uid == widget.post.uid;
 
@@ -1551,7 +1555,7 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
                       final comment = CommentModel(
                         id: '',
                         uid: user.uid,
-                        authorName: user.displayName ?? (widget.isKorean ? '익명' : 'Anonymous'),
+                        authorName: resolvedName,
                         content: text,
                         createdAt: DateTime.now(),
                       );
