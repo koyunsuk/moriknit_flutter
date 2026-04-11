@@ -1,5 +1,5 @@
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -21,38 +21,51 @@ class ProjectPdfService {
   static final _greenBrd   = PdfColor.fromHex('86EFAC');
   static final _white      = PdfColors.white;
   static final _grey50     = PdfColor.fromHex('F9FAFB');
-  static final _grey100    = PdfColor.fromHex('F3F4F6');
   static final _grey200    = PdfColor.fromHex('E5E7EB');
+  static final _grey300    = PdfColor.fromHex('D1D5DB');
   static final _grey400    = PdfColor.fromHex('9CA3AF');
   static final _grey600    = PdfColor.fromHex('4B5563');
   static final _grey700    = PdfColor.fromHex('374151');
   static final _grey900    = PdfColor.fromHex('111827');
 
-  // ── Image loader ──────────────────────────────────────
+  // ── Image loader (Firebase Storage SDK — 인증 포함 안정적 다운로드) ────
   static Future<pw.ImageProvider?> _img(String url) async {
     if (url.isEmpty) return null;
     try {
-      final r = await http.get(Uri.parse(url))
-          .timeout(const Duration(seconds: 10));
-      if (r.statusCode == 200) return pw.MemoryImage(r.bodyBytes);
+      // Firebase Storage gs:// 또는 https://firebasestorage.googleapis.com URL 처리
+      final ref = FirebaseStorage.instance.refFromURL(url);
+      final bytes = await ref.getData(10 * 1024 * 1024); // 최대 10MB
+      if (bytes != null && bytes.isNotEmpty) return pw.MemoryImage(bytes);
     } catch (_) {}
     return null;
   }
 
-  // ── Placeholder box ───────────────────────────────────
-  static pw.Widget _box(double w, double h, String text, pw.Font font) =>
+  // ── Placeholder box (blank template slot) ────────────
+  static pw.Widget _blank(double w, double h, String label, pw.Font font,
+      {PdfColor? borderColor}) =>
       pw.Container(
         width: w, height: h,
         decoration: pw.BoxDecoration(
-          color: _grey100,
+          color: _grey50,
           borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
-          border: pw.Border.all(color: _grey200),
+          border: pw.Border.all(
+              color: borderColor ?? _grey300, width: 0.8,
+              style: pw.BorderStyle.dashed),
         ),
         child: pw.Center(
-          child: pw.Text(text,
+          child: pw.Text(label,
               style: pw.TextStyle(font: font, fontSize: 9, color: _grey400)),
         ),
       );
+
+  // ── PageTheme (워터마크 없음) ─────────────────────────
+  static pw.PageTheme _pageTheme(pw.Font font, String _,
+      {pw.EdgeInsets margin = const pw.EdgeInsets.fromLTRB(36, 32, 36, 28)}) {
+    return pw.PageTheme(
+      pageFormat: PdfPageFormat.a4,
+      margin: margin,
+    );
+  }
 
   // ── Rounded image ─────────────────────────────────────
   static pw.Widget _photo(pw.ImageProvider img, double w, double h,
@@ -63,26 +76,43 @@ class ProjectPdfService {
         child: pw.Image(img, width: w, height: h, fit: fit),
       );
 
-  // ── Section title ─────────────────────────────────────
-  static pw.Widget _sectionTitle(
-          String text, pw.TextStyle style, PdfColor accent) =>
-      pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Text(text, style: style),
-          pw.SizedBox(height: 5),
-          pw.Container(
-            height: 2.5, width: 32,
-            decoration: pw.BoxDecoration(
-              color: accent,
-              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(1.5)),
-            ),
-          ),
-          pw.SizedBox(height: 10),
-        ],
+  // ── Section card (always shown) ───────────────────────
+  static pw.Widget _card({
+    required String title,
+    required List<pw.Widget> children,
+    required pw.Font bold,
+    required PdfColor accent,
+    PdfColor? bgColor,
+  }) =>
+      pw.Container(
+        padding: const pw.EdgeInsets.all(10),
+        decoration: pw.BoxDecoration(
+          color: bgColor ?? _grey50,
+          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+          border: pw.Border.all(color: _grey200, width: 0.5),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Row(children: [
+              pw.Container(
+                width: 3, height: 12,
+                decoration: pw.BoxDecoration(
+                  color: accent,
+                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)),
+                ),
+              ),
+              pw.SizedBox(width: 5),
+              pw.Text(title,
+                  style: pw.TextStyle(font: bold, fontSize: 8.5, color: _grey700)),
+            ]),
+            pw.SizedBox(height: 7),
+            ...children,
+          ],
+        ),
       );
 
-  // ── Labeled field row ─────────────────────────────────
+  // ── Field row (label + value, always shown) ───────────
   static pw.Widget _field(
     String label,
     String value,
@@ -94,68 +124,27 @@ class ProjectPdfService {
         child: pw.Row(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Container(
-              color: _grey100,
-              padding:
-                  const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            pw.SizedBox(
+              width: 42,
               child: pw.Text(label, style: labelStyle),
             ),
-            pw.SizedBox(width: 6),
+            pw.SizedBox(width: 4),
             pw.Expanded(
-              child: pw.Padding(
-                padding: const pw.EdgeInsets.symmetric(vertical: 2),
-                child: pw.Text(value,
-                    style: valueStyle,
-                    maxLines: 2,
-                    overflow: pw.TextOverflow.clip),
+              child: pw.Text(
+                value.isNotEmpty ? value : '—',
+                style: value.isNotEmpty
+                    ? valueStyle
+                    : valueStyle.copyWith(color: _grey300),
+                maxLines: 2,
+                overflow: pw.TextOverflow.clip,
               ),
             ),
           ],
         ),
       );
 
-  // ── Info section card ─────────────────────────────────
-  static pw.Widget _infoSection({
-    required String title,
-    required List<pw.Widget> fields,
-    required pw.TextStyle titleStyle,
-    required PdfColor accent,
-  }) =>
-      pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Row(children: [
-            pw.Container(
-              width: 3, height: 14,
-              decoration: pw.BoxDecoration(
-                color: accent,
-                borderRadius:
-                    const pw.BorderRadius.all(pw.Radius.circular(2)),
-              ),
-            ),
-            pw.SizedBox(width: 7),
-            pw.Text(title, style: titleStyle),
-          ]),
-          pw.SizedBox(height: 6),
-          pw.Container(
-            padding: const pw.EdgeInsets.all(9),
-            decoration: pw.BoxDecoration(
-              color: _grey50,
-              borderRadius:
-                  const pw.BorderRadius.all(pw.Radius.circular(8)),
-              border: pw.Border.all(color: _grey200),
-            ),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: fields,
-            ),
-          ),
-        ],
-      );
-
   // ── Footer ────────────────────────────────────────────
-  static pw.Widget _footer(
-          pw.Font font, String dateStr, pw.Context ctx) =>
+  static pw.Widget _footer(pw.Font font, String dateStr, pw.Context ctx) =>
       pw.Container(
         padding: const pw.EdgeInsets.only(top: 6),
         decoration: pw.BoxDecoration(
@@ -166,11 +155,9 @@ class ProjectPdfService {
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
             pw.Text('MoriKnit  ·  www.moriknit.com  ·  $dateStr',
-                style: pw.TextStyle(
-                    font: font, fontSize: 7.5, color: _grey400)),
+                style: pw.TextStyle(font: font, fontSize: 7.5, color: _grey400)),
             pw.Text('${ctx.pageNumber} / ${ctx.pagesCount}',
-                style: pw.TextStyle(
-                    font: font, fontSize: 7.5, color: _grey400)),
+                style: pw.TextStyle(font: font, fontSize: 7.5, color: _grey400)),
           ],
         ),
       );
@@ -185,39 +172,50 @@ class ProjectPdfService {
     required bool isKorean,
     String userName = '',
   }) async {
-    final regular = pw.Font.ttf(
-        await rootBundle.load('assets/fonts/NotoSansKR-Regular.ttf'));
-    final bold = pw.Font.ttf(
-        await rootBundle.load('assets/fonts/NotoSansKR-Bold.ttf'));
+    pw.Font regular;
+    pw.Font bold;
+    try {
+      regular = pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSansKR-Regular.ttf'));
+      bold = pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSansKR-Bold.ttf'));
+    } catch (_) {
+      regular = pw.Font.helvetica();
+      bold = pw.Font.helveticaBold();
+    }
 
     final df = DateFormat('yyyy.MM.dd');
     final dateStr = df.format(DateTime.now());
-    String fmt(DateTime? d) => d != null ? df.format(d) : '-';
+    String fmt(DateTime? d) => d != null ? df.format(d) : '—';
 
     // Text styles
-    final base  = pw.TextStyle(font: regular, fontSize: 9.5, color: _grey700);
-    final baseB = pw.TextStyle(font: bold,    fontSize: 9.5, color: _grey700);
-    final sm    = pw.TextStyle(font: regular, fontSize: 8.5, color: _grey400);
-    final smB   = pw.TextStyle(font: bold,    fontSize: 8.5, color: _grey600);
-    final lbl   = pw.TextStyle(font: bold,    fontSize: 8,   color: _grey700);
+    final base  = pw.TextStyle(font: regular, fontSize: 9,   color: _grey700);
+    final baseB = pw.TextStyle(font: bold,    fontSize: 9,   color: _grey700);
+    final sm    = pw.TextStyle(font: regular, fontSize: 8,   color: _grey400);
+    final smB   = pw.TextStyle(font: bold,    fontSize: 8,   color: _grey600);
+    final lbl   = pw.TextStyle(font: bold,    fontSize: 7.5, color: _grey600);
     final h1    = pw.TextStyle(font: bold,    fontSize: 26,  color: _grey900);
-    final h2    = pw.TextStyle(font: bold,    fontSize: 15,  color: _grey900);
-    final h3    = pw.TextStyle(font: bold,    fontSize: 10.5,color: _grey900);
     final whiteSm = pw.TextStyle(font: regular, fontSize: 9,  color: _white);
     final whiteMd = pw.TextStyle(font: bold,    fontSize: 12, color: _white);
 
     final swatch  = swatches.isNotEmpty ? swatches.first : null;
     final sorted  = [...steps]..sort((a, b) => a.order.compareTo(b.order));
-    final withPhoto = sorted.where((s) => s.photoUrl?.isNotEmpty == true).toList();
     final albumUrls = project.photoUrls.where((u) => u.isNotEmpty).toList();
+
+    // 프로젝트 연계 도안: imageUrl 있는 것만 (없으면 플레이스홀더)
+    final patternImgUrls = patterns
+        .where((p) => p.imageUrl.isNotEmpty)
+        .map((p) => p.imageUrl)
+        .take(1)
+        .toList();
+    final firstPattern = patterns.isNotEmpty ? patterns.first : null;
 
     // ── Parallel image load ──────────────────────────────
     final urls = [
       project.coverPhotoUrl,
       if (swatch != null) swatch.beforePhotoUrl,
       if (swatch != null) swatch.afterPhotoUrl,
-      ...withPhoto.map((s) => s.photoUrl!),
+      ...steps.where((s) => s.photoUrl?.isNotEmpty == true).map((s) => s.photoUrl!),
       ...albumUrls,
+      ...patternImgUrls,
     ];
     final imgs = await Future.wait(urls.map(_img));
 
@@ -227,7 +225,7 @@ class ProjectPdfService {
     final swatchAfter  = swatch != null ? imgs[ii++] : null;
 
     final stepPhotos = <String, pw.ImageProvider>{};
-    for (final s in withPhoto) {
+    for (final s in sorted.where((s) => s.photoUrl?.isNotEmpty == true)) {
       final img = imgs[ii++];
       if (img != null) stepPhotos[s.id] = img;
     }
@@ -236,26 +234,31 @@ class ProjectPdfService {
       final img = imgs[ii++];
       if (img != null) albumImgs.add(img);
     }
-
-    // ── 사진 앨범: 모든 사진 수집 ──────────────────────────
-    final allPhotos = <pw.ImageProvider>[];
-    if (coverImg != null) allPhotos.add(coverImg);
-    if (swatchBefore != null) allPhotos.add(swatchBefore);
-    if (swatchAfter != null) allPhotos.add(swatchAfter);
-    for (final s in sorted) {
-      final img = stepPhotos[s.id];
-      if (img != null) allPhotos.add(img);
+    pw.ImageProvider? patternImg;
+    if (patternImgUrls.isNotEmpty) {
+      patternImg = imgs[ii++];
     }
-    allPhotos.addAll(albumImgs);
+
+    // 모든 사진 앨범 수집 (이미지 + 라벨 쌍)
+    final allPhotosWithLabel = <(pw.ImageProvider, String?)>[];
+    if (coverImg != null) allPhotosWithLabel.add((coverImg, isKorean ? '표지' : 'Cover'));
+    if (swatchBefore != null) allPhotosWithLabel.add((swatchBefore, isKorean ? '세탁 전' : 'Before'));
+    if (swatchAfter != null) allPhotosWithLabel.add((swatchAfter, isKorean ? '세탁 후' : 'After'));
+    for (int si = 0; si < sorted.length; si++) {
+      final img = stepPhotos[sorted[si].id];
+      if (img != null) allPhotosWithLabel.add((img, '#${si + 1}'));
+    }
+    for (final img in albumImgs) {
+      allPhotosWithLabel.add((img, null));
+    }
 
     final pdf = pw.Document();
 
     // ══════════════════════════════════════════════════════
-    // PAGE 1: 표지
+    // PAGE 1: 표지 (고정 템플릿)
     // ══════════════════════════════════════════════════════
     pdf.addPage(pw.Page(
-      pageFormat: PdfPageFormat.a4,
-      margin: pw.EdgeInsets.zero,
+      pageTheme: _pageTheme(regular, userName, margin: pw.EdgeInsets.zero),
       build: (ctx) {
         const pageW = 595.28;
         const imgH  = 370.0;
@@ -263,12 +266,9 @@ class ProjectPdfService {
         return pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.stretch,
           children: [
-            // 브랜드 헤더 바
             pw.Container(
-              height: 36,
-              color: _brand,
-              padding:
-                  const pw.EdgeInsets.symmetric(horizontal: 28),
+              height: 36, color: _brand,
+              padding: const pw.EdgeInsets.symmetric(horizontal: 28),
               child: pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: pw.CrossAxisAlignment.center,
@@ -278,62 +278,68 @@ class ProjectPdfService {
                 ],
               ),
             ),
-            // 커버 이미지 (가운데 정렬 · contain)
+            // 커버 이미지 — 항상 이 영역 표시 (사진 없으면 플레이스홀더)
             pw.Container(
               width: pageW, height: imgH,
               color: _brandLight,
               alignment: pw.Alignment.center,
               child: coverImg != null
                   ? pw.Image(coverImg,
-                      width: pageW, height: imgH,
-                      fit: pw.BoxFit.contain)
-                  : pw.Center(
-                      child: pw.Text(
-                        isKorean ? '사진 없음' : 'No photo',
-                        style: pw.TextStyle(
-                            font: regular,
-                            fontSize: 14,
-                            color: _grey400),
-                      ),
+                      width: pageW, height: imgH, fit: pw.BoxFit.contain)
+                  : pw.Column(
+                      mainAxisAlignment: pw.MainAxisAlignment.center,
+                      children: [
+                        pw.Container(
+                          width: 48, height: 48,
+                          decoration: pw.BoxDecoration(
+                            color: _brand.shade(0.3),
+                            borderRadius: const pw.BorderRadius.all(
+                                pw.Radius.circular(24)),
+                          ),
+                        ),
+                        pw.SizedBox(height: 12),
+                        pw.Text(
+                          isKorean ? '커버 사진을 추가해 보세요' : 'Add a cover photo',
+                          style: pw.TextStyle(
+                              font: regular, fontSize: 12, color: _brandDark),
+                        ),
+                      ],
                     ),
             ),
             // 타이틀 영역
             pw.Expanded(
               child: pw.Container(
                 color: _white,
-                padding:
-                    const pw.EdgeInsets.fromLTRB(32, 18, 32, 18),
+                padding: const pw.EdgeInsets.fromLTRB(32, 18, 32, 18),
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  mainAxisAlignment:
-                      pw.MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
                     pw.Column(
-                      crossAxisAlignment:
-                          pw.CrossAxisAlignment.start,
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
                         if (project.status.isNotEmpty)
                           pw.Container(
-                            margin: const pw.EdgeInsets.only(
-                                bottom: 7),
+                            margin: const pw.EdgeInsets.only(bottom: 7),
                             padding: const pw.EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 3),
                             decoration: pw.BoxDecoration(
                               color: _pink,
-                              borderRadius:
-                                  const pw.BorderRadius.all(
-                                      pw.Radius.circular(20)),
+                              borderRadius: const pw.BorderRadius.all(
+                                  pw.Radius.circular(20)),
                             ),
                             child: pw.Text(project.status,
                                 style: pw.TextStyle(
-                                    font: bold,
-                                    fontSize: 8.5,
-                                    color: _white)),
+                                    font: bold, fontSize: 8.5, color: _white)),
                           ),
-                        pw.Text(project.title,
-                            style: h1,
-                            maxLines: 2,
-                            overflow: pw.TextOverflow.clip),
+                        pw.Text(
+                          project.title.isNotEmpty
+                              ? project.title
+                              : (isKorean ? '제목 없음' : 'Untitled'),
+                          style: h1,
+                          maxLines: 2,
+                          overflow: pw.TextOverflow.clip,
+                        ),
                         if (project.memo.isNotEmpty) ...[
                           pw.SizedBox(height: 5),
                           pw.Text(project.memo,
@@ -344,12 +350,10 @@ class ProjectPdfService {
                       ],
                     ),
                     pw.Row(
-                      mainAxisAlignment:
-                          pw.MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
-                        userName.isNotEmpty
-                            ? pw.Text(userName, style: smB)
-                            : pw.SizedBox(),
+                        pw.Text(userName.isNotEmpty ? userName : '—',
+                            style: smB),
                         pw.Text(
                           [
                             if (project.startDate != null)
@@ -359,8 +363,7 @@ class ProjectPdfService {
                           ].join('  ~  '),
                           style: sm,
                         ),
-                        pw.Text(
-                            '${ctx.pageNumber} / ${ctx.pagesCount}',
+                        pw.Text('${ctx.pageNumber} / ${ctx.pagesCount}',
                             style: sm),
                       ],
                     ),
@@ -374,12 +377,12 @@ class ProjectPdfService {
     ));
 
     // ══════════════════════════════════════════════════════
-    // PAGE 2: 작품 정보
+    // PAGE 2: 작품 상세 — 고정 템플릿, 꽉채우기
     // ══════════════════════════════════════════════════════
     pdf.addPage(pw.Page(
-      pageFormat: PdfPageFormat.a4,
-      margin: const pw.EdgeInsets.fromLTRB(36, 32, 36, 28),
+      pageTheme: _pageTheme(regular, userName, margin: const pw.EdgeInsets.fromLTRB(32, 28, 32, 24)),
       build: (ctx) {
+        // 데이터 추출
         final needleSize  = (swatch?.needleSize ?? 0) > 0
             ? swatch!.needleSize : project.needleSize;
         final needleBrand = swatch?.needleBrandName.isNotEmpty == true
@@ -393,196 +396,336 @@ class ProjectPdfService {
             ? swatch!.yarnColor : project.yarnColor;
         final yarnWeight  = swatch?.yarnWeight.isNotEmpty == true
             ? swatch!.yarnWeight : project.yarnWeight;
-        final infoImg = coverImg ?? (swatchBefore ?? swatchAfter);
+
+        // 스와치 게이지 문자열
+        final gaugeStr = swatch != null && swatch.beforeStitchCount > 0
+            ? '${swatch.beforeStitchCount}코 × ${swatch.beforeRowCount}단'
+            : '—';
+        final dimStr = swatch != null && swatch.beforeWidthCm > 0
+            ? '${swatch.beforeWidthCm.toStringAsFixed(1)} × ${swatch.beforeHeightCm.toStringAsFixed(1)} cm'
+            : '—';
+
+        // 대표 이미지 (커버 → 스와치 before → after 순)
+        final mainImg = coverImg ?? swatchBefore ?? swatchAfter;
+
+        // 제목
+        pw.Widget sectionTitle(String t) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(t, style: pw.TextStyle(font: bold, fontSize: 15, color: _grey900)),
+            pw.SizedBox(height: 4),
+            pw.Container(height: 2.5, width: 32,
+                decoration: pw.BoxDecoration(color: _brand,
+                    borderRadius: const pw.BorderRadius.all(pw.Radius.circular(1.5)))),
+            pw.SizedBox(height: 10),
+          ],
+        );
 
         return pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            _sectionTitle(
-                isKorean ? '작품 정보' : 'Project Details', h2, _brand),
+            sectionTitle(isKorean ? '작품 상세' : 'Project Details'),
             pw.Expanded(
               child: pw.Row(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  // 왼쪽: 이미지 + 기간
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      infoImg != null
-                          ? _photo(infoImg, 175, 210)
-                          : _box(175, 210,
-                              isKorean ? '사진 없음' : 'No photo',
-                              regular),
-                      pw.SizedBox(height: 9),
-                      pw.Container(
-                        width: 175,
-                        padding: const pw.EdgeInsets.all(9),
-                        decoration: pw.BoxDecoration(
-                          color: _brandLight,
-                          borderRadius:
-                              const pw.BorderRadius.all(
-                                  pw.Radius.circular(8)),
-                          border: pw.Border.all(
-                              color: _brand, width: 0.3),
-                        ),
-                        child: pw.Column(
-                          crossAxisAlignment:
-                              pw.CrossAxisAlignment.start,
-                          children: [
-                            pw.Text(
-                              isKorean ? '진행 기간' : 'Duration',
-                              style: pw.TextStyle(
-                                  font: bold,
-                                  fontSize: 8,
-                                  color: _brandDark),
+                  // ── 왼쪽: 이미지 + 기간 카드 ──────────────────
+                  pw.SizedBox(
+                    width: 158,
+                    child: pw.Column(
+                      children: [
+                        // 메인 이미지
+                        mainImg != null
+                            ? _photo(mainImg, 158, 190)
+                            : _blank(158, 190,
+                                isKorean ? '사진 없음' : 'No photo', regular,
+                                borderColor: _brandLight),
+                        pw.SizedBox(height: 8),
+                        // 스와치 before / after 썸네일 (있으면)
+                        if (swatchBefore != null || swatchAfter != null)
+                          pw.Row(children: [
+                            pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.start,
+                              children: [
+                                pw.Text(isKorean ? '세탁 전' : 'Before',
+                                    style: pw.TextStyle(
+                                        font: bold, fontSize: 7, color: _grey400)),
+                                pw.SizedBox(height: 3),
+                                swatchBefore != null
+                                    ? _photo(swatchBefore, 73, 73)
+                                    : _blank(73, 73, '—', regular),
+                              ],
                             ),
-                            pw.SizedBox(height: 5),
-                            if (project.startDate != null)
-                              _field(
-                                  isKorean ? '시작' : 'Start',
-                                  fmt(project.startDate),
-                                  lbl, base),
-                            if (project.finishDate != null)
-                              _field(
-                                  isKorean ? '완성' : 'Finish',
-                                  fmt(project.finishDate),
-                                  lbl, base),
-                            if (project.startDate == null &&
-                                project.finishDate == null)
-                              pw.Text(
-                                  isKorean
-                                      ? '날짜 미입력'
-                                      : 'No dates',
-                                  style: sm),
-                            if (project.status.isNotEmpty) ...[
-                              pw.SizedBox(height: 3),
-                              pw.Text(project.status,
-                                  style: pw.TextStyle(
-                                      font: bold,
-                                      fontSize: 8.5,
+                            pw.SizedBox(width: 8),
+                            pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.start,
+                              children: [
+                                pw.Text(isKorean ? '세탁 후' : 'After',
+                                    style: pw.TextStyle(
+                                        font: bold, fontSize: 7, color: _grey400)),
+                                pw.SizedBox(height: 3),
+                                swatchAfter != null
+                                    ? _photo(swatchAfter, 73, 73)
+                                    : _blank(73, 73, '—', regular),
+                              ],
+                            ),
+                          ]),
+                        if (swatchBefore == null && swatchAfter == null)
+                          pw.Row(children: [
+                            pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.start,
+                              children: [
+                                pw.Text(isKorean ? '스와치 사진' : 'Swatch',
+                                    style: pw.TextStyle(
+                                        font: bold, fontSize: 7, color: _grey400)),
+                                pw.SizedBox(height: 3),
+                                _blank(73, 73, '—', regular),
+                              ],
+                            ),
+                            pw.SizedBox(width: 8),
+                            pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.start,
+                              children: [
+                                pw.Text(isKorean ? '세탁 후' : 'After',
+                                    style: pw.TextStyle(
+                                        font: bold, fontSize: 7, color: _grey400)),
+                                pw.SizedBox(height: 3),
+                                _blank(73, 73, '—', regular),
+                              ],
+                            ),
+                          ]),
+                        pw.SizedBox(height: 8),
+                        // 날짜 + 상태 카드
+                        pw.Container(
+                          width: 158,
+                          padding: const pw.EdgeInsets.all(9),
+                          decoration: pw.BoxDecoration(
+                            color: _brandLight,
+                            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+                            border: pw.Border.all(color: _brand, width: 0.3),
+                          ),
+                          child: pw.Column(
+                            crossAxisAlignment: pw.CrossAxisAlignment.start,
+                            children: [
+                              _field(isKorean ? '상태' : 'Status',
+                                  project.status, lbl,
+                                  pw.TextStyle(font: bold, fontSize: 8.5,
                                       color: _brandDark)),
+                              _field(isKorean ? '시작일' : 'Start',
+                                  fmt(project.startDate), lbl, base),
+                              _field(isKorean ? '목표일' : 'Target',
+                                  fmt(project.targetDate), lbl, base),
+                              _field(isKorean ? '완성일' : 'Finish',
+                                  fmt(project.finishDate), lbl, base),
                             ],
-                          ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                  pw.SizedBox(width: 16),
-                  // 오른쪽: 바늘/실/도안/메모
+                  pw.SizedBox(width: 12),
+                  // ── 오른쪽: 4개 카드 2×2 그리드 ──────────────
                   pw.Expanded(
                     child: pw.Column(
-                      crossAxisAlignment:
-                          pw.CrossAxisAlignment.start,
                       children: [
-                        _infoSection(
-                          title: isKorean ? '바늘 정보' : 'Needle',
-                          titleStyle: h3,
-                          accent: _brand,
-                          fields: [
-                            if (needleSize > 0)
-                              _field(
-                                isKorean ? '사이즈' : 'Size',
-                                needleSize % 1 == 0
-                                    ? '${needleSize.toInt()} mm'
-                                    : '$needleSize mm',
-                                lbl, baseB,
+                        // 상단: 바늘 + 실
+                        pw.Row(
+                          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                          children: [
+                            pw.Expanded(
+                              child: _card(
+                                title: isKorean ? '바늘' : 'Needle',
+                                bold: bold,
+                                accent: _brand,
+                                children: [
+                                  _field(
+                                    isKorean ? '사이즈' : 'Size',
+                                    needleSize > 0
+                                        ? (needleSize % 1 == 0
+                                            ? '${needleSize.toInt()} mm'
+                                            : '$needleSize mm')
+                                        : '',
+                                    lbl, baseB,
+                                  ),
+                                  _field(isKorean ? '재질' : 'Material',
+                                      needleMat, lbl, base),
+                                  _field(isKorean ? '브랜드' : 'Brand',
+                                      needleBrand, lbl, base),
+                                ],
                               ),
-                            if (needleMat.isNotEmpty)
-                              _field(
-                                  isKorean ? '재질' : 'Material',
-                                  needleMat, lbl, base),
-                            if (needleBrand.isNotEmpty)
-                              _field(
-                                  isKorean ? '브랜드' : 'Brand',
-                                  needleBrand, lbl, base),
-                            if (needleSize <= 0 &&
-                                needleBrand.isEmpty)
-                              pw.Text(
-                                  isKorean
-                                      ? '정보 없음'
-                                      : 'No info',
-                                  style: sm),
+                            ),
+                            pw.SizedBox(width: 8),
+                            pw.Expanded(
+                              child: _card(
+                                title: isKorean ? '실' : 'Yarn',
+                                bold: bold,
+                                accent: _pink,
+                                children: [
+                                  _field(isKorean ? '이름' : 'Name',
+                                      yarnName, lbl, baseB),
+                                  _field(isKorean ? '브랜드' : 'Brand',
+                                      yarnBrand, lbl, base),
+                                  _field(isKorean ? '색상' : 'Color',
+                                      yarnColor, lbl, base),
+                                  _field(isKorean ? '두께' : 'Weight',
+                                      yarnWeight, lbl, base),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
-                        pw.SizedBox(height: 12),
-                        _infoSection(
-                          title: isKorean ? '실 정보' : 'Yarn',
-                          titleStyle: h3,
-                          accent: _pink,
-                          fields: [
-                            if (yarnName.isNotEmpty)
-                              _field(isKorean ? '이름' : 'Name',
-                                  yarnName, lbl, baseB),
-                            if (yarnBrand.isNotEmpty)
-                              _field(isKorean ? '브랜드' : 'Brand',
-                                  yarnBrand, lbl, base),
-                            if (yarnColor.isNotEmpty)
-                              _field(isKorean ? '색상' : 'Color',
-                                  yarnColor, lbl, base),
-                            if (yarnWeight.isNotEmpty)
-                              _field(isKorean ? '두께' : 'Weight',
-                                  yarnWeight, lbl, base),
-                            if (yarnName.isEmpty &&
-                                yarnBrand.isEmpty)
-                              pw.Text(
-                                  isKorean
-                                      ? '정보 없음'
-                                      : 'No info',
-                                  style: sm),
-                          ],
-                        ),
-                        pw.SizedBox(height: 12),
-                        _infoSection(
-                          title: isKorean ? '도안' : 'Patterns',
-                          titleStyle: h3,
-                          accent: _green,
-                          fields: patterns.isNotEmpty
-                              ? patterns.take(5).map((p) =>
-                                  pw.Padding(
-                                    padding: const pw.EdgeInsets
-                                        .only(bottom: 3),
-                                    child: pw.Row(children: [
+                        pw.SizedBox(height: 8),
+                        // 하단: 스와치 + 도안
+                        pw.Row(
+                          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                          children: [
+                            pw.Expanded(
+                              child: _card(
+                                title: isKorean ? '스와치 게이지' : 'Swatch Gauge',
+                                bold: bold,
+                                accent: _green,
+                                children: [
+                                  _field(isKorean ? '게이지' : 'Gauge',
+                                      gaugeStr, lbl, baseB),
+                                  _field(isKorean ? '크기' : 'Size',
+                                      dimStr, lbl, base),
+                                  if (swatch != null &&
+                                      swatch.hasAfterWash &&
+                                      swatch.afterStitchCount > 0)
+                                    _field(
+                                      isKorean ? '세탁 후' : 'After wash',
+                                      '${swatch.afterStitchCount}코 × ${swatch.afterRowCount}단',
+                                      lbl, base,
+                                    ),
+                                  if (swatch == null ||
+                                      (!swatch.hasAfterWash ||
+                                          swatch.afterStitchCount == 0))
+                                    _field(isKorean ? '세탁 후' : 'After wash',
+                                        '', lbl, base),
+                                  if (swatch?.memo.isNotEmpty == true)
+                                    _field(isKorean ? '메모' : 'Memo',
+                                        swatch!.memo, lbl, base),
+                                  if (swatch == null ||
+                                      swatch.memo.isEmpty)
+                                    _field(isKorean ? '메모' : 'Memo',
+                                        '', lbl, base),
+                                ],
+                              ),
+                            ),
+                            pw.SizedBox(width: 8),
+                            // 도안 카드 — 이미지 있으면 표시, 없으면 플레이스홀더
+                            pw.Expanded(
+                              child: pw.Container(
+                                padding: const pw.EdgeInsets.all(10),
+                                decoration: pw.BoxDecoration(
+                                  color: _grey50,
+                                  borderRadius: const pw.BorderRadius.all(
+                                      pw.Radius.circular(8)),
+                                  border: pw.Border.all(
+                                      color: _grey200, width: 0.5),
+                                ),
+                                child: pw.Column(
+                                  crossAxisAlignment:
+                                      pw.CrossAxisAlignment.start,
+                                  children: [
+                                    pw.Row(children: [
                                       pw.Container(
-                                        width: 5, height: 5,
+                                        width: 3, height: 12,
                                         decoration: pw.BoxDecoration(
-                                          color: _green,
-                                          borderRadius: const pw
-                                              .BorderRadius.all(
-                                              pw.Radius.circular(3)),
+                                          color: PdfColor.fromHex('F59E0B'),
+                                          borderRadius: const pw.BorderRadius.all(
+                                              pw.Radius.circular(2)),
                                         ),
                                       ),
                                       pw.SizedBox(width: 5),
-                                      pw.Expanded(
-                                        child: pw.Text(p.title,
-                                            style: base,
-                                            maxLines: 1,
-                                            overflow: pw
-                                                .TextOverflow.clip),
-                                      ),
+                                      pw.Text(isKorean ? '도안' : 'Pattern',
+                                          style: pw.TextStyle(
+                                              font: bold,
+                                              fontSize: 8.5,
+                                              color: _grey700)),
                                     ]),
-                                  )).toList()
-                              : [
-                                  pw.Text(
-                                      isKorean
-                                          ? '연계된 도안 없음'
-                                          : 'No patterns',
-                                      style: sm)
-                                ],
+                                    pw.SizedBox(height: 7),
+                                    // 도안 이미지 or 플레이스홀더
+                                    patternImg != null
+                                        ? _photo(patternImg, double.infinity, 110,
+                                            fit: pw.BoxFit.contain)
+                                        : pw.Container(
+                                            height: 110,
+                                            decoration: pw.BoxDecoration(
+                                              color: PdfColor.fromHex('FFFBEB'),
+                                              borderRadius: const pw.BorderRadius.all(
+                                                  pw.Radius.circular(6)),
+                                              border: pw.Border.all(
+                                                color: PdfColor.fromHex('FDE68A'),
+                                                width: 0.8,
+                                                style: pw.BorderStyle.dashed,
+                                              ),
+                                            ),
+                                            child: pw.Center(
+                                              child: pw.Text(
+                                                isKorean
+                                                    ? '도안 이미지 없음'
+                                                    : 'No pattern image',
+                                                style: pw.TextStyle(
+                                                    font: regular,
+                                                    fontSize: 8.5,
+                                                    color: _grey400),
+                                              ),
+                                            ),
+                                          ),
+                                    pw.SizedBox(height: 6),
+                                    pw.Text(
+                                      firstPattern != null
+                                          ? firstPattern.title
+                                          : (isKorean
+                                              ? '도안을 연계해 주세요'
+                                              : 'Link a pattern'),
+                                      style: firstPattern != null
+                                          ? baseB
+                                          : pw.TextStyle(
+                                              font: regular,
+                                              fontSize: 8.5,
+                                              color: _grey300),
+                                      maxLines: 2,
+                                      overflow: pw.TextOverflow.clip,
+                                    ),
+                                    if (patterns.length > 1) ...[
+                                      pw.SizedBox(height: 3),
+                                      pw.Text(
+                                        isKorean
+                                            ? '외 ${patterns.length - 1}개'
+                                            : '+${patterns.length - 1} more',
+                                        style: sm,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        if (project.memo.isNotEmpty) ...[
-                          pw.SizedBox(height: 12),
-                          _infoSection(
-                            title: isKorean ? '메모' : 'Memo',
-                            titleStyle: h3,
-                            accent: _grey400,
-                            fields: [
-                              pw.Text(project.memo,
-                                  style: base,
-                                  maxLines: 6,
-                                  overflow: pw.TextOverflow.clip),
-                            ],
-                          ),
-                        ],
+                        pw.SizedBox(height: 8),
+                        // 메모 (있을 때만 — 없으면 빈 슬롯)
+                        _card(
+                          title: isKorean ? '메모' : 'Memo',
+                          bold: bold,
+                          accent: _grey400,
+                          children: [
+                            pw.Text(
+                              project.memo.isNotEmpty
+                                  ? project.memo
+                                  : (isKorean ? '메모가 없습니다.' : 'No memo.'),
+                              style: project.memo.isNotEmpty
+                                  ? base
+                                  : pw.TextStyle(
+                                      font: regular,
+                                      fontSize: 9,
+                                      color: _grey300),
+                              maxLines: 4,
+                              overflow: pw.TextOverflow.clip,
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -597,24 +740,40 @@ class ProjectPdfService {
     ));
 
     // ══════════════════════════════════════════════════════
-    // PAGE 3+: 단계로그 (2열 · 컴팩트)
+    // PAGE 3: 단계로그 — 고정템플릿, 모든 단계 표시 (삭제 없음)
     // ══════════════════════════════════════════════════════
-    if (sorted.isNotEmpty) {
+    {
       final doneCount = sorted.where((s) => s.isDone).length;
-      final pct = (doneCount / sorted.length * 100).round();
+      final pct = sorted.isEmpty ? 0 : (doneCount / sorted.length * 100).round();
       const barMaxW = 380.0;
-      final fillW =
-          (barMaxW * doneCount / sorted.length).clamp(0.0, barMaxW);
+      final fillW = sorted.isEmpty ? 0.0 : (barMaxW * doneCount / sorted.length).clamp(0.0, barMaxW);
+
+      final numRows = sorted.isEmpty ? 1 : (sorted.length / 2).ceil();
+      // 1페이지 피팅: 9행(18단계) 이하면 동적 카드 높이로 1페이지에 피팅
+      // 초과 시 MultiPage로 모든 단계 표시 (단계 삭제 없음)
+      final fitOnePage = numRows <= 9;
+
+      // 사용 가능 높이 계산 (A4 - margins - header - footer)
+      const pageH = 841.89;
+      const marginT = 32.0, marginB = 28.0;
+      const headerH = 58.0; // 제목 + 프로그레스바
+      const footerH = 22.0;
+      const contentH = pageH - marginT - marginB - headerH - footerH;
+      final rowGap = 7.0;
+      final cardH = fitOnePage
+          ? ((contentH - rowGap * (numRows - 1)) / numRows).clamp(60.0, 120.0)
+          : 88.0; // MultiPage: 고정 88pt
+      final thumbSize = (cardH - 20.0).clamp(36.0, 72.0);
 
       pw.Widget card(ProjectStep step, int idx) {
         final photo = stepPhotos[step.id];
         final done  = step.isDone;
         return pw.Container(
+          height: cardH,
           padding: const pw.EdgeInsets.all(8),
           decoration: pw.BoxDecoration(
             color: done ? _greenBg : _white,
-            borderRadius:
-                const pw.BorderRadius.all(pw.Radius.circular(8)),
+            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
             border: pw.Border.all(
                 color: done ? _greenBrd : _grey200,
                 width: done ? 1.0 : 0.5),
@@ -622,11 +781,33 @@ class ProjectPdfService {
           child: pw.Row(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              // 썸네일 64×64
+              // 썸네일 (항상 단계 번호 오버레이 표시)
               photo != null
-                  ? _photo(photo, 64, 64, r: 6)
+                  ? pw.Stack(
+                      children: [
+                        _photo(photo, thumbSize, thumbSize, r: 6),
+                        pw.Positioned(
+                          bottom: 3,
+                          right: 3,
+                          child: pw.Container(
+                            padding: const pw.EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 2),
+                            decoration: pw.BoxDecoration(
+                              color: _grey900,
+                              borderRadius: const pw.BorderRadius.all(
+                                  pw.Radius.circular(4)),
+                            ),
+                            child: pw.Text(
+                              '${idx + 1}',
+                              style: pw.TextStyle(
+                                  font: bold, fontSize: 8, color: _white),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
                   : pw.Container(
-                      width: 64, height: 64,
+                      width: thumbSize, height: thumbSize,
                       decoration: pw.BoxDecoration(
                         color: done ? _greenBrd : _brandLight,
                         borderRadius: const pw.BorderRadius.all(
@@ -636,7 +817,7 @@ class ProjectPdfService {
                         child: pw.Text('${idx + 1}',
                             style: pw.TextStyle(
                                 font: bold,
-                                fontSize: 18,
+                                fontSize: (thumbSize * 0.28).clamp(10, 18),
                                 color: done ? _green : _brand)),
                       ),
                     ),
@@ -646,10 +827,8 @@ class ProjectPdfService {
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Row(
-                      mainAxisAlignment:
-                          pw.MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment:
-                          pw.CrossAxisAlignment.start,
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
                         pw.Expanded(
                           child: pw.Text(step.name,
@@ -662,49 +841,33 @@ class ProjectPdfService {
                         ),
                         if (done)
                           pw.Container(
-                            margin:
-                                const pw.EdgeInsets.only(left: 4),
+                            margin: const pw.EdgeInsets.only(left: 4),
                             padding: const pw.EdgeInsets.symmetric(
                                 horizontal: 6, vertical: 2),
                             decoration: pw.BoxDecoration(
                               color: _green,
-                              borderRadius:
-                                  const pw.BorderRadius.all(
-                                      pw.Radius.circular(10)),
+                              borderRadius: const pw.BorderRadius.all(
+                                  pw.Radius.circular(10)),
                             ),
                             child: pw.Text(
                                 isKorean ? '완료' : 'Done',
                                 style: pw.TextStyle(
-                                    font: bold,
-                                    fontSize: 7,
-                                    color: _white)),
+                                    font: bold, fontSize: 7, color: _white)),
                           ),
                       ],
                     ),
-                    if (step.description.isNotEmpty) ...[
+                    if (step.description.isNotEmpty && cardH > 70) ...[
                       pw.SizedBox(height: 3),
                       pw.Text(step.description,
                           style: sm,
-                          maxLines: 2,
+                          maxLines: 1,
                           overflow: pw.TextOverflow.clip),
                     ],
-                    if (step.note.isNotEmpty) ...[
-                      pw.SizedBox(height: 2),
-                      pw.Text(step.note,
-                          style: pw.TextStyle(
-                              font: regular,
-                              fontSize: 7.5,
-                              color: _grey400),
-                          maxLines: 2,
-                          overflow: pw.TextOverflow.clip),
-                    ],
-                    if (done && step.doneAt != null) ...[
+                    if (done && step.doneAt != null && cardH > 80) ...[
                       pw.SizedBox(height: 3),
                       pw.Text(fmt(step.doneAt),
                           style: pw.TextStyle(
-                              font: bold,
-                              fontSize: 7.5,
-                              color: _green)),
+                              font: bold, fontSize: 7.5, color: _green)),
                     ],
                   ],
                 ),
@@ -722,191 +885,282 @@ class ProjectPdfService {
         ]);
       }
 
-      pdf.addPage(pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.fromLTRB(36, 32, 36, 28),
-        header: (ctx) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            _sectionTitle(
-                isKorean ? '단계로그' : 'Step Log', h2, _brand),
-            pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.center,
-              children: [
-                pw.Stack(children: [
-                  pw.Container(
-                    width: barMaxW, height: 7,
+      pw.Widget headerWidget(pw.Context ctx) => pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(isKorean ? '단계로그' : 'Step Log',
+                  style: pw.TextStyle(font: bold, fontSize: 15, color: _grey900)),
+              pw.SizedBox(height: 4),
+              pw.Container(height: 2.5, width: 32,
+                  decoration: pw.BoxDecoration(color: _brand,
+                      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(1.5)))),
+              pw.SizedBox(height: 8),
+            ],
+          ),
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              pw.Stack(children: [
+                pw.Container(
+                  width: barMaxW, height: 7,
+                  decoration: pw.BoxDecoration(
+                    color: _grey200,
+                    borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3.5)),
+                  ),
+                ),
+                pw.Container(
+                  width: fillW, height: 7,
+                  decoration: pw.BoxDecoration(
+                    color: _brand,
+                    borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3.5)),
+                  ),
+                ),
+              ]),
+              pw.SizedBox(width: 10),
+              pw.Text('$doneCount / ${sorted.length}  ($pct%)',
+                  style: pw.TextStyle(font: bold, fontSize: 9, color: _brand)),
+            ],
+          ),
+          pw.SizedBox(height: 10),
+        ],
+      );
+
+      // 단계 없음 → 빈 플레이스홀더 페이지 (고정템플릿)
+      if (sorted.isEmpty) {
+        pdf.addPage(pw.Page(
+          pageTheme: _pageTheme(regular, userName),
+          build: (ctx) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              headerWidget(ctx),
+              pw.Expanded(
+                child: pw.Center(
+                  child: pw.Container(
+                    padding: const pw.EdgeInsets.all(24),
                     decoration: pw.BoxDecoration(
-                      color: _grey200,
-                      borderRadius: const pw.BorderRadius.all(
-                          pw.Radius.circular(3.5)),
+                      color: _grey50,
+                      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(12)),
+                      border: pw.Border.all(color: _grey200, width: 0.8, style: pw.BorderStyle.dashed),
+                    ),
+                    child: pw.Text(
+                      isKorean ? '등록된 단계가 없습니다.' : 'No steps added yet.',
+                      style: pw.TextStyle(font: regular, fontSize: 11, color: _grey400),
                     ),
                   ),
-                  pw.Container(
-                    width: fillW, height: 7,
-                    decoration: pw.BoxDecoration(
-                      color: _brand,
-                      borderRadius: const pw.BorderRadius.all(
-                          pw.Radius.circular(3.5)),
-                    ),
-                  ),
-                ]),
-                pw.SizedBox(width: 10),
-                pw.Text(
-                  '$doneCount / ${sorted.length}  ($pct%)',
-                  style: pw.TextStyle(
-                      font: bold, fontSize: 9, color: _brand)),
-              ],
-            ),
-            pw.SizedBox(height: 10),
-          ],
-        ),
-        footer: (ctx) => _footer(regular, dateStr, ctx),
-        build: (ctx) => rows
-            .map((row) => pw.Padding(
-                  padding: const pw.EdgeInsets.only(bottom: 7),
-                  child: pw.Row(
-                    crossAxisAlignment:
-                        pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Expanded(
-                          child:
-                              card(row[0], sorted.indexOf(row[0]))),
-                      pw.SizedBox(width: 8),
-                      row.length > 1
-                          ? pw.Expanded(
-                              child: card(
-                                  row[1], sorted.indexOf(row[1])))
-                          : pw.Expanded(child: pw.SizedBox()),
-                    ],
-                  ),
-                ))
-            .toList(),
-      ));
-    }
-
-    // ══════════════════════════════════════════════════════
-    // PAGE: 사진 앨범 (3열 · 모든 사진)
-    // ══════════════════════════════════════════════════════
-    if (allPhotos.isNotEmpty) {
-      const cols   = 3;
-      const gap    = 7.0;
-      final imgSize = (523.28 - gap * (cols - 1)) / cols; // ≈ 169.76
-
-      final albumRows = <List<pw.ImageProvider>>[];
-      for (int k = 0; k < allPhotos.length; k += cols) {
-        albumRows.add(allPhotos.sublist(
-            k,
-            k + cols > allPhotos.length ? allPhotos.length : k + cols));
-      }
-
-      pdf.addPage(pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.fromLTRB(36, 32, 36, 28),
-        header: (ctx) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            _sectionTitle(
-                isKorean ? '사진 앨범' : 'Photo Album', h2, _pink),
-          ],
-        ),
-        footer: (ctx) => _footer(regular, dateStr, ctx),
-        build: (ctx) => albumRows
-            .map((row) => pw.Padding(
-                  padding: const pw.EdgeInsets.only(bottom: gap),
-                  child: pw.Row(
-                    children: [
-                      for (int k = 0; k < cols; k++) ...[
-                        if (k > 0) pw.SizedBox(width: gap),
-                        k < row.length
-                            ? _photo(row[k], imgSize, imgSize)
-                            : pw.SizedBox(
-                                width: imgSize, height: imgSize),
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              _footer(regular, dateStr, ctx),
+            ],
+          ),
+        ));
+      } else if (fitOnePage) {
+        // 단일 페이지 — 동적 카드 높이로 전체 단계 피팅
+        pdf.addPage(pw.Page(
+          pageTheme: _pageTheme(regular, userName),
+          build: (ctx) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              headerWidget(ctx),
+              pw.Expanded(
+                child: pw.Column(
+                  children: rows
+                      .map((row) => pw.Padding(
+                            padding: pw.EdgeInsets.only(
+                                bottom: row == rows.last ? 0 : rowGap),
+                            child: pw.Row(
+                              crossAxisAlignment: pw.CrossAxisAlignment.start,
+                              children: [
+                                pw.Expanded(
+                                    child: card(row[0], sorted.indexOf(row[0]))),
+                                pw.SizedBox(width: 8),
+                                row.length > 1
+                                    ? pw.Expanded(
+                                        child: card(row[1],
+                                            sorted.indexOf(row[1])))
+                                    : pw.Expanded(child: pw.SizedBox()),
+                              ],
+                            ),
+                          ))
+                      .toList(),
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              _footer(regular, dateStr, ctx),
+            ],
+          ),
+        ));
+      } else {
+        // 여러 페이지 — MultiPage로 모든 단계 표시 (삭제 없음)
+        pdf.addPage(pw.MultiPage(
+          pageTheme: _pageTheme(regular, userName),
+          header: (ctx) => headerWidget(ctx),
+          footer: (ctx) => _footer(regular, dateStr, ctx),
+          build: (ctx) => rows
+              .map((row) => pw.Padding(
+                    padding: const pw.EdgeInsets.only(bottom: 7),
+                    child: pw.Row(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Expanded(
+                            child: card(row[0], sorted.indexOf(row[0]))),
+                        pw.SizedBox(width: 8),
+                        row.length > 1
+                            ? pw.Expanded(
+                                child: card(row[1], sorted.indexOf(row[1])))
+                            : pw.Expanded(child: pw.SizedBox()),
                       ],
-                    ],
-                  ),
-                ))
-            .toList(),
-      ));
+                    ),
+                  ))
+              .toList(),
+        ));
+      }
     }
+
+    // ══════════════════════════════════════════════════════
+    // PAGE: 사진 앨범 (3열 · 고정 템플릿)
+    // ══════════════════════════════════════════════════════
+    const cols   = 3;
+    const gap    = 7.0;
+    final imgSize = (523.28 - gap * (cols - 1)) / cols;
+
+    // 앨범은 항상 페이지 추가 (사진 없으면 빈 그리드 표시)
+    final albumRows = <List<(pw.ImageProvider?, String?)>>[];
+    if (allPhotosWithLabel.isNotEmpty) {
+      for (int k = 0; k < allPhotosWithLabel.length; k += cols) {
+        final end = k + cols > allPhotosWithLabel.length ? allPhotosWithLabel.length : k + cols;
+        final row = List<(pw.ImageProvider?, String?)>.from(allPhotosWithLabel.sublist(k, end));
+        while (row.length < cols) {
+          row.add((null, null));
+        }
+        albumRows.add(row);
+      }
+    } else {
+      // 빈 그리드 3줄 표시
+      albumRows.addAll(List.generate(3, (_) => List<(pw.ImageProvider?, String?)>.filled(cols, (null, null))));
+    }
+
+    pdf.addPage(pw.MultiPage(
+      pageTheme: _pageTheme(regular, userName),
+      header: (ctx) => pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(isKorean ? '사진 앨범' : 'Photo Album',
+              style: pw.TextStyle(font: bold, fontSize: 15, color: _grey900)),
+          pw.SizedBox(height: 4),
+          pw.Container(height: 2.5, width: 32,
+              decoration: pw.BoxDecoration(color: _pink,
+                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(1.5)))),
+          pw.SizedBox(height: 10),
+        ],
+      ),
+      footer: (ctx) => _footer(regular, dateStr, ctx),
+      build: (ctx) => albumRows
+          .map((row) => pw.Padding(
+                padding: const pw.EdgeInsets.only(bottom: gap),
+                child: pw.Row(
+                  children: [
+                    for (int k = 0; k < cols; k++) ...[
+                      if (k > 0) pw.SizedBox(width: gap),
+                      pw.SizedBox(
+                        width: imgSize,
+                        height: imgSize,
+                        child: row[k].$1 != null
+                            ? pw.Stack(
+                                children: [
+                                  _photo(row[k].$1!, imgSize, imgSize),
+                                  if (row[k].$2 != null)
+                                    pw.Positioned(
+                                      bottom: 5,
+                                      right: 5,
+                                      child: pw.Container(
+                                        padding: const pw.EdgeInsets.symmetric(
+                                            horizontal: 5, vertical: 2),
+                                        decoration: pw.BoxDecoration(
+                                          color: _grey900,
+                                          borderRadius: const pw.BorderRadius.all(
+                                              pw.Radius.circular(4)),
+                                        ),
+                                        child: pw.Text(
+                                          row[k].$2!,
+                                          style: pw.TextStyle(
+                                              font: bold,
+                                              fontSize: 8,
+                                              color: _white),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              )
+                            : _blank(imgSize, imgSize,
+                                isKorean ? '사진 없음' : 'No photo', regular),
+                      ),
+                    ],
+                  ],
+                ),
+              ))
+          .toList(),
+    ));
 
     // ══════════════════════════════════════════════════════
     // 마지막 페이지: 제작자 정보
     // ══════════════════════════════════════════════════════
     pdf.addPage(pw.Page(
-      pageFormat: PdfPageFormat.a4,
-      margin: const pw.EdgeInsets.fromLTRB(60, 80, 60, 60),
-      build: (ctx) {
-        return pw.Column(
-          children: [
-            pw.Spacer(),
-            pw.Center(
-              child: pw.Container(
-                  height: 3, width: 48, color: _brand),
+      pageTheme: _pageTheme(regular, userName, margin: const pw.EdgeInsets.fromLTRB(60, 80, 60, 60)),
+      build: (ctx) => pw.Column(
+        children: [
+          pw.Spacer(),
+          pw.Center(child: pw.Container(height: 3, width: 48, color: _brand)),
+          pw.SizedBox(height: 28),
+          pw.Center(
+            child: pw.Text(
+              project.title.isNotEmpty
+                  ? project.title
+                  : (isKorean ? '제목 없음' : 'Untitled'),
+              style: pw.TextStyle(font: bold, fontSize: 20, color: _grey900),
+              textAlign: pw.TextAlign.center,
             ),
-            pw.SizedBox(height: 28),
-            pw.Center(
-              child: pw.Text(
-                project.title,
-                style: h2.copyWith(fontSize: 20),
-                textAlign: pw.TextAlign.center,
-              ),
+          ),
+          pw.SizedBox(height: 20),
+          pw.Center(child: pw.Container(height: 0.5, width: 120, color: _grey200)),
+          pw.SizedBox(height: 20),
+          pw.Center(
+            child: pw.Text(isKorean ? '제작자' : 'Created by', style: sm),
+          ),
+          pw.SizedBox(height: 5),
+          pw.Center(
+            child: pw.Text(
+              userName.isNotEmpty ? userName : '—',
+              style: pw.TextStyle(font: bold, fontSize: 14, color: _grey900),
             ),
-            pw.SizedBox(height: 20),
-            pw.Center(
-              child: pw.Container(
-                  height: 0.5, width: 120, color: _grey200),
+          ),
+          pw.SizedBox(height: 16),
+          pw.Center(
+            child: pw.Text(
+              isKorean ? '내보내기 날짜 : $dateStr' : 'Exported on: $dateStr',
+              style: sm,
             ),
-            pw.SizedBox(height: 20),
-            if (userName.isNotEmpty) ...[
-              pw.Center(
-                child: pw.Text(
-                  isKorean ? '제작자' : 'Created by',
-                  style: sm,
-                ),
-              ),
-              pw.SizedBox(height: 5),
-              pw.Center(
-                child: pw.Text(
-                  userName,
-                  style: pw.TextStyle(
-                      font: bold, fontSize: 14, color: _grey900),
-                ),
-              ),
-              pw.SizedBox(height: 16),
-            ],
-            pw.Center(
-              child: pw.Text(
-                isKorean
-                    ? '내보내기 날짜 : $dateStr'
-                    : 'Exported on: $dateStr',
-                style: sm,
-              ),
+          ),
+          pw.Spacer(),
+          pw.Center(
+            child: pw.Column(
+              children: [
+                pw.Container(height: 0.5, width: 80, color: _grey200),
+                pw.SizedBox(height: 10),
+                pw.Text('MoriKnit',
+                    style: pw.TextStyle(font: bold, fontSize: 14, color: _brand)),
+                pw.SizedBox(height: 3),
+                pw.Text('www.moriknit.com',
+                    style: pw.TextStyle(
+                        font: regular, fontSize: 8.5, color: _grey400)),
+              ],
             ),
-            pw.Spacer(),
-            pw.Center(
-              child: pw.Column(
-                children: [
-                  pw.Container(
-                      height: 0.5, width: 80, color: _grey200),
-                  pw.SizedBox(height: 10),
-                  pw.Text('MoriKnit',
-                      style: pw.TextStyle(
-                          font: bold,
-                          fontSize: 14,
-                          color: _brand)),
-                  pw.SizedBox(height: 3),
-                  pw.Text('www.moriknit.com',
-                      style: pw.TextStyle(
-                          font: regular,
-                          fontSize: 8.5,
-                          color: _grey400)),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
+          ),
+        ],
+      ),
     ));
 
     return (await pdf.save()).toList();
