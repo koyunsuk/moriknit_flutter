@@ -1,13 +1,19 @@
 import 'dart:async';
 import 'dart:math';
 
+import '_popup_prefs.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/router/routes.dart';
+import '../../../core/utils/web_utils_stub.dart'
+    // ignore: uri_does_not_exist
+    if (dart.library.js_interop) '../../../core/utils/web_utils.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -19,7 +25,46 @@ import '../../community/domain/post_model.dart';
 import '../../encyclopedia/domain/encyclopedia_entry.dart';
 import '../../market/domain/market_item.dart';
 
+const String _mainAppUrl = 'https://moriknit-ceea9.web.app';
+void _goToApp(String path) => goToWebUrl('$_mainAppUrl$path');
+
 const double _landingMaxWidth = 1160;
+const double _landingButtonHeight = 52;
+const double _landingCardRadius = 22;
+const double _landingThumbHeight = 156;
+const double _landingSectionGap = 18;
+
+ButtonStyle _landingPrimaryButtonStyle() {
+  return ElevatedButton.styleFrom(
+    minimumSize: const Size(0, _landingButtonHeight),
+    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+    elevation: 0,
+    textStyle: T.bodyBold.copyWith(fontSize: 15, height: 1.1),
+  );
+}
+
+ButtonStyle _landingSecondaryButtonStyle() {
+  return OutlinedButton.styleFrom(
+    minimumSize: const Size(0, _landingButtonHeight),
+    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+    textStyle: T.bodyBold.copyWith(fontSize: 15, height: 1.1),
+  );
+}
+
+Widget _landingIconBadge(IconData icon, Color color, {double size = 46}) {
+  return Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.10),
+      borderRadius: BorderRadius.circular(size * 0.32),
+      border: Border.all(color: color.withValues(alpha: 0.12)),
+    ),
+    child: Icon(icon, color: color, size: size * 0.5),
+  );
+}
 
 // ── 최근 가입자 스트림 ─────────────────────────────────────────────────────────
 final _landingRecentUsersProvider = StreamProvider<List<String>>((ref) {
@@ -49,11 +94,120 @@ final _landingStatsProvider = FutureProvider<Map<String, int>>((ref) async {
   };
 });
 
-class LandingScreen extends ConsumerWidget {
+class LandingScreen extends ConsumerStatefulWidget {
   const LandingScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LandingScreen> createState() => _LandingScreenState();
+}
+
+class _LandingScreenState extends ConsumerState<LandingScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_isPopupDismissedToday()) _showNewFeatureDialog();
+    });
+  }
+
+  bool _isPopupDismissedToday() {
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    return getPopupDismissed() == today;
+  }
+
+  void _dismissPopupToday() {
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    setPopupDismissed(today);
+  }
+
+  void _showNewFeatureDialog() {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.55),
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        backgroundColor: const Color(0xFF1A1A2E),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF818CF8), Color(0xFFEC4899)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 32),
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF818CF8).withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(99),
+                    border: Border.all(color: const Color(0xFF818CF8).withValues(alpha: 0.35)),
+                  ),
+                  child: const Text('✨ NEW FEATURE', style: TextStyle(color: Color(0xFF818CF8), fontWeight: FontWeight.w800, fontSize: 11, letterSpacing: 1.2)),
+                ),
+                const SizedBox(height: 14),
+                const Text('AI 게이지 판독기 출시!', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 22), textAlign: TextAlign.center),
+                const SizedBox(height: 10),
+                Text('스와치 사진 한 장으로\n코수와 단수를 자동으로 읽어드려요.', style: TextStyle(color: Colors.white.withValues(alpha: 0.70), fontSize: 14, height: 1.6), textAlign: TextAlign.center),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      context.go(Routes.login);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF818CF8),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 0,
+                      textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                    ),
+                    child: const Text('지금 사용해보기'),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        _dismissPopupToday();
+                        Navigator.of(context).pop();
+                      },
+                      child: Text('오늘은 그만 보기', style: TextStyle(color: Colors.white.withValues(alpha: 0.40), fontSize: 12)),
+                    ),
+                    Text('·', style: TextStyle(color: Colors.white.withValues(alpha: 0.25), fontSize: 12)),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text('다음에 볼게요', style: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 12)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull;
     final marketAsync = ref.watch(marketItemsProvider);
     final postsAsync = ref.watch(postsProvider(communityAllCategory));
@@ -67,48 +221,35 @@ class LandingScreen extends ConsumerWidget {
             child: _LandingTopBar(
               isLoggedIn: user != null,
               onLogin: () => context.go(Routes.login),
-              onOpenApp: () => context.go(Routes.home),
+              onOpenApp: () => _goToApp(Routes.home),
+              onLogout: () => FirebaseAuth.instance.signOut(),
             ),
           ),
           SliverToBoxAdapter(
             child: _PromoBanner(
-              onTap: user == null ? () => context.go(Routes.login) : () => context.go(Routes.home),
+              onTap: user == null ? () => context.go(Routes.login) : () => _goToApp(Routes.home),
             ),
           ),
           SliverToBoxAdapter(
             child: _LandingHero(
               isLoggedIn: user != null,
               onLogin: () => context.go(Routes.login),
-              onOpenApp: () => context.go(Routes.home),
+              onOpenApp: () => _goToApp(Routes.home),
             ),
           ),
           // ── 앱 화면 목업 ───────────────────────────────────────────────────
           const SliverToBoxAdapter(child: _AppScreensSection()),
           // ── 통계 바 ────────────────────────────────────────────────────────
           const SliverToBoxAdapter(child: _StatsBar()),
-          // ── 인기 마켓 ──────────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: _LandingSectionFrame(
-              title: '인기 마켓',
-              subtitle: '실, 도안, 뜨개 도구를 미리 살펴보세요.',
-              actionLabel: user == null ? '로그인 후 더 보기' : '마켓으로',
-              onAction: () => user == null ? context.go(Routes.login) : context.go(Routes.market),
-              child: marketAsync.when(
-                loading: () => const _LandingLoadingGrid(),
-                error: (_, _) => const _LandingEmptyCard(icon: Icons.storefront_outlined, title: '마켓 데이터를 불러오지 못했어요', message: '잠시 후 다시 확인해 주세요.'),
-                data: (items) => items.isEmpty
-                    ? const _LandingEmptyCard(icon: Icons.storefront_outlined, title: '등록된 상품이 아직 없어요', message: '관리자와 판매자가 등록한 상품이 여기에 표시됩니다.')
-                    : _LandingCardGrid(children: items.take(6).map((item) => _MarketPreviewCard(item: item)).toList()),
-              ),
-            ),
-          ),
+          // ── 모리니트의 모든 기능 (히어로 바로 아래) ────────────────────────
+          const SliverToBoxAdapter(child: _FeatureSection()),
           // ── 커뮤니티 ───────────────────────────────────────────────────────
           SliverToBoxAdapter(
             child: _LandingSectionFrame(
               title: '커뮤니티 미리보기',
               subtitle: '메이커들의 최근 이야기를 가볍게 둘러보세요.',
               actionLabel: user == null ? '로그인 후 이어보기' : '커뮤니티로',
-              onAction: () => user == null ? context.go(Routes.login) : context.go(Routes.community),
+              onAction: () => user == null ? context.go(Routes.login) : _goToApp(Routes.community),
               child: postsAsync.when(
                 loading: () => const _LandingLoadingGrid(),
                 error: (_, _) => const _LandingEmptyCard(icon: Icons.forum_outlined, title: '커뮤니티 글을 불러오지 못했어요', message: '잠시 후 다시 확인해 주세요.'),
@@ -118,13 +259,29 @@ class LandingScreen extends ConsumerWidget {
               ),
             ),
           ),
+          // ── 인기 마켓 ──────────────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: _LandingSectionFrame(
+              title: '인기 마켓',
+              subtitle: '실, 도안, 뜨개 도구를 미리 살펴보세요.',
+              actionLabel: user == null ? '로그인 후 더 보기' : '마켓으로',
+              onAction: () => user == null ? context.go(Routes.login) : _goToApp(Routes.market),
+              child: marketAsync.when(
+                loading: () => const _LandingLoadingGrid(),
+                error: (_, _) => const _LandingEmptyCard(icon: Icons.storefront_outlined, title: '마켓 데이터를 불러오지 못했어요', message: '잠시 후 다시 확인해 주세요.'),
+                data: (items) => items.isEmpty
+                    ? const _LandingEmptyCard(icon: Icons.storefront_outlined, title: '등록된 상품이 아직 없어요', message: '관리자와 판매자가 등록한 상품이 여기에 표시됩니다.')
+                    : _LandingCardGrid(children: items.take(6).map((item) => _MarketPreviewCard(item: item)).toList()),
+              ),
+            ),
+          ),
           // ── 뜨개백과 ───────────────────────────────────────────────────────
           SliverToBoxAdapter(
             child: _LandingSectionFrame(
               title: '뜨개백과사전',
               subtitle: '뜨개 용어와 기법을 언제든지 찾아보세요.',
               actionLabel: user == null ? '로그인 후 더 보기' : '사전으로',
-              onAction: () => user == null ? context.go(Routes.login) : context.go(Routes.toolsEncyclopedia),
+              onAction: () => user == null ? context.go(Routes.login) : _goToApp(Routes.toolsEncyclopedia),
               child: encyclopediaAsync.when(
                 loading: () => const _LandingLoadingGrid(),
                 error: (_, _) => const _LandingEmptyCard(icon: Icons.menu_book_outlined, title: '백과사전 데이터를 불러오지 못했어요', message: '잠시 후 다시 확인해 주세요.'),
@@ -134,7 +291,7 @@ class LandingScreen extends ConsumerWidget {
               ),
             ),
           ),
-          const SliverToBoxAdapter(child: _FeatureSection()),
+          const SliverToBoxAdapter(child: _AiGaugeSection()),
           const SliverToBoxAdapter(child: _CtaSection()),
           const SliverToBoxAdapter(child: _LandingFooter()),
         ],
@@ -165,8 +322,9 @@ class _LandingTopBar extends StatefulWidget {
   final bool isLoggedIn;
   final VoidCallback onLogin;
   final VoidCallback onOpenApp;
+  final VoidCallback onLogout;
 
-  const _LandingTopBar({required this.isLoggedIn, required this.onLogin, required this.onOpenApp});
+  const _LandingTopBar({required this.isLoggedIn, required this.onLogin, required this.onOpenApp, required this.onLogout});
 
   @override
   State<_LandingTopBar> createState() => _LandingTopBarState();
@@ -228,21 +386,32 @@ class _LandingTopBarState extends State<_LandingTopBar> with TickerProviderState
                     const SizedBox(width: 10),
                     const MoriKnitTitle(fontSize: 19),
                     const Spacer(),
-                    if (!widget.isLoggedIn)
-                      TextButton(onPressed: widget.onLogin, child: const Text('로그인')),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: widget.isLoggedIn ? widget.onOpenApp : widget.onLogin,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: C.lv,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                        elevation: 0,
+                    if (widget.isLoggedIn) ...[
+                      TextButton(
+                        onPressed: widget.onLogout,
+                        child: Text('로그아웃', style: TextStyle(color: Colors.grey[600])),
                       ),
-                      child: Text(widget.isLoggedIn ? '앱으로 이동' : '무료로 시작하기',
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
-                    ),
+                      const SizedBox(width: 4),
+                      ElevatedButton(
+                        onPressed: widget.onOpenApp,
+                        style: _landingPrimaryButtonStyle().copyWith(
+                          backgroundColor: WidgetStatePropertyAll(C.lv),
+                          foregroundColor: const WidgetStatePropertyAll(Colors.white),
+                        ),
+                        child: const Text('앱으로 이동', style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                    ] else ...[
+                      TextButton(onPressed: widget.onLogin, child: const Text('로그인')),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: widget.onLogin,
+                        style: _landingPrimaryButtonStyle().copyWith(
+                          backgroundColor: WidgetStatePropertyAll(C.lv),
+                          foregroundColor: const WidgetStatePropertyAll(Colors.white),
+                        ),
+                        child: const Text('무료로 시작하기', style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -471,32 +640,41 @@ class _LandingHero extends StatelessWidget {
             child: Column(
               children: [
                 const MoriLogo(size: 96),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 const MoriKnitTitle(fontSize: 34, width: 240),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 Text(
                   '뜨개 프로젝트, 커뮤니티, 마켓, 백과사전을 한곳에 모은 작업 플랫폼',
-                  style: T.h2,
+                  style: T.h2.copyWith(fontSize: 25, height: 1.32),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 Text(
                   '웹에서는 크게 보고, 모바일에서는 가볍게 기록하고 이어가는 Moriknit의 흐름을 소개합니다.',
-                  style: T.body.copyWith(color: C.tx2, height: 1.6),
+                  style: T.body.copyWith(color: C.tx2, height: 1.72),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 22),
+                const SizedBox(height: 28),
                 Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
+                  spacing: 12,
+                  runSpacing: 12,
                   alignment: WrapAlignment.center,
                   children: [
                     ElevatedButton(
                       onPressed: isLoggedIn ? onOpenApp : onLogin,
+                      style: _landingPrimaryButtonStyle().copyWith(
+                        backgroundColor: WidgetStatePropertyAll(C.lv),
+                        foregroundColor: const WidgetStatePropertyAll(Colors.white),
+                      ),
                       child: Text(isLoggedIn ? '앱으로 이동' : '무료로 시작하기'),
                     ),
                     OutlinedButton(
-                      onPressed: () => context.go(Routes.market),
+                      onPressed: () => _goToApp(Routes.market),
+                      style: _landingSecondaryButtonStyle().copyWith(
+                        side: WidgetStatePropertyAll(BorderSide(color: C.lv.withValues(alpha: 0.28))),
+                        foregroundColor: WidgetStatePropertyAll(C.lvD),
+                        backgroundColor: WidgetStatePropertyAll(Colors.white.withValues(alpha: 0.55)),
+                      ),
                       child: const Text('마켓 둘러보기'),
                     ),
                   ],
@@ -2058,35 +2236,48 @@ class _LandingSectionFrame extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: _landingMaxWidth),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 40, 20, 0),
+          padding: const EdgeInsets.fromLTRB(20, 44, 20, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(title, style: T.h2),
-                        const SizedBox(height: 5),
-                        Text(subtitle, style: T.body.copyWith(color: C.tx2)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: C.lv.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            'CURATED',
+                            style: T.captionBold.copyWith(color: C.lvD, letterSpacing: 1.0),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(title, style: T.h2.copyWith(fontSize: 24, height: 1.25)),
+                        const SizedBox(height: 7),
+                        Text(subtitle, style: T.body.copyWith(color: C.tx2, height: 1.65)),
                       ],
                     ),
                   ),
                   const SizedBox(width: 12),
                   OutlinedButton(
                     onPressed: onAction,
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: C.lv),
-                      foregroundColor: C.lvD,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    style: _landingSecondaryButtonStyle().copyWith(
+                      side: WidgetStatePropertyAll(BorderSide(color: C.lv.withValues(alpha: 0.26))),
+                      foregroundColor: WidgetStatePropertyAll(C.lvD),
+                      backgroundColor: WidgetStatePropertyAll(Colors.white.withValues(alpha: 0.58)),
                     ),
                     child: Text(actionLabel),
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: _landingSectionGap),
               child,
             ],
           ),
@@ -2111,9 +2302,9 @@ class _LandingCardGrid extends StatelessWidget {
       itemCount: children.length,
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: crossAxisCount,
-        crossAxisSpacing: 14,
-        mainAxisSpacing: 14,
-        mainAxisExtent: 260,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        mainAxisExtent: 286,
       ),
       itemBuilder: (_, index) => children[index],
     );
@@ -2176,19 +2367,31 @@ class _LandingEmptyCard extends StatelessWidget {
 // ── 썸네일 헬퍼 ───────────────────────────────────────────────────────────────
 Widget _thumb({String? url, IconData icon = Icons.image_outlined, Color color = const Color(0xFFC084FC)}) {
   return SizedBox(
-    height: 130,
+    height: _landingThumbHeight,
     width: double.infinity,
     child: url != null && url.isNotEmpty
-        ? Image.network(url, fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => _thumbIcon(icon, color))
+        ? Image.network(
+            url,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => _thumbIcon(icon, color),
+          )
         : _thumbIcon(icon, color),
   );
 }
 
 Widget _thumbIcon(IconData icon, Color color) {
   return Container(
-    color: color.withValues(alpha: 0.10),
-    child: Center(child: Icon(icon, size: 40, color: color.withValues(alpha: 0.55))),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [
+          color.withValues(alpha: 0.14),
+          color.withValues(alpha: 0.06),
+        ],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+    ),
+    child: Center(child: _landingIconBadge(icon, color, size: 58)),
   );
 }
 
@@ -2201,30 +2404,31 @@ class _MarketPreviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return GlassCard(
       padding: EdgeInsets.zero,
-      radius: 18,
+      radius: _landingCardRadius,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(_landingCardRadius)),
             child: _thumb(url: item.imageUrl.isNotEmpty ? item.imageUrl : null, icon: Icons.storefront_rounded, color: C.pkD),
           ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(item.title, style: T.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 4),
+                  Text(item.title, style: T.bodyBold.copyWith(fontSize: 16, height: 1.3), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 6),
                   Expanded(
                     child: Text(item.description, style: T.caption.copyWith(color: C.tx2, height: 1.5), maxLines: 2, overflow: TextOverflow.ellipsis),
                   ),
+                  const SizedBox(height: 10),
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                        decoration: BoxDecoration(color: C.pkL, borderRadius: BorderRadius.circular(20)),
+                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                        decoration: BoxDecoration(color: C.pkL, borderRadius: BorderRadius.circular(999)),
                         child: Text(item.category, style: T.caption.copyWith(color: C.pkD, fontWeight: FontWeight.w600, fontSize: 11)),
                       ),
                       const Spacer(),
@@ -2251,25 +2455,26 @@ class _PostPreviewCard extends StatelessWidget {
     final thumb = post.imageUrls.isNotEmpty ? post.imageUrls.first : null;
     return GlassCard(
       padding: EdgeInsets.zero,
-      radius: 18,
+      radius: _landingCardRadius,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(_landingCardRadius)),
             child: _thumb(url: thumb, icon: Icons.forum_rounded, color: C.lvD),
           ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(post.title, style: T.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 4),
+                  Text(post.title, style: T.bodyBold.copyWith(fontSize: 16, height: 1.3), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 6),
                   Expanded(
                     child: Text(post.content, style: T.caption.copyWith(color: C.tx2, height: 1.5), maxLines: 2, overflow: TextOverflow.ellipsis),
                   ),
+                  const SizedBox(height: 10),
                   Row(
                     children: [
                       Icon(Icons.person_rounded, size: 13, color: C.mu),
@@ -2303,14 +2508,14 @@ class _EncyclopediaPreviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return GlassCard(
       padding: EdgeInsets.zero,
-      radius: 18,
+      radius: _landingCardRadius,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(_landingCardRadius)),
             child: Container(
-              height: 130,
+              height: _landingThumbHeight,
               width: double.infinity,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -2322,13 +2527,13 @@ class _EncyclopediaPreviewCard extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.menu_book_rounded, size: 36, color: C.lv.withValues(alpha: 0.7)),
-                  const SizedBox(height: 8),
+                  _landingIconBadge(Icons.menu_book_rounded, C.lvD, size: 58),
+                  const SizedBox(height: 10),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
                       color: C.lvL,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(entry.category, style: TextStyle(fontSize: 11, color: C.lvD, fontWeight: FontWeight.w700)),
                   ),
@@ -2338,7 +2543,7 @@ class _EncyclopediaPreviewCard extends StatelessWidget {
           ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -2349,7 +2554,7 @@ class _EncyclopediaPreviewCard extends StatelessWidget {
                         Text(entry.termEn, style: T.caption.copyWith(color: C.mu), maxLines: 1, overflow: TextOverflow.ellipsis),
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Expanded(
                     child: Text(entry.description, style: T.caption.copyWith(color: C.tx2, height: 1.5), maxLines: 3, overflow: TextOverflow.ellipsis),
                   ),
@@ -2358,6 +2563,160 @@ class _EncyclopediaPreviewCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── AI 게이지 판독기 섹션 ─────────────────────────────────────────────────────
+class _AiGaugeSection extends StatelessWidget {
+  const _AiGaugeSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWide = screenWidth >= 720;
+
+    final steps = [
+      (icon: Icons.photo_camera_outlined, label: '스와치 사진 촬영'),
+      (icon: Icons.touch_app_outlined, label: '10cm 영역 두 점 선택'),
+      (icon: Icons.auto_fix_high_rounded, label: 'AI 자동 분석'),
+      (icon: Icons.check_circle_outline_rounded, label: '코수·단수 즉시 확인'),
+    ];
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _landingMaxWidth),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 56, 20, 0),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFF8B5CF6).withValues(alpha: 0.08),
+                  const Color(0xFFEC4899).withValues(alpha: 0.06),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: const Color(0xFF8B5CF6).withValues(alpha: 0.18)),
+            ),
+            padding: const EdgeInsets.fromLTRB(32, 40, 32, 40),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.auto_awesome_rounded, color: Color(0xFF8B5CF6), size: 14),
+                          SizedBox(width: 6),
+                          Text(
+                            'NEW',
+                            style: TextStyle(
+                              color: Color(0xFF8B5CF6),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'AI 게이지 판독기',
+                  style: TextStyle(
+                    fontSize: isWide ? 32 : 26,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF1A1A2E),
+                    letterSpacing: -0.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '스와치 사진 한 장으로 코수·단수를 자동 측정하세요.\n손으로 세던 시간을 AI가 대신합니다.',
+                  style: TextStyle(
+                    fontSize: isWide ? 17 : 15,
+                    color: const Color(0xFF6B7280),
+                    height: 1.6,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 36),
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 16,
+                  alignment: WrapAlignment.center,
+                  children: steps.map((step) => Container(
+                    width: isWide ? 220 : double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.85),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF8B5CF6).withValues(alpha: 0.08),
+                          blurRadius: 16,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF8B5CF6).withValues(alpha: 0.10),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(step.icon, color: const Color(0xFF8B5CF6), size: 22),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          step.label,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1A1A2E),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  )).toList(),
+                ),
+                const SizedBox(height: 32),
+                ElevatedButton.icon(
+                  onPressed: () => context.go(Routes.login),
+                  icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                  label: const Text('앱에서 무료로 사용하기'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8B5CF6),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                    elevation: 0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -2378,6 +2737,7 @@ class _FeatureSection extends StatelessWidget {
       (Icons.calculate_rounded, '게이지 계산기', '게이지에 맞는 코수와 단수를 계산해요', Color(0xFF34D399)),
       (Icons.search_rounded, 'Ravelry 연동', 'Ravelry 실·도안을 앱 안에서 바로 검색하세요', Color(0xFF60A5FA)),
       (Icons.shopping_bag_rounded, 'Etsy 연동', 'Etsy 마켓에 내 도안을 손쉽게 등록·판매하세요', Color(0xFFFF8C00)),
+      (Icons.auto_awesome_rounded, 'AI 게이지 판독기', '실 사진으로 게이지를 자동으로 읽어드려요 ✨ 신기능', Color(0xFF818CF8)),
     ];
 
     final width = MediaQuery.of(context).size.width;
@@ -2408,24 +2768,19 @@ class _FeatureSection extends StatelessWidget {
                 itemBuilder: (_, i) {
                   final (icon, title, desc, color) = features[i];
                   return Container(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(22),
                     decoration: BoxDecoration(
                       color: const Color(0xFF252540),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(22),
                       border: Border.all(color: color.withValues(alpha: 0.15)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
-                          child: Icon(icon, color: color, size: 24),
-                        ),
-                        const SizedBox(height: 14),
-                        Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                        const SizedBox(height: 6),
+                        _landingIconBadge(icon, color, size: 48),
+                        const SizedBox(height: 16),
+                        Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, height: 1.25)),
+                        const SizedBox(height: 8),
                         Text(desc, style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 12.5, height: 1.6)),
                       ],
                     ),
@@ -2472,13 +2827,12 @@ class _CtaSection extends StatelessWidget {
                   onPressed: () => context.go(Routes.login),
                   icon: const Icon(Icons.person_add_rounded, size: 18),
                   label: const Text('무료 계정 만들기'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: C.lvD,
-                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                    elevation: 0,
-                    textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                  style: _landingPrimaryButtonStyle().copyWith(
+                    backgroundColor: const WidgetStatePropertyAll(Colors.white),
+                    foregroundColor: WidgetStatePropertyAll(C.lvD),
+                    padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 30, vertical: 16)),
+                    shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(24))),
+                    textStyle: WidgetStatePropertyAll(T.bodyBold.copyWith(fontSize: 16, height: 1.1)),
                   ),
                 ),
               ],
@@ -2520,6 +2874,20 @@ class _LandingFooter extends StatelessWidget {
                           const SizedBox(height: 6),
                           const Text('스와치, 프로젝트, 커뮤니티, 마켓까지\n뜨개질의 모든 과정을 한 곳에서.',
                               style: TextStyle(color: Colors.white38, fontSize: 12, height: 1.6)),
+                          const SizedBox(height: 16),
+                          _AppStoreButton(
+                            icon: Icons.shop_rounded,
+                            label: 'Google Play',
+                            sublabel: '다운로드',
+                            onTap: () {}, // TODO: 스토어 링크 등록 후 교체
+                          ),
+                          const SizedBox(height: 8),
+                          _AppStoreButton(
+                            icon: Icons.apple_rounded,
+                            label: 'App Store',
+                            sublabel: '다운로드',
+                            onTap: () {}, // TODO: 스토어 링크 등록 후 교체
+                          ),
                         ],
                       ),
                     ),
@@ -2529,12 +2897,12 @@ class _LandingFooter extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('회사 정보', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                          const Text('사업자 정보', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
                           const SizedBox(height: 12),
                           const _FooterInfoRow(label: '서비스명', value: 'MoriKnit (모리니트)'),
-                          const _FooterInfoRow(label: '운영', value: '1인 개발 서비스'),
-                          const _FooterInfoRow(label: '이메일', value: 'support@moriknit.app'),
-                          const _FooterInfoRow(label: '버전', value: '1.0.0'),
+                          const _FooterInfoRow(label: '사업자등록번호', value: '307-25-11089'),
+                          const _FooterInfoRow(label: '전화', value: '032-766-7720'),
+                          const _FooterInfoRow(label: '이메일', value: 'mori@moriknit.com'),
                           const SizedBox(height: 16),
                           Wrap(
                             spacing: 16,
@@ -2559,7 +2927,7 @@ class _LandingFooter extends StatelessWidget {
                 const SizedBox(height: 28),
                 const Divider(color: Colors.white12),
                 const SizedBox(height: 16),
-                const Text('© 2024 MoriKnit. All rights reserved.',
+                const Text('© 2026 MoriKnit. All rights reserved.',
                     style: TextStyle(color: Colors.white30, fontSize: 12)),
               ],
             ),
@@ -2581,9 +2949,52 @@ class _FooterInfoRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         children: [
-          SizedBox(width: 70, child: Text(label, style: const TextStyle(color: Colors.white38, fontSize: 12))),
+          SizedBox(width: 100, child: Text(label, style: const TextStyle(color: Colors.white38, fontSize: 12))),
           Expanded(child: Text(value, style: const TextStyle(color: Colors.white70, fontSize: 12))),
         ],
+      ),
+    );
+  }
+}
+
+class _AppStoreButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String sublabel;
+  final VoidCallback onTap;
+
+  const _AppStoreButton({
+    required this.icon,
+    required this.label,
+    required this.sublabel,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white, size: 22),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(sublabel, style: const TextStyle(color: Colors.white54, fontSize: 10)),
+                Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

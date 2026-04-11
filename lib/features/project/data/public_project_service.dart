@@ -20,6 +20,7 @@ class PublicProjectEntry {
   final DateTime createdAt;
   final List<String> stepTitles;
   final List<String> photoUrls;
+  final String sourcePatternId;
 
   const PublicProjectEntry({
     required this.id,
@@ -38,6 +39,7 @@ class PublicProjectEntry {
     required this.createdAt,
     this.stepTitles = const [],
     this.photoUrls = const [],
+    this.sourcePatternId = '',
   });
 
   factory PublicProjectEntry.fromFirestore(DocumentSnapshot doc) {
@@ -63,6 +65,7 @@ class PublicProjectEntry {
           DateTime.now(),
       stepTitles: List<String>.from(data['stepTitles'] as List? ?? []),
       photoUrls: List<String>.from(data['photoUrls'] as List? ?? []),
+      sourcePatternId: data['sourcePatternId'] as String? ?? '',
     );
   }
 
@@ -82,6 +85,7 @@ class PublicProjectEntry {
     'createdAt': createdAt.toIso8601String(),
     'stepTitles': stepTitles,
     'photoUrls': photoUrls,
+    'sourcePatternId': sourcePatternId,
   };
 }
 
@@ -143,6 +147,7 @@ class PublicProjectService {
         createdAt: DateTime.now(),
         stepTitles: stepTitles ?? [],
         photoUrls: photoUrls ?? [],
+        sourcePatternId: project.sourcePatternId,
       ).toMap(),
     );
   }
@@ -159,6 +164,14 @@ class PublicProjectService {
     for (final doc in existing.docs) {
       await doc.reference.delete();
     }
+  }
+
+  Future<void> deleteEntry(String entryId) async {
+    await _col.doc(entryId).delete();
+  }
+
+  Future<void> updateEntryTitle(String entryId, String newTitle) async {
+    await _col.doc(entryId).update({'title': newTitle});
   }
 
   Future<void> toggleLike({

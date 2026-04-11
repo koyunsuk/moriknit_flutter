@@ -26,6 +26,13 @@ class PatternRepository {
       cols: chart.cols,
       mode: chart.mode,
       grid: chart.grid,
+      narrativeText: chart.narrativeText,
+      type: chart.type,
+      imageUrl: chart.imageUrl,
+      pdfUrl: chart.pdfUrl,
+      forkCount: chart.forkCount,
+      sourcePatternId: chart.sourcePatternId,
+      sourceOwnerName: chart.sourceOwnerName,
     );
     await docRef.set({
       ...saved.toJson(),
@@ -49,6 +56,61 @@ class PatternRepository {
       narrativeText: original.narrativeText,
     );
     return save(copy);
+  }
+
+  /// 다른 사용자의 chart 타입 도안을 Fork하여 내 컬렉션에 복사합니다.
+  /// 원본의 forkCount를 +1 업데이트하고 새 패턴 ID를 반환합니다.
+  Future<PatternChart> forkPattern({
+    required String sourceOwnerId,
+    required String sourceOwnerName,
+    required PatternChart sourcePattern,
+  }) async {
+    if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
+    if (sourcePattern.type != PatternType.chart) {
+      throw Exception('차트 타입 도안만 Fork할 수 있어요.');
+    }
+
+    // 1. 내 컬렉션에 복사본 저장
+    final docRef = _ref.doc();
+    final forked = PatternChart(
+      id: docRef.id,
+      title: '${sourcePattern.title} (Fork)',
+      rows: sourcePattern.rows,
+      cols: sourcePattern.cols,
+      mode: sourcePattern.mode,
+      grid: sourcePattern.grid,
+      narrativeText: sourcePattern.narrativeText,
+      type: PatternType.chart,
+      sourcePatternId: sourcePattern.id,
+      sourceOwnerName: sourceOwnerName,
+    );
+    await docRef.set({
+      ...forked.toJson(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    // 2. 원본 패턴의 forkCount를 +1 증가
+    final sourceRef = _db
+        .collection('users')
+        .doc(sourceOwnerId)
+        .collection('pattern_charts')
+        .doc(sourcePattern.id);
+    await sourceRef.update({'forkCount': FieldValue.increment(1)});
+
+    return forked;
+  }
+
+  /// 원본 도안의 forkCount를 +1 증가시킵니다.
+  Future<void> incrementForkCount({
+    required String sourceOwnerId,
+    required String patternId,
+  }) async {
+    await _db
+        .collection('users')
+        .doc(sourceOwnerId)
+        .collection('pattern_charts')
+        .doc(patternId)
+        .update({'forkCount': FieldValue.increment(1)});
   }
 
   Stream<List<PatternChart>> watchAll() {
