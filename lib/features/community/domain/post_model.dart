@@ -4,6 +4,7 @@ class PostModel {
   final String id;
   final String uid;
   final String authorName;
+  final String authorPhotoUrl;
   final String category;
   final String title;
   final String content;
@@ -19,6 +20,7 @@ class PostModel {
     required this.id,
     required this.uid,
     required this.authorName,
+    this.authorPhotoUrl = '',
     required this.category,
     required this.title,
     required this.content,
@@ -37,6 +39,7 @@ class PostModel {
       id: doc.id,
       uid: data['uid'] as String? ?? '',
       authorName: data['authorName'] as String? ?? 'Anonymous',
+      authorPhotoUrl: data['authorPhotoUrl'] as String? ?? '',
       category: data['category'] as String? ?? 'all',
       title: data['title'] as String? ?? '',
       content: data['content'] as String? ?? '',
@@ -53,6 +56,7 @@ class PostModel {
   Map<String, dynamic> toJson() => {
         'uid': uid,
         'authorName': authorName,
+        'authorPhotoUrl': authorPhotoUrl,
         'category': category,
         'title': title,
         'content': content,

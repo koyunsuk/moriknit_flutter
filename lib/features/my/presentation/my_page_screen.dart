@@ -18,6 +18,7 @@ import '../../../providers/counter_provider.dart';
 import '../../../providers/market_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/swatch_provider.dart';
+import '../../../providers/avatar_provider.dart';
 import '../../../providers/fab_settings_provider.dart';
 import '../../../providers/theme_provider.dart';
 import '../../auth/domain/user_model.dart';
@@ -54,7 +55,6 @@ class _MyPageBody extends ConsumerStatefulWidget {
 }
 
 class _MyPageBodyState extends ConsumerState<_MyPageBody> {
-  bool _profileExpanded = false;
   bool _uploadingPhoto = false;
 
   UserModel get user => widget.user;
@@ -82,6 +82,57 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
     } finally {
       if (mounted) setState(() => _uploadingPhoto = false);
     }
+  }
+
+  Future<void> _showAvatarPicker() async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final current = ref.read(avatarPresetProvider);
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 36, height: 4, margin: const EdgeInsets.only(bottom: 16), decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+            Text(isKorean ? '기본 아바타 선택' : 'Select avatar', style: T.h3),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: DefaultAvatarPreset.values.map((preset) {
+                final isSelected = preset == current;
+                return GestureDetector(
+                  onTap: () async {
+                    await ref.read(avatarPresetProvider.notifier).setPreset(preset);
+                    if (mounted) Navigator.pop(context);
+                  },
+                  child: Column(
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: isSelected ? C.lv : Colors.transparent, width: 2.5),
+                        ),
+                        child: MoriDefaultAvatar(size: 60, borderRadius: 999, preset: preset),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(isKorean ? preset.label : preset.labelEn, style: T.caption.copyWith(color: isSelected ? C.lvD : C.tx2, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400)),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _editDisplayName(BuildContext context, AppStrings t) async {
@@ -128,6 +179,29 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
     }
   }
 
+  Widget _buildSnapshotItem(String label, int count, int stored, Color color, VoidCallback onTap) {
+    final progress = count == 0 ? 0.0 : (stored == 0 ? 0.15 : (count / (stored > count ? stored : count)).clamp(0.0, 1.0));
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(label, style: T.caption.copyWith(color: C.tx2), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 4),
+            Text('$count', style: T.bodyBold.copyWith(color: color, fontSize: 22, letterSpacing: -0.3)),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: LinearProgressIndicator(value: progress, minHeight: 5, backgroundColor: color.withValues(alpha: 0.14), valueColor: AlwaysStoppedAnimation(color)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = ref.watch(appStringsProvider);
@@ -142,8 +216,6 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
     final salesAsync = ref.watch(myMarketSalesProvider);
     final name = user.displayName.isNotEmpty ? user.displayName : (user.email.isNotEmpty ? user.email.split('@').first : 'Maker');
     final photo = user.photoURL;
-    final firstLetter = name.isNotEmpty ? name.characters.first.toUpperCase() : 'M';
-    final joinedDate = user.createdAt ?? user.lastActiveAt;
 
     return Stack(
       children: [
@@ -165,140 +237,196 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                       const SizedBox(height: 4),
 
                       // ── 1. 기본정보 ─────────────────────────────────
-                      SectionTitle(title: isKorean ? '기본정보' : 'Basic Info'),
+                      SectionTitle(title: isKorean ? '👤 기본정보' : '👤 Basic Info'),
                       const SizedBox(height: 10),
-                      GestureDetector(
-                        onTap: () => setState(() => _profileExpanded = !_profileExpanded),
-                        child: GlassCard(
-                          child: Column(
-                            children: [
-                              Row(
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          GlassCard(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            radius: 24,
+                            borderColor: C.lv.withValues(alpha: 0.16),
+                            color: Color.alphaBlend(C.lv.withValues(alpha: 0.05), Colors.white.withValues(alpha: 0.88)),
+                            child: IntrinsicHeight(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  // 프로필 사진 + 편집 버튼
-                                  Stack(
-                                    children: [
-                                      CircleAvatar(
-                                radius: 38,
-                                backgroundColor: C.lvL,
-                                backgroundImage: photo.isNotEmpty ? NetworkImage(photo) : null,
-                                child: photo.isEmpty
-                                    ? Text(firstLetter, style: TextStyle(fontSize: 24, color: C.lvD, fontWeight: FontWeight.w700))
-                                    : null,
-                              ),
-                              if (_uploadingPhoto)
-                                Positioned.fill(
-                                  child: CircleAvatar(
-                                    radius: 38,
-                                    backgroundColor: Colors.black.withValues(alpha: 0.42),
-                                    child: const SizedBox(
-                                      width: 22,
-                                      height: 22,
-                                      child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                                  // LEFT: 아바타 (고정 너비)
+                                  SizedBox(
+                                    width: 84,
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Stack(
+                                          children: [
+                                            GestureDetector(
+                                              onTap: photo.isEmpty ? _showAvatarPicker : null,
+                                              child: ClipOval(
+                                                child: SizedBox(
+                                                  width: 64,
+                                                  height: 64,
+                                                  child: photo.isNotEmpty
+                                                      ? Image.network(
+                                                          photo,
+                                                          width: 64,
+                                                          height: 64,
+                                                          fit: BoxFit.cover,
+                                                          errorBuilder: (_, _, _) => MoriDefaultAvatar(size: 64, borderRadius: 999, preset: ref.watch(avatarPresetProvider)),
+                                                        )
+                                                      : MoriDefaultAvatar(size: 64, borderRadius: 999, preset: ref.watch(avatarPresetProvider)),
+                                                ),
+                                              ),
+                                            ),
+                                            if (_uploadingPhoto)
+                                              Positioned.fill(
+                                                child: CircleAvatar(
+                                                  radius: 32,
+                                                  backgroundColor: Colors.black.withValues(alpha: 0.42),
+                                                  child: const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white)),
+                                                ),
+                                              ),
+                                            Positioned(
+                                              bottom: 0,
+                                              right: 0,
+                                              child: GestureDetector(
+                                                onTap: _uploadingPhoto ? null : _pickAndUploadPhoto,
+                                                child: Container(
+                                                  width: 24,
+                                                  height: 24,
+                                                  decoration: BoxDecoration(
+                                                    color: C.lvD,
+                                                    shape: BoxShape.circle,
+                                                    border: Border.all(color: Colors.white, width: 2),
+                                                  ),
+                                                  child: const Icon(Icons.camera_alt_rounded, size: 12, color: Colors.white),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                ),
-                              Positioned(
-                                bottom: 0,
-                                right: 0,
-                                child: GestureDetector(
-                                  onTap: _uploadingPhoto ? null : _pickAndUploadPhoto,
-                                  child: Container(
-                                    width: 26,
-                                    height: 26,
-                                    decoration: BoxDecoration(
-                                      color: C.lvD,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(color: Colors.white, width: 2),
+                                  // 구분선
+                                  Container(width: 1, color: C.bd.withValues(alpha: 0.5), margin: const EdgeInsets.symmetric(vertical: 4)),
+                                  const SizedBox(width: 14),
+                                  // RIGHT: 3단 정보 (고정 높이 셀)
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        // 1단: 이름 + 수정버튼
+                                        SizedBox(
+                                          height: 28,
+                                          child: Row(
+                                            crossAxisAlignment: CrossAxisAlignment.center,
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  name,
+                                                  style: T.bodyBold,
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              GestureDetector(
+                                                onTap: () => _editDisplayName(context, t),
+                                                child: Icon(Icons.edit_rounded, size: 15, color: C.lv),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        // 2단: 이메일
+                                        SizedBox(
+                                          height: 28,
+                                          child: Row(
+                                            crossAxisAlignment: CrossAxisAlignment.center,
+                                            children: [
+                                              Icon(Icons.mail_outline_rounded, size: 13, color: C.mu),
+                                              const SizedBox(width: 4),
+                                              Expanded(
+                                                child: Text(
+                                                  user.email.isEmpty ? t.noEmailConnected : user.email,
+                                                  style: T.bodyBold.copyWith(color: C.tx2),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        // 3단: 특이사항 (플랜)
+                                        SizedBox(
+                                          height: 28,
+                                          child: Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: MoriChip(label: _planLabel(t, user.subscription.planId), type: ChipType.lavender),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    child: const Icon(Icons.settings_rounded, size: 14, color: Colors.white),
                                   ),
-                                ),
+                                ],
                               ),
-                            ],
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // 별명 + 편집 아이콘
-                                Row(
-                                  children: [
-                                    Expanded(child: Text(name, style: T.h2)),
-                                    TextButton(
-                                      onPressed: () => _editDisplayName(context, t),
-                                      style: TextButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                        minimumSize: Size.zero,
-                                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      ),
-                                      child: Text(isKorean ? '닉네임 변경' : 'Edit name', style: T.caption.copyWith(color: C.lvD)),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(user.email.isEmpty ? t.noEmailConnected : user.email, style: T.body.copyWith(color: C.mu)),
-                                const SizedBox(height: 8),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    MoriChip(label: _planLabel(t, user.subscription.planId), type: ChipType.lavender),
-                                    MoriChip(label: photo.isEmpty ? t.defaultAvatar : t.socialPhoto, type: ChipType.pink),
-                                    MoriChip(label: language.label, type: ChipType.white),
-                                  ],
-                                ),
-                              ],
                             ),
                           ),
-                          Icon(
-                            _profileExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                            color: C.mu,
-                          ),
+                          if (ref.watch(isProProvider))
+                            Positioned(
+                              top: -2,
+                              left: 14,
+                              child: CustomPaint(
+                                size: const Size(18, 24),
+                                painter: _ProBookmarkPainter(),
+                                child: const SizedBox(
+                                  width: 18,
+                                  height: 24,
+                                  child: Center(
+                                    child: Text('PRO', style: TextStyle(color: Colors.white, fontSize: 5, fontWeight: FontWeight.w800, letterSpacing: 0.3, height: 1)),
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
-                      if (user.bio.isNotEmpty) ...[
-                        const SizedBox(height: 14),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(14)),
-                          child: Text(user.bio, style: T.body.copyWith(color: C.tx2)),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-                      if (_profileExpanded) ...[
-                        const SizedBox(height: 16),
-                        GlassCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t.profileOverview, style: T.bodyBold), const SizedBox(height: 12), _InfoRow(label: t.displayName, value: name), _InfoRow(label: t.email, value: user.email.isEmpty ? t.notConnected : user.email), _InfoRow(label: t.joined, value: joinedDate == null ? t.unknown : _formatDate(joinedDate)), _InfoRow(label: t.lastActive, value: user.lastActiveAt == null ? t.unknown : _formatDate(user.lastActiveAt!))])),
-                        const SizedBox(height: 16),
-                        GlassCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t.accountConnections, style: T.bodyBold), const SizedBox(height: 12), _InfoRow(label: t.plan, value: _planLabel(t, user.subscription.planId)), _InfoRow(label: t.status, value: user.subscription.status), _InfoRow(label: t.profilePhoto, value: photo.isEmpty ? t.usingDefaultAvatar : t.importedFromSocial), _InfoRow(label: t.signInSync, value: _socialSyncLabel(t, photo: photo, displayName: user.displayName, email: user.email))])),
-                      ],
+                      const SizedBox(height: 16),
+
+                      // ── 1-b. 구독 상태 ─────────────────────────────
+                      SectionTitle(title: isKorean ? '💳 구독 정보' : '💳 Subscription'),
+                      const SizedBox(height: 10),
+                      _SubscriptionCard(user: user, isKorean: isKorean),
                       const SizedBox(height: 20),
 
                       // ── 2. 필수정보 ───────────────────────────────
-                      SectionTitle(title: isKorean ? '필수정보' : 'Essential Info'),
+                      SectionTitle(title: isKorean ? '📊 필수정보' : '📊 Essential Info'),
                       const SizedBox(height: 10),
-                      GlassCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t.usageSnapshot, style: T.bodyBold), const SizedBox(height: 12), _UsageRow(label: t.swatchLibrary, caption: t.liveSaved(swatchCount, user.usage.swatchCount), current: swatchCount, stored: user.usage.swatchCount, color: C.lv), const SizedBox(height: 10), _UsageRow(label: t.projectBoard, caption: t.liveSaved(projectCount, user.usage.projectCount), current: projectCount, stored: user.usage.projectCount, color: C.pk), const SizedBox(height: 10), _UsageRow(label: isKorean ? '카운터 기록' : 'Counter records', caption: t.liveSaved(counterCount, user.usage.counterCount), current: counterCount, stored: user.usage.counterCount, color: C.lmD)])),
+                      GlassCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('📈 ${t.usageSnapshot}', style: T.bodyBold),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(child: _buildSnapshotItem(t.swatchLibrary, swatchCount, user.usage.swatchCount, C.lv, () => context.push('/swatch'))),
+                                Container(width: 1, height: 72, color: C.bd),
+                                Expanded(child: _buildSnapshotItem(t.projectBoard, projectCount, user.usage.projectCount, C.pk, () => context.push('/project'))),
+                                Container(width: 1, height: 72, color: C.bd),
+                                Expanded(child: _buildSnapshotItem(isKorean ? '카운터' : 'Counters', counterCount, user.usage.counterCount, C.lmD, () => context.push('/counters'))),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: 16),
-              GlassCard(
-                child: Row(
-                  children: [
-                    Expanded(child: _ProfileStat(label: t.swatches, value: '$swatchCount', accent: C.lvD, onTap: () => context.push('/swatch'))),
-                    Expanded(child: _ProfileStat(label: t.projects, value: '$projectCount', accent: C.pkD, onTap: () => context.push('/project'))),
-                    Expanded(child: _ProfileStat(label: isKorean ? '카운터' : 'Counters', value: '$counterCount', accent: C.lmD, onTap: () => context.push('/counters'))),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
                     child: purchasesAsync.when(
                       data: (items) => _SummaryCard(
-                        title: isKorean ? '구매 요약' : 'Purchase summary',
+                        title: isKorean ? '🛍️ 구매 요약' : '🛍️ Purchase summary',
                         countLabel: isKorean ? '구매 수' : 'Orders',
                         countValue: '${items.length}',
                         amountLabel: isKorean ? '구매 합계' : 'Spent',
@@ -313,7 +441,7 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                   Expanded(
                     child: salesAsync.when(
                       data: (items) => _SummaryCard(
-                        title: isKorean ? '마켓 수익' : 'Market earnings',
+                        title: isKorean ? '💰 마켓 수익' : '💰 Market earnings',
                         countLabel: isKorean ? '판매 수' : 'Sales',
                         countValue: '${items.length}',
                         amountLabel: isKorean ? '누적 수익' : 'Revenue',
@@ -336,13 +464,13 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(isKorean ? '내 구매' : 'My purchases', style: T.bodyBold),
+                            Text(isKorean ? '🧾 내 구매' : '🧾 My purchases', style: T.bodyBold),
                             const SizedBox(height: 6),
-                            Text(isKorean ? '최근 구입한 상품을 확인해요.' : 'See your latest purchases.', style: T.caption.copyWith(color: C.mu)),
+                            Text(isKorean ? '최근 구입한 상품을 확인해요.' : 'See your latest purchases.', style: T.caption.copyWith(color: C.tx2)),
                             const SizedBox(height: 12),
                             purchasesAsync.when(
                               data: (items) => items.isEmpty
-                                  ? Text(isKorean ? '아직 구매한 상품이 없어요.' : 'No purchases yet.', style: T.caption.copyWith(color: C.mu))
+                                  ? Column(children: List.generate(3, (_) => Container(height: 50, margin: const EdgeInsets.only(bottom: 10), decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(20), border: Border.all(color: C.bd.withValues(alpha: 0.5))))))
                                   : Column(children: items.take(4).map((item) => _LedgerRow(title: item.title, subtitle: _formatWon(item.price, isKorean), accent: C.pkD)).toList()),
                               loading: () => CircularProgressIndicator(color: C.lv),
                               error: (e, _) => Text('$e', style: T.caption.copyWith(color: C.og)),
@@ -357,13 +485,13 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(isKorean ? '내 마켓' : 'My market', style: T.bodyBold),
+                            Text(isKorean ? '🏪 내 마켓' : '🏪 My market', style: T.bodyBold),
                             const SizedBox(height: 6),
-                            Text(isKorean ? '등록한 상품을 관리해요.' : 'Manage your listings.', style: T.caption.copyWith(color: C.mu)),
+                            Text(isKorean ? '등록한 상품을 관리해요.' : 'Manage your listings.', style: T.caption.copyWith(color: C.tx2)),
                             const SizedBox(height: 12),
                             marketItemsAsync.when(
                               data: (items) => items.isEmpty
-                                  ? Text(isKorean ? '등록한 상품이 아직 없어요.' : 'No listed items yet.', style: T.caption.copyWith(color: C.mu))
+                                  ? Column(children: List.generate(3, (_) => Container(height: 50, margin: const EdgeInsets.only(bottom: 10), decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(20), border: Border.all(color: C.bd.withValues(alpha: 0.5))))))
                                   : Column(
                                       children: items.take(4).map((item) => _LedgerRow(title: item.title, subtitle: _formatWon(item.price, isKorean), accent: C.lmD)).toList(),
                                     ),
@@ -380,7 +508,7 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
               const SizedBox(height: 20),
 
               // ── 3. 개인설정 ───────────────────────────────────────
-              Text(isKorean ? '개인설정' : 'Personal settings', style: T.bodyBold.copyWith(color: C.tx2)),
+              SectionTitle(title: isKorean ? '⚙️ 개인설정' : '⚙️ Personal settings'),
               const SizedBox(height: 10),
               GlassCard(
                 child: Column(
@@ -424,7 +552,9 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                         // 헤더 미리보기 색 계산 (C.headerBg 로직과 동기화)
                         final headerPreview = mode == AppThemeMode.moriMono
                             ? tc.bd
-                            : mode == AppThemeMode.jwiChuni
+                            : mode == AppThemeMode.moriCream
+                                ? tc.bg
+                                : mode == AppThemeMode.jwiChuni
                                 ? Color.alphaBlend(tc.pk.withValues(alpha: 0.28), tc.bg)
                                 : Color.alphaBlend(tc.pk.withValues(alpha: 0.22), tc.bg);
                         return GestureDetector(
@@ -521,14 +651,14 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
 
               // ── 4. 퀵다이얼 설정 ─────────────────────────────────
               if (!kIsWeb) ...[
-                SectionTitle(title: isKorean ? '퀵다이얼 설정' : 'Quick Dial Settings'),
+                SectionTitle(title: isKorean ? '⚡ 퀵다이얼 설정' : '⚡ Quick Dial Settings'),
                 const SizedBox(height: 10),
                 _FabSettingsCard(isKorean: isKorean),
                 const SizedBox(height: 20),
               ],
 
               // ── 5. 회사정보 ───────────────────────────────────────
-              SectionTitle(title: isKorean ? '회사정보' : 'Company Info'),
+              SectionTitle(title: isKorean ? '🏢 회사정보' : '🏢 Company Info'),
               const SizedBox(height: 10),
               GlassCard(
                 child: Column(
@@ -593,6 +723,19 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                       if (context.mounted) context.go('/login');
                     },
                   ),
+                  Divider(height: 1, color: Colors.grey.shade100),
+                  ListTile(
+                    leading: Icon(Icons.person_remove_outlined, color: C.mu),
+                    title: Text(
+                      isKorean ? '회원 탈퇴' : 'Delete Account',
+                      style: T.body.copyWith(color: C.mu),
+                    ),
+                    subtitle: Text(
+                      isKorean ? '모든 데이터가 영구 삭제됩니다' : 'All data will be permanently deleted',
+                      style: T.caption.copyWith(color: C.mu),
+                    ),
+                    onTap: () => context.push('/my/delete-account'),
+                  ),
                 ]),
               ),
                     ],
@@ -619,28 +762,7 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
     }
   }
 
-  String _socialSyncLabel(AppStrings t, {required String photo, required String displayName, required String email}) {
-    if (photo.isNotEmpty || displayName.isNotEmpty) return t.importedProfile;
-    if (email.isNotEmpty) return t.emailOnlyProfile;
-    return t.noProviderProfile;
-  }
-
-  String _formatDate(DateTime date) => '${date.year}.${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}';
-
   String _formatWon(int amount, bool isKorean) => isKorean ? '$amount원' : '$amount KRW';
-}
-
-class _ProfileStat extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color accent;
-  final VoidCallback? onTap;
-  const _ProfileStat({required this.label, required this.value, required this.accent, this.onTap});
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Column(children: [Text(value, style: T.numLG.copyWith(color: accent)), const SizedBox(height: 4), Text(label, style: T.caption)]),
-  );
 }
 
 class _SummaryCard extends StatelessWidget {
@@ -655,13 +777,21 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GlassCard(
+      padding: const EdgeInsets.all(18),
+      radius: 22,
+      borderColor: accent.withValues(alpha: 0.12),
+      color: Color.alphaBlend(accent.withValues(alpha: 0.028), Colors.white.withValues(alpha: 0.86)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(title, style: T.bodyBold),
-          const SizedBox(height: 12),
+          _CardHeading(
+            eyebrow: 'SUMMARY',
+            title: title,
+            subtitle: '',
+          ),
+          const SizedBox(height: 14),
           _SummaryMetric(label: countLabel, value: countValue, accent: accent),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           _SummaryMetric(label: amountLabel, value: amountValue, accent: accent),
         ],
       ),
@@ -679,9 +809,32 @@ class _SummaryMetric extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: accent.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(14), border: Border.all(color: accent.withValues(alpha: 0.16))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [Text(label, style: T.caption.copyWith(color: C.mu)), const SizedBox(height: 4), Text(value, style: T.bodyBold.copyWith(color: accent))]),
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: accent.withValues(alpha: 0.14)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            style: T.caption.copyWith(color: C.tx2),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: T.bodyBold.copyWith(
+              color: accent,
+              fontSize: 20,
+              letterSpacing: -0.25,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -709,17 +862,90 @@ class _LedgerRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.82), borderRadius: BorderRadius.circular(14), border: Border.all(color: C.bd)),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.84),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: C.bd.withValues(alpha: 0.92)),
+      ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(width: 12, height: 12, decoration: BoxDecoration(color: accent, borderRadius: BorderRadius.circular(99))),
-          const SizedBox(width: 10),
-          Expanded(child: Text(title, style: T.body)),
-          Text(subtitle, style: T.captionBold.copyWith(color: accent)),
+          Container(
+            width: 12,
+            height: 12,
+            margin: const EdgeInsets.only(top: 4),
+            decoration: BoxDecoration(color: accent, borderRadius: BorderRadius.circular(99)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              title,
+              style: T.body.copyWith(
+                fontWeight: FontWeight.w600,
+                height: 1.3,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            subtitle,
+            style: T.captionBold.copyWith(
+              color: accent,
+              fontSize: 12,
+              letterSpacing: 0.15,
+            ),
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _CardHeading extends StatelessWidget {
+  final String eyebrow;
+  final String title;
+  final String subtitle;
+
+  const _CardHeading({
+    required this.eyebrow,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          eyebrow,
+          style: T.captionBold.copyWith(
+            color: C.lvD.withValues(alpha: 0.92),
+            letterSpacing: 1.15,
+          ),
+        ),
+        const SizedBox(height: 7),
+        Text(
+          title,
+          style: T.bodyBold.copyWith(
+            fontSize: 17.5,
+            height: 1.22,
+            letterSpacing: -0.15,
+          ),
+        ),
+        if (subtitle.isNotEmpty) ...[
+          const SizedBox(height: 5),
+          Text(
+            subtitle,
+            style: T.caption.copyWith(
+              color: C.tx2.withValues(alpha: 0.9),
+              height: 1.45,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -759,7 +985,7 @@ class _FabSettingsCard extends ConsumerWidget {
                   children: [
                     Text(isKorean ? '반투명 모드' : 'Transparent Mode', style: T.bodyBold),
                     Text(isKorean ? '퀵다이얼 버튼을 반투명하게 표시' : 'Show quick dial buttons as semi-transparent',
-                        style: T.caption.copyWith(color: C.mu)),
+                        style: T.caption.copyWith(color: C.tx2)),
                   ],
                 ),
               ),
@@ -782,7 +1008,7 @@ class _FabSettingsCard extends ConsumerWidget {
                     Text(isKorean ? '스노우 효과' : 'Snow Effect', style: T.bodyBold),
                     Text(
                       isKorean ? '상단 스노우 효과를 켜거나 끌 수 있어요' : 'Toggle the snow effect at the top',
-                      style: T.caption.copyWith(color: C.mu),
+                      style: T.caption.copyWith(color: C.tx2),
                     ),
                   ],
                 ),
@@ -807,8 +1033,9 @@ class _FabSettingsCard extends ConsumerWidget {
                   Text(isKorean ? '효과 종류' : 'Effect Type', style: T.bodyBold),
                   const SizedBox(height: 8),
                   Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                    spacing: 6,
+                    runSpacing: 6,
+                    alignment: WrapAlignment.center,
                     children: [
                       for (final entry in const [
                         ('mori', '✨ 모리'),
@@ -821,7 +1048,7 @@ class _FabSettingsCard extends ConsumerWidget {
                           onTap: () => ref.read(fabSettingsProvider.notifier).setParticleType(entry.$1),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 150),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
                             decoration: BoxDecoration(
                               color: settings.particleType == entry.$1 ? C.lv : C.lvL,
                               borderRadius: BorderRadius.circular(20),
@@ -831,7 +1058,7 @@ class _FabSettingsCard extends ConsumerWidget {
                             ),
                             child: Text(
                               entry.$2,
-                              style: T.body.copyWith(
+                              style: T.caption.copyWith(
                                 color: settings.particleType == entry.$1 ? Colors.white : C.lvD,
                                 fontWeight: settings.particleType == entry.$1 ? FontWeight.w700 : FontWeight.w500,
                               ),
@@ -849,7 +1076,7 @@ class _FabSettingsCard extends ConsumerWidget {
           Text(isKorean ? '기본 위치' : 'Default Position', style: T.bodyBold),
           const SizedBox(height: 8),
           Text(isKorean ? '버튼을 길게 드래그해서 자유롭게 이동할 수 있어요' : 'Long drag the buttons to move them freely',
-              style: T.caption.copyWith(color: C.mu)),
+              style: T.caption.copyWith(color: C.tx2)),
           const SizedBox(height: 10),
           Row(
             children: presets.map((e) {
@@ -861,7 +1088,7 @@ class _FabSettingsCard extends ConsumerWidget {
                   onTap: () => ref.read(fabSettingsProvider.notifier).setPreset(key),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
                       color: selected ? C.lv : C.lvL,
                       borderRadius: BorderRadius.circular(20),
@@ -872,7 +1099,7 @@ class _FabSettingsCard extends ConsumerWidget {
                       style: TextStyle(
                         color: selected ? Colors.white : C.lvD,
                         fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                        fontSize: 13,
+                        fontSize: 12,
                       ),
                     ),
                   ),
@@ -891,18 +1118,462 @@ class _InfoRow extends StatelessWidget {
   final String value;
   const _InfoRow({required this.label, required this.value});
   @override
-  Widget build(BuildContext context) => Padding(padding: const EdgeInsets.only(bottom: 10), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [SizedBox(width: 110, child: Text(label, style: T.captionBold.copyWith(color: C.mu))), Expanded(child: Text(value, style: T.body))]));
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 110,
+              child: Text(
+                label,
+                style: T.captionBold.copyWith(
+                  color: C.mu,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                value,
+                style: T.body.copyWith(
+                  fontWeight: FontWeight.w600,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
-class _UsageRow extends StatelessWidget {
-  final String label;
-  final String caption;
-  final int current;
-  final int stored;
-  final Color color;
-  const _UsageRow({required this.label, required this.caption, required this.current, required this.stored, required this.color});
+// ── 구독 상태 카드 ──────────────────────────────────────────────────────────
+class _SubscriptionCard extends ConsumerWidget {
+  final UserModel user;
+  final bool isKorean;
+  const _SubscriptionCard({required this.user, required this.isKorean});
+
   @override
-  Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label, style: T.captionBold.copyWith(color: C.mu)), Text(caption, style: T.caption.copyWith(color: color))]), const SizedBox(height: 6), ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: current == 0 ? 0 : (stored == 0 ? 0.15 : (current / (stored > current ? stored : current)).clamp(0.0, 1.0)), minHeight: 6, backgroundColor: color.withValues(alpha: 0.14), valueColor: AlwaysStoppedAnimation(color)))]);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isPro = ref.watch(isProProvider);
+    final remainingDays = ref.watch(proRemainingDaysProvider);
+    final sub = user.subscription;
+    final isTrial = sub.status == 'trial';
+
+    final statusText = isTrial
+        ? (isKorean ? 'Pro — 무료 체험 중' : 'Pro — Free trial')
+        : isPro
+            ? (isKorean ? 'Pro — 활성' : 'Pro — Active')
+            : (isKorean ? '무료 플랜' : 'Free plan');
+
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 헤더
+          Row(
+            children: [
+              Text(isKorean ? '💎 현재 플랜' : '💎 Current plan', style: T.bodyBold),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isPro ? C.og.withValues(alpha: 0.12) : C.mu.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: isPro ? C.og.withValues(alpha: 0.3) : C.bd),
+                ),
+                child: Text(isPro ? 'Pro' : 'Free', style: T.captionBold.copyWith(color: isPro ? C.og : C.mu)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // D-day 배너 (trial)
+          if (isPro && isTrial && remainingDays != null) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: C.og.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: C.og.withValues(alpha: 0.20)),
+              ),
+              child: Row(
+                children: [
+                  Column(
+                    children: [
+                      Text(remainingDays == 0 ? 'D-Day' : 'D-$remainingDays',
+                          style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: C.og, height: 1)),
+                      const SizedBox(height: 2),
+                      Text(isKorean ? '남음' : 'left', style: T.caption.copyWith(color: C.og)),
+                    ],
+                  ),
+                  const SizedBox(width: 14),
+                  Container(width: 1, height: 38, color: C.og.withValues(alpha: 0.20)),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(isKorean ? 'Pro 플랜 무료 체험 중' : 'Pro plan free trial',
+                            style: T.captionBold.copyWith(color: C.og)),
+                        if (sub.trialEndAt != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            isKorean ? '${_fmtDate(sub.trialEndAt!)} 만료' : 'Expires ${_fmtDate(sub.trialEndAt!)}',
+                            style: T.caption.copyWith(color: C.og.withValues(alpha: 0.75)),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          // 상태 + 주요 혜택 그리드
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: isPro ? C.lv.withValues(alpha: 0.07) : C.bd.withValues(alpha: 0.25),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: isPro ? C.lv.withValues(alpha: 0.15) : C.bd),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.circle, size: 8, color: isPro ? C.lv : C.mu),
+                    const SizedBox(width: 6),
+                    Text(isKorean ? '상태' : 'Status', style: T.caption.copyWith(color: C.tx2)),
+                    const Spacer(),
+                    Text(statusText, style: T.captionBold.copyWith(color: isPro ? C.lv : C.tx)),
+                  ],
+                ),
+                if (sub.currentPeriodEnd != null && isPro) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(Icons.calendar_today_rounded, size: 11, color: C.mu),
+                      const SizedBox(width: 6),
+                      Text(isKorean ? '다음 결제일' : 'Next billing', style: T.caption.copyWith(color: C.tx2)),
+                      const Spacer(),
+                      Text(_fmtDate(sub.currentPeriodEnd!), style: T.captionBold.copyWith(color: C.tx)),
+                    ],
+                  ),
+                ],
+                if (sub.cancelAtPeriodEnd) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline_rounded, size: 11, color: C.og),
+                      const SizedBox(width: 6),
+                      Text(isKorean ? '해지 예약됨' : 'Cancellation scheduled',
+                          style: T.caption.copyWith(color: C.og)),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // 플랜 혜택 요약 (1줄)
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              for (final entry in [
+                (isKorean ? '무제한' : 'Unlimited', isPro),
+                ('PDF', isPro),
+                ('AI게이지', isPro),
+                (isKorean ? '광고없음' : 'Ad-free', isPro),
+              ]) ...[
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isPro ? C.lv.withValues(alpha: 0.10) : C.lvL,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: C.lv.withValues(alpha: 0.20)),
+                    ),
+                    child: Text(
+                      '✓ ${entry.$1}',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: isPro ? C.lv : C.lvD,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _showManageDialog(context, ref),
+              icon: const Icon(Icons.settings_outlined, size: 16, color: Colors.white),
+              label: Text(isKorean ? '구독 관리하기' : 'Manage subscription',
+                  style: T.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w600)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: C.lv,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
+
+  static String _fmtDate(DateTime d) =>
+      '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
+
+  void _showManageDialog(BuildContext context, WidgetRef ref) {
+    final sub = user.subscription;
+    final isTrial = sub.status == 'trial';
+    final trialEnd = sub.trialEndAt ??
+        (user.createdAt?.add(const Duration(days: 90)));
+    final dday = trialEnd?.difference(DateTime.now()).inDays;
+
+    // 플랜 비교 데이터
+    final planFeatures = [
+      (isKorean ? '스와치 저장' : 'Swatches', isKorean ? '20개' : '20', isKorean ? '무제한' : 'Unlimited'),
+      (isKorean ? '프로젝트' : 'Projects', isKorean ? '10개' : '10', isKorean ? '무제한' : 'Unlimited'),
+      (isKorean ? '카운터' : 'Counters', isKorean ? '3개' : '3', isKorean ? '무제한' : 'Unlimited'),
+      (isKorean ? '도안 저장' : 'Patterns', isKorean ? '5개' : '5', isKorean ? '무제한' : 'Unlimited'),
+      (isKorean ? 'PDF 내보내기' : 'PDF export', '✗', '✓'),
+      (isKorean ? '게이지 AI 판독' : 'AI gauge reader', '✗', '✓'),
+      (isKorean ? '광고 없음' : 'Ad-free', '✗', '✓'),
+    ];
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final isCancelled = sub.cancelAtPeriodEnd;
+          return StatefulBuilder(
+            builder: (ctx2, setInner) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Text(isKorean ? '구독 관리' : 'Manage Subscription', style: T.h3),
+              contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 현재 플랜 요약
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: C.lvL,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: C.lv.withValues(alpha: 0.25)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.workspace_premium_rounded, size: 16, color: C.lvD),
+                              const SizedBox(width: 6),
+                              Text(
+                                isTrial ? (isKorean ? 'Pro 무료 체험 중' : 'Pro Free Trial')
+                                    : (isKorean ? 'Pro 플랜' : 'Pro Plan'),
+                                style: T.captionBold.copyWith(color: C.lvD),
+                              ),
+                              if (dday != null) ...[
+                                const Spacer(),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: C.og.withValues(alpha: 0.10),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(dday > 0 ? 'D-$dday' : 'D-Day',
+                                      style: T.captionBold.copyWith(color: C.og)),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          if (user.createdAt != null)
+                            _InfoRow(label: isKorean ? '가입일' : 'Joined', value: _fmtDate(user.createdAt!)),
+                          if (trialEnd != null) ...[
+                            _InfoRow(label: isKorean ? '체험 만료일' : 'Trial ends', value: _fmtDate(trialEnd)),
+                            _InfoRow(label: isKorean ? '유료 전환 예정' : 'Paid from', value: _fmtDate(trialEnd)),
+                          ],
+                          _InfoRow(label: isKorean ? '현재 요금' : 'Fee', value: isKorean ? '무료 (베타)' : 'Free (Beta)'),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // 플랜 비교 (드롭다운)
+                    Theme(
+                      data: Theme.of(ctx2).copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding: EdgeInsets.zero,
+                        title: Text(isKorean ? '플랜별 기능 비교' : 'Plan comparison',
+                            style: T.captionBold.copyWith(color: C.mu)),
+                        iconColor: C.mu,
+                        collapsedIconColor: C.mu,
+                        children: [
+                          const SizedBox(height: 4),
+                          // 헤더 행
+                          Row(
+                            children: [
+                              Expanded(flex: 3, child: Text(isKorean ? '기능' : 'Feature',
+                                  style: T.caption.copyWith(color: C.mu))),
+                              Expanded(child: Center(child: Text('Free', style: T.captionBold.copyWith(color: C.mu)))),
+                              Expanded(child: Center(child: Text('Pro', style: T.captionBold.copyWith(color: C.og)))),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Divider(height: 1, color: C.bd),
+                          const SizedBox(height: 4),
+                          ...planFeatures.map((f) {
+                            final (feat, free, pro) = f;
+                            final isFreeCheck = free == '✓';
+                            final isProCheck = pro == '✓';
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 5),
+                              child: Row(
+                                children: [
+                                  Expanded(flex: 3, child: Text(feat, style: T.caption)),
+                                  Expanded(child: Center(child: Text(free,
+                                      style: T.captionBold.copyWith(
+                                          color: isFreeCheck ? Colors.green : (free == '✗' ? C.mu : C.tx))))),
+                                  Expanded(child: Center(child: Text(pro,
+                                      style: T.captionBold.copyWith(
+                                          color: isProCheck ? C.og : (pro == '✗' ? C.mu : C.og))))),
+                                ],
+                              ),
+                            );
+                          }),
+                          const SizedBox(height: 4),
+                        ],
+                      ),
+                    ),
+
+                    // 해지 예약 상태 배너
+                    if (isCancelled) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: C.og.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: C.og.withValues(alpha: 0.25)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline_rounded, size: 14, color: C.og),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                isKorean
+                                    ? '해지가 예약되어 있어요. 체험 기간 종료 후 무료 전환됩니다.'
+                                    : 'Cancellation scheduled. Downgrades to free after trial.',
+                                style: T.caption.copyWith(color: C.og, height: 1.4),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ] else if (isTrial) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        isKorean
+                            ? '해지 신청 후에도 체험 기간 종료일까지 이용 가능합니다.'
+                            : 'After cancellation, service continues until trial ends.',
+                        style: T.caption.copyWith(color: C.mu, height: 1.5),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+              actionsAlignment: MainAxisAlignment.spaceBetween,
+              actions: [
+                if (isCancelled)
+                  TextButton(
+                    onPressed: () async {
+                      await ref.read(authRepositoryProvider).setCancelAtPeriodEnd(user.uid, false);
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(isKorean ? '해지 예약이 취소되었습니다.' : 'Cancellation revoked.'),
+                          behavior: SnackBarBehavior.floating,
+                        ));
+                      }
+                    },
+                    child: Text(isKorean ? '해지 취소하기' : 'Revoke',
+                        style: TextStyle(color: C.lv, fontWeight: FontWeight.w600)),
+                  )
+                else
+                  TextButton(
+                    onPressed: () async {
+                      await ref.read(authRepositoryProvider).setCancelAtPeriodEnd(user.uid, true);
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(isKorean
+                              ? '해지 신청이 접수되었습니다. 체험 기간 종료까지 이용 가능합니다.'
+                              : 'Cancellation requested. Service continues until trial ends.'),
+                          behavior: SnackBarBehavior.floating,
+                        ));
+                      }
+                    },
+                    child: Text(isKorean ? '해지·변경' : 'Cancel / Change',
+                        style: TextStyle(color: C.mu)),
+                  ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: C.lv,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: Text(isKorean ? '유지하기' : 'Keep plan',
+                      style: const TextStyle(color: Colors.white)),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ProBookmarkPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = const Color(0xFFFF6B2B); // C.og
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width, size.height)
+      ..lineTo(size.width / 2, size.height - 8)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

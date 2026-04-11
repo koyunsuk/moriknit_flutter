@@ -2,7 +2,7 @@ name: moriknit_flutter
 description: "MoriKnit - knitting record app"
 publish_to: 'none'
 
-version: 0.9.3+2007
+version: 0.9.3+2008
 
 environment:
   sdk: ^3.11.1
@@ -38,9 +38,11 @@ dependencies:
 
   google_sign_in: ^7.2.0
   kakao_flutter_sdk_user: ^1.9.1
+  image: ^4.2.0
 
   flutter_web_plugins:
     sdk: flutter
+  web: ^1.1.0
   google_fonts: ^8.0.2
   flutter_svg: ^2.0.10+1
   shimmer: ^3.0.0
