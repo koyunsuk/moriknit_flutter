@@ -13,6 +13,7 @@ import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../providers/app_config_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/comment_provider.dart';
 import '../../../providers/dm_provider.dart';
@@ -50,6 +51,8 @@ class CommunityScreen extends ConsumerWidget {
     final resolvedDisplayName = (currentUserModel?.displayName.isNotEmpty == true)
         ? currentUserModel!.displayName
         : (user?.displayName?.isNotEmpty == true ? user!.displayName! : '');
+    final communityWriteEnabled =
+        ref.watch(appConfigProvider).valueOrNull?.communityWriteEnabled ?? true;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -128,9 +131,13 @@ class CommunityScreen extends ConsumerWidget {
                   return SliverToBoxAdapter(
                     child: _EmptyCommunity(
                       isKorean: isKorean,
-                      onWrite: user == null
-                          ? () => showLoginRequiredDialog(context, isKorean: isKorean, fromRoute: '/community')
-                          : () => _showWriteSheet(context, ref, user.uid, resolvedDisplayName),
+                      onWrite: !communityWriteEnabled
+                          ? () => ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(isKorean ? '현재 글쓰기가 제한됐어요.' : 'Writing is currently restricted.')),
+                              )
+                          : user == null
+                              ? () => showLoginRequiredDialog(context, isKorean: isKorean, fromRoute: '/community')
+                              : () => _showWriteSheet(context, ref, user.uid, resolvedDisplayName),
                     ),
                   );
                 }
@@ -147,11 +154,15 @@ class CommunityScreen extends ConsumerWidget {
                             children: [
                               Expanded(child: Text(isKorean ? '게시글 ${posts.length}' : '${posts.length} posts', style: T.bodyBold)),
                               TextButton.icon(
-                                onPressed: user == null
-                                    ? () => showLoginRequiredDialog(context, isKorean: isKorean, fromRoute: '/community')
-                                    : () => _showWriteSheet(context, ref, user.uid, resolvedDisplayName),
-                                icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
-                                label: Text(isKorean ? '글쓰기' : 'Write'),
+                                onPressed: !communityWriteEnabled
+                                    ? () => ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(content: Text(isKorean ? '현재 글쓰기가 제한됐어요.' : 'Writing is currently restricted.')),
+                                        )
+                                    : user == null
+                                        ? () => showLoginRequiredDialog(context, isKorean: isKorean, fromRoute: '/community')
+                                        : () => _showWriteSheet(context, ref, user.uid, resolvedDisplayName),
+                                icon: Icon(Icons.add_circle_outline_rounded, size: 18, color: communityWriteEnabled ? null : C.tx2),
+                                label: Text(isKorean ? '글쓰기' : 'Write', style: communityWriteEnabled ? null : T.sm.copyWith(color: C.tx2)),
                               ),
                             ],
                           ),
@@ -188,9 +199,11 @@ class CommunityScreen extends ConsumerWidget {
       backgroundColor: C.bg,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 18, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: StatefulBuilder(
-          builder: (ctx, setState) => Column(
+          builder: (ctx, setState) => SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -342,7 +355,8 @@ class CommunityScreen extends ConsumerWidget {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 }
 
@@ -864,7 +878,7 @@ class _PostRowState extends ConsumerState<_PostRow> {
                             )),
                             if (isOther) ...[
                               const SizedBox(width: 4),
-                              Icon(Icons.chat_bubble_rounded, size: 12, color: C.lv),
+                              Icon(Icons.send_rounded, size: 12, color: C.lv),
                             ],
                           ],
                         );
@@ -1386,6 +1400,7 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
               controller: controller,
               padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
               children: [
+                // ── 헤더: 카테고리 + 액션 버튼 ──────────────────
                 Row(
                   children: [
                     Container(
@@ -1400,63 +1415,129 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
                       ),
                     ),
                     const Spacer(),
-                    if (isMyPost) ...[
-                      IconButton(
-                        icon: Icon(Icons.edit_rounded, color: C.lvD, size: 20),
-                        onPressed: () => _editPost(context, ref),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.delete_outline_rounded, color: C.og, size: 20),
-                        onPressed: () async {
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: Text(widget.isKorean ? '게시글 삭제' : 'Delete Post'),
-                              content: Text(widget.isKorean ? '정말 삭제할까요? 복구할 수 없어요.' : 'Are you sure? This cannot be undone.'),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(widget.isKorean ? '취소' : 'Cancel')),
-                                TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(widget.isKorean ? '삭제' : 'Delete', style: const TextStyle(color: Colors.red))),
-                              ],
-                            ),
-                          );
-                          if (confirm != true) return;
-                          if (!context.mounted) return;
-                          await runWithMoriLoadingDialog<void>(
-                            context,
-                            message: widget.isKorean ? '삭제하는 중입니다.' : 'Deleting...',
-                            task: () async {
-                              await ref.read(postRepositoryProvider).deletePost(widget.post.id);
-                            },
-                          );
-                          if (context.mounted) {
-                            showSavedSnackBar(context, message: widget.isKorean ? '삭제되었습니다.' : 'Deleted.');
-                            Navigator.pop(context);
-                          }
-                        },
-                      ),
-                    ],
                     IconButton(
                       icon: Icon(Icons.share_rounded, color: C.mu, size: 20),
                       onPressed: () => _sharePost(),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                     ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: Text(widget.isKorean ? '닫기' : 'Close', style: T.body.copyWith(color: C.mu)),
+                    if (isMyPost)
+                      PopupMenuButton<String>(
+                        icon: Icon(Icons.more_vert_rounded, color: C.mu, size: 20),
+                        onSelected: (val) async {
+                          if (val == 'edit') {
+                            _editPost(context, ref);
+                          } else if (val == 'delete') {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: Text(widget.isKorean ? '게시글 삭제' : 'Delete Post'),
+                                content: Text(widget.isKorean ? '정말 삭제할까요? 복구할 수 없어요.' : 'Are you sure? This cannot be undone.'),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(widget.isKorean ? '취소' : 'Cancel')),
+                                  TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(widget.isKorean ? '삭제' : 'Delete', style: const TextStyle(color: Colors.red))),
+                                ],
+                              ),
+                            );
+                            if (confirm != true) return;
+                            if (!context.mounted) return;
+                            await runWithMoriLoadingDialog<void>(
+                              context,
+                              message: widget.isKorean ? '삭제하는 중입니다.' : 'Deleting...',
+                              task: () async {
+                                await ref.read(postRepositoryProvider).deletePost(widget.post.id);
+                              },
+                            );
+                            if (context.mounted) {
+                              showSavedSnackBar(context, message: widget.isKorean ? '삭제되었습니다.' : 'Deleted.');
+                              Navigator.pop(context);
+                            }
+                          }
+                        },
+                        itemBuilder: (_) => [
+                          PopupMenuItem(value: 'edit', child: Text(widget.isKorean ? '수정' : 'Edit')),
+                          PopupMenuItem(
+                            value: 'delete',
+                            child: Text(widget.isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og)),
+                          ),
+                        ],
+                      ),
+                    const SizedBox(width: 4),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        child: Icon(Icons.close_rounded, color: C.mu, size: 20),
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
+                // ── 제목 ─────────────────────────────────────────
                 Text(widget.post.title, style: T.h2),
-                const SizedBox(height: 6),
-                Row(children: [
-                  GestureDetector(
-                    onTap: () => _openDm(context, ref),
-                    child: Text(widget.post.authorName, style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w600, decoration: TextDecoration.underline)),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(widget.post.timeAgo, style: T.caption.copyWith(color: C.mu)),
-                ]),
-                const Divider(height: 24),
+                const SizedBox(height: 10),
+                // ── 작성자 정보 ───────────────────────────────────
+                if (!isMyPost)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: C.lv.withValues(alpha: 0.07),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: C.lv.withValues(alpha: 0.13)),
+                    ),
+                    child: Row(
+                      children: [
+                        ClipOval(
+                          child: SizedBox(
+                            width: 40,
+                            height: 40,
+                            child: widget.post.authorPhotoUrl.isNotEmpty
+                                ? Image.network(widget.post.authorPhotoUrl, width: 40, height: 40, fit: BoxFit.cover,
+                                    errorBuilder: (_, _, _) => Container(color: C.lvL, child: Icon(Icons.person_rounded, color: C.lvD, size: 20)))
+                                : Container(color: C.lvL, child: Icon(Icons.person_rounded, color: C.lvD, size: 20)),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(widget.post.authorName, style: T.bodyBold),
+                              Text(widget.post.timeAgo, style: T.caption.copyWith(color: C.mu)),
+                            ],
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: () => _openDm(context, ref),
+                          icon: const Icon(Icons.send_rounded, size: 13),
+                          label: Text(widget.isKorean ? '메시지' : 'Message', style: const TextStyle(fontSize: 12)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: C.lv,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                            elevation: 0,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  Row(children: [
+                    CircleAvatar(
+                      radius: 14,
+                      backgroundColor: C.lvL,
+                      backgroundImage: user?.photoURL != null ? NetworkImage(user!.photoURL!) : null,
+                      child: user?.photoURL == null ? Icon(Icons.person_rounded, size: 14, color: C.lvD) : null,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(widget.post.authorName, style: T.caption.copyWith(color: C.tx2, fontWeight: FontWeight.w600)),
+                    const SizedBox(width: 6),
+                    Text('·', style: T.caption.copyWith(color: C.mu)),
+                    const SizedBox(width: 6),
+                    Text(widget.post.timeAgo, style: T.caption.copyWith(color: C.mu)),
+                  ]),
+                const Divider(height: 20),
                 Text(widget.post.content, style: T.body),
                 if (widget.post.imageUrls.isNotEmpty) ...[
                   const SizedBox(height: 12),

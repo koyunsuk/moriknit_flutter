@@ -366,7 +366,29 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
       appBar: AppBar(
         backgroundColor: C.bg,
         elevation: 0,
-        title: Text(_chart.title, style: T.h3),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_chart.title, style: T.h3),
+            if (_chart.sourcePatternId != null &&
+                _chart.sourceOwnerName != null &&
+                _chart.sourceOwnerName!.isNotEmpty)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.fork_right_rounded, size: 12, color: C.pkD),
+                  const SizedBox(width: 3),
+                  Text(
+                    isKorean
+                        ? '원본: ${_chart.sourceOwnerName}'
+                        : 'Forked from: ${_chart.sourceOwnerName}',
+                    style: T.caption.copyWith(color: C.pkD, fontSize: 11),
+                  ),
+                ],
+              ),
+          ],
+        ),
         actions: [
           // 참조 이미지/PDF 토글 버튼
           if (widget.referenceImageFile != null || widget.referencePdfPath != null)

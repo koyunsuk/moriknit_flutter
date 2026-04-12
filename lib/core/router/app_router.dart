@@ -10,13 +10,15 @@ import 'package:moriknit_flutter/features/auth/presentation/splash_screen.dart';
 import 'package:moriknit_flutter/features/landing/presentation/landing_screen.dart';
 import 'package:moriknit_flutter/features/counter/presentation/counter_list_screen.dart';
 import 'package:moriknit_flutter/features/community/presentation/community_screen.dart';
-import 'package:moriknit_flutter/features/messenger/presentation/messenger_screen.dart';
 import 'package:moriknit_flutter/features/counter/presentation/counter_screen.dart';
+import 'package:moriknit_flutter/features/dm/presentation/dm_list_screen.dart';
+import 'package:moriknit_flutter/features/dm/presentation/dm_chat_screen.dart';
 import 'package:moriknit_flutter/features/course/presentation/course_screen.dart';
 import 'package:moriknit_flutter/features/encyclopedia/presentation/encyclopedia_screen.dart';
 import 'package:moriknit_flutter/features/gauge/presentation/gauge_calculator_screen.dart';
 import 'package:moriknit_flutter/features/home/presentation/home_screen.dart';
 import 'package:moriknit_flutter/features/market/presentation/market_screen.dart';
+import 'package:moriknit_flutter/features/my/presentation/delete_account_screen.dart';
 import 'package:moriknit_flutter/features/my/presentation/my_page_screen.dart';
 import 'package:moriknit_flutter/features/my/presentation/needle_detail_screen.dart';
 import 'package:moriknit_flutter/features/my/presentation/needle_list_screen.dart';
@@ -52,7 +54,7 @@ Page<void> _fadePage(Widget child) => CustomTransitionPage(
   child: child,
   transitionDuration: const Duration(milliseconds: 220),
   reverseTransitionDuration: const Duration(milliseconds: 180),
-  transitionsBuilder: (_, animation, __, child) =>
+  transitionsBuilder: (_, animation, _, child) =>
       FadeTransition(opacity: CurvedAnimation(parent: animation, curve: Curves.easeInOut), child: child),
 );
 
@@ -137,12 +139,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
           GoRoute(path: Routes.community, pageBuilder: (_, _) => _noTransitionPage(const CommunityScreen())),
-          GoRoute(path: Routes.messenger, pageBuilder: (_, _) => _noTransitionPage(const MessengerScreen())),
+          GoRoute(path: Routes.messenger, pageBuilder: (_, _) => _noTransitionPage(const DmListScreen())),
+          GoRoute(
+            path: Routes.dm,
+            pageBuilder: (_, _) => _noTransitionPage(const DmListScreen()),
+            routes: [
+              GoRoute(path: ':roomId', pageBuilder: (_, state) => _fadePage(DmChatScreen(roomId: state.pathParameters['roomId']!))),
+            ],
+          ),
           GoRoute(path: Routes.market, pageBuilder: (_, _) => _noTransitionPage(const MarketScreen())),
           GoRoute(
             path: Routes.my,
             pageBuilder: (_, _) => _noTransitionPage(const MyPageScreen()),
-            routes: [GoRoute(path: 'needles', pageBuilder: (_, _) => _fadePage(const NeedleListScreen()))],
+            routes: [
+              GoRoute(path: 'needles', pageBuilder: (_, _) => _fadePage(const NeedleListScreen())),
+              GoRoute(path: 'delete-account', pageBuilder: (_, _) => _fadePage(const DeleteAccountScreen())),
+            ],
           ),
           GoRoute(path: Routes.counterList, pageBuilder: (_, _) => _noTransitionPage(const CounterListScreen())),
           GoRoute(

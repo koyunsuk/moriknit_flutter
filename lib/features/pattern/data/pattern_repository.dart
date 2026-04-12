@@ -129,6 +129,18 @@ class PatternRepository {
     return PatternChart.fromJson(doc.data() as Map<String, dynamic>);
   }
 
+  /// 타인의 도안을 UID + patternId로 조회합니다 (Fork 출처 보기 등).
+  Future<PatternChart?> getFromUser(String ownerUid, String patternId) async {
+    final doc = await _db
+        .collection('users')
+        .doc(ownerUid)
+        .collection('pattern_charts')
+        .doc(patternId)
+        .get();
+    if (!doc.exists) return null;
+    return PatternChart.fromJson(doc.data() as Map<String, dynamic>);
+  }
+
   Future<String> _uploadFile(File file, String folder) async {
     if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
     final ext = file.path.split('.').last;

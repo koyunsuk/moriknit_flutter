@@ -61,7 +61,7 @@ class ProjectShareCard extends StatelessWidget {
                 child: Image.network(
                   project.coverPhotoUrl,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
+                  errorBuilder: (_, _, _) => Container(
                     height: 180,
                     color: const Color(0xFFEDE9FF),
                     child: const Icon(

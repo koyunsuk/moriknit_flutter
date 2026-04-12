@@ -202,6 +202,7 @@
   String get upgrade;
   String get projectsTabLabel;
   String get messengerTabLabel;
+  String get dmSendMessage;
   String get createLabel;
   String get adminLabel;
   String get createAccount;
@@ -312,5 +313,18 @@
   String beforeAfterLabel(bool before);
   String gauge10cm(int stitches, int rows);
   String savedOn(String date);
+  // Gauge optical reading
+  String get gaugePhotoReading;
+  String get selectSwatchPhoto;
+  String get tapTwoPoints10cm;
+  String get tapFirstPoint;
+  String get tapSecondPoint;
+  String get analyzeGauge;
+  String get analyzing;
+  String get applyResult;
+  String get gaugeReadingResult;
+  String get detectedStitches;
+  String get detectedRows;
+  String get photoReadingTip;
 }
 

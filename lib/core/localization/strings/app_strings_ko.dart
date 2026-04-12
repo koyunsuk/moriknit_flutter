@@ -203,7 +203,8 @@ class AppStringsKo extends BaseAppStrings {
   @override String get limitReached => '한도 도달';
   @override String get upgrade => '업그레이드';
   @override String get projectsTabLabel => '내 작업실';
-  @override String get messengerTabLabel => '메신저';
+  @override String get messengerTabLabel => '모리톡';
+  @override String get dmSendMessage => 'DM 보내기';
   @override String get createLabel => '만들기';
   @override String get adminLabel => '관리자';
   @override String get createAccount => '계정 만들기';
@@ -313,5 +314,18 @@ class AppStringsKo extends BaseAppStrings {
   @override String beforeAfterLabel(bool before) => before ? '전' : '후';
   @override String gauge10cm(int stitches, int rows) => '$stitches코 / $rows단 (10cm)';
   @override String savedOn(String date) => '기록일 $date';
+  // Gauge optical reading
+  @override String get gaugePhotoReading => '사진 판독';
+  @override String get selectSwatchPhoto => '스와치 사진 선택';
+  @override String get tapTwoPoints10cm => '10cm 영역의 대각선 두 점을 순서대로 탭하세요';
+  @override String get tapFirstPoint => '▶ 1번 점을 탭하세요 (첫 번째 모서리)';
+  @override String get tapSecondPoint => '▶ 2번 점을 탭하세요 (반대편 모서리)';
+  @override String get analyzeGauge => '판독';
+  @override String get analyzing => '분석 중...';
+  @override String get applyResult => '결과 적용';
+  @override String get gaugeReadingResult => '판독 결과';
+  @override String get detectedStitches => '감지된 코수';
+  @override String get detectedRows => '감지된 단수';
+  @override String get photoReadingTip => '스와치 사진에서 10cm x 10cm 영역을 선택하면 코수와 단수를 자동으로 판독합니다. 정확도는 약 80%이며, 결과를 확인 후 조정하세요.';
 }
 

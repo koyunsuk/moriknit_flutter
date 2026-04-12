@@ -308,7 +308,7 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
           children: [
             // 기본 정보
-            SectionTitle(title: isKorean ? '기본 정보' : 'Basic Info'),
+            SectionTitle(title: isKorean ? '📝 기본 정보' : '📝 Basic Info'),
             const SizedBox(height: 8),
             GlassCard(
               child: Column(
@@ -339,7 +339,7 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
             ),
             const SizedBox(height: 14),
             // 상세 정보
-            SectionTitle(title: isKorean ? '상세 정보' : 'Details'),
+            SectionTitle(title: isKorean ? '🔍 상세 정보' : '🔍 Details'),
             const SizedBox(height: 8),
             GlassCard(
               child: Column(
@@ -392,7 +392,7 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
             ),
             const SizedBox(height: 14),
             // 메모
-            SectionTitle(title: isKorean ? '메모' : 'Notes'),
+            SectionTitle(title: isKorean ? '📝 메모' : '📝 Notes'),
             const SizedBox(height: 8),
             GlassCard(
               child: Text(
@@ -468,7 +468,7 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
               // 브랜드
               GlassCard(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  SectionTitle(title: isKorean ? '브랜드' : 'Brand'),
+                  SectionTitle(title: isKorean ? '🏷️ 브랜드' : '🏷️ Brand'),
                   const SizedBox(height: 10),
                   _PickerField(
                     label: isKorean ? '브랜드명' : 'Brand name',
@@ -486,7 +486,7 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
               // 실 이름
               GlassCard(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  SectionTitle(title: isKorean ? '실 정보' : 'Yarn Info'),
+                  SectionTitle(title: isKorean ? '🧵 실 정보' : '🧵 Yarn Info'),
                   const SizedBox(height: 10),
                   TextField(
                     controller: _nameController,
@@ -502,7 +502,7 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
               // 소재
               GlassCard(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  SectionTitle(title: isKorean ? '소재' : 'Material'),
+                  SectionTitle(title: isKorean ? '🌿 소재' : '🌿 Material'),
                   const SizedBox(height: 10),
                   _PickerField(
                     label: isKorean ? '소재 선택' : 'Select material',
@@ -519,7 +519,7 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
               // 색상
               GlassCard(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  SectionTitle(title: isKorean ? '색상' : 'Color'),
+                  SectionTitle(title: isKorean ? '🎨 색상' : '🎨 Color'),
                   const SizedBox(height: 10),
                   GestureDetector(
                     onTap: () => YarnColorSheet.show(
@@ -578,7 +578,7 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
               // 굵기
               GlassCard(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  SectionTitle(title: isKorean ? '굵기' : 'Weight'),
+                  SectionTitle(title: isKorean ? '📏 굵기' : '📏 Weight'),
                   const SizedBox(height: 10),
                   Wrap(
                     spacing: 8, runSpacing: 8,
@@ -597,7 +597,7 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
               // 보유 정보
               GlassCard(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  SectionTitle(title: isKorean ? '보유 정보' : 'Stock Info'),
+                  SectionTitle(title: isKorean ? '📦 보유 정보' : '📦 Stock Info'),
                   const SizedBox(height: 10),
                   TextField(
                     controller: _amountController,
@@ -653,7 +653,7 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
               // 메모
               GlassCard(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  SectionTitle(title: isKorean ? '메모' : 'Memo'),
+                  SectionTitle(title: isKorean ? '📝 메모' : '📝 Memo'),
                   const SizedBox(height: 10),
                   TextField(
                     controller: _memoController,

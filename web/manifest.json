@@ -8,6 +8,11 @@
     "description": "뜨개질의 모든 순간을 기록하세요. 스와치, 프로젝트, 카운터까지 — MoriKnit 하나로.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
+    "categories": ["lifestyle", "productivity"],
+    "lang": "ko",
+    "dir": "ltr",
+    "scope": "/",
+    "id": "/",
     "icons": [
         {
             "src": "icons/Icon-192.png",

@@ -1,10 +1,8 @@
 import 'dart:async';
-import 'dart:math';
 
 import '_popup_prefs.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -24,6 +22,7 @@ import '../../../providers/post_provider.dart';
 import '../../community/domain/post_model.dart';
 import '../../encyclopedia/domain/encyclopedia_entry.dart';
 import '../../market/domain/market_item.dart';
+import 'landing_top_bar.dart';
 
 const String _mainAppUrl = 'https://moriknit-ceea9.web.app';
 void _goToApp(String path) => goToWebUrl('$_mainAppUrl$path');
@@ -217,14 +216,7 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
       backgroundColor: const Color(0xFFFFF8FB),
       body: CustomScrollView(
         slivers: [
-          SliverToBoxAdapter(
-            child: _LandingTopBar(
-              isLoggedIn: user != null,
-              onLogin: () => context.go(Routes.login),
-              onOpenApp: () => _goToApp(Routes.home),
-              onLogout: () => FirebaseAuth.instance.signOut(),
-            ),
-          ),
+          const SliverToBoxAdapter(child: LandingTopBar()),
           SliverToBoxAdapter(
             child: _PromoBanner(
               onTap: user == null ? () => context.go(Routes.login) : () => _goToApp(Routes.home),
@@ -291,152 +283,8 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
               ),
             ),
           ),
-          const SliverToBoxAdapter(child: _AiGaugeSection()),
           const SliverToBoxAdapter(child: _CtaSection()),
           const SliverToBoxAdapter(child: _LandingFooter()),
-        ],
-      ),
-    );
-  }
-}
-
-// ── 스파클 파티클 ─────────────────────────────────────────────────────────────
-class _SparkleParticle {
-  final AnimationController controller;
-  final double x;   // 0.0 ~ 1.0 (비율)
-  final String emoji;
-  final double drift; // 좌우 흔들림
-  final double size;
-
-  _SparkleParticle({
-    required this.controller,
-    required this.x,
-    required this.emoji,
-    required this.drift,
-    required this.size,
-  });
-}
-
-// ── 탑바 ──────────────────────────────────────────────────────────────────────
-class _LandingTopBar extends StatefulWidget {
-  final bool isLoggedIn;
-  final VoidCallback onLogin;
-  final VoidCallback onOpenApp;
-  final VoidCallback onLogout;
-
-  const _LandingTopBar({required this.isLoggedIn, required this.onLogin, required this.onOpenApp, required this.onLogout});
-
-  @override
-  State<_LandingTopBar> createState() => _LandingTopBarState();
-}
-
-class _LandingTopBarState extends State<_LandingTopBar> with TickerProviderStateMixin {
-  static const _emojis = ['❤️', '🩷', '♪', '♫', '✨', '💜', '🎵'];
-  final _rng = Random();
-  final _particles = <_SparkleParticle>[];
-  Timer? _timer;
-
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(const Duration(milliseconds: 700), (_) => _spawnParticle());
-  }
-
-  void _spawnParticle() {
-    if (!mounted) return;
-    final ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600));
-    final p = _SparkleParticle(
-      controller: ctrl,
-      x: _rng.nextDouble(),
-      emoji: _emojis[_rng.nextInt(_emojis.length)],
-      drift: (_rng.nextDouble() - 0.5) * 20,
-      size: 14 + _rng.nextDouble() * 10,
-    );
-    setState(() => _particles.add(p));
-    ctrl.forward().then((_) {
-      if (mounted) setState(() => _particles.remove(p));
-      ctrl.dispose();
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    for (final p in _particles) {
-      p.controller.dispose();
-    }
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: Colors.white.withValues(alpha: 0.96),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: _landingMaxWidth),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                child: Row(
-                  children: [
-                    const MoriLogo(size: 32),
-                    const SizedBox(width: 10),
-                    const MoriKnitTitle(fontSize: 19),
-                    const Spacer(),
-                    if (widget.isLoggedIn) ...[
-                      TextButton(
-                        onPressed: widget.onLogout,
-                        child: Text('로그아웃', style: TextStyle(color: Colors.grey[600])),
-                      ),
-                      const SizedBox(width: 4),
-                      ElevatedButton(
-                        onPressed: widget.onOpenApp,
-                        style: _landingPrimaryButtonStyle().copyWith(
-                          backgroundColor: WidgetStatePropertyAll(C.lv),
-                          foregroundColor: const WidgetStatePropertyAll(Colors.white),
-                        ),
-                        child: const Text('앱으로 이동', style: TextStyle(fontWeight: FontWeight.w700)),
-                      ),
-                    ] else ...[
-                      TextButton(onPressed: widget.onLogin, child: const Text('로그인')),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: widget.onLogin,
-                        style: _landingPrimaryButtonStyle().copyWith(
-                          backgroundColor: WidgetStatePropertyAll(C.lv),
-                          foregroundColor: const WidgetStatePropertyAll(Colors.white),
-                        ),
-                        child: const Text('무료로 시작하기', style: TextStyle(fontWeight: FontWeight.w700)),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // ── 파티클 오버레이 ──────────────────────────────────────────────
-          ..._particles.map((p) => AnimatedBuilder(
-                animation: p.controller,
-                builder: (context, _) {
-                  final t = p.controller.value;
-                  final opacity = t < 0.15 ? t / 0.15 : t > 0.65 ? (1 - t) / 0.35 : 1.0;
-                  final barWidth = MediaQuery.of(context).size.width;
-                  return Positioned(
-                    left: p.x * barWidth + p.drift * t * 2,
-                    bottom: 4 + 48 * t,
-                    child: Opacity(
-                      opacity: opacity.clamp(0, 1),
-                      child: Transform.scale(
-                        scale: 0.7 + 0.5 * (1 - t),
-                        child: Text(p.emoji, style: TextStyle(fontSize: p.size)),
-                      ),
-                    ),
-                  );
-                },
-              )),
         ],
       ),
     );
@@ -1252,13 +1100,13 @@ class _MockCounterScreen extends StatelessWidget {
                     ),
                   ),
               ]),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               // 코 카운터
               _counterPanel('코 (Stitches)', 42, C.lv),
-              const SizedBox(height: 10),
+              const SizedBox(height: 6),
               // 단 카운터
               _counterPanel('단 (Rows)', 18, C.pk),
-              const SizedBox(height: 10),
+              const SizedBox(height: 6),
               // 마크 저장 버튼
               SizedBox(
                 width: double.infinity,
@@ -1266,10 +1114,10 @@ class _MockCounterScreen extends StatelessWidget {
                   onPressed: null,
                   icon: Icon(Icons.bookmark_add_rounded, size: 12, color: C.lv),
                   label: Text('현재 위치 저장', style: TextStyle(fontSize: 9, color: C.lv)),
-                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 6), side: BorderSide(color: C.lv.withValues(alpha: 0.4))),
+                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 4), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap, side: BorderSide(color: C.lv.withValues(alpha: 0.4))),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               // 최근 마크
               Container(
                 padding: const EdgeInsets.all(8),
@@ -2146,7 +1994,7 @@ Widget _stepRow(int num, String title, bool done, {bool isCurrent = false}) => C
 );
 
 Widget _counterPanel(String label, int value, Color color) => Container(
-  padding: const EdgeInsets.all(10),
+  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
   decoration: BoxDecoration(
     gradient: LinearGradient(colors: [color.withValues(alpha: 0.08), color.withValues(alpha: 0.04)]),
     borderRadius: BorderRadius.circular(12),
@@ -2154,13 +2002,13 @@ Widget _counterPanel(String label, int value, Color color) => Container(
   ),
   child: Column(children: [
     Text(label, style: TextStyle(fontSize: 8, color: C.tx2)),
-    const SizedBox(height: 4),
+    const SizedBox(height: 2),
     Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Container(width: 30, height: 30, decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Icon(Icons.remove_rounded, size: 16, color: color)),
-      const SizedBox(width: 16),
-      Text('$value', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w200, color: color, height: 1)),
-      const SizedBox(width: 16),
-      Container(width: 30, height: 30, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8), boxShadow: [BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 6)]), child: const Icon(Icons.add_rounded, size: 16, color: Colors.white)),
+      Container(width: 26, height: 26, decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Icon(Icons.remove_rounded, size: 14, color: color)),
+      const SizedBox(width: 14),
+      Text('$value', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w200, color: color, height: 1)),
+      const SizedBox(width: 14),
+      Container(width: 26, height: 26, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8), boxShadow: [BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 6)]), child: const Icon(Icons.add_rounded, size: 14, color: Colors.white)),
     ]),
   ]),
 );
@@ -2178,7 +2026,7 @@ class _StatsBar extends ConsumerWidget {
       (Icons.storefront_rounded, '${stats?['market'] ?? '—'}+', '마켓 상품 등록', C.pkD),
     ];
     return Container(
-      margin: const EdgeInsets.fromLTRB(20, 32, 20, 0),
+      margin: const EdgeInsets.fromLTRB(20, 32, 20, 48),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: _landingMaxWidth),
@@ -2568,160 +2416,6 @@ class _EncyclopediaPreviewCard extends StatelessWidget {
   }
 }
 
-// ── AI 게이지 판독기 섹션 ─────────────────────────────────────────────────────
-class _AiGaugeSection extends StatelessWidget {
-  const _AiGaugeSection();
-
-  @override
-  Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isWide = screenWidth >= 720;
-
-    final steps = [
-      (icon: Icons.photo_camera_outlined, label: '스와치 사진 촬영'),
-      (icon: Icons.touch_app_outlined, label: '10cm 영역 두 점 선택'),
-      (icon: Icons.auto_fix_high_rounded, label: 'AI 자동 분석'),
-      (icon: Icons.check_circle_outline_rounded, label: '코수·단수 즉시 확인'),
-    ];
-
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: _landingMaxWidth),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 56, 20, 0),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  const Color(0xFF8B5CF6).withValues(alpha: 0.08),
-                  const Color(0xFFEC4899).withValues(alpha: 0.06),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: const Color(0xFF8B5CF6).withValues(alpha: 0.18)),
-            ),
-            padding: const EdgeInsets.fromLTRB(32, 40, 32, 40),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.auto_awesome_rounded, color: Color(0xFF8B5CF6), size: 14),
-                          SizedBox(width: 6),
-                          Text(
-                            'NEW',
-                            style: TextStyle(
-                              color: Color(0xFF8B5CF6),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'AI 게이지 판독기',
-                  style: TextStyle(
-                    fontSize: isWide ? 32 : 26,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF1A1A2E),
-                    letterSpacing: -0.5,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  '스와치 사진 한 장으로 코수·단수를 자동 측정하세요.\n손으로 세던 시간을 AI가 대신합니다.',
-                  style: TextStyle(
-                    fontSize: isWide ? 17 : 15,
-                    color: const Color(0xFF6B7280),
-                    height: 1.6,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 36),
-                Wrap(
-                  spacing: 16,
-                  runSpacing: 16,
-                  alignment: WrapAlignment.center,
-                  children: steps.map((step) => Container(
-                    width: isWide ? 220 : double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.85),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF8B5CF6).withValues(alpha: 0.08),
-                          blurRadius: 16,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF8B5CF6).withValues(alpha: 0.10),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(step.icon, color: const Color(0xFF8B5CF6), size: 22),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          step.label,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF1A1A2E),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  )).toList(),
-                ),
-                const SizedBox(height: 32),
-                ElevatedButton.icon(
-                  onPressed: () => context.go(Routes.login),
-                  icon: const Icon(Icons.camera_alt_outlined, size: 18),
-                  label: const Text('앱에서 무료로 사용하기'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF8B5CF6),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                    elevation: 0,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // ── 기능 소개 섹션 ────────────────────────────────────────────────────────────
 class _FeatureSection extends StatelessWidget {
   const _FeatureSection();
@@ -2729,15 +2423,15 @@ class _FeatureSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const features = [
-      (Icons.folder_special_rounded, '프로젝트 기록', '진행 중인 뜨개 프로젝트를 체계적으로 관리하세요', Color(0xFFC084FC)),
-      (Icons.grid_view_rounded, '스와치 보관함', '게이지 기록과 실 정보를 저장해두세요', Color(0xFF22D3EE)),
-      (Icons.storefront_rounded, '도안 마켓', '도안을 구매하거나 직접 판매할 수 있어요', Color(0xFFF472B6)),
-      (Icons.people_alt_rounded, '커뮤니티', '뜨개인들과 작업물을 나누고 소통해요', Color(0xFFA3E635)),
-      (Icons.menu_book_rounded, '뜨개백과사전', '뜨개 용어와 기법을 언제든 찾아보세요', Color(0xFFFB923C)),
-      (Icons.calculate_rounded, '게이지 계산기', '게이지에 맞는 코수와 단수를 계산해요', Color(0xFF34D399)),
-      (Icons.search_rounded, 'Ravelry 연동', 'Ravelry 실·도안을 앱 안에서 바로 검색하세요', Color(0xFF60A5FA)),
-      (Icons.shopping_bag_rounded, 'Etsy 연동', 'Etsy 마켓에 내 도안을 손쉽게 등록·판매하세요', Color(0xFFFF8C00)),
-      (Icons.auto_awesome_rounded, 'AI 게이지 판독기', '실 사진으로 게이지를 자동으로 읽어드려요 ✨ 신기능', Color(0xFF818CF8)),
+      ('project', Icons.folder_special_rounded, '프로젝트 기록', '진행 중인 뜨개 프로젝트를 체계적으로 관리하세요', Color(0xFFC084FC)),
+      ('swatch', Icons.grid_view_rounded, '스와치 보관함', '게이지 기록과 실 정보를 저장해두세요', Color(0xFF22D3EE)),
+      ('market', Icons.storefront_rounded, '도안 마켓', '도안을 구매하거나 직접 판매할 수 있어요', Color(0xFFF472B6)),
+      ('community', Icons.people_alt_rounded, '커뮤니티', '뜨개인들과 작업물을 나누고 소통해요', Color(0xFFA3E635)),
+      ('encyclopedia', Icons.menu_book_rounded, '뜨개백과사전', '뜨개 용어와 기법을 언제든 찾아보세요', Color(0xFFFB923C)),
+      ('gauge', Icons.calculate_rounded, '게이지 계산기', '게이지에 맞는 코수와 단수를 계산해요', Color(0xFF34D399)),
+      ('ravelry', Icons.search_rounded, 'Ravelry 연동', 'Ravelry 실·도안을 앱 안에서 바로 검색하세요', Color(0xFF60A5FA)),
+      ('etsy', Icons.shopping_bag_rounded, 'Etsy 연동', 'Etsy 마켓에 내 도안을 손쉽게 등록·판매하세요', Color(0xFFFF8C00)),
+      ('ai-gauge', Icons.auto_awesome_rounded, 'AI 게이지 판독기', '실 사진으로 게이지를 자동으로 읽어드려요 ✨ 신기능', Color(0xFF818CF8)),
     ];
 
     final width = MediaQuery.of(context).size.width;
@@ -2763,26 +2457,41 @@ class _FeatureSection extends StatelessWidget {
                   crossAxisCount: crossAxisCount,
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
-                  childAspectRatio: crossAxisCount == 3 ? 1.6 : 1.4,
+                  childAspectRatio: crossAxisCount == 3 ? 1.5 : 1.2,
                 ),
-                itemBuilder: (_, i) {
-                  final (icon, title, desc, color) = features[i];
-                  return Container(
-                    padding: const EdgeInsets.all(22),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF252540),
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: color.withValues(alpha: 0.15)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _landingIconBadge(icon, color, size: 48),
-                        const SizedBox(height: 16),
-                        Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, height: 1.25)),
-                        const SizedBox(height: 8),
-                        Text(desc, style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 12.5, height: 1.6)),
-                      ],
+                itemBuilder: (ctx, i) {
+                  final (id, icon, title, desc, color) = features[i];
+                  return InkWell(
+                    onTap: () => ctx.go('/features/$id'),
+                    borderRadius: BorderRadius.circular(22),
+                    child: Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF252540),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(color: color.withValues(alpha: 0.15)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _landingIconBadge(icon, color, size: 40),
+                          const SizedBox(height: 10),
+                          Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14, height: 1.25)),
+                          const SizedBox(height: 5),
+                          Expanded(
+                            child: Text(desc, style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 11.5, height: 1.5), overflow: TextOverflow.ellipsis, maxLines: 3),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Text('자세히 보기', style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600)),
+                              const SizedBox(width: 2),
+                              Icon(Icons.arrow_forward_ios_rounded, size: 9, color: color),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 },

@@ -7,6 +7,8 @@ enum ChartTool { draw, erase, fill, select, move }
 
 enum PatternType { chart, image, pdf }
 
+enum PatternSourceType { editor, image, external }
+
 class CellData {
   final Color? color;
   final String? symbolId;
@@ -55,6 +57,12 @@ class PatternChart {
   final String imageUrl;
   final String pdfUrl;
 
+  /// Fork 관련 필드
+  final int forkCount;
+  final String? sourcePatternId;
+  final String? sourceOwnerName;
+  final PatternSourceType sourceType;
+
   PatternChart({
     required this.id,
     required this.title,
@@ -66,6 +74,10 @@ class PatternChart {
     this.type = PatternType.chart,
     this.imageUrl = '',
     this.pdfUrl = '',
+    this.forkCount = 0,
+    this.sourcePatternId,
+    this.sourceOwnerName,
+    this.sourceType = PatternSourceType.editor,
   });
 
   PatternChart setCell(int row, int col, CellData cell) {
@@ -101,6 +113,10 @@ class PatternChart {
     PatternType? type,
     String? imageUrl,
     String? pdfUrl,
+    int? forkCount,
+    String? sourcePatternId,
+    String? sourceOwnerName,
+    PatternSourceType? sourceType,
   }) {
     return PatternChart(
       id: id ?? this.id,
@@ -113,6 +129,10 @@ class PatternChart {
       type: type ?? this.type,
       imageUrl: imageUrl ?? this.imageUrl,
       pdfUrl: pdfUrl ?? this.pdfUrl,
+      forkCount: forkCount ?? this.forkCount,
+      sourcePatternId: sourcePatternId ?? this.sourcePatternId,
+      sourceOwnerName: sourceOwnerName ?? this.sourceOwnerName,
+      sourceType: sourceType ?? this.sourceType,
     );
   }
 
@@ -129,6 +149,10 @@ class PatternChart {
         'type': type.name,
         'imageUrl': imageUrl,
         'pdfUrl': pdfUrl,
+        'forkCount': forkCount,
+        if (sourcePatternId != null) 'sourcePatternId': sourcePatternId,
+        if (sourceOwnerName != null) 'sourceOwnerName': sourceOwnerName,
+        'sourceType': sourceType.name,
       };
 
   factory PatternChart.fromJson(Map<String, dynamic> json) {
@@ -159,6 +183,11 @@ class PatternChart {
       type: PatternType.values.byName(json['type'] as String? ?? 'chart'),
       imageUrl: json['imageUrl'] as String? ?? '',
       pdfUrl: json['pdfUrl'] as String? ?? '',
+      forkCount: json['forkCount'] as int? ?? 0,
+      sourcePatternId: json['sourcePatternId'] as String?,
+      sourceOwnerName: json['sourceOwnerName'] as String?,
+      sourceType: PatternSourceType.values.byName(
+          json['sourceType'] as String? ?? 'editor'),
     );
   }
 

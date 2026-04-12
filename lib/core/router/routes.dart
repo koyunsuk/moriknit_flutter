@@ -26,6 +26,8 @@ class Routes {
   static const messenger = '/messenger';
   static const templateList = '/templates';
   static const templateEditor = '/templates/editor';
+  static const dm = '/dm';
+  static const dmChat = '/dm/:roomId';
   static const yarnDetail = '/yarn-detail/:id';
   static const needleDetail = '/needle-detail/:id';
   static const ravelry = '/tools/ravelry';

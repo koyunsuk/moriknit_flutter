@@ -55,7 +55,34 @@ final hasAnyAdminProvider = FutureProvider<bool>((ref) async {
 
 final currentPlanProvider = Provider<String>((ref) {
   final user = ref.watch(currentUserProvider).valueOrNull;
-  return user?.subscription.planId ?? SubscriptionConstants.planFree;
+  if (user == null) return SubscriptionConstants.planFree;
+  final sub = user.subscription;
+  // trial 만료 시 free로 다운그레이드
+  if (sub.status == SubscriptionConstants.statusTrial && sub.trialEndAt != null) {
+    if (sub.trialEndAt!.isBefore(DateTime.now())) {
+      return SubscriptionConstants.planFree;
+    }
+  }
+  return sub.planId;
+});
+
+/// 현재 사용자가 Pro 이상인지 확인합니다 (trial 만료 포함).
+final isProProvider = Provider<bool>((ref) {
+  final planId = ref.watch(currentPlanProvider);
+  return planId == SubscriptionConstants.planPro ||
+      planId == SubscriptionConstants.planBusiness;
+});
+
+/// Pro 플랜(trial 포함) 잔여일을 반환합니다. trial이 아니면 null.
+final proRemainingDaysProvider = Provider<int?>((ref) {
+  final user = ref.watch(currentUserProvider).valueOrNull;
+  final sub = user?.subscription;
+  if (sub == null) return null;
+  if (sub.status == SubscriptionConstants.statusTrial && sub.trialEndAt != null) {
+    final remaining = sub.trialEndAt!.difference(DateTime.now()).inDays;
+    return remaining < 0 ? 0 : remaining;
+  }
+  return null;
 });
 
 // 기능 제한은 화면 진입 전과 저장 직전에 함께 확인합니다.

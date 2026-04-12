@@ -45,7 +45,11 @@ mixin _$ProjectModel {
   DateTime? get updatedAt => throw _privateConstructorUsedError;
   bool get isDirty => throw _privateConstructorUsedError;
   int get completedStepCount => throw _privateConstructorUsedError;
-  int get totalStepCount => throw _privateConstructorUsedError;
+  int get totalStepCount => throw _privateConstructorUsedError; // Fork 관련 필드
+  String get sourcePatternId => throw _privateConstructorUsedError;
+  String get originProjectId => throw _privateConstructorUsedError;
+  String get originUserId => throw _privateConstructorUsedError;
+  String get originOwnerName => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -85,7 +89,11 @@ abstract class $ProjectModelCopyWith<$Res> {
       DateTime? updatedAt,
       bool isDirty,
       int completedStepCount,
-      int totalStepCount});
+      int totalStepCount,
+      String sourcePatternId,
+      String originProjectId,
+      String originUserId,
+      String originOwnerName});
 }
 
 /// @nodoc
@@ -127,6 +135,10 @@ class _$ProjectModelCopyWithImpl<$Res, $Val extends ProjectModel>
     Object? isDirty = null,
     Object? completedStepCount = null,
     Object? totalStepCount = null,
+    Object? sourcePatternId = null,
+    Object? originProjectId = null,
+    Object? originUserId = null,
+    Object? originOwnerName = null,
   }) {
     return _then(_value.copyWith(
       id: null == id
@@ -233,6 +245,22 @@ class _$ProjectModelCopyWithImpl<$Res, $Val extends ProjectModel>
           ? _value.totalStepCount
           : totalStepCount // ignore: cast_nullable_to_non_nullable
               as int,
+      sourcePatternId: null == sourcePatternId
+          ? _value.sourcePatternId
+          : sourcePatternId // ignore: cast_nullable_to_non_nullable
+              as String,
+      originProjectId: null == originProjectId
+          ? _value.originProjectId
+          : originProjectId // ignore: cast_nullable_to_non_nullable
+              as String,
+      originUserId: null == originUserId
+          ? _value.originUserId
+          : originUserId // ignore: cast_nullable_to_non_nullable
+              as String,
+      originOwnerName: null == originOwnerName
+          ? _value.originOwnerName
+          : originOwnerName // ignore: cast_nullable_to_non_nullable
+              as String,
     ) as $Val);
   }
 }
@@ -271,7 +299,11 @@ abstract class _$$ProjectModelImplCopyWith<$Res>
       DateTime? updatedAt,
       bool isDirty,
       int completedStepCount,
-      int totalStepCount});
+      int totalStepCount,
+      String sourcePatternId,
+      String originProjectId,
+      String originUserId,
+      String originOwnerName});
 }
 
 /// @nodoc
@@ -311,6 +343,10 @@ class __$$ProjectModelImplCopyWithImpl<$Res>
     Object? isDirty = null,
     Object? completedStepCount = null,
     Object? totalStepCount = null,
+    Object? sourcePatternId = null,
+    Object? originProjectId = null,
+    Object? originUserId = null,
+    Object? originOwnerName = null,
   }) {
     return _then(_$ProjectModelImpl(
       id: null == id
@@ -417,6 +453,22 @@ class __$$ProjectModelImplCopyWithImpl<$Res>
           ? _value.totalStepCount
           : totalStepCount // ignore: cast_nullable_to_non_nullable
               as int,
+      sourcePatternId: null == sourcePatternId
+          ? _value.sourcePatternId
+          : sourcePatternId // ignore: cast_nullable_to_non_nullable
+              as String,
+      originProjectId: null == originProjectId
+          ? _value.originProjectId
+          : originProjectId // ignore: cast_nullable_to_non_nullable
+              as String,
+      originUserId: null == originUserId
+          ? _value.originUserId
+          : originUserId // ignore: cast_nullable_to_non_nullable
+              as String,
+      originOwnerName: null == originOwnerName
+          ? _value.originOwnerName
+          : originOwnerName // ignore: cast_nullable_to_non_nullable
+              as String,
     ));
   }
 }
@@ -450,7 +502,11 @@ class _$ProjectModelImpl implements _ProjectModel {
       this.updatedAt,
       this.isDirty = false,
       this.completedStepCount = 0,
-      this.totalStepCount = 0})
+      this.totalStepCount = 0,
+      this.sourcePatternId = '',
+      this.originProjectId = '',
+      this.originUserId = '',
+      this.originOwnerName = ''})
       : _counterIds = counterIds,
         _photoUrls = photoUrls;
 
@@ -539,10 +595,23 @@ class _$ProjectModelImpl implements _ProjectModel {
   @override
   @JsonKey()
   final int totalStepCount;
+// Fork 관련 필드
+  @override
+  @JsonKey()
+  final String sourcePatternId;
+  @override
+  @JsonKey()
+  final String originProjectId;
+  @override
+  @JsonKey()
+  final String originUserId;
+  @override
+  @JsonKey()
+  final String originOwnerName;
 
   @override
   String toString() {
-    return 'ProjectModel(id: $id, uid: $uid, title: $title, description: $description, status: $status, progressPercent: $progressPercent, yarnBrandId: $yarnBrandId, yarnBrandName: $yarnBrandName, yarnName: $yarnName, yarnColor: $yarnColor, yarnWeight: $yarnWeight, needleSize: $needleSize, needleBrandName: $needleBrandName, swatchId: $swatchId, counterIds: $counterIds, photoUrls: $photoUrls, coverPhotoUrl: $coverPhotoUrl, memo: $memo, startDate: $startDate, targetDate: $targetDate, finishDate: $finishDate, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty, completedStepCount: $completedStepCount, totalStepCount: $totalStepCount)';
+    return 'ProjectModel(id: $id, uid: $uid, title: $title, description: $description, status: $status, progressPercent: $progressPercent, yarnBrandId: $yarnBrandId, yarnBrandName: $yarnBrandName, yarnName: $yarnName, yarnColor: $yarnColor, yarnWeight: $yarnWeight, needleSize: $needleSize, needleBrandName: $needleBrandName, swatchId: $swatchId, counterIds: $counterIds, photoUrls: $photoUrls, coverPhotoUrl: $coverPhotoUrl, memo: $memo, startDate: $startDate, targetDate: $targetDate, finishDate: $finishDate, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty, completedStepCount: $completedStepCount, totalStepCount: $totalStepCount, sourcePatternId: $sourcePatternId, originProjectId: $originProjectId, originUserId: $originUserId, originOwnerName: $originOwnerName)';
   }
 
   @override
@@ -595,7 +664,15 @@ class _$ProjectModelImpl implements _ProjectModel {
             (identical(other.completedStepCount, completedStepCount) ||
                 other.completedStepCount == completedStepCount) &&
             (identical(other.totalStepCount, totalStepCount) ||
-                other.totalStepCount == totalStepCount));
+                other.totalStepCount == totalStepCount) &&
+            (identical(other.sourcePatternId, sourcePatternId) ||
+                other.sourcePatternId == sourcePatternId) &&
+            (identical(other.originProjectId, originProjectId) ||
+                other.originProjectId == originProjectId) &&
+            (identical(other.originUserId, originUserId) ||
+                other.originUserId == originUserId) &&
+            (identical(other.originOwnerName, originOwnerName) ||
+                other.originOwnerName == originOwnerName));
   }
 
   @JsonKey(ignore: true)
@@ -627,7 +704,11 @@ class _$ProjectModelImpl implements _ProjectModel {
         updatedAt,
         isDirty,
         completedStepCount,
-        totalStepCount
+        totalStepCount,
+        sourcePatternId,
+        originProjectId,
+        originUserId,
+        originOwnerName
       ]);
 
   @JsonKey(ignore: true)
@@ -671,7 +752,11 @@ abstract class _ProjectModel implements ProjectModel {
       final DateTime? updatedAt,
       final bool isDirty,
       final int completedStepCount,
-      final int totalStepCount}) = _$ProjectModelImpl;
+      final int totalStepCount,
+      final String sourcePatternId,
+      final String originProjectId,
+      final String originUserId,
+      final String originOwnerName}) = _$ProjectModelImpl;
 
   factory _ProjectModel.fromJson(Map<String, dynamic> json) =
       _$ProjectModelImpl.fromJson;
@@ -728,6 +813,14 @@ abstract class _ProjectModel implements ProjectModel {
   int get completedStepCount;
   @override
   int get totalStepCount;
+  @override // Fork 관련 필드
+  String get sourcePatternId;
+  @override
+  String get originProjectId;
+  @override
+  String get originUserId;
+  @override
+  String get originOwnerName;
   @override
   @JsonKey(ignore: true)
   _$$ProjectModelImplCopyWith<_$ProjectModelImpl> get copyWith =>

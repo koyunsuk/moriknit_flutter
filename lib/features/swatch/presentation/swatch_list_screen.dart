@@ -98,49 +98,30 @@ class _SwatchListScreenState extends ConsumerState<SwatchListScreen> {
                         separatorBuilder: (_, i) => i == 0 ? const SizedBox(height: 14) : const SizedBox(height: 10),
                         itemBuilder: (context, index) {
                           if (index == 0) {
-                            return GlassCard(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              isKorean ? '내 스와치 ${swatches.length}개' : '${swatches.length} Swatches',
-                                              style: T.bodyBold.copyWith(color: C.lmD),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              isKorean ? '게이지 스와치 목록' : 'Gauge swatch list',
-                                              style: T.caption.copyWith(color: C.mu),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      ElevatedButton.icon(
-                                        onPressed: isLimitReached
-                                            ? () => _showLimitDialog(isKorean)
-                                            : () => _showSwatchStartSheet(context),
-                                        icon: const Icon(Icons.add_rounded),
-                                        label: Text(isKorean ? '스와치 추가' : 'Add swatch'),
-                                      ),
-                                    ],
-                                  ),
-                                  if (gates.isFree) ...[
-                                    const SizedBox(height: 12),
-                                    SwatchLimitBar(
+                            return Column(
+                              children: [
+                                WorkspaceSummaryBar(
+                                  stats: [
+                                    WorkStat('${swatches.length}', isKorean ? '전체' : 'Total', color: C.lmD),
+                                  ],
+                                  addLabel: isKorean ? '추가' : 'Add',
+                                  onAdd: isLimitReached
+                                      ? () => _showLimitDialog(isKorean)
+                                      : () => _showSwatchStartSheet(context),
+                                ),
+                                if (gates.isFree) ...[
+                                  const SizedBox(height: 8),
+                                  GlassCard(
+                                    child: SwatchLimitBar(
                                       current: count,
                                       max: 5,
                                       progress: progress,
                                       isReached: isLimitReached,
                                       onUpgrade: () {},
                                     ),
-                                  ],
+                                  ),
                                 ],
-                              ),
+                              ],
                             );
                           }
                           final swatch = swatches[index - 1];

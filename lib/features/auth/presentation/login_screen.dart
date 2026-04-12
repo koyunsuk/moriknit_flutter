@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hive/hive.dart';
 
 import '../../../core/constants/subscription_constants.dart';
@@ -10,11 +11,13 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/theme_provider.dart';
+import '../data/auth_repository.dart';
 import 'sign_up_sheet.dart';
 import 'social_login_button.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  final bool isAdmin;
+  const LoginScreen({super.key, this.isAdmin = false});
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -23,7 +26,6 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailCtrl = TextEditingController();
   final _pwCtrl = TextEditingController();
-  bool _loading = false;
   bool _obscure = true;
   bool _rememberMe = true;
   String? _error;
@@ -31,11 +33,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    C.apply(AppThemeMode.lavender);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      ref.read(appThemeProvider.notifier).resetTheme();
-    });
+    if (!widget.isAdmin) {
+      C.apply(AppThemeMode.lavender);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(appThemeProvider.notifier).resetTheme();
+      });
+    }
     try {
       final box = Hive.box<Map>(SubscriptionConstants.boxUser);
       final settings = box.get('settings');
@@ -47,7 +51,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   void dispose() {
-    C.apply(AppThemeMode.lavender);
+    if (!widget.isAdmin) {
+      C.apply(AppThemeMode.lavender);
+    }
     _emailCtrl.dispose();
     _pwCtrl.dispose();
     super.dispose();
@@ -64,65 +70,73 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.isAdmin) {
+      return _buildAdminLogin();
+    }
+
     final isWideWeb = kIsWeb && MediaQuery.of(context).size.width >= 720;
 
     if (isWideWeb) {
       return Scaffold(
         backgroundColor: const Color(0xFFF2F3F5),
-        body: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 960),
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 40),
-              decoration: BoxDecoration(
-                color: C.bg,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 24, offset: const Offset(0, 8))],
-              ),
-              child: Row(
-                children: [
-                  // Left brand panel
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [C.lv.withValues(alpha: 0.18), C.pk.withValues(alpha: 0.12)],
-                        ),
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(24),
-                          bottomLeft: Radius.circular(24),
+        body: Stack(
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 960),
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 40),
+                  decoration: BoxDecoration(
+                    color: C.bg,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 24, offset: const Offset(0, 8))],
+                  ),
+                  child: Row(
+                    children: [
+                      // Left brand panel
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [C.lv.withValues(alpha: 0.18), C.pk.withValues(alpha: 0.12)],
+                            ),
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(24),
+                              bottomLeft: Radius.circular(24),
+                            ),
+                          ),
+                          child: const _LoginBrandPanel(),
                         ),
                       ),
-                      child: const _LoginBrandPanel(),
-                    ),
+                      // Right login form
+                      SizedBox(
+                        width: 400,
+                        child: LoginPanel(
+                          emailCtrl: _emailCtrl,
+                          pwCtrl: _pwCtrl,
+                          loading: false,
+                          obscure: _obscure,
+                          rememberMe: _rememberMe,
+                          error: _error,
+                          onToggleObscure: () => setState(() => _obscure = !_obscure),
+                          onRememberMeChanged: (v) {
+                            setState(() => _rememberMe = v);
+                            _saveRememberMe(v);
+                          },
+                          onLoginEmail: _loginEmail,
+                          onLoginGoogle: _loginGoogle,
+                          onLoginKakao: _loginKakao,
+                          onShowSignUp: () => showSignUpSheet(context, ref, mounted),
+                        ),
+                      ),
+                    ],
                   ),
-                  // Right login form
-                  SizedBox(
-                    width: 400,
-                    child: LoginPanel(
-                      emailCtrl: _emailCtrl,
-                      pwCtrl: _pwCtrl,
-                      loading: _loading,
-                      obscure: _obscure,
-                      rememberMe: _rememberMe,
-                      error: _error,
-                      onToggleObscure: () => setState(() => _obscure = !_obscure),
-                      onRememberMeChanged: (v) {
-                        setState(() => _rememberMe = v);
-                        _saveRememberMe(v);
-                      },
-                      onLoginEmail: _loginEmail,
-                      onLoginGoogle: _loginGoogle,
-                      onLoginKakao: _loginKakao,
-                      onShowSignUp: () => showSignUpSheet(context, ref, mounted),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
+          ],
         ),
       );
     }
@@ -150,7 +164,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   child: LoginPanel(
                     emailCtrl: _emailCtrl,
                     pwCtrl: _pwCtrl,
-                    loading: _loading,
+                    loading: false,
                     obscure: _obscure,
                     rememberMe: _rememberMe,
                     error: _error,
@@ -173,44 +187,303 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
+  Widget _buildAdminLogin() {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F172A),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(28, 40, 28, 40),
+                child: Column(
+                  children: [
+                    // App icon logo
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: Image.network(
+                        '/favicon.png',
+                        width: 88,
+                        height: 88,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, err) => Container(
+                          width: 88,
+                          height: 88,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E293B),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: const Color(0xFF334155)),
+                          ),
+                          child: const Icon(Icons.admin_panel_settings_rounded,
+                              color: Color(0xFF84CC16), size: 44),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'MoriKnit Admin',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        letterSpacing: -0.4,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      '관리자 전용 로그인',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    // Email/Password form
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFF334155)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.3),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      child: Column(
+                        children: [
+                          TextField(
+                            controller: _emailCtrl,
+                            keyboardType: TextInputType.emailAddress,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              hintText: '이메일',
+                              hintStyle: const TextStyle(color: Color(0xFF64748B)),
+                              prefixIcon: const Icon(Icons.mail_outline_rounded, color: Color(0xFF64748B), size: 20),
+                              filled: true,
+                              fillColor: const Color(0xFF0F172A),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFF334155)),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFF334155)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFF64748B), width: 1.6),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: _pwCtrl,
+                            obscureText: _obscure,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              hintText: '비밀번호',
+                              hintStyle: const TextStyle(color: Color(0xFF64748B)),
+                              prefixIcon: const Icon(Icons.lock_outline_rounded, color: Color(0xFF64748B), size: 20),
+                              suffixIcon: GestureDetector(
+                                onTap: () => setState(() => _obscure = !_obscure),
+                                child: Icon(
+                                  _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                  color: const Color(0xFF64748B),
+                                  size: 20,
+                                ),
+                              ),
+                              filled: true,
+                              fillColor: const Color(0xFF0F172A),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFF334155)),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFF334155)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFF64748B), width: 1.6),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                            ),
+                          ),
+                          if (_error != null) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFDC2626).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                _error!,
+                                style: const TextStyle(fontSize: 11, color: Color(0xFFDC2626)),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: ElevatedButton(
+                              onPressed: _loginEmail,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF334155),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              child: const Text(
+                                '관리자 로그인',
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Row(children: [
+                              const Expanded(child: Divider(color: Color(0xFF334155))),
+                              const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 10),
+                                child: Text('또는', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                              ),
+                              const Expanded(child: Divider(color: Color(0xFF334155))),
+                            ]),
+                          ),
+                          // Google 로그인
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: OutlinedButton.icon(
+                              onPressed: _loginGoogle,
+                              icon: const Text('G', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF4285F4))),
+                              label: const Text('Google로 로그인', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Color(0xFF334155)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _loginEmail() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    setState(() => _error = null);
     try {
-      await ref.read(authRepositoryProvider).signInWithEmail(
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '로그인 중입니다.' : 'Signing in...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () async {
+          await ref.read(authRepositoryProvider).signInWithEmail(
             email: _emailCtrl.text.trim(),
             password: _pwCtrl.text,
           );
+        },
+      );
+    } on LoginException catch (e) {
+      if (!mounted) return;
+      // 어드민 로그인: invalid-credential은 "이메일/비밀번호 오류"로만 처리 (회원가입 팝업 금지)
+      if (widget.isAdmin && (e.code == 'user-not-found' || e.code == 'invalid-credential')) {
+        setState(() => _error = isKorean ? '이메일 또는 비밀번호가 올바르지 않습니다.' : 'Invalid email or password.');
+      } else if (!widget.isAdmin && (e.code == 'user-not-found' || e.code == 'invalid-credential')) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(isKorean ? '가입되지 않은 이메일' : 'Account not found'),
+            content: Text(
+              isKorean
+                  ? '해당 이메일로 가입된 계정이 없습니다.\n회원가입 화면으로 이동하시겠습니까?'
+                  : 'No account found for this email.\nWould you like to sign up?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text(isKorean ? '취소' : 'Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                style: ElevatedButton.styleFrom(backgroundColor: C.lv, foregroundColor: Colors.white),
+                child: Text(isKorean ? '회원가입' : 'Sign Up'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed == true && mounted) {
+          showSignUpSheet(context, ref, mounted);
+        }
+      } else {
+        setState(() => _error = e.message);
+      }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _loading = false);
     }
   }
 
   Future<void> _loginGoogle() async {
-    setState(() { _loading = true; _error = null; });
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    setState(() => _error = null);
     try {
-      await ref.read(authRepositoryProvider).signInWithGoogle();
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '로그인 중입니다.' : 'Signing in...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () async {
+          await ref.read(authRepositoryProvider).signInWithGoogle();
+        },
+      );
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _loading = false);
     }
   }
 
   Future<void> _loginKakao() async {
-    setState(() { _loading = true; _error = null; });
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    setState(() => _error = null);
     try {
-      await ref.read(authRepositoryProvider).signInWithKakao();
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '로그인 중입니다.' : 'Signing in...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () async {
+          await ref.read(authRepositoryProvider).signInWithKakao();
+        },
+      );
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _loading = false);
     }
   }
+
 }
 
 Future<void> showWebLoginOverlayDialog(
@@ -246,7 +519,6 @@ class _LoginOverlayCard extends ConsumerStatefulWidget {
 class _LoginOverlayCardState extends ConsumerState<_LoginOverlayCard> {
   final _emailCtrl = TextEditingController();
   final _pwCtrl = TextEditingController();
-  bool _loading = false;
   bool _obscure = true;
   bool _rememberMe = true;
   String? _error;
@@ -270,7 +542,7 @@ class _LoginOverlayCardState extends ConsumerState<_LoginOverlayCard> {
             child: LoginPanel(
               emailCtrl: _emailCtrl,
               pwCtrl: _pwCtrl,
-              loading: _loading,
+              loading: false,
               obscure: _obscure,
               rememberMe: _rememberMe,
               error: _error,
@@ -299,46 +571,94 @@ class _LoginOverlayCardState extends ConsumerState<_LoginOverlayCard> {
   }
 
   Future<void> _loginEmail() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    setState(() => _error = null);
     try {
-      await ref.read(authRepositoryProvider).signInWithEmail(
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '로그인 중입니다.' : 'Signing in...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () async {
+          await ref.read(authRepositoryProvider).signInWithEmail(
             email: _emailCtrl.text.trim(),
             password: _pwCtrl.text,
           );
+        },
+      );
       if (mounted) Navigator.of(context).pop();
+    } on LoginException catch (e) {
+      if (!mounted) return;
+      if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(isKorean ? '가입되지 않은 이메일' : 'Account not found'),
+            content: Text(
+              isKorean
+                  ? '해당 이메일로 가입된 계정이 없습니다.\n회원가입 화면으로 이동하시겠습니까?'
+                  : 'No account found for this email.\nWould you like to sign up?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text(isKorean ? '취소' : 'Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                style: ElevatedButton.styleFrom(backgroundColor: C.lv, foregroundColor: Colors.white),
+                child: Text(isKorean ? '회원가입' : 'Sign Up'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed == true && mounted) {
+          Navigator.of(context).pop();
+          showSignUpSheet(context, ref, mounted);
+        }
+      } else {
+        setState(() => _error = e.message);
+      }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _loading = false);
     }
   }
 
   Future<void> _loginGoogle() async {
-    setState(() { _loading = true; _error = null; });
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    setState(() => _error = null);
     try {
-      await ref.read(authRepositoryProvider).signInWithGoogle();
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '로그인 중입니다.' : 'Signing in...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () async {
+          await ref.read(authRepositoryProvider).signInWithGoogle();
+        },
+      );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _loading = false);
     }
   }
 
   Future<void> _loginKakao() async {
-    setState(() { _loading = true; _error = null; });
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    setState(() => _error = null);
     try {
-      await ref.read(authRepositoryProvider).signInWithKakao();
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '로그인 중입니다.' : 'Signing in...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () async {
+          await ref.read(authRepositoryProvider).signInWithKakao();
+        },
+      );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _loading = false);
     }
   }
+
 }
 
 class LoginPanel extends ConsumerWidget {
@@ -385,6 +705,16 @@ class LoginPanel extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
       child: Column(
         children: [
+          if (!showOverlayIntro)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => GoRouter.of(context).go('/'),
+                icon: Icon(Icons.arrow_back_ios_rounded, size: 14, color: C.mu),
+                label: Text('홈으로', style: T.caption.copyWith(color: C.mu)),
+                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4)),
+              ),
+            ),
           if (showOverlayIntro && (title != null || message != null)) ...[
             if (title != null) Text(title!, style: T.h3, textAlign: TextAlign.center),
             if (message != null) ...[
@@ -431,14 +761,6 @@ class LoginPanel extends ConsumerWidget {
             label: t.continueWithKakao,
             leading: const _KakaoIcon(),
             onTap: onLoginKakao,
-          ),
-          const SizedBox(height: 8),
-          _ComingSoonButton(
-            color: const Color(0xFF111111).withValues(alpha: 0.88),
-            textColor: Colors.white,
-            label: t.continueWithApple,
-            leading: const _AppleIcon(),
-            badgeLabel: t.preparing,
           ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
@@ -694,15 +1016,6 @@ class _KakaoIcon extends StatelessWidget {
   }
 }
 
-class _AppleIcon extends StatelessWidget {
-  const _AppleIcon();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Icon(Icons.apple, color: Colors.white, size: 20);
-  }
-}
-
 class _LangChip extends StatelessWidget {
   final String label;
   final bool selected;
@@ -789,47 +1102,3 @@ class _LoginBrandPanel extends StatelessWidget {
   }
 }
 
-class _ComingSoonButton extends StatelessWidget {
-  final Color color;
-  final Color textColor;
-  final String label;
-  final Widget leading;
-  final String badgeLabel;
-
-  const _ComingSoonButton({
-    required this.color,
-    required this.textColor,
-    required this.label,
-    required this.leading,
-    required this.badgeLabel,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Opacity(
-      opacity: 0.55,
-      child: SocialLoginButton(
-        color: color,
-        textColor: textColor,
-        label: label,
-        leading: leading,
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Text(
-            badgeLabel,
-            style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
-          ),
-        ),
-        onTap: null,
-      ),
-    );
-  }
-}

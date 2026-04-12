@@ -38,7 +38,7 @@ final adminRouterProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: '/', builder: (_, _) => const SplashScreen()),
-      GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+      GoRoute(path: '/login', builder: (_, _) => const LoginScreen(isAdmin: true)),
       GoRoute(path: '/admin', builder: (_, _) => const AdminScreen()),
       GoRoute(path: '/no-permission', builder: (_, _) => const _NoPermissionScreen()),
     ],

@@ -10,3 +10,11 @@ final commentRepositoryProvider = Provider<CommentRepository>((ref) {
 final commentsProvider = StreamProvider.family<List<CommentModel>, String>((ref, postId) {
   return ref.watch(commentRepositoryProvider).watchComments(postId);
 });
+
+final galleryCommentRepositoryProvider = Provider<GalleryCommentRepository>((ref) {
+  return GalleryCommentRepository();
+});
+
+final galleryCommentsProvider = StreamProvider.family<List<CommentModel>, String>((ref, entryId) {
+  return ref.watch(galleryCommentRepositoryProvider).watchComments(entryId);
+});

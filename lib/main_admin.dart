@@ -40,7 +40,7 @@ class MoriKnitAdminApp extends ConsumerWidget {
       key: ValueKey(themeMode),
       title: 'MoriKnit Admin',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
+      theme: AppTheme.adminLight,
       routerConfig: router,
       locale: locale,
       supportedLocales: supportedAppLocales,

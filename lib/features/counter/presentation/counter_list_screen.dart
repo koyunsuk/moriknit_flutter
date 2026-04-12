@@ -85,32 +85,12 @@ class CounterListScreen extends ConsumerWidget {
                         separatorBuilder: (_, i) => i == 0 ? const SizedBox(height: 14) : const SizedBox(height: 10),
                         itemBuilder: (context, index) {
                           if (index == 0) {
-                            return GlassCard(
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          isKorean ? '내 카운터 ${counters.length}개' : '${counters.length} Counters',
-                                          style: T.bodyBold.copyWith(color: C.lmD),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          isKorean ? '코·단 카운터 목록' : 'Stitch & row counters',
-                                          style: T.caption.copyWith(color: C.mu),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  ElevatedButton.icon(
-                                    onPressed: () => _showCounterStartSheet(context, ref, isKorean, projects),
-                                    icon: const Icon(Icons.add_rounded),
-                                    label: Text(isKorean ? '카운터 추가' : 'Add counter'),
-                                  ),
-                                ],
-                              ),
+                            return WorkspaceSummaryBar(
+                              stats: [
+                                WorkStat('${counters.length}', isKorean ? '전체' : 'Total', color: C.lmD),
+                              ],
+                              addLabel: isKorean ? '추가' : 'Add',
+                              onAdd: () => _showCounterStartSheet(context, ref, isKorean, projects),
                             );
                           }
                           final counter = counters[index - 1];

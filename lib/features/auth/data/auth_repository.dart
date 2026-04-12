@@ -13,6 +13,14 @@ import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' as kakao;
 
 import '../domain/user_model.dart';
 
+class LoginException implements Exception {
+  final String message;
+  final String? code;
+  const LoginException(this.message, {this.code});
+  @override
+  String toString() => message;
+}
+
 class AuthRepository {
   AuthRepository();
 
@@ -40,19 +48,24 @@ class AuthRepository {
           .timeout(const Duration(seconds: 15));
       return await _getOrCreateUser(credential.user!);
     } on FirebaseAuthException catch (e) {
-      throw _handleAuthException(e);
+      throw LoginException(_handleAuthException(e), code: e.code);
     } on TimeoutException {
       throw 'Login timed out. Please try again.';
     }
   }
 
-  Future<UserModel?> signUpWithEmail({required String email, required String password, required String displayName}) async {
+  Future<UserModel?> signUpWithEmail({
+    required String email,
+    required String password,
+    required String displayName,
+    String? signupSource,
+  }) async {
     try {
       final credential = await _auth
           .createUserWithEmailAndPassword(email: email, password: password)
           .timeout(const Duration(seconds: 15));
       await credential.user!.updateDisplayName(displayName);
-      return await _getOrCreateUser(credential.user!);
+      return await _getOrCreateUser(credential.user!, signupSource: signupSource);
     } on FirebaseAuthException catch (e) {
       throw _handleAuthException(e);
     } on TimeoutException {
@@ -154,7 +167,7 @@ class AuthRepository {
     }
   }
 
-  Future<UserModel> _getOrCreateUser(User firebaseUser) async {
+  Future<UserModel> _getOrCreateUser(User firebaseUser, {String? signupSource}) async {
     final docRef = _db.collection('users').doc(firebaseUser.uid);
     final doc = await docRef.get().timeout(const Duration(seconds: 12));
     final profileUpdates = <String, dynamic>{
@@ -182,9 +195,14 @@ class AuthRepository {
       'createdAt': FieldValue.serverTimestamp(),
       'lastActiveAt': FieldValue.serverTimestamp(),
       'moriBalance': 10000,
+      if (signupSource != null) 'signupSource': signupSource,
       'subscription': {
         'planId': 'pro', // 베타 기간: 신규 회원 전원 Pro
-        'status': 'active',
+        'status': 'trial',
+        'trialEndAt': Timestamp.fromDate(DateTime.now().add(const Duration(days: 90))),
+        'currentPeriodEnd': Timestamp.fromDate(DateTime.now().add(const Duration(days: 90))),
+        'currentPeriodStart': FieldValue.serverTimestamp(),
+        'cancelAtPeriodEnd': false,
       },
       'usage': {
         'swatchCount': 0,
@@ -223,6 +241,61 @@ class AuthRepository {
   Future<void> updateDisplayName(String uid, String displayName) async {
     await _db.collection('users').doc(uid).update({'displayName': displayName});
     await _auth.currentUser?.updateDisplayName(displayName);
+  }
+
+  /// 구독 해지 예약 토글
+  Future<void> setCancelAtPeriodEnd(String uid, bool cancel) async {
+    await _db
+        .collection('users')
+        .doc(uid)
+        .update({'subscription.cancelAtPeriodEnd': cancel})
+        .timeout(const Duration(seconds: 10));
+  }
+
+  /// 회원 탈퇴 — Firebase Auth + Firestore 사용자 데이터 삭제
+  Future<void> deleteAccount() async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('로그인 상태가 아닙니다.');
+    final uid = user.uid;
+
+    // Firestore 사용자 문서 삭제
+    try {
+      await _db.collection('users').doc(uid).delete()
+          .timeout(const Duration(seconds: 10));
+    } catch (_) {}
+
+    // Firebase Auth 계정 삭제 (requires-recent-login 에러 시 재로그인 필요)
+    await user.delete();
+  }
+
+  /// 이메일 재인증 (탈퇴 전 recent-login 필요 시)
+  Future<void> reauthWithEmail({required String email, required String password}) async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('로그인 상태가 아닙니다.');
+    final credential = EmailAuthProvider.credential(email: email, password: password);
+    await user.reauthenticateWithCredential(credential);
+  }
+
+  /// Google 재인증
+  Future<void> reauthWithGoogle() async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('로그인 상태가 아닙니다.');
+    if (kIsWeb) {
+      await user.reauthenticateWithPopup(GoogleAuthProvider());
+    } else {
+      await _ensureGoogleInitialized();
+      // 경량 인증 먼저 시도 (이미 로그인된 경우 계정 선택창 스킵)
+      GoogleSignInAccount? account;
+      try {
+        account = await _googleSignIn.attemptLightweightAuthentication();
+      } catch (_) {}
+      // silent 실패 시 UI 표시
+      account ??= await _googleSignIn.authenticate();
+      final idToken = account.authentication.idToken;
+      if (idToken == null) throw Exception('Google 재인증 실패');
+      final credential = GoogleAuthProvider.credential(idToken: idToken);
+      await user.reauthenticateWithCredential(credential);
+    }
   }
 
   String _handleAuthException(FirebaseAuthException e) {

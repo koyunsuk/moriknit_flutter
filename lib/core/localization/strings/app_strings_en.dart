@@ -204,6 +204,7 @@ class AppStringsEn extends BaseAppStrings {
   @override String get upgrade => 'Upgrade';
   @override String get projectsTabLabel => 'Workspace';
   @override String get messengerTabLabel => 'Messenger';
+  @override String get dmSendMessage => 'Send DM';
   @override String get createLabel => 'Create';
   @override String get adminLabel => 'Admin';
   @override String get createAccount => 'Create account';
@@ -313,5 +314,18 @@ class AppStringsEn extends BaseAppStrings {
   @override String beforeAfterLabel(bool before) => before ? 'Before' : 'After';
   @override String gauge10cm(int stitches, int rows) => '$stitches stitches / $rows rows (10cm)';
   @override String savedOn(String date) => 'Saved on $date';
+  // Gauge optical reading
+  @override String get gaugePhotoReading => 'Photo Reading';
+  @override String get selectSwatchPhoto => 'Select swatch photo';
+  @override String get tapTwoPoints10cm => 'Tap two diagonal corners of the 10cm area';
+  @override String get tapFirstPoint => '▶ Tap point 1 (first corner)';
+  @override String get tapSecondPoint => '▶ Tap point 2 (opposite corner)';
+  @override String get analyzeGauge => 'Analyze';
+  @override String get analyzing => 'Analyzing...';
+  @override String get applyResult => 'Apply Result';
+  @override String get gaugeReadingResult => 'Reading Result';
+  @override String get detectedStitches => 'Detected stitches';
+  @override String get detectedRows => 'Detected rows';
+  @override String get photoReadingTip => 'Select a 10cm x 10cm area on your swatch photo to auto-detect stitch and row counts. Accuracy is about 80% — review and adjust the result.';
 }
 

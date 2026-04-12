@@ -188,7 +188,7 @@ class AdminScreen extends ConsumerWidget {
     final isKorean = language.isKorean;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F3F5),
+      backgroundColor: const Color(0xFF0A1020),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1280),
@@ -196,7 +196,7 @@ class AdminScreen extends ConsumerWidget {
             width: double.infinity,
             height: double.infinity,
             decoration: BoxDecoration(
-              color: C.bg,
+              color: const Color(0xFF0F172A),
               boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 16)],
             ),
             child: SafeArea(
@@ -265,148 +265,53 @@ class _AdminConsoleState extends State<_AdminConsole> {
     _AdminNavItem.tab(index: 14, icon: Icons.settings_rounded, label: '설정', color: Color(0xFF94A3B8)),
   ];
 
+  String get _currentPageLabel {
+    for (final item in _navItems) {
+      if (item.tabIndex == _selectedIndex) return item.label;
+    }
+    return '대시보드';
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(
       children: [
-        // ── 어드민 탑바 ──────────────────────────────────────────────────────
-        Container(
-          decoration: BoxDecoration(
-            color: C.gx,
-            border: Border(bottom: BorderSide(color: C.bd2)),
-          ),
+        // ── 사이드바 ─────────────────────────────────────────────────────────
+        _AdminSidebar(
+          navItems: _navItems,
+          selectedIndex: _selectedIndex,
+          user: widget.user,
+          onSelect: (i) => setState(() => _selectedIndex = i),
+        ),
+        // ── 콘텐츠 영역 ─────────────────────────────────────────────────────
+        Expanded(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 상단: 로고 + 유틸 버튼
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 8, 6),
+              // 콘텐츠 상단 헤더
+              Container(
+                height: 52,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1E293B),
+                  border: Border(bottom: BorderSide(color: Color(0xFF334155), width: 1)),
+                ),
                 child: Row(
                   children: [
-                    Image.asset('assets/login_logo.png', width: 26, height: 26, fit: BoxFit.contain),
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('MoriKnit', style: TextStyle(color: C.tx, fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: 0.3)),
-                        const Text('Admin Console', style: TextStyle(color: Color(0xFFB47EEB), fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.8)),
-                      ],
-                    ),
+                    Text(_currentPageLabel,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC))),
                     const Spacer(),
-                    _AdminSidebarUtil(
-                      icon: Icons.open_in_new_rounded,
-                      label: '앱으로 가기',
-                      onTap: () => launchUrl(Uri.parse('https://www.moriknit.com'), mode: LaunchMode.externalApplication),
-                    ),
-                    _AdminSidebarUtil(
-                      icon: Icons.logout_rounded,
-                      label: '로그아웃',
-                      onTap: () => FirebaseAuth.instance.signOut(),
-                    ),
+                    Text(DateFormat('yyyy.MM.dd').format(DateTime.now()),
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
                   ],
                 ),
               ),
-              // 탭 네비게이션 (가로 스크롤 — 그룹 2단 계층)
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: _buildGroupedNav(_navItems, _selectedIndex, (i) => setState(() => _selectedIndex = i)),
-                ),
-              ),
+              Expanded(child: _buildContent()),
             ],
           ),
         ),
-        // ── 콘텐츠 영역 ─────────────────────────────────────────────────────
-        Expanded(child: _buildContent()),
       ],
     );
-  }
-
-  List<Widget> _buildGroupedNav(List<_AdminNavItem> items, int selectedIndex, void Function(int) onSelect) {
-    final result = <Widget>[];
-    // 현재 그룹 범위를 추적하며 그룹별 Column 빌드
-    _AdminNavItem? currentGroup;
-    List<_AdminNavItem> groupTabs = [];
-
-    void flushGroup() {
-      if (currentGroup == null && groupTabs.isEmpty) return;
-      final color = currentGroup?.color ?? C.mu;
-      final isGroupActive = groupTabs.any((t) => t.tabIndex == selectedIndex);
-      result.add(
-        Container(
-          margin: const EdgeInsets.only(left: 4, right: 2),
-          decoration: BoxDecoration(
-            border: Border(
-              left: BorderSide(color: color.withValues(alpha: 0.35), width: 2),
-              bottom: BorderSide(color: isGroupActive ? color : Colors.transparent, width: 2),
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (currentGroup != null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
-                  child: Text(
-                    currentGroup!.groupLabel!.toUpperCase(),
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color, letterSpacing: 0.8),
-                  ),
-                ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: groupTabs.map((item) {
-                  final isSelected = item.tabIndex == selectedIndex;
-                  final accent = item.color;
-                  return GestureDetector(
-                    onTap: () => onSelect(item.tabIndex!),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      margin: const EdgeInsets.only(right: 1),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: isSelected ? accent.withValues(alpha: 0.14) : Colors.transparent,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(item.icon, size: 15, color: isSelected ? accent : C.mu),
-                          const SizedBox(width: 5),
-                          Text(
-                            item.label,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
-                              color: isSelected ? accent : C.tx2,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-          ),
-        ),
-      );
-      currentGroup = null;
-      groupTabs = [];
-    }
-
-    for (final item in items) {
-      if (item.isGroup) {
-        flushGroup();
-        currentGroup = item;
-      } else {
-        groupTabs.add(item);
-      }
-    }
-    flushGroup();
-    return result;
   }
 
   Widget _buildContent() {
@@ -420,7 +325,7 @@ class _AdminConsoleState extends State<_AdminConsole> {
       case 6:  return const _AdminSwatchesTab();
       case 7:  return const _AdminProjectsTab();
       case 8:  return _CollectionWithImportTab(collection: 'market_items', title: '마켓상품', importKind: AdminImportKind.market, isKorean: widget.isKorean, adminUid: widget.user.uid);
-      case 9:  return _CollectionWithImportTab(collection: 'posts', title: '커뮤니티', importKind: AdminImportKind.communityPost, isKorean: widget.isKorean, adminUid: widget.user.uid);
+      case 9:  return const _CommunityAdminTab();
       case 10: return _CopyManagementTab(isKorean: widget.isKorean);
       case 11: return const _BugReportsTab();
       case 12: return const _EditorialAdminTab();
@@ -432,24 +337,197 @@ class _AdminConsoleState extends State<_AdminConsole> {
 }
 
 
-class _AdminSidebarUtil extends StatelessWidget {
+class _AdminSidebar extends StatelessWidget {
+  final List<_AdminNavItem> navItems;
+  final int selectedIndex;
+  final User user;
+  final void Function(int) onSelect;
+
+  const _AdminSidebar({
+    required this.navItems,
+    required this.selectedIndex,
+    required this.user,
+    required this.onSelect,
+  });
+
+  static const _bg = Color(0xFF1E293B);
+  static const _divider = Color(0x33FFFFFF);
+  static const _textDim = Color(0xFFCBD5E1);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 210,
+      color: _bg,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── 헤더 ──────────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: _divider, width: 1)),
+            ),
+            child: Row(
+              children: [
+                Image.asset('assets/login_logo.png', width: 30, height: 30, fit: BoxFit.contain),
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text('MoriKnit',
+                        style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.3)),
+                    Text('Admin Console',
+                        style: TextStyle(color: Color(0xFF84CC16), fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.8)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // ── 네비게이션 ────────────────────────────────────
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: _buildNavItems(),
+              ),
+            ),
+          ),
+          // ── 하단 유틸 ─────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: _divider, width: 1)),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 14,
+                      backgroundColor: const Color(0xFF334155),
+                      backgroundImage: user.photoURL != null ? NetworkImage(user.photoURL!) : null,
+                      child: user.photoURL == null
+                          ? const Icon(Icons.person_rounded, size: 14, color: Colors.white)
+                          : null,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        user.displayName ?? user.email ?? '관리자',
+                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _SidebarUtilBtn(
+                        icon: Icons.open_in_new_rounded,
+                        label: '앱으로',
+                        onTap: () => launchUrl(Uri.parse('https://www.moriknit.com'), mode: LaunchMode.externalApplication),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: _SidebarUtilBtn(
+                        icon: Icons.logout_rounded,
+                        label: '로그아웃',
+                        onTap: () => FirebaseAuth.instance.signOut(),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildNavItems() {
+    final result = <Widget>[];
+    for (final item in navItems) {
+      if (item.isGroup) {
+        result.add(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 16, 14, 4),
+            child: Text(
+              item.label.toUpperCase(),
+              style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: item.color, letterSpacing: 1.0),
+            ),
+          ),
+        );
+      } else {
+        final isSelected = item.tabIndex == selectedIndex;
+        final accent = item.color;
+        result.add(
+          GestureDetector(
+            onTap: () => onSelect(item.tabIndex!),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+              decoration: BoxDecoration(
+                color: isSelected ? accent.withValues(alpha: 0.15) : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                border: Border(
+                  left: BorderSide(
+                    color: isSelected ? accent : Colors.transparent,
+                    width: 3,
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(item.icon, size: 15, color: isSelected ? accent : _textDim),
+                  const SizedBox(width: 9),
+                  Text(
+                    item.label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
+                      color: isSelected ? Colors.white : _textDim,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+    }
+    return result;
+  }
+}
+
+class _SidebarUtilBtn extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  const _AdminSidebarUtil({required this.icon, required this.label, required this.onTap});
+  const _SidebarUtilBtn({required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F172A),
+          borderRadius: BorderRadius.circular(6),
+        ),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 15, color: C.tx2),
-            const SizedBox(width: 8),
-            Text(label, style: TextStyle(fontSize: 13, color: C.tx2)),
+            Icon(icon, size: 12, color: const Color(0xFF94A3B8)),
+            const SizedBox(width: 4),
+            Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
           ],
         ),
       ),
@@ -5479,6 +5557,301 @@ class _BuiltinTemplateAdminTab extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── 커뮤니티 어드민 탭 ────────────────────────────────────────────────────────
+class _CommunityAdminTab extends StatefulWidget {
+  const _CommunityAdminTab();
+
+  @override
+  State<_CommunityAdminTab> createState() => _CommunityAdminTabState();
+}
+
+class _CommunityAdminTabState extends State<_CommunityAdminTab> {
+  String _selectedCategory = 'all';
+  String? _expandedPostId;
+
+  static const _categories = ['all', 'free', 'qna', 'show', 'market', 'kal'];
+  static const _categoryLabels = {
+    'all': '전체',
+    'free': '자유',
+    'qna': 'Q&A',
+    'show': '작품공유',
+    'market': '마켓',
+    'kal': 'KAL',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+        .collection('posts')
+        .orderBy('createdAt', descending: true)
+        .limit(200);
+    if (_selectedCategory != 'all') {
+      query = query.where('category', isEqualTo: _selectedCategory);
+    }
+
+    return Column(
+      children: [
+        // 카테고리 필터
+        Container(
+          height: 40,
+          margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _categories.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 6),
+            itemBuilder: (_, i) {
+              final cat = _categories[i];
+              final selected = cat == _selectedCategory;
+              return GestureDetector(
+                onTap: () => setState(() { _selectedCategory = cat; _expandedPostId = null; }),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: selected ? C.lv : C.lvL,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: selected ? C.lv : C.lv.withValues(alpha: 0.2)),
+                  ),
+                  child: Text(
+                    _categoryLabels[cat] ?? cat,
+                    style: TextStyle(
+                      color: selected ? Colors.white : C.lvD,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        // 게시글 목록
+        Expanded(
+          child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: query.snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final docs = snapshot.data?.docs ?? [];
+              if (docs.isEmpty) {
+                return Center(child: Text('게시글이 없습니다.', style: TextStyle(color: C.mu)));
+              }
+              return ListView.separated(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                itemCount: docs.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 6),
+                itemBuilder: (_, index) {
+                  final doc = docs[index];
+                  final data = doc.data();
+                  final postId = doc.id;
+                  final isExpanded = _expandedPostId == postId;
+                  final title = data['title'] as String? ?? '(제목 없음)';
+                  final author = data['authorName'] as String? ?? '익명';
+                  final category = data['category'] as String? ?? '';
+                  final content = data['content'] as String? ?? '';
+                  final likeCount = data['likeCount'] as int? ?? 0;
+                  final imageUrls = List<String>.from(data['imageUrls'] ?? []);
+                  final createdAt = data['createdAt'];
+                  String timeStr = '';
+                  if (createdAt is Timestamp) {
+                    final dt = createdAt.toDate();
+                    timeStr = '${dt.year}-${dt.month.toString().padLeft(2,'0')}-${dt.day.toString().padLeft(2,'0')}';
+                  }
+
+                  return Card(
+                    margin: EdgeInsets.zero,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: C.bd.withValues(alpha: 0.5)),
+                    ),
+                    child: Column(
+                      children: [
+                        // 헤더 행
+                        InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () => setState(() => _expandedPostId = isExpanded ? null : postId),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: C.lvL,
+                                    borderRadius: BorderRadius.circular(99),
+                                  ),
+                                  child: Text(_categoryLabels[category] ?? category, style: TextStyle(color: C.lvD, fontSize: 11, fontWeight: FontWeight.w700)),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                const SizedBox(width: 8),
+                                Text(author, style: TextStyle(fontSize: 12, color: C.tx2)),
+                                const SizedBox(width: 6),
+                                Text(timeStr, style: TextStyle(fontSize: 11, color: C.mu)),
+                                const SizedBox(width: 6),
+                                Icon(Icons.favorite_rounded, size: 12, color: C.og),
+                                const SizedBox(width: 2),
+                                Text('$likeCount', style: TextStyle(fontSize: 11, color: C.mu)),
+                                const SizedBox(width: 8),
+                                // 삭제 버튼
+                                IconButton(
+                                  icon: Icon(Icons.delete_outline_rounded, color: C.og, size: 18),
+                                  tooltip: '게시글 삭제',
+                                  onPressed: () async {
+                                    final confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder: (ctx) => AlertDialog(
+                                        title: const Text('게시글 삭제'),
+                                        content: Text('[$title] 게시글을 삭제하시겠습니까?\n댓글 및 이미지도 함께 삭제됩니다.'),
+                                        actions: [
+                                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+                                          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('삭제', style: TextStyle(color: C.og))),
+                                        ],
+                                      ),
+                                    );
+                                    if (confirm != true) return;
+                                    try {
+                                      await runWithMoriLoadingDialog<void>(
+                                        context,
+                                        message: '삭제하는 중입니다.',
+                                        subtitle: '잠시만 기다려 주세요.',
+                                        task: () async {
+                                          // 댓글 먼저 삭제
+                                          final comments = await FirebaseFirestore.instance
+                                              .collection('posts').doc(postId).collection('comments').get();
+                                          for (final c in comments.docs) { await c.reference.delete(); }
+                                          await FirebaseFirestore.instance.collection('posts').doc(postId).delete();
+                                        },
+                                      );
+                                      if (mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: '삭제됐어요.');
+                                    } catch (e) {
+                                      if (mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+                                    }
+                                  },
+                                ),
+                                Icon(isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded, color: C.mu, size: 18),
+                              ],
+                            ),
+                          ),
+                        ),
+                        // 펼침: 내용 + 이미지 + 댓글
+                        if (isExpanded) ...[
+                          const Divider(height: 1),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(content, style: TextStyle(fontSize: 13, color: C.tx2)),
+                            ),
+                          ),
+                          if (imageUrls.isNotEmpty) ...[
+                            SizedBox(
+                              height: 80,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+                                itemCount: imageUrls.length,
+                                separatorBuilder: (_, _) => const SizedBox(width: 6),
+                                itemBuilder: (_, i) => ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(imageUrls[i], width: 80, height: 80, fit: BoxFit.cover),
+                                ),
+                              ),
+                            ),
+                          ],
+                          // 댓글 목록
+                          _CommunityAdminComments(postId: postId),
+                          const SizedBox(height: 8),
+                        ],
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CommunityAdminComments extends StatelessWidget {
+  final String postId;
+  const _CommunityAdminComments({required this.postId});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('posts').doc(postId).collection('comments')
+          .orderBy('createdAt')
+          .snapshots(),
+      builder: (context, snapshot) {
+        final docs = snapshot.data?.docs ?? [];
+        if (docs.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(14, 4, 14, 8),
+            child: Text('댓글 없음', style: TextStyle(fontSize: 12, color: C.mu)),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 4, 14, 4),
+              child: Text('댓글 ${docs.length}개', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: C.tx2)),
+            ),
+            ...docs.map((doc) {
+              final d = doc.data();
+              final author = d['authorName'] as String? ?? '익명';
+              final body = d['body'] as String? ?? '';
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(14, 2, 14, 2),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('$author  ', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: C.tx)),
+                          Expanded(child: Text(body, style: TextStyle(fontSize: 12, color: C.tx2))),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.delete_outline_rounded, size: 15, color: C.og),
+                      tooltip: '댓글 삭제',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () async {
+                        try {
+                          await runWithMoriLoadingDialog<void>(
+                            context,
+                            message: '삭제하는 중입니다.',
+                            subtitle: '잠시만 기다려 주세요.',
+                            task: () => doc.reference.delete(),
+                          );
+                          if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: '댓글 삭제됐어요.');
+                        } catch (e) {
+                          if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        );
+      },
     );
   }
 }

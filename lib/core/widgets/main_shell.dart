@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../providers/avatar_provider.dart';
+import '../../providers/dm_provider.dart';
 import '../../providers/fab_settings_provider.dart';
 import '../localization/app_language.dart';
 import '../router/app_router.dart';
@@ -105,6 +106,7 @@ class _MainShellState extends ConsumerState<MainShell> with TickerProviderStateM
     if (location.startsWith(Routes.counterList)) return 1;
     if (location.startsWith(Routes.community)) return 2;
     if (location.startsWith(Routes.messenger)) return 3;
+    if (location.startsWith(Routes.dm)) return 3;
     if (location.startsWith(Routes.market)) return 4;
     if (location.startsWith(Routes.my)) return 5;
     return 0;
@@ -133,11 +135,14 @@ class _MainShellState extends ConsumerState<MainShell> with TickerProviderStateM
     final avatarInitial = displayName.trim().isEmpty ? 'M' : displayName.trim().characters.first.toUpperCase();
     final avatarUrl = (profile?.photoURL.isNotEmpty == true) ? profile!.photoURL : (authUser?.photoURL ?? '');
 
+    final dmRooms = authUser != null ? ref.watch(dmRoomsProvider(authUser.uid)).valueOrNull : null;
+    final dmUnread = dmRooms?.fold<int>(0, (sum, r) => sum + r.unreadFor(authUser?.uid ?? '')) ?? 0;
+
     final tabs = [
       MoriTabDestination(Icons.home_rounded, t.home, C.pk),
       MoriTabDestination(Icons.folder_special_rounded, t.projectsTabLabel, C.lv),
       MoriTabDestination(Icons.people_alt_rounded, t.community, C.pkD),
-      MoriTabDestination(Icons.chat_bubble_outline_rounded, t.messengerTabLabel, C.lmD),
+      MoriTabDestination(Icons.chat_bubble_rounded, t.messengerTabLabel, C.lv, badgeCount: dmUnread),
       MoriTabDestination(Icons.storefront_rounded, t.market, C.lvD),
       MoriTabDestination(Icons.person_rounded, t.my, C.tx, avatarUrl: avatarUrl, avatarInitial: authUser == null ? null : avatarInitial, avatarPreset: avatarPreset),
     ];
@@ -355,7 +360,7 @@ class _WebShell extends ConsumerWidget {
       _WebNavItem(Icons.home_rounded, t.home, C.pk, Routes.home),
       _WebNavItem(Icons.folder_special_rounded, t.projectsTabLabel, C.lv, Routes.tools),
       _WebNavItem(Icons.people_alt_rounded, t.community, C.pkD, Routes.community),
-      _WebNavItem(Icons.chat_bubble_outline_rounded, t.messengerTabLabel, C.lmD, Routes.messenger),
+      _WebNavItem(Icons.chat_bubble_rounded, t.messengerTabLabel, C.lv, Routes.messenger),
       _WebNavItem(Icons.storefront_rounded, t.market, C.lvD, Routes.market),
       _WebNavItem(Icons.person_rounded, t.my, C.tx2, Routes.my),
     ];
@@ -534,6 +539,28 @@ class _WebShell extends ConsumerWidget {
                 ),
               ),
             ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () async {
+                await ref.read(authRepositoryProvider).signOut();
+                if (context.mounted) context.go(Routes.login);
+              },
+              icon: Icon(Icons.logout_rounded, size: 16, color: C.tx2),
+              label: Text(
+                ref.read(appLanguageProvider).isKorean ? '로그아웃' : 'Sign out',
+                style: T.caption.copyWith(color: C.tx2, fontWeight: FontWeight.w600),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: C.bd),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
           ),
         ),
       ],

@@ -39,7 +39,7 @@ class HomeWipSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionTitle(title: 'Work in Progress'),
+        const SectionTitle(title: '🧶 Work in Progress'),
         const SizedBox(height: 10),
         GlassCard(
           onTap: () => context.go(Routes.projectList),
@@ -165,7 +165,7 @@ class HomeCommunityFeed extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SectionTitle(title: 'Community', trailing: Text('See all', style: T.caption.copyWith(color: C.lvD))),
+        SectionTitle(title: '💬 Community', trailing: Text('See all', style: T.caption.copyWith(color: C.lvD))),
         const SizedBox(height: 10),
         ...List.generate(2, (i) => GlassCard(
           margin: const EdgeInsets.only(bottom: 10),

@@ -27,11 +27,6 @@ class NeedleListScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: C.lv,
-        onPressed: () => _showNeedleStartSheet(context, ref),
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
       body: SafeArea(
         child: Column(
           children: [
@@ -46,42 +41,15 @@ class NeedleListScreen extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
                 children: [
                   // 1단: 통계
-                  GlassCard(
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _NeedleStatCell(
-                            label: isKorean ? '보유 바늘' : 'Total',
-                            value: '${needles.length}',
-                            color: C.lvD,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _NeedleStatCell(
-                            label: isKorean ? '일반' : 'Straight',
-                            value: '$straightCount',
-                            color: C.lv,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _NeedleStatCell(
-                            label: isKorean ? '줄바늘' : 'Circular',
-                            value: '$circularCount',
-                            color: C.pk,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _NeedleStatCell(
-                            label: isKorean ? '기타' : 'Other',
-                            value: '${dpnCount + cableCount}',
-                            color: C.mu,
-                          ),
-                        ),
-                      ],
-                    ),
+                  WorkspaceSummaryBar(
+                    stats: [
+                      WorkStat('${needles.length}', isKorean ? '전체' : 'Total', color: C.lvD),
+                      WorkStat('$straightCount', isKorean ? '일반' : 'Straight', color: C.lv),
+                      WorkStat('$circularCount', isKorean ? '줄바늘' : 'Circular', color: C.pk),
+                      WorkStat('${dpnCount + cableCount}', isKorean ? '기타' : 'Other', color: C.mu),
+                    ],
+                    addLabel: isKorean ? '추가' : 'Add',
+                    onAdd: () => _showNeedleStartSheet(context, ref),
                   ),
                   const SizedBox(height: 16),
                   // 2단: 리스트 or 빈상태
@@ -106,20 +74,9 @@ class NeedleListScreen extends ConsumerWidget {
                             onAction: () => _showNeedleStartSheet(context, ref),
                           )
                         else ...[
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  isKorean ? '내 바늘 목록' : 'My Needles',
-                                  style: T.bodyBold,
-                                ),
-                              ),
-                              ElevatedButton.icon(
-                                onPressed: () => _showNeedleStartSheet(context, ref),
-                                icon: const Icon(Icons.add_rounded),
-                                label: Text(t.addNeedle),
-                              ),
-                            ],
+                          Text(
+                            isKorean ? '내 바늘 목록' : 'My Needles',
+                            style: T.bodyBold,
                           ),
                           const SizedBox(height: 8),
                           ...needles.map(
@@ -389,29 +346,3 @@ class _NeedleCard extends StatelessWidget {
   }
 }
 
-class _NeedleStatCell extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-  const _NeedleStatCell({required this.label, required this.value, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.16)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: T.caption.copyWith(color: C.mu)),
-          const SizedBox(height: 4),
-          Text(value, style: T.bodyBold.copyWith(color: color)),
-        ],
-      ),
-    );
-  }
-}

@@ -179,7 +179,8 @@ class MoriTabDestination {
   final String? avatarUrl;
   final String? avatarInitial;
   final DefaultAvatarPreset? avatarPreset;
-  const MoriTabDestination(this.icon, this.label, this.accent, {this.avatarUrl, this.avatarInitial, this.avatarPreset});
+  final int badgeCount;
+  const MoriTabDestination(this.icon, this.label, this.accent, {this.avatarUrl, this.avatarInitial, this.avatarPreset, this.badgeCount = 0});
 }
 
 class MoriTabBar extends StatelessWidget {
@@ -247,7 +248,7 @@ class _TabBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasAvatar = (tab.avatarUrl != null && tab.avatarUrl!.isNotEmpty) || (tab.avatarInitial != null && tab.avatarInitial!.isNotEmpty);
-    return Container(
+    final iconWidget = Container(
       width: 30,
       height: 30,
       decoration: BoxDecoration(
@@ -255,6 +256,30 @@ class _TabBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
       ),
       child: hasAvatar ? _ProfileBadge(url: tab.avatarUrl, initial: tab.avatarInitial, accent: accent, isOn: isOn, preset: tab.avatarPreset) : Icon(tab.icon, size: 18, color: accent),
+    );
+
+    if (tab.badgeCount <= 0) return iconWidget;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        iconWidget,
+        Positioned(
+          top: -4,
+          right: -4,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+            decoration: BoxDecoration(
+              color: const Color(0xFFDC2626),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white, width: 1.5),
+            ),
+            child: Text(
+              tab.badgeCount > 99 ? '99+' : '${tab.badgeCount}',
+              style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -433,6 +458,7 @@ class BgOrbs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (C.isMono) return const SizedBox.shrink();
     return Positioned.fill(
       child: IgnorePointer(
         child: CustomPaint(painter: _BgPatternPainter()),
@@ -1142,6 +1168,87 @@ class MoriLibraryCard extends StatelessWidget {
 }
 
 /// 컴팩트 목록 행 — leading 아이콘 + title/subtitle + trailing(팝업 등) + 화살표
+// ── 화면 상단 통계 요약바 (세로구분선 + 추가버튼) ──────────────────────────────
+class WorkStat {
+  final String value;
+  final String label;
+  final Color? color;
+  const WorkStat(this.value, this.label, {this.color});
+}
+
+class WorkspaceSummaryBar extends StatelessWidget {
+  final List<WorkStat> stats;
+  final String addLabel;
+  final VoidCallback onAdd;
+
+  const WorkspaceSummaryBar({
+    super.key,
+    required this.stats,
+    required this.addLabel,
+    required this.onAdd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            Expanded(
+              child: Row(
+                children: [
+                  for (int i = 0; i < stats.length; i++) ...[
+                    if (i > 0)
+                      Container(width: 1, color: C.bd),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            stats[i].value,
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              color: stats[i].color ?? C.tx,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            stats[i].label,
+                            style: TextStyle(fontSize: 10, color: C.mu),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Container(width: 1, color: C.bd),
+            const SizedBox(width: 10),
+            ElevatedButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.add_rounded, size: 15),
+              label: Text(addLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: C.lv,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                elevation: 0,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class MoriCompactRow extends StatelessWidget {
   final VoidCallback onTap;
   final Widget? leading;

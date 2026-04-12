@@ -46,61 +46,21 @@ class _YarnListScreenState extends ConsumerState<YarnListScreen> {
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
                     children: [
-                      // 실 요약 카드 (MoriKnit + Ravelry 뱃지)
-                      GlassCard(
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: C.pk.withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text('MoriKnit', style: T.caption.copyWith(color: C.pkD, fontWeight: FontWeight.w700)),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    yarnListAsync.maybeWhen(data: (y) => '${y.length}', orElse: () => '$count'),
-                                    style: T.h3.copyWith(color: C.pkD),
-                                  ),
-                                  Text(isKorean ? '보유 실' : 'My yarns', style: T.caption.copyWith(color: C.mu)),
-                                ],
-                              ),
-                            ),
-                            Container(width: 1, height: 40, color: C.bd),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: C.lv.withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text('Ravelry', style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w700)),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Consumer(
-                                    builder: (ctx, ref2, _) {
-                                      final stashAsync = ref2.watch(ravelryStashProvider);
-                                      return Text(
-                                        stashAsync.maybeWhen(data: (s) => '${s.length}', orElse: () => '-'),
-                                        style: T.h3.copyWith(color: C.lv),
-                                      );
-                                    },
-                                  ),
-                                  Text(isKorean ? '스태시' : 'Stash', style: T.caption.copyWith(color: C.mu)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
+                      // 실 요약 바 (WorkspaceSummaryBar)
+                      Consumer(
+                        builder: (ctx, ref2, _) {
+                          final stashAsync = ref2.watch(ravelryStashProvider);
+                          final ravelryCount = stashAsync.maybeWhen(data: (s) => '${s.length}', orElse: () => '-');
+                          final yarnCount = yarnListAsync.maybeWhen(data: (y) => '${y.length}', orElse: () => '$count');
+                          return WorkspaceSummaryBar(
+                            stats: [
+                              WorkStat(yarnCount, isKorean ? '전체' : 'Total', color: C.pkD),
+                              WorkStat(ravelryCount, 'Ravelry', color: C.lv),
+                            ],
+                            addLabel: isKorean ? '실 추가' : 'Add',
+                            onAdd: () => Navigator.push(ctx, MaterialPageRoute(builder: (_) => const YarnInputScreen())),
+                          );
+                        },
                       ),
                       const SizedBox(height: 16),
                       // 모리니트 실 목록
@@ -116,7 +76,7 @@ class _YarnListScreenState extends ConsumerState<YarnListScreen> {
                                   child: Text('MoriKnit', style: T.caption.copyWith(color: C.pkD, fontWeight: FontWeight.w700)),
                                 ),
                                 const SizedBox(width: 8),
-                                Text(isKorean ? '나의 실' : 'My Yarns', style: T.bodyBold),
+                                Text(isKorean ? '🧵 나의 실' : '🧵 My Yarns', style: T.bodyBold),
                               ],
                             ),
                             const SizedBox(height: 12),
@@ -152,22 +112,6 @@ class _YarnListScreenState extends ConsumerState<YarnListScreen> {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        isKorean ? '실 목록' : 'Yarn list',
-                                        style: T.bodyBold,
-                                      ),
-                                    ),
-                                    ElevatedButton.icon(
-                                      onPressed: () => _showYarnStartSheet(context),
-                                      icon: const Icon(Icons.add_rounded),
-                                      label: Text(isKorean ? '실 추가' : 'Add yarn'),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
                                 ...yarns.map(
                                   (yarn) => _YarnCard(
                                     brandName: yarn.brandName,
@@ -375,7 +319,7 @@ class _RavelryStashSection extends ConsumerWidget {
                 child: Text('Ravelry', style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w700)),
               ),
               const SizedBox(width: 8),
-              Text(isKorean ? '나의 스태시' : 'My Stash', style: T.bodyBold),
+              Text(isKorean ? '📦 나의 스태시' : '📦 My Stash', style: T.bodyBold),
             ],
           ),
           const SizedBox(height: 12),

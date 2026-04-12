@@ -18,7 +18,6 @@ import '../../../providers/counter_provider.dart';
 import '../../../providers/market_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/swatch_provider.dart';
-import '../../../providers/avatar_provider.dart';
 import '../../../providers/fab_settings_provider.dart';
 import '../../../providers/theme_provider.dart';
 import '../../auth/domain/user_model.dart';
@@ -84,56 +83,6 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
     }
   }
 
-  Future<void> _showAvatarPicker() async {
-    final isKorean = ref.read(appLanguageProvider).isKorean;
-    final current = ref.read(avatarPresetProvider);
-    await showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-        decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 36, height: 4, margin: const EdgeInsets.only(bottom: 16), decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
-            Text(isKorean ? '기본 아바타 선택' : 'Select avatar', style: T.h3),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: DefaultAvatarPreset.values.map((preset) {
-                final isSelected = preset == current;
-                return GestureDetector(
-                  onTap: () async {
-                    await ref.read(avatarPresetProvider.notifier).setPreset(preset);
-                    if (mounted) Navigator.pop(context);
-                  },
-                  child: Column(
-                    children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: isSelected ? C.lv : Colors.transparent, width: 2.5),
-                        ),
-                        child: MoriDefaultAvatar(size: 60, borderRadius: 999, preset: preset),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(isKorean ? preset.label : preset.labelEn, style: T.caption.copyWith(color: isSelected ? C.lvD : C.tx2, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400)),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Future<void> _editDisplayName(BuildContext context, AppStrings t) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -253,28 +202,25 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                                 children: [
                                   // LEFT: 아바타 (고정 너비)
                                   SizedBox(
-                                    width: 84,
+                                    width: 96,
                                     child: Column(
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
                                         Stack(
                                           children: [
-                                            GestureDetector(
-                                              onTap: photo.isEmpty ? _showAvatarPicker : null,
-                                              child: ClipOval(
-                                                child: SizedBox(
-                                                  width: 64,
-                                                  height: 64,
-                                                  child: photo.isNotEmpty
-                                                      ? Image.network(
-                                                          photo,
-                                                          width: 64,
-                                                          height: 64,
-                                                          fit: BoxFit.cover,
-                                                          errorBuilder: (_, _, _) => MoriDefaultAvatar(size: 64, borderRadius: 999, preset: ref.watch(avatarPresetProvider)),
-                                                        )
-                                                      : MoriDefaultAvatar(size: 64, borderRadius: 999, preset: ref.watch(avatarPresetProvider)),
-                                                ),
+                                            ClipOval(
+                                              child: SizedBox(
+                                                width: 80,
+                                                height: 80,
+                                                child: photo.isNotEmpty
+                                                    ? Image.network(
+                                                        photo,
+                                                        width: 80,
+                                                        height: 80,
+                                                        fit: BoxFit.cover,
+                                                        errorBuilder: (_, _, _) => const MoriDefaultAvatar(size: 80, borderRadius: 999),
+                                                      )
+                                                    : const MoriDefaultAvatar(size: 80, borderRadius: 999),
                                               ),
                                             ),
                                             if (_uploadingPhoto)
@@ -1155,16 +1101,23 @@ class _SubscriptionCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final gates = ref.watch(featureGatesProvider);
     final isPro = ref.watch(isProProvider);
+    final isBusiness = gates.isBusiness;
     final remainingDays = ref.watch(proRemainingDaysProvider);
     final sub = user.subscription;
     final isTrial = sub.status == 'trial';
 
+    final planLabel = isBusiness ? 'Business' : (isPro ? 'Pro' : 'Free');
+    final planColor = isBusiness ? C.lmD : (isPro ? C.og : C.mu);
+
     final statusText = isTrial
-        ? (isKorean ? 'Pro — 무료 체험 중' : 'Pro — Free trial')
-        : isPro
-            ? (isKorean ? 'Pro — 활성' : 'Pro — Active')
-            : (isKorean ? '무료 플랜' : 'Free plan');
+        ? (isKorean ? '$planLabel — 무료 체험 중' : '$planLabel — Free trial')
+        : isBusiness
+            ? (isKorean ? 'Business — 활성' : 'Business — Active')
+            : isPro
+                ? (isKorean ? 'Pro — 활성' : 'Pro — Active')
+                : (isKorean ? '무료 플랜' : 'Free plan');
 
     return GlassCard(
       child: Column(
@@ -1178,11 +1131,11 @@ class _SubscriptionCard extends ConsumerWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: isPro ? C.og.withValues(alpha: 0.12) : C.mu.withValues(alpha: 0.10),
+                  color: planColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: isPro ? C.og.withValues(alpha: 0.3) : C.bd),
+                  border: Border.all(color: planColor.withValues(alpha: 0.3)),
                 ),
-                child: Text(isPro ? 'Pro' : 'Free', style: T.captionBold.copyWith(color: isPro ? C.og : C.mu)),
+                child: Text(planLabel, style: T.captionBold.copyWith(color: planColor)),
               ),
             ],
           ),
@@ -1282,39 +1235,30 @@ class _SubscriptionCard extends ConsumerWidget {
           ),
           const SizedBox(height: 14),
 
-          // 플랜 혜택 요약 (1줄)
+          // 플랜 혜택 요약
           const SizedBox(height: 10),
-          Row(
-            children: [
-              for (final entry in [
-                (isKorean ? '무제한' : 'Unlimited', isPro),
-                ('PDF', isPro),
-                ('AI게이지', isPro),
-                (isKorean ? '광고없음' : 'Ad-free', isPro),
-              ]) ...[
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isPro ? C.lv.withValues(alpha: 0.10) : C.lvL,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: C.lv.withValues(alpha: 0.20)),
-                    ),
-                    child: Text(
-                      '✓ ${entry.$1}',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: isPro ? C.lv : C.lvD,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-              ],
-            ],
-          ),
+          if (isBusiness) ...[
+            // 비즈니스 전용 혜택 2행
+            _PlanBadgeRow(badges: [
+              (isKorean ? '무제한' : 'Unlimited', true),
+              ('PDF판매', true),
+              ('AI게이지', true),
+              (isKorean ? '광고없음' : 'Ad-free', true),
+            ], activeColor: C.lmD),
+            const SizedBox(height: 6),
+            _PlanBadgeRow(badges: [
+              (isKorean ? '에디터도안판매' : 'Chart sell', true),
+              (isKorean ? 'PDF도안판매' : 'PDF sell', true),
+              (isKorean ? '단계로그 상품구성' : 'Step template', true),
+            ], activeColor: C.lmD),
+          ] else ...[
+            _PlanBadgeRow(badges: [
+              (isKorean ? '무제한' : 'Unlimited', isPro),
+              ('PDF', isPro),
+              ('AI게이지', isPro),
+              (isKorean ? '광고없음' : 'Ad-free', isPro),
+            ], activeColor: C.lv),
+          ],
           const SizedBox(height: 14),
 
           SizedBox(
@@ -1576,4 +1520,41 @@ class _ProBookmarkPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _PlanBadgeRow extends StatelessWidget {
+  final List<(String, bool)> badges;
+  final Color activeColor;
+
+  const _PlanBadgeRow({required this.badges, required this.activeColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (final entry in badges) ...[
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              decoration: BoxDecoration(
+                color: entry.$2 ? activeColor.withValues(alpha: 0.10) : const Color(0xFFF3F0FA),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: activeColor.withValues(alpha: 0.20)),
+              ),
+              child: Text(
+                '✓ ${entry.$1}',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: entry.$2 ? activeColor : activeColor.withValues(alpha: 0.4),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
+      ],
+    );
+  }
 }

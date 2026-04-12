@@ -101,6 +101,11 @@ class ProjectModel with _$ProjectModel {
     @Default(false) bool isDirty,
     @Default(0) int completedStepCount,
     @Default(0) int totalStepCount,
+    // Fork 관련 필드
+    @Default('') String sourcePatternId,
+    @Default('') String originProjectId,
+    @Default('') String originUserId,
+    @Default('') String originOwnerName,
   }) = _ProjectModel;
 
   factory ProjectModel.fromJson(Map<String, dynamic> json) => _$ProjectModelFromJson(json);

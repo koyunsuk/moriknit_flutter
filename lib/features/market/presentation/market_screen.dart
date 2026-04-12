@@ -67,7 +67,7 @@ class MarketScreen extends ConsumerWidget {
                           onCreate: canCreate ? () => _showCreateItemSheet(context, ref, user.uid, user.displayName ?? user.email ?? '') : null,
                         ),
                       const SizedBox(height: 16),
-                      SectionTitle(title: isKorean ? '추천 상품' : 'Recommended items'),
+                      SectionTitle(title: isKorean ? '⭐ 추천 상품' : '⭐ Recommended items'),
                       const SizedBox(height: 10),
                       itemsAsync.when(
                     data: (items) {

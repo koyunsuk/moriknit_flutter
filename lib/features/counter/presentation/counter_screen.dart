@@ -467,7 +467,7 @@ class _CounterScreenState extends ConsumerState<CounterScreen> {
                   const SizedBox(height: 14),
                   GlassCard(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(isKorean ? '최근 마크' : 'Recent marks', style: T.bodyBold),
+                      Text(isKorean ? '🔖 최근 마크' : '🔖 Recent marks', style: T.bodyBold),
                       const SizedBox(height: 10),
                       if (counter.marks.isEmpty) Text(isKorean ? '아직 저장한 마크가 없어요.' : 'No saved marks yet.', style: T.caption.copyWith(color: C.mu)),
                       ...counter.marks.reversed.take(3).map((mark) => Padding(

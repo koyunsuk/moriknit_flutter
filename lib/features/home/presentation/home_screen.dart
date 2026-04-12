@@ -1,5 +1,6 @@
 ﻿import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,6 +13,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/admin_config_provider.dart';
+import '../../../providers/app_config_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/editorial_provider.dart';
 import '../../../providers/guestbook_provider.dart';
@@ -26,11 +28,59 @@ import '../../project/data/public_project_service.dart';
 import '../domain/editorial_post.dart';
 import 'editorial_screen.dart';
 
-class HomeScreen extends ConsumerWidget {
+// 공지사항 Provider
+final landingNoticesProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
+  return FirebaseFirestore.instance
+      .collection('landing_notices')
+      .orderBy('createdAt', descending: true)
+      .limit(5)
+      .snapshots()
+      .map((snap) => snap.docs.map((d) => {'id': d.id, ...d.data()}).toList());
+});
+
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  bool _bannerDismissed = false;
+  bool _popupShown = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 팝업 공지는 첫 번째 데이터 수신 시 1회만 표시
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowPopup());
+  }
+
+  void _maybeShowPopup() {
+    if (_popupShown) return;
+    final appConfig = ref.read(appConfigProvider).valueOrNull;
+    if (appConfig == null) return;
+    if (appConfig.maintenanceNotice.isNotEmpty && appConfig.noticeType == 'popup') {
+      _popupShown = true;
+      final isKorean = ref.read(appLanguageProvider).isKorean;
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(isKorean ? '공지사항' : 'Notice'),
+          content: Text(appConfig.maintenanceNotice),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(isKorean ? '확인' : 'OK'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final t = ref.watch(appStringsProvider);
     final language = ref.watch(appLanguageProvider);
     final isKorean = language.isKorean;
@@ -41,6 +91,7 @@ class HomeScreen extends ConsumerWidget {
     final projectCount = ref.watch(projectCountProvider);
     final publicProjectsAsync = ref.watch(publicProjectsProvider);
     final adminConfig = ref.watch(adminConfigProvider).valueOrNull;
+    final appConfig = ref.watch(appConfigProvider).valueOrNull;
     final currentUser = ref.watch(currentUserProvider).valueOrNull;
     final userName = currentUser?.displayName.isNotEmpty == true
         ? currentUser!.displayName
@@ -53,6 +104,15 @@ class HomeScreen extends ConsumerWidget {
         .replaceAll('[사용자 이름]', userName)
         .replaceAll('[userName]', userName);
 
+    // 팝업 공지: 데이터가 처음 로드되면 표시 시도
+    if (!_popupShown && appConfig != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowPopup());
+    }
+
+    final showBanner = !_bannerDismissed &&
+        (appConfig?.maintenanceNotice.isNotEmpty ?? false) &&
+        appConfig?.noticeType == 'banner';
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
@@ -64,6 +124,12 @@ class HomeScreen extends ConsumerWidget {
                 subtitle: personalizedSubtitle,
               ),
             ),
+            // 긴급공지 배너
+            if (showBanner)
+              _MaintenanceBanner(
+                message: appConfig!.maintenanceNotice,
+                onDismiss: () => setState(() => _bannerDismissed = true),
+              ),
             Expanded(
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -81,7 +147,10 @@ class HomeScreen extends ConsumerWidget {
                       publicProjectsAsync: publicProjectsAsync,
                     ),
                     const SizedBox(height: 20),
-                    // 2. 커뮤니티 그룹 카드
+                    // 2. 공지사항
+                    _HomeNoticesSection(isKorean: isKorean),
+                    const SizedBox(height: 20),
+                    // 3. 커뮤니티 그룹 카드
                     _SectionGroupCard(
                       label: isKorean ? '커뮤니티' : 'Community',
                       icon: Icons.people_rounded,
@@ -111,7 +180,7 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    // 3. 강의실
+                    // 4. 강의실
                     _SectionGroupCard(
                       label: isKorean ? '강의실' : 'Course',
                       icon: Icons.play_lesson_rounded,
@@ -120,7 +189,7 @@ class HomeScreen extends ConsumerWidget {
                       child: const _PopularCourseSection(),
                     ),
                     const SizedBox(height: 20),
-                    // 4. 오늘의 뜨개 소식 (모리채널 포함)
+                    // 5. 오늘의 뜨개 소식 (모리채널 포함)
                     _SectionGroupCard(
                       label: isKorean ? '오늘의 Knitting 소식' : "Today's Knitting News",
                       icon: Icons.newspaper_rounded,
@@ -133,6 +202,41 @@ class HomeScreen extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 운영지원 긴급공지 배너 (maintenanceNotice + noticeType == 'banner')
+class _MaintenanceBanner extends StatelessWidget {
+  final String message;
+  final VoidCallback onDismiss;
+
+  const _MaintenanceBanner({required this.message, required this.onDismiss});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: C.og.withValues(alpha: 0.12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          Icon(Icons.campaign_rounded, size: 18, color: C.og),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: T.sm.copyWith(color: C.og, fontWeight: FontWeight.w600),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          GestureDetector(
+            onTap: onDismiss,
+            child: Icon(Icons.close_rounded, size: 18, color: C.og),
+          ),
+        ],
       ),
     );
   }
@@ -1535,6 +1639,249 @@ class _SubSectionLabel extends StatelessWidget {
         ),
         const SizedBox(width: 7),
         Text(title, style: T.captionBold.copyWith(color: color)),
+      ],
+    );
+  }
+}
+
+// ── 공지사항 섹션 ──────────────────────────────────────────────
+class _NoticesPlaceholder extends StatelessWidget {
+  final bool isKorean;
+  const _NoticesPlaceholder({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          height: 48,
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: C.gx,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: C.bd, width: 0.5),
+          ),
+          child: Row(children: [
+            Icon(Icons.campaign_outlined, size: 14, color: C.mu),
+            const SizedBox(width: 8),
+            Text(
+              isKorean ? '등록된 공지사항이 없어요' : 'No notices yet',
+              style: T.caption.copyWith(color: C.mu),
+            ),
+          ]),
+        ),
+        Container(
+          height: 48,
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            color: C.gx,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: C.bd, width: 0.5),
+          ),
+        ),
+        Container(
+          height: 48,
+          decoration: BoxDecoration(
+            color: C.gx,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: C.bd, width: 0.5),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HomeNoticesSection extends ConsumerStatefulWidget {
+  final bool isKorean;
+  const _HomeNoticesSection({required this.isKorean});
+
+  @override
+  ConsumerState<_HomeNoticesSection> createState() => _HomeNoticesSectionState();
+}
+
+class _HomeNoticesSectionState extends ConsumerState<_HomeNoticesSection> {
+  bool _isExpanded = false;
+
+  bool get isKorean => widget.isKorean;
+
+  String _formatDate(dynamic createdAt) {
+    if (createdAt == null) return '';
+    try {
+      final ts = createdAt as Timestamp;
+      final dt = ts.toDate();
+      return '${dt.year}.${dt.month.toString().padLeft(2, '0')}.${dt.day.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  void _showNoticeDetail(BuildContext context, Map<String, dynamic> notice) {
+    final title = notice['title'] as String? ?? '';
+    final content = notice['content'] as String? ?? '';
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.55,
+        minChildSize: 0.35,
+        maxChildSize: 0.85,
+        expand: false,
+        builder: (_, controller) => Container(
+          decoration: BoxDecoration(
+            color: C.bg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: C.bd,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  title,
+                  style: T.h3.copyWith(color: C.tx),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Divider(color: C.bd, thickness: 0.5, indent: 20, endIndent: 20),
+              Expanded(
+                child: ListView(
+                  controller: controller,
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+                  children: [
+                    Text(
+                      content,
+                      style: T.body.copyWith(color: C.tx2, height: 1.7),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final noticesAsync = ref.watch(landingNoticesProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionTitle(title: isKorean ? '공지사항' : 'Notices'),
+        const SizedBox(height: 10),
+        noticesAsync.when(
+          loading: () => _NoticesPlaceholder(isKorean: isKorean),
+          error: (_, _) => _NoticesPlaceholder(isKorean: isKorean),
+          data: (notices) {
+            if (notices.isEmpty) {
+              return _NoticesPlaceholder(isKorean: isKorean);
+            }
+            final displayed = _isExpanded ? notices : notices.take(1).toList();
+            final hiddenCount = notices.length - 1;
+
+            return Column(
+              children: [
+                ...displayed.map((notice) {
+                  final isPinned = notice['isPinned'] as bool? ?? false;
+                  final title = notice['title'] as String? ?? '';
+                  final dateStr = _formatDate(notice['createdAt']);
+
+                  return GestureDetector(
+                    onTap: () => _showNoticeDetail(context, notice),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: isPinned ? C.lv.withValues(alpha: 0.08) : C.gx,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border(
+                          left: BorderSide(
+                            color: isPinned ? C.lv : Colors.transparent,
+                            width: 3,
+                          ),
+                          top: BorderSide(color: C.bd, width: 0.5),
+                          right: BorderSide(color: C.bd, width: 0.5),
+                          bottom: BorderSide(color: C.bd, width: 0.5),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            if (isPinned) ...[
+                              Icon(Icons.push_pin_rounded, size: 14, color: C.lv),
+                              const SizedBox(width: 6),
+                            ],
+                            Expanded(
+                              child: Text(
+                                title,
+                                style: T.body.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: C.tx,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              dateStr,
+                              style: T.caption.copyWith(color: C.mu),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(Icons.chevron_right_rounded, size: 16, color: C.mu),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+                if (notices.length > 1)
+                  GestureDetector(
+                    onTap: () => setState(() => _isExpanded = !_isExpanded),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            _isExpanded
+                                ? (isKorean ? '접기' : 'Collapse')
+                                : (isKorean ? '공지 더 보기 ($hiddenCount)' : 'More notices ($hiddenCount)'),
+                            style: T.caption.copyWith(color: C.mu, fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            _isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                            size: 16,
+                            color: C.mu,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
       ],
     );
   }

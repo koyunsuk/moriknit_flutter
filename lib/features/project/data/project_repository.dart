@@ -55,6 +55,37 @@ class ProjectRepository {
     }
   }
 
+  // ── FORK (타인의 공개 프로젝트 복사) ─────────────────────
+  Future<ProjectModel> forkProject({
+    required String originProjectId,
+    required String originUserId,
+    required String originOwnerName,
+    required String title,
+    required String yarnName,
+    required String yarnBrandName,
+    required String yarnWeight,
+    required double needleSize,
+    String sourcePatternId = '',
+  }) async {
+    final now = DateTime.now();
+    final forked = ProjectModel(
+      id: '',
+      uid: _uid,
+      title: title,
+      yarnName: yarnName,
+      yarnBrandName: yarnBrandName,
+      yarnWeight: yarnWeight,
+      needleSize: needleSize,
+      originProjectId: originProjectId,
+      originUserId: originUserId,
+      originOwnerName: originOwnerName,
+      sourcePatternId: sourcePatternId,
+      createdAt: now,
+      updatedAt: now,
+    );
+    return createProject(forked);
+  }
+
   // ── DUPLICATE ────────────────────────────────────────────
   Future<ProjectModel> duplicateProject(ProjectModel original) async {
     final now = DateTime.now();

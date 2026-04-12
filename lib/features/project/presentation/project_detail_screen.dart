@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -7,7 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/localization/app_language.dart';
@@ -16,7 +17,9 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/counter_provider.dart';
+import '../../../providers/market_provider.dart';
 import '../../../providers/project_provider.dart';
+import '../../market/domain/market_item.dart';
 import '../../../providers/project_step_provider.dart';
 import '../../../providers/needle_provider.dart';
 import '../../../providers/swatch_provider.dart';
@@ -34,6 +37,7 @@ import '../domain/project_model.dart';
 import '../domain/project_step.dart';
 import '../../pattern/data/pattern_repository.dart';
 import '../../pattern/domain/pattern_chart.dart';
+import '../../pattern/presentation/pattern_detail_screen.dart';
 import 'widgets/project_progress_section.dart';
 import 'widgets/project_share_card.dart';
 class ProjectDetailScreen extends ConsumerStatefulWidget {
@@ -72,7 +76,7 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
 
     // ignore: use_build_context_synchronously
     final confirm = await showDialog<bool>(
-      context: context,
+      context: context, // ignore: use_build_context_synchronously
       builder: (ctx) => AlertDialog(
         title: Text(
           alreadyPublished
@@ -104,7 +108,7 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
     try {
       // ignore: use_build_context_synchronously
       await runWithMoriLoadingDialog<void>(
-        context,
+        context, // ignore: use_build_context_synchronously
         message: isKorean ? '처리하는 중입니다.' : 'Processing...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
         task: () async {
@@ -115,12 +119,18 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
             final ownerName = currentUser?.displayName ?? user.displayName ?? '';
             final steps = ref.read(projectStepsProvider(project.id)).valueOrNull ?? [];
             final completedStepTitles = steps.where((s) => s.isDone).map((s) => s.name).toList();
+            // step 사진 + 프로젝트 앨범 사진 모두 포함
+            final stepPhotoUrls = steps
+                .where((s) => s.photoUrl?.isNotEmpty == true)
+                .map((s) => s.photoUrl!)
+                .toList();
+            final allPhotoUrls = {...stepPhotoUrls, ...project.photoUrls}.toList();
             await service.publishProject(
               uid: user.uid,
               ownerName: ownerName,
               project: project,
               stepTitles: completedStepTitles,
-              photoUrls: project.photoUrls,
+              photoUrls: allPhotoUrls,
             );
           }
         },
@@ -304,16 +314,11 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
       final safeUser = rawUser.replaceAll(RegExp(r'[^\w가-힣]'), '_');
       final filename = safeUser.isEmpty
           ? '${safeName}_$dateStr.pdf'
-          : '${safeName}_${dateStr}_${safeUser}.pdf';
-      // 임시 디렉토리에 파일명으로 저장 후 공유 (XFile.fromData는 UUID로 저장되는 문제 방지)
-      final dir = await getTemporaryDirectory();
-      final tmpFile = File('${dir.path}/$filename');
-      await tmpFile.writeAsBytes(bytes);
-      await SharePlus.instance.share(
-        ShareParams(
-          files: [XFile(tmpFile.path, mimeType: 'application/pdf', name: filename)],
-          subject: isKorean ? '${project.title} 프로젝트 기록지' : '${project.title} - Project Record',
-        ),
+          : '${safeName}_${dateStr}_$safeUser.pdf';
+      // Printing.sharePdf handles file sharing natively on all platforms
+      await Printing.sharePdf(
+        bytes: Uint8List.fromList(bytes),
+        filename: filename,
       );
       if (!mounted) return;
       showSavedSnackBar(messenger, message: isKorean ? 'PDF가 저장되었어요.' : 'PDF saved.');
@@ -321,6 +326,173 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
       if (!mounted) return;
       showSaveErrorSnackBar(messenger, message: '$e');
     }
+  }
+
+  Future<void> _shareProjectText(BuildContext context, WidgetRef ref, ProjectModel project) async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final lines = <String>[
+      isKorean ? '[모리니트] 프로젝트 공유' : '[MoriKnit] Project Share',
+      '${isKorean ? '작품명' : 'Title'}: ${project.title}',
+    ];
+    if (project.yarnName.isNotEmpty) {
+      final yarnInfo = project.yarnBrandName.isNotEmpty
+          ? '${project.yarnName} (${project.yarnBrandName})'
+          : project.yarnName;
+      lines.add('${isKorean ? '실' : 'Yarn'}: $yarnInfo');
+    }
+    if (project.finishDate != null) {
+      lines.add('${isKorean ? '완성일' : 'Finished'}: ${DateFormat('yyyy-MM-dd').format(project.finishDate!)}');
+    }
+    if (project.description.isNotEmpty) {
+      lines.add('');
+      lines.add(project.description);
+    }
+    await SharePlus.instance.share(ShareParams(text: lines.join('\n')));
+  }
+
+  Future<void> _showPatternSellSheet(BuildContext context, WidgetRef ref, ProjectModel project) async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
+
+    final titleCtrl = TextEditingController(text: project.title);
+    final descCtrl = TextEditingController(text: project.description);
+    final priceCtrl = TextEditingController(text: '0');
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 핸들
+                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(2)))),
+                const SizedBox(height: 16),
+                Text(isKorean ? '패턴 판매 등록' : 'Sell Pattern', style: T.h3),
+                const SizedBox(height: 4),
+                Text(
+                  isKorean ? '직접 제작한 도안을 모리니트 마켓에 등록해요. 관리자 승인 후 공개돼요.' : 'Submit your pattern to MoriKnit Market. It will be visible after admin approval.',
+                  style: T.caption.copyWith(color: C.mu),
+                ),
+                const SizedBox(height: 20),
+                // 커버 이미지 미리보기
+                if (project.coverPhotoUrl.isNotEmpty) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(project.coverPhotoUrl, height: 140, width: double.infinity, fit: BoxFit.cover),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                SectionTitle(title: isKorean ? '제목' : 'Title'),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: titleCtrl,
+                  decoration: InputDecoration(
+                    labelText: isKorean ? '판매 제목' : 'Listing title',
+                    hintText: project.title,
+                    fillColor: C.gx,
+                    filled: true,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                SectionTitle(title: isKorean ? '설명' : 'Description'),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: descCtrl,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    labelText: isKorean ? '도안 설명' : 'Pattern description',
+                    hintText: isKorean ? '사용 실, 난이도, 완성 크기 등을 적어주세요.' : 'Yarn, difficulty, size...',
+                    fillColor: C.gx,
+                    filled: true,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                SectionTitle(title: isKorean ? '가격 (원)' : 'Price (KRW)'),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: priceCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: isKorean ? '가격' : 'Price',
+                    hintText: '0',
+                    suffixText: isKorean ? '원' : 'KRW',
+                    fillColor: C.gx,
+                    filled: true,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final title = titleCtrl.text.trim();
+                      final desc = descCtrl.text.trim();
+                      final price = int.tryParse(priceCtrl.text.trim()) ?? 0;
+                      if (title.isEmpty) return;
+                      Navigator.pop(ctx);
+                      try {
+                        final sellerName = user.displayName ?? (isKorean ? '알 수 없음' : 'Unknown');
+                        final item = MarketItem(
+                          id: '',
+                          sellerUid: user.uid,
+                          sellerName: sellerName,
+                          title: title,
+                          description: desc,
+                          price: price,
+                          category: 'pattern',
+                          accentHex: '#8B5CF6',
+                          imageType: 'pattern',
+                          isSoldOut: false,
+                          status: 'pending',
+                        );
+                        // ignore: use_build_context_synchronously
+                        await runWithMoriLoadingDialog<void>(
+                          context,
+                          message: isKorean ? '등록하는 중입니다.' : 'Submitting...',
+                          subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+                          task: () => ref.read(marketRepositoryProvider).createItem(
+                            item,
+                            imageBytes: null,
+                            extraData: {
+                              'sourceProjectId': project.id,
+                              'coverPhotoUrl': project.coverPhotoUrl,
+                              if (project.sourcePatternId.isNotEmpty)
+                                'sourcePatternId': project.sourcePatternId,
+                            },
+                          ),
+                        );
+                        if (!context.mounted) return;
+                        showSavedSnackBar(
+                          ScaffoldMessenger.of(context),
+                          message: isKorean ? '등록됐어요. 관리자 승인 후 마켓에 공개돼요.' : 'Submitted! Will be visible after approval.',
+                        );
+                      } catch (e) {
+                        if (!context.mounted) return;
+                        showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+                      }
+                    },
+                    child: Text(isKorean ? '판매 등록 신청' : 'Submit for Review'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    titleCtrl.dispose();
+    descCtrl.dispose();
+    priceCtrl.dispose();
   }
 
   Future<void> _showShareCardDialog(BuildContext context, WidgetRef ref, ProjectModel project) async {
@@ -461,10 +633,14 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
                                   _duplicateProject(context, ref, project);
                                 } else if (value == 'pdf') {
                                   await _exportPdf(context, ref, project);
+                                } else if (value == 'share_text') {
+                                  await _shareProjectText(context, ref, project);
                                 } else if (value == 'share_card') {
                                   await _showShareCardDialog(context, ref, project);
                                 } else if (value == 'publish') {
                                   await _publishToGallery(context, ref, project);
+                                } else if (value == 'sell_pattern') {
+                                  await _showPatternSellSheet(context, ref, project);
                                 } else if (value == 'delete') {
                                   _confirmDelete(context, ref, project.id);
                                 }
@@ -485,10 +661,13 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
                                   menuItem('edit', Icons.edit_rounded, C.lv, isKorean ? '수정' : 'Edit'),
                                   menuItem('copy', Icons.copy_rounded, C.mu, isKorean ? '복사' : 'Duplicate'),
                                   menuItem('pdf', Icons.picture_as_pdf_outlined, C.lv, isKorean ? 'PDF 내보내기' : 'Export PDF'),
+                                  menuItem('share_text', Icons.share_rounded, C.mu, isKorean ? '외부 공유' : 'Share'),
                                   if (project.isFinished)
                                     menuItem('share_card', Icons.ios_share_rounded, C.pk, isKorean ? '완성 기록지 공유' : 'Share card'),
                                   if (project.isFinished)
                                     menuItem('publish', Icons.public_rounded, C.lv, isKorean ? '갤러리에 공개' : 'Publish to gallery'),
+                                  if (project.isFinished && project.originProjectId.isEmpty)
+                                    menuItem('sell_pattern', Icons.sell_rounded, C.lmD, isKorean ? '패턴 판매 등록' : 'Sell pattern'),
                                   menuItem('delete', Icons.delete_rounded, C.og, isKorean ? '삭제' : 'Delete', textStyle: TextStyle(color: C.og)),
                                 ];
                               },
@@ -599,7 +778,7 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
     try {
       // ignore: use_build_context_synchronously
       await runWithMoriLoadingDialog<void>(
-        context,
+        context, // ignore: use_build_context_synchronously
         message: isKorean ? '저장하는 중입니다.' : 'Saving...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
         task: () async {
@@ -643,6 +822,58 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
           controller: _scrollCtrl,
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 160),
           children: [
+            // Fork 출처 배너
+            if (project.originProjectId.isNotEmpty) ...[
+              GestureDetector(
+                onTap: project.sourcePatternId.isNotEmpty
+                    ? () async {
+                        final chart = await ref
+                            .read(patternRepositoryProvider)
+                            .getFromUser(project.originUserId, project.sourcePatternId);
+                        if (!context.mounted) return;
+                        if (chart == null) {
+                          showSaveErrorSnackBar(
+                            ScaffoldMessenger.of(context),
+                            message: isKorean ? '원본 도안을 불러올 수 없어요.' : 'Could not load the original pattern.',
+                          );
+                          return;
+                        }
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => PatternDetailScreen(chart: chart)),
+                        );
+                      }
+                    : null,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    color: C.lv.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: C.lv.withValues(alpha: 0.25)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.fork_right_rounded, size: 16, color: C.lv),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          isKorean
+                              ? '${project.originOwnerName.isNotEmpty ? project.originOwnerName : "다른 사용자"}님의 프로젝트에서 Fork됐어요'
+                              : 'Forked from ${project.originOwnerName.isNotEmpty ? project.originOwnerName : "another user"}\'s project',
+                          style: T.caption.copyWith(color: C.lv),
+                        ),
+                      ),
+                      if (project.sourcePatternId.isNotEmpty) ...[
+                        const SizedBox(width: 4),
+                        Icon(Icons.chevron_right_rounded, size: 14, color: C.lv),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
             if (project.coverPhotoUrl.isNotEmpty) ...[
               GestureDetector(
                 onTap: (isEditing && isCardEditMode) ? () => _pickAndUpdateCover(context, ref, project) : null,
@@ -787,7 +1018,7 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
                         children: [
                           Icon(Icons.bolt_rounded, color: C.pk, size: 18),
                           const SizedBox(width: 6),
-                          Text(isKorean ? '실 정보' : 'Yarn', style: T.bodyBold),
+                          Text(isKorean ? '🧵 실 정보' : '🧵 Yarn', style: T.bodyBold),
                           const Spacer(),
                           if (isCardEditMode && hasYarn)
                             IconButton(
@@ -884,7 +1115,7 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
                         children: [
                           Icon(Icons.straighten_rounded, color: C.lv, size: 18),
                           const SizedBox(width: 6),
-                          Text(isKorean ? '바늘 정보' : 'Needle', style: T.bodyBold),
+                          Text(isKorean ? '🪡 바늘 정보' : '🪡 Needle', style: T.bodyBold),
                           const Spacer(),
                           if (isCardEditMode && hasNeedle)
                             IconButton(
@@ -2945,7 +3176,7 @@ class _ProjectPhotosSectionState extends ConsumerState<_ProjectPhotosSection> {
             children: [
               Icon(Icons.photo_camera_outlined, color: C.pk, size: 18),
               const SizedBox(width: 6),
-              Text(isKorean ? '착용샷 / 사용샷' : 'Wearing / Usage', style: T.bodyBold.copyWith(color: C.pkD)),
+              Text(isKorean ? '📸 착용샷 / 사용샷' : '📸 Wearing / Usage', style: T.bodyBold.copyWith(color: C.pkD)),
               const Spacer(),
               if (canAdd && widget.isCardEditMode)
                 GestureDetector(

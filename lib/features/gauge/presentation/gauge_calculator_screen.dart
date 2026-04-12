@@ -1,12 +1,17 @@
+import 'dart:math' as math;
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image/image.dart' as img;
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 
-enum _GaugeMode { myGauge, patternConvert, bidirectional }
+enum _GaugeMode { myGauge, patternConvert, bidirectional, photoReading }
 
 class GaugeCalculatorScreen extends ConsumerStatefulWidget {
   const GaugeCalculatorScreen({super.key});
@@ -37,6 +42,16 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
   final _cmToConvertCtrl = TextEditingController(text: '20');
   final _rowsToConvertCtrl = TextEditingController(text: '60');
   final _cmHeightToConvertCtrl = TextEditingController(text: '25');
+
+  // ── 모드 4: 사진 판독 ──
+  Uint8List? _photoBytes;
+  Size? _imageSize;
+  Size? _displaySize;
+  Offset? _selectionStart;
+  Offset? _selectionEnd;
+  int? _detectedSts;
+  int? _detectedRows;
+  bool _analyzing = false;
 
   @override
   void initState() {
@@ -112,8 +127,10 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
                 _buildModeMyGauge(isKorean),
               ] else if (_mode == _GaugeMode.patternConvert) ...[
                 _buildModePatternConvert(isKorean),
-              ] else ...[
+              ] else if (_mode == _GaugeMode.bidirectional) ...[
                 _buildModeBidirectional(isKorean),
+              ] else ...[
+                _buildModePhotoReading(isKorean, t),
               ],
             ],
           ),
@@ -138,7 +155,7 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(isKorean ? '원하는 크기' : 'Target Size', style: T.bodyBold),
+              Text(isKorean ? '📐 원하는 크기' : '📐 Target Size', style: T.bodyBold),
               const SizedBox(height: 12),
               _NumberField(controller: _widthCtrl, label: isKorean ? '가로 (cm)' : 'Width (cm)'),
               const SizedBox(height: 10),
@@ -221,7 +238,7 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(isKorean ? '도안 코수 / 단수' : 'Pattern Stitch & Row Count', style: T.bodyBold),
+              Text(isKorean ? '🔢 도안 코수 / 단수' : '🔢 Pattern Stitch & Row Count', style: T.bodyBold),
               const SizedBox(height: 4),
               Text(
                 isKorean ? '도안에서 사용하는 코수와 단수를 입력하세요' : 'Enter the stitch and row counts from the pattern',
@@ -250,7 +267,7 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
                 children: [
                   Icon(Icons.calculate_outlined, color: C.lv, size: 18),
                   const SizedBox(width: 6),
-                  Text(isKorean ? '계산 결과' : 'Result', style: T.bodyBold),
+                  Text(isKorean ? '✨ 계산 결과' : '✨ Result', style: T.bodyBold),
                 ],
               ),
               const SizedBox(height: 14),
@@ -348,6 +365,438 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
     );
   }
 
+  // ── 사진 선택 ──
+  Future<void> _pickPhoto(ImageSource source) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: source, maxWidth: 1200);
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) return;
+    setState(() {
+      _photoBytes = bytes;
+      _imageSize = Size(decoded.width.toDouble(), decoded.height.toDouble());
+      _selectionStart = null;
+      _selectionEnd = null;
+      _detectedSts = null;
+      _detectedRows = null;
+    });
+  }
+
+  void _showImageSourceDialog(bool isKorean) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: Text(isKorean ? '갤러리에서 선택' : 'Choose from gallery'),
+              onTap: () { Navigator.pop(ctx); _pickPhoto(ImageSource.gallery); },
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: Text(isKorean ? '카메라로 촬영' : 'Take photo'),
+              onTap: () { Navigator.pop(ctx); _pickPhoto(ImageSource.camera); },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _analyzeSelection() async {
+    if (_photoBytes == null || _selectionStart == null || _selectionEnd == null || _imageSize == null) return;
+    setState(() => _analyzing = true);
+
+    try {
+      final result = await _analyzeGaugeImage(
+        _photoBytes!,
+        _imageSize!,
+        _displaySize ?? const Size(300, 300),
+        Rect.fromPoints(_selectionStart!, _selectionEnd!),
+      );
+      if (mounted) {
+        setState(() {
+          _detectedSts = result.$1;
+          _detectedRows = result.$2;
+          _analyzing = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _analyzing = false);
+    }
+  }
+
+  /// 이미지 분석: 자기상관(autocorrelation)으로 수평/수직 주기 감지
+  Future<(int stitches, int rows)> _analyzeGaugeImage(
+    Uint8List imageBytes,
+    Size originalImageSize,
+    Size displaySize,
+    Rect selectionRect,
+  ) async {
+    final decoded = img.decodeImage(imageBytes)!;
+
+    // BoxFit.cover 좌표 변환: display 좌표 → 이미지 픽셀 좌표
+    final imgW = decoded.width.toDouble();
+    final imgH = decoded.height.toDouble();
+    final dispW = displaySize.width;
+    final dispH = displaySize.height;
+
+    final scaleW = dispW / imgW;
+    final scaleH = dispH / imgH;
+    final scale = math.max(scaleW, scaleH);
+    final offsetX = (imgW - dispW / scale) / 2;
+    final offsetY = (imgH - dispH / scale) / 2;
+    final visW = dispW / scale;
+    final visH = dispH / scale;
+
+    final x0 = (offsetX + selectionRect.left * visW).round().clamp(0, decoded.width - 1);
+    final y0 = (offsetY + selectionRect.top * visH).round().clamp(0, decoded.height - 1);
+    final x1 = (offsetX + selectionRect.right * visW).round().clamp(0, decoded.width - 1);
+    final y1 = (offsetY + selectionRect.bottom * visH).round().clamp(0, decoded.height - 1);
+
+    final cropX = math.min(x0, x1);
+    final cropY = math.min(y0, y1);
+    final cropW = (x1 - x0).abs().clamp(10, decoded.width - cropX);
+    final cropH = (y1 - y0).abs().clamp(10, decoded.height - cropY);
+
+    final cropped = img.copyCrop(decoded, x: cropX, y: cropY, width: cropW, height: cropH);
+    final gray = img.grayscale(cropped);
+
+    final stitches = _countPeriodsAC(gray, horizontal: true);
+    final rows = _countPeriodsAC(gray, horizontal: false);
+
+    return (stitches, rows);
+  }
+
+  /// 자기상관(Autocorrelation)으로 주기 감지 → 주기 개수 반환
+  int _countPeriodsAC(img.Image gray, {required bool horizontal}) {
+    final length = horizontal ? gray.width : gray.height;
+    final crossLen = horizontal ? gray.height : gray.width;
+
+    if (length < 10) return 1;
+
+    // 밝기 투영 프로파일 (perpendicular 방향으로 평균)
+    final profile = List<double>.filled(length, 0);
+    for (int i = 0; i < length; i++) {
+      double sum = 0;
+      for (int j = 0; j < crossLen; j++) {
+        final px = horizontal ? gray.getPixel(i, j) : gray.getPixel(j, i);
+        sum += img.getLuminance(px);
+      }
+      profile[i] = sum / crossLen;
+    }
+
+    // 가벼운 스무딩 (window=2, 5점)
+    final sm = List<double>.filled(length, 0);
+    for (int i = 0; i < length; i++) {
+      double s = 0; int cnt = 0;
+      for (int k = -2; k <= 2; k++) {
+        final idx = i + k;
+        if (idx >= 0 && idx < length) { s += profile[idx]; cnt++; }
+      }
+      sm[i] = s / cnt;
+    }
+
+    // 자기상관 계산
+    final mean = sm.reduce((a, b) => a + b) / length;
+    final half = math.min(length ~/ 2, 200);
+
+    final ac = List<double>.filled(half, 0);
+    for (int lag = 1; lag < half; lag++) {
+      double s = 0;
+      final n = length - lag;
+      for (int i = 0; i < n; i++) {
+        s += (sm[i] - mean) * (sm[i + lag] - mean);
+      }
+      ac[lag] = s / n;
+    }
+
+    // 최소 주기: 3개 이상의 주기가 있어야 함
+    final minPeriod = math.max(3, length ~/ 50);
+
+    // 자기상관에서 첫 번째 로컬 최대값 찾기 (= 기본 주기)
+    int peakLag = 0;
+    for (int lag = minPeriod + 1; lag < half - 1; lag++) {
+      if (ac[lag] > ac[lag - 1] && ac[lag] > ac[lag + 1]) {
+        peakLag = lag;
+        break;
+      }
+    }
+
+    if (peakLag < minPeriod) {
+      // 자기상관 실패 → 로컬 미니마 카운팅으로 fallback
+      int count = 0;
+      for (int i = 2; i < length - 2; i++) {
+        if (sm[i] <= sm[i - 1] && sm[i] <= sm[i + 1] &&
+            sm[i] <= sm[i - 2] && sm[i] <= sm[i + 2]) {
+          count++;
+        }
+      }
+      return count.clamp(1, 60);
+    }
+
+    return (length.toDouble() / peakLag).round().clamp(1, 60);
+  }
+
+  // ── Mode 4: 사진 판독 ────────────────────────────────────────
+  Widget _buildModePhotoReading(bool isKorean, dynamic t) {
+    return Column(
+      children: [
+        // 사진 선택 버튼
+        if (_photoBytes == null)
+          GlassCard(
+            child: Column(
+              children: [
+                Icon(Icons.camera_alt_outlined, color: C.lv, size: 40),
+                const SizedBox(height: 12),
+                Text(t.selectSwatchPhoto, style: T.bodyBold),
+                const SizedBox(height: 4),
+                Text(
+                  t.tapTwoPoints10cm,
+                  style: T.caption.copyWith(color: C.mu),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 14),
+                ElevatedButton.icon(
+                  onPressed: () => _showImageSourceDialog(isKorean),
+                  icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
+                  label: Text(t.selectSwatchPhoto),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: C.lv,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else ...[
+          // 사진 + 영역 선택 UI
+          GlassCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.crop_free_rounded, color: C.lv, size: 18),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        _selectionStart == null
+                            ? t.tapFirstPoint
+                            : _selectionEnd == null
+                                ? t.tapSecondPoint
+                                : t.tapTwoPoints10cm,
+                        style: T.bodyBold,
+                      ),
+                    ),
+                    if (_selectionStart != null)
+                      TextButton(
+                        onPressed: () => setState(() {
+                          _selectionStart = null;
+                          _selectionEnd = null;
+                          _detectedSts = null;
+                          _detectedRows = null;
+                        }),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(isKorean ? '다시 하기' : 'Reset', style: T.caption.copyWith(color: C.og)),
+                      ),
+                    IconButton(
+                      icon: Icon(Icons.refresh_rounded, color: C.mu, size: 20),
+                      onPressed: () => _showImageSourceDialog(isKorean),
+                      tooltip: isKorean ? '사진 다시 선택' : 'Change photo',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final displayWidth = constraints.maxWidth;
+                      final aspectRatio = _imageSize != null
+                          ? _imageSize!.height / _imageSize!.width
+                          : 1.0;
+                      final displayHeight = displayWidth * aspectRatio;
+
+                      final clampedHeight = displayHeight.clamp(150.0, 400.0);
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        _displaySize = Size(displayWidth, clampedHeight);
+                      });
+                      return SizedBox(
+                        width: displayWidth,
+                        height: clampedHeight,
+                        child: GestureDetector(
+                          onTapUp: (d) {
+                            final box = context.findRenderObject() as RenderBox;
+                            final local = box.globalToLocal(d.globalPosition);
+                            final rx = (local.dx / displayWidth).clamp(0.0, 1.0);
+                            final ry = (local.dy / clampedHeight).clamp(0.0, 1.0);
+                            final pt = Offset(rx, ry);
+                            setState(() {
+                              if (_selectionStart == null || _selectionEnd != null) {
+                                // 첫 탭 또는 재시작
+                                _selectionStart = pt;
+                                _selectionEnd = null;
+                                _detectedSts = null;
+                                _detectedRows = null;
+                              } else {
+                                // 두 번째 탭
+                                _selectionEnd = pt;
+                              }
+                            });
+                          },
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Image.memory(_photoBytes!, fit: BoxFit.cover),
+                              if (_selectionStart != null)
+                                CustomPaint(
+                                  painter: _SelectionOverlayPainter(
+                                    start: _selectionStart!,
+                                    end: _selectionEnd,
+                                    color: C.lv,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: (_selectionStart != null && _selectionEnd != null && !_analyzing)
+                        ? _analyzeSelection
+                        : null,
+                    icon: _analyzing
+                        ? const SizedBox(
+                            width: 16, height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.auto_fix_high_rounded, size: 18),
+                    label: Text(_analyzing ? t.analyzing : t.analyzeGauge),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: C.lv,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // 결과 카드
+          if (_detectedSts != null && _detectedRows != null) ...[
+            GlassCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.analytics_outlined, color: C.lv, size: 18),
+                      const SizedBox(width: 6),
+                      Text(t.gaugeReadingResult, style: T.bodyBold),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: C.lv.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            children: [
+                              Text(t.detectedStitches, style: T.caption.copyWith(color: C.mu)),
+                              const SizedBox(height: 4),
+                              Text(
+                                '$_detectedSts',
+                                style: T.h2.copyWith(color: C.lv),
+                              ),
+                              Text(isKorean ? '코/10cm' : 'sts/10cm', style: T.caption.copyWith(color: C.mu)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: C.pk.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            children: [
+                              Text(t.detectedRows, style: T.caption.copyWith(color: C.mu)),
+                              const SizedBox(height: 4),
+                              Text(
+                                '$_detectedRows',
+                                style: T.h2.copyWith(color: C.pk),
+                              ),
+                              Text(isKorean ? '단/10cm' : 'rows/10cm', style: T.caption.copyWith(color: C.mu)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _myStsCtrl.text = '$_detectedSts';
+                          _myRowsCtrl.text = '$_detectedRows';
+                          _mode = _GaugeMode.myGauge;
+                        });
+                      },
+                      icon: const Icon(Icons.check_rounded, size: 18),
+                      label: Text(t.applyResult),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: C.lvD,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ],
+        const SizedBox(height: 8),
+        _TipCard(
+          isKorean: isKorean,
+          text: t.photoReadingTip,
+        ),
+      ],
+    );
+  }
+
   // ── Mode 3: 양방향 코 ↔ cm ───────────────────────────────────
   Widget _buildModeBidirectional(bool isKorean) {
     final myS = _parse(_myStsCtrl);
@@ -378,7 +827,7 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
                 children: [
                   Icon(Icons.swap_horiz_rounded, color: C.lv, size: 18),
                   const SizedBox(width: 6),
-                  Text(isKorean ? '가로 (코수 ↔ cm)' : 'Width (stitches ↔ cm)', style: T.bodyBold),
+                  Text(isKorean ? '📏 가로 (코수 ↔ cm)' : '📏 Width (stitches ↔ cm)', style: T.bodyBold),
                 ],
               ),
               const SizedBox(height: 12),
@@ -440,7 +889,7 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
                 children: [
                   Icon(Icons.swap_vert_rounded, color: C.pk, size: 18),
                   const SizedBox(width: 6),
-                  Text(isKorean ? '세로 (단수 ↔ cm)' : 'Height (rows ↔ cm)', style: T.bodyBold),
+                  Text(isKorean ? '📏 세로 (단수 ↔ cm)' : '📏 Height (rows ↔ cm)', style: T.bodyBold),
                 ],
               ),
               const SizedBox(height: 12),
@@ -519,8 +968,11 @@ class _ModeSelector extends StatelessWidget {
       (_GaugeMode.myGauge, isKorean ? '크기 계산' : 'Size'),
       (_GaugeMode.patternConvert, isKorean ? '도안 변환' : 'Pattern'),
       (_GaugeMode.bidirectional, isKorean ? '코↔cm' : 'Sts↔cm'),
+      (_GaugeMode.photoReading, isKorean ? '사진 판독' : 'Photo'),
     ];
-    return Row(
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
       children: items.map((item) {
         final selected = mode == item.$1;
         return Padding(
@@ -549,6 +1001,7 @@ class _ModeSelector extends StatelessWidget {
           ),
         );
       }).toList(),
+    ),
     );
   }
 }
@@ -632,7 +1085,7 @@ class _ResultCard extends StatelessWidget {
             children: [
               Icon(Icons.calculate_outlined, color: C.lv, size: 18),
               const SizedBox(width: 6),
-              Text(isKorean ? '계산 결과' : 'Result', style: T.bodyBold),
+              Text(isKorean ? '✨ 계산 결과' : '✨ Result', style: T.bodyBold),
             ],
           ),
           const SizedBox(height: 12),
@@ -748,4 +1201,74 @@ class _NumberField extends StatelessWidget {
       decoration: InputDecoration(labelText: label),
     );
   }
+}
+
+class _SelectionOverlayPainter extends CustomPainter {
+  final Offset start;
+  final Offset? end;
+  final Color color;
+
+  _SelectionOverlayPainter({
+    required this.start,
+    required this.end,
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final pt1 = Offset(start.dx * size.width, start.dy * size.height);
+
+    final dotPaint = Paint()..color = color;
+    final dotBorderPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+
+    if (end == null) {
+      // 첫 번째 점만 — 원형 마커
+      canvas.drawCircle(pt1, 10, dotPaint);
+      canvas.drawCircle(pt1, 10, dotBorderPaint);
+      return;
+    }
+
+    final pt2 = Offset(end!.dx * size.width, end!.dy * size.height);
+    final rect = Rect.fromPoints(pt1, pt2);
+
+    // 어두운 오버레이 (선택 영역 외부)
+    final overlayPaint = Paint()..color = Colors.black.withValues(alpha: 0.40);
+    canvas.drawRect(Rect.fromLTRB(0, 0, size.width, rect.top), overlayPaint);
+    canvas.drawRect(Rect.fromLTRB(0, rect.bottom, size.width, size.height), overlayPaint);
+    canvas.drawRect(Rect.fromLTRB(0, rect.top, rect.left, rect.bottom), overlayPaint);
+    canvas.drawRect(Rect.fromLTRB(rect.right, rect.top, size.width, rect.bottom), overlayPaint);
+
+    // 선택 영역 테두리
+    final borderPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+    canvas.drawRect(rect, borderPaint);
+
+    // 두 대각선 점 마커
+    for (final pt in [pt1, pt2]) {
+      canvas.drawCircle(pt, 10, dotPaint);
+      canvas.drawCircle(pt, 10, dotBorderPaint);
+    }
+
+    // 모서리 L자 마커
+    const markerSize = 12.0;
+    final markerPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3;
+    for (final corner in [rect.topLeft, rect.topRight, rect.bottomLeft, rect.bottomRight]) {
+      final dx = corner.dx == rect.left ? 1.0 : -1.0;
+      final dy = corner.dy == rect.top ? 1.0 : -1.0;
+      canvas.drawLine(corner, Offset(corner.dx + markerSize * dx, corner.dy), markerPaint);
+      canvas.drawLine(corner, Offset(corner.dx, corner.dy + markerSize * dy), markerPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SelectionOverlayPainter oldDelegate) =>
+      start != oldDelegate.start || end != oldDelegate.end;
 }

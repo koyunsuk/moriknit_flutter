@@ -50,6 +50,10 @@ _$ProjectModelImpl _$$ProjectModelImplFromJson(Map<String, dynamic> json) =>
       isDirty: json['isDirty'] as bool? ?? false,
       completedStepCount: (json['completedStepCount'] as num?)?.toInt() ?? 0,
       totalStepCount: (json['totalStepCount'] as num?)?.toInt() ?? 0,
+      sourcePatternId: json['sourcePatternId'] as String? ?? '',
+      originProjectId: json['originProjectId'] as String? ?? '',
+      originUserId: json['originUserId'] as String? ?? '',
+      originOwnerName: json['originOwnerName'] as String? ?? '',
     );
 
 Map<String, dynamic> _$$ProjectModelImplToJson(_$ProjectModelImpl instance) =>
@@ -80,4 +84,8 @@ Map<String, dynamic> _$$ProjectModelImplToJson(_$ProjectModelImpl instance) =>
       'isDirty': instance.isDirty,
       'completedStepCount': instance.completedStepCount,
       'totalStepCount': instance.totalStepCount,
+      'sourcePatternId': instance.sourcePatternId,
+      'originProjectId': instance.originProjectId,
+      'originUserId': instance.originUserId,
+      'originOwnerName': instance.originOwnerName,
     };

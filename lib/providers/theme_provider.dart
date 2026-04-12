@@ -17,6 +17,9 @@ enum AppThemeMode {
   moriYellow,
   moriNavy,
   moriMono,
+  moriCream,
+  moriMint,
+  moriLime,
 }
 
 extension AppThemeModeExt on AppThemeMode {
@@ -34,6 +37,9 @@ extension AppThemeModeExt on AppThemeMode {
       case AppThemeMode.moriYellow:  return '모리옐로우';
       case AppThemeMode.moriNavy:    return '모리네이비';
       case AppThemeMode.moriMono:    return '모리모노';
+      case AppThemeMode.moriCream:   return '모리크림';
+      case AppThemeMode.moriMint:    return '모리민트';
+      case AppThemeMode.moriLime:    return '모리라임';
     }
   }
 
@@ -51,6 +57,9 @@ extension AppThemeModeExt on AppThemeMode {
       case AppThemeMode.moriYellow:  return 'MoriYellow';
       case AppThemeMode.moriNavy:    return 'MoriNavy';
       case AppThemeMode.moriMono:    return 'MoriMono';
+      case AppThemeMode.moriCream:   return 'MoriCream';
+      case AppThemeMode.moriMint:    return 'MoriMint';
+      case AppThemeMode.moriLime:    return 'MoriLime';
     }
   }
 }

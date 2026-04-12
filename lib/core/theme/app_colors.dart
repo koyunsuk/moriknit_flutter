@@ -34,6 +34,8 @@ class C {
   static _Palette _p = _lavender;
   static AppThemeMode _mode = AppThemeMode.lavender;
 
+  static bool get isMono => _mode == AppThemeMode.moriMono;
+
   // tint: alpha 색상 반환
   static Color tint(Color base, double alpha) => base.withValues(alpha: alpha);
 
@@ -41,6 +43,8 @@ class C {
   static Color get headerBg {
     // 모리모노: 순백 배경 위 그레이 헤더
     if (_mode == AppThemeMode.moriMono) return _p.bd;
+    // 모리크림: 크림색 헤더
+    if (_mode == AppThemeMode.moriCream) return _p.bg;
     // 쥐춘이: 슬레이트블루 강조
     if (_mode == AppThemeMode.jwiChuni) return Color.alphaBlend(_p.pk.withValues(alpha: 0.28), _p.bg);
     // 토도리 컨셉: pk 색을 0.22 alpha로 bg에 오버레이 → 테마 고유 색상이 헤더에 드러남
@@ -69,6 +73,9 @@ class C {
       case AppThemeMode.moriYellow:  _p = _moriYellow;  break;
       case AppThemeMode.moriNavy:    _p = _moriNavy;    break;
       case AppThemeMode.moriMono:    _p = _moriMono;    break;
+      case AppThemeMode.moriCream:   _p = _moriCream;   break;
+      case AppThemeMode.moriMint:    _p = _moriMint;    break;
+      case AppThemeMode.moriLime:    _p = _moriLime;    break;
     }
   }
 
@@ -98,11 +105,13 @@ class C {
   static Color get bd2 => _p.bd2;
 
   // Gradient getters
-  static LinearGradient get bgGradient => LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [_p.bg, Color.alphaBlend(_p.lv.withValues(alpha: 0.08), _p.bg)],
-    );
+  static LinearGradient get bgGradient => isMono
+      ? LinearGradient(colors: [_p.bg, _p.bg])
+      : LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_p.bg, Color.alphaBlend(_p.lv.withValues(alpha: 0.08), _p.bg)],
+        );
 
   static LinearGradient get pkLvGradient => LinearGradient(
         colors: [_p.pk, _p.lv],
@@ -171,19 +180,19 @@ class C {
 
   // 모리라벤더 — 전체 라벤더/연보라 계열
   static const _Palette _lavender = _Palette(
-    pk: Color(0xFF9061F9),   // 미디엄 라벤더
-    pkD: Color(0xFF6D28D9),
-    pkL: Color(0x249061F9),
-    lv: Color(0xFFA78BFA),   // 연한 라벤더
-    lvD: Color(0xFF7C3AED),
-    lvL: Color(0x24A78BFA),
+    pk: Color(0xFF7C3AED),   // 미디엄 라벤더
+    pkD: Color(0xFF5B21B6),
+    pkL: Color(0x247C3AED),
+    lv: Color(0xFF8B5CF6),   // 라벤더 메인
+    lvD: Color(0xFF6D28D9),
+    lvL: Color(0x248B5CF6),
     lm: Color(0xFFDDD6FE),   // 아주 연한 라벤더
     lmD: Color(0xFFC4B5FD),
     lmG: Color(0x57DDD6FE),
     og: Color(0xFFEC4899),   // 핑크 (대비/경고)
     tx: Color(0xFF1E1B4B),   // 딥 인디고
-    tx2: Color(0xFF5B4E8A),
-    mu: Color(0xFF9575CD),
+    tx2: Color(0xFF4C3D8A),
+    mu: Color(0xFF7C5CBF),
     bg: Color(0xFFFCFAFF),   // 더 연한 라벤더 배경
     gx: Color(0xD9FAF8FF),
     bd: Color(0xE8E0D5F5),
@@ -334,46 +343,67 @@ class C {
     bd2: Color(0x30DC2626),
   );
 
-  // 모리옐로우 — 전체 앰버/옐로우 계열
-  static const _Palette _moriYellow = _Palette(
-    pk: Color(0xFFF59E0B),   // amber-500
-    pkD: Color(0xFFB45309),
-    pkL: Color(0x20F59E0B),
-    lv: Color(0xFFFBBF24),   // amber-400
-    lvD: Color(0xFFD97706),
-    lvL: Color(0x20FBBF24),
-    lm: Color(0xFFFDE68A),   // amber-200
-    lmD: Color(0xFFFCD34D),
-    lmG: Color(0x57FDE68A),
-    og: Color(0xFFD97706),   // amber-600
-    tx: Color(0xFF1C1917),   // stone-950
-    tx2: Color(0xFF44403C),
-    mu: Color(0xFF78716C),
-    bg: Color(0xFFFFFBEB),   // amber-50
-    gx: Color(0xD9FFFDF5),
-    bd: Color(0xE8FDE68A),
-    bd2: Color(0x30F59E0B),
-  );
-
-  // 모리네이비 — 딥블루/네이비 계열
-  static const _Palette _moriNavy = _Palette(
-    pk: Color(0xFF1E40AF),   // blue-800
+  // 모리크림 — 크림 배경 + 딥블루 포인트
+  static const _Palette _moriCream = _Palette(
+    pk: Color(0xFF1D4ED8),   // 딥 블루
     pkD: Color(0xFF1E3A8A),
-    pkL: Color(0x201E40AF),
-    lv: Color(0xFF2563EB),   // blue-600
+    pkL: Color(0x201D4ED8),
+    lv: Color(0xFF2563EB),   // 미디엄 블루
     lvD: Color(0xFF1D4ED8),
     lvL: Color(0x202563EB),
-    lm: Color(0xFFBFDBFE),   // blue-200
-    lmD: Color(0xFF93C5FD),
-    lmG: Color(0x57BFDBFE),
-    og: Color(0xFF0369A1),   // sky-700
+    lm: Color(0xFF3B82F6),   // 블루
+    lmD: Color(0xFF1D4ED8),
+    lmG: Color(0x573B82F6),
+    og: Color(0xFF1E40AF),   // 딥 네이비
+    tx: Color(0xFF0F172A),
+    tx2: Color(0xFF334155),
+    mu: Color(0xFF64748B),
+    bg: Color(0xFFFFF8E8),   // 크림 배경
+    gx: Color(0xD9FFFCF0),
+    bd: Color(0xE8E8D8B8),
+    bd2: Color(0x301D4ED8),
+  );
+
+  // 모리옐로우 — 레몬옐로우 (골드와 명확히 구분)
+  static const _Palette _moriYellow = _Palette(
+    pk: Color(0xFFFACC15),   // yellow-400 (선명한 레몬옐로우)
+    pkD: Color(0xFFCA8A04),  // yellow-600
+    pkL: Color(0x20FACC15),
+    lv: Color(0xFFFDE047),   // yellow-300 (밝은 옐로우)
+    lvD: Color(0xFFFACC15),
+    lvL: Color(0x20FDE047),
+    lm: Color(0xFFFDE047),   // yellow-300 — FAB 선명한 옐로우
+    lmD: Color(0xFFFACC15),
+    lmG: Color(0x57FDE047),
+    og: Color(0xFFCA8A04),   // yellow-600
+    tx: Color(0xFF1C1917),   // 거의 블랙 (옐로우와 대비)
+    tx2: Color(0xFF44403C),
+    mu: Color(0xFF78716C),
+    bg: Color(0xFFFEFCE8),   // yellow-50
+    gx: Color(0xD9FEFDF0),
+    bd: Color(0xE8FEF08A),
+    bd2: Color(0x30FACC15),
+  );
+
+  // 모리네이비 — 딥다크 네이비 계열 (스틸과 명확히 구분)
+  static const _Palette _moriNavy = _Palette(
+    pk: Color(0xFF1E3A8A),   // blue-900 (진한 네이비)
+    pkD: Color(0xFF172554),  // 더 어두운 네이비
+    pkL: Color(0x201E3A8A),
+    lv: Color(0xFF1D4ED8),   // blue-700
+    lvD: Color(0xFF1E3A8A),
+    lvL: Color(0x201D4ED8),
+    lm: Color(0xFF1E40AF),   // blue-800 — FAB이 네이비색으로
+    lmD: Color(0xFF1E3A8A),
+    lmG: Color(0x571E40AF),
+    og: Color(0xFF7C3AED),   // 퍼플 액센트 (네이비와 대비)
     tx: Color(0xFF0F172A),   // 거의 블랙
     tx2: Color(0xFF1E3A8A),
-    mu: Color(0xFF60A5FA),   // blue-400
-    bg: Color(0xFFF0F6FF),   // 아주 연한 블루
-    gx: Color(0xD9F5F9FF),
-    bd: Color(0xE8BFDBFE),
-    bd2: Color(0x301E40AF),
+    mu: Color(0xFF3B82F6),   // blue-500
+    bg: Color(0xFFF0F4FF),   // 쿨 라벤더-블루 배경
+    gx: Color(0xD9F4F6FF),
+    bd: Color(0xE8C7D2FE),
+    bd2: Color(0x301E3A8A),
   );
 
   // 모리모노 — 순백 배경 + 그레이 헤더 (모노크롬)
@@ -395,6 +425,48 @@ class C {
     gx: Color(0xFFFFFFFF),
     bd: Color(0xFFE5E7EB),   // gray-200 — 헤더 색으로 사용
     bd2: Color(0xFFD1D5DB),
+  );
+
+  // 모리민트 — 민트/틸 계열
+  static const _Palette _moriMint = _Palette(
+    pk: Color(0xFF06B6D4),   // cyan-500
+    pkD: Color(0xFF0E7490),  // cyan-700
+    pkL: Color(0x1406B6D4),
+    lv: Color(0xFF22D3EE),   // cyan-400
+    lvD: Color(0xFF0891B2),  // cyan-600
+    lvL: Color(0x1422D3EE),
+    lm: Color(0xFFA5F3FC),   // cyan-200
+    lmD: Color(0xFF67E8F9),  // cyan-300
+    lmG: Color(0x57A5F3FC),
+    og: Color(0xFF0284C7),   // sky-600 (대비)
+    tx: Color(0xFF083344),   // cyan-950
+    tx2: Color(0xFF155E75),  // cyan-800
+    mu: Color(0xFF0E7490),   // cyan-700 (가독성 확보)
+    bg: Color(0xFFECFEFF),   // cyan-50
+    gx: Color(0xD9F0FDFF),
+    bd: Color(0xE8A5F3FC),   // cyan-200
+    bd2: Color(0x3006B6D4),
+  );
+
+  // 모리라임 — 라임/연두 계열
+  static const _Palette _moriLime = _Palette(
+    pk: Color(0xFF65A30D),   // lime-600 (더 진해서 가독성 확보)
+    pkD: Color(0xFF4D7C0F),  // lime-700
+    pkL: Color(0x2065A30D),
+    lv: Color(0xFF84CC16),   // lime-400
+    lvD: Color(0xFF65A30D),  // lime-600
+    lvL: Color(0x2084CC16),
+    lm: Color(0xFFD9F99D),   // lime-200
+    lmD: Color(0xFFBEF264),  // lime-300
+    lmG: Color(0x57D9F99D),
+    og: Color(0xFF16A34A),   // green-600 (대비)
+    tx: Color(0xFF1A2E05),   // lime-950
+    tx2: Color(0xFF365314),  // lime-900
+    mu: Color(0xFF65A30D),   // lime-600 (가독성 확보)
+    bg: Color(0xFFF7FEE7),   // lime-50
+    gx: Color(0xD9FAFFF0),
+    bd: Color(0xE8ECFCCB),   // lime-100
+    bd2: Color(0x3065A30D),
   );
 
   // 모리그린 — 전체 그린 계열 (모리핑크 스타일)

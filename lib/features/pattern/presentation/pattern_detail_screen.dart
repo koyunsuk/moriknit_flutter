@@ -22,7 +22,18 @@ import '../data/pattern_repository.dart';
 
 class PatternDetailScreen extends ConsumerStatefulWidget {
   final PatternChart chart;
-  const PatternDetailScreen({super.key, required this.chart});
+
+  /// Fork 기능: 다른 사람의 패턴을 볼 때 소유자 정보를 전달합니다.
+  /// null이면 자신의 패턴으로 간주합니다.
+  final String? ownerId;
+  final String? ownerName;
+
+  const PatternDetailScreen({
+    super.key,
+    required this.chart,
+    this.ownerId,
+    this.ownerName,
+  });
 
   @override
   ConsumerState<PatternDetailScreen> createState() => _PatternDetailScreenState();
@@ -84,6 +95,44 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
       }
     } catch (e) {
       if (mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+
+  /// 다른 사용자의 패턴인지 확인합니다.
+  bool get _isOtherUser {
+    if (widget.ownerId == null || _uid == null) return false;
+    return widget.ownerId != _uid;
+  }
+
+  /// chart 타입이고 다른 사용자의 패턴일 때 Fork 가능합니다.
+  bool get _canFork =>
+      widget.chart.type == PatternType.chart && _isOtherUser;
+
+  Future<void> _forkPattern() async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? 'Fork하는 중입니다.' : 'Forking...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () async {
+          await ref.read(patternRepositoryProvider).forkPattern(
+                sourceOwnerId: widget.ownerId!,
+                sourceOwnerName: widget.ownerName ?? '',
+                sourcePattern: widget.chart,
+              );
+        },
+      );
+      if (mounted) {
+        showSavedSnackBar(ScaffoldMessenger.of(context),
+            message: isKorean
+                ? '도안이 내 라이브러리에 추가됐어요.'
+                : 'Pattern added to your library.');
+      }
+    } catch (e) {
+      if (mounted) {
+        showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+      }
     }
   }
 
@@ -447,6 +496,56 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                           ),
                         ],
                       ),
+                      // Fork 출처 배지
+                      if (widget.chart.sourcePatternId != null &&
+                          widget.chart.sourceOwnerName != null &&
+                          widget.chart.sourceOwnerName!.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: C.pk.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                                color: C.pk.withValues(alpha: 0.25)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.fork_right_rounded,
+                                  size: 16, color: C.pkD),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  isKorean
+                                      ? '원본: ${widget.chart.sourceOwnerName}'
+                                      : 'Forked from: ${widget.chart.sourceOwnerName}',
+                                  style: T.caption.copyWith(color: C.pkD),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      // Fork 수 표시
+                      if (widget.chart.forkCount > 0) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Icon(Icons.fork_right_rounded,
+                                size: 14, color: C.mu),
+                            const SizedBox(width: 4),
+                            Text(
+                              isKorean
+                                  ? 'Fork ${widget.chart.forkCount}회'
+                                  : '${widget.chart.forkCount} forks',
+                              style: T.caption.copyWith(color: C.mu),
+                            ),
+                          ],
+                        ),
+                      ],
                       if (widget.chart.type == PatternType.chart) ...[
                         const SizedBox(height: 12),
                         const Divider(height: 1),
@@ -490,6 +589,25 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                     ),
                   ),
                 ),
+                // Fork 버튼 (chart 타입 + 다른 사용자 패턴)
+                if (_canFork) ...[
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      onPressed: _forkPattern,
+                      icon: const Icon(Icons.fork_right_rounded),
+                      label: Text(isKorean ? '내 도안으로 Fork' : 'Fork to my library'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: C.pkD,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ),
+                ],
                 // PDF export button (chart type only)
                 if (widget.chart.type == PatternType.chart) ...[
                   const SizedBox(height: 10),

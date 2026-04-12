@@ -156,7 +156,7 @@ class TemplateListScreen extends ConsumerWidget {
                   // 기본 템플릿 섹션
                   Row(
                     children: [
-                      Expanded(child: SectionTitle(title: isKorean ? '기본 템플릿' : 'Built-in Templates')),
+                      Expanded(child: SectionTitle(title: isKorean ? '📋 기본 템플릿' : '📋 Built-in Templates')),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -199,7 +199,7 @@ class TemplateListScreen extends ConsumerWidget {
                   // 커스텀 템플릿 섹션
                   Row(
                     children: [
-                      Expanded(child: SectionTitle(title: isKorean ? '나의 커스텀 템플릿' : 'My Custom Templates')),
+                      Expanded(child: SectionTitle(title: isKorean ? '✨ 나의 커스텀 템플릿' : '✨ My Custom Templates')),
                       ElevatedButton.icon(
                         onPressed: () => context.push(Routes.templateEditor),
                         icon: const Icon(Icons.add_rounded, size: 18),

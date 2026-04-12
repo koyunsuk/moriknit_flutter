@@ -31,12 +31,12 @@ class AppThemeColors {
   });
 
   static const lavender = AppThemeColors(
-    pk: Color(0xFF9061F9), pkD: Color(0xFF6D28D9), pkL: Color(0x249061F9),
-    lv: Color(0xFFA78BFA), lvD: Color(0xFF7C3AED), lvL: Color(0x24A78BFA),
+    pk: Color(0xFF7C3AED), pkD: Color(0xFF5B21B6), pkL: Color(0x247C3AED),
+    lv: Color(0xFF8B5CF6), lvD: Color(0xFF6D28D9), lvL: Color(0x248B5CF6),
     lm: Color(0xFFDDD6FE), lmD: Color(0xFFC4B5FD), lmG: Color(0x57DDD6FE),
     og: Color(0xFFEC4899),
-    tx: Color(0xFF1E1B4B), tx2: Color(0xFF5B4E8A), mu: Color(0xFF9575CD),
-    bg: Color(0xFFFCFAFF), gx: Color(0xD9FAF8FF), bd: Color(0xE8E0D5F5), bd2: Color(0x309061F9),
+    tx: Color(0xFF1E1B4B), tx2: Color(0xFF4C3D8A), mu: Color(0xFF7C5CBF),
+    bg: Color(0xFFFCFAFF), gx: Color(0xD9FAF8FF), bd: Color(0xE8E0D5F5), bd2: Color(0x307C3AED),
   );
 
   static const earthy = AppThemeColors(
@@ -137,22 +137,31 @@ class AppThemeColors {
     bd2: Color(0x407B4A2F),
   );
 
+  static const moriCream = AppThemeColors(
+    pk: Color(0xFF1D4ED8), pkD: Color(0xFF1E3A8A), pkL: Color(0x201D4ED8),
+    lv: Color(0xFF2563EB), lvD: Color(0xFF1D4ED8), lvL: Color(0x202563EB),
+    lm: Color(0xFF3B82F6), lmD: Color(0xFF1D4ED8), lmG: Color(0x573B82F6),
+    og: Color(0xFF1E40AF),
+    tx: Color(0xFF0F172A), tx2: Color(0xFF334155), mu: Color(0xFF64748B),
+    bg: Color(0xFFFFF8E8), gx: Color(0xD9FFFCF0), bd: Color(0xE8E8D8B8), bd2: Color(0x301D4ED8),
+  );
+
   static const moriYellow = AppThemeColors(
-    pk: Color(0xFFF59E0B), pkD: Color(0xFFB45309), pkL: Color(0x20F59E0B),
-    lv: Color(0xFFFBBF24), lvD: Color(0xFFD97706), lvL: Color(0x20FBBF24),
-    lm: Color(0xFFFDE68A), lmD: Color(0xFFFCD34D), lmG: Color(0x57FDE68A),
-    og: Color(0xFFD97706),
+    pk: Color(0xFFFACC15), pkD: Color(0xFFCA8A04), pkL: Color(0x20FACC15),
+    lv: Color(0xFFFDE047), lvD: Color(0xFFFACC15), lvL: Color(0x20FDE047),
+    lm: Color(0xFFFDE047), lmD: Color(0xFFFACC15), lmG: Color(0x57FDE047),
+    og: Color(0xFFCA8A04),
     tx: Color(0xFF1C1917), tx2: Color(0xFF44403C), mu: Color(0xFF78716C),
-    bg: Color(0xFFFFFBEB), gx: Color(0xD9FFFDF5), bd: Color(0xE8FDE68A), bd2: Color(0x30F59E0B),
+    bg: Color(0xFFFEFCE8), gx: Color(0xD9FEFDF0), bd: Color(0xE8FEF08A), bd2: Color(0x30FACC15),
   );
 
   static const moriNavy = AppThemeColors(
-    pk: Color(0xFF1E40AF), pkD: Color(0xFF1E3A8A), pkL: Color(0x201E40AF),
-    lv: Color(0xFF2563EB), lvD: Color(0xFF1D4ED8), lvL: Color(0x202563EB),
-    lm: Color(0xFFBFDBFE), lmD: Color(0xFF93C5FD), lmG: Color(0x57BFDBFE),
-    og: Color(0xFF0369A1),
-    tx: Color(0xFF0F172A), tx2: Color(0xFF1E3A8A), mu: Color(0xFF60A5FA),
-    bg: Color(0xFFF0F6FF), gx: Color(0xD9F5F9FF), bd: Color(0xE8BFDBFE), bd2: Color(0x301E40AF),
+    pk: Color(0xFF1E3A8A), pkD: Color(0xFF172554), pkL: Color(0x201E3A8A),
+    lv: Color(0xFF1D4ED8), lvD: Color(0xFF1E3A8A), lvL: Color(0x201D4ED8),
+    lm: Color(0xFF1E40AF), lmD: Color(0xFF1E3A8A), lmG: Color(0x571E40AF),
+    og: Color(0xFF7C3AED),
+    tx: Color(0xFF0F172A), tx2: Color(0xFF1E3A8A), mu: Color(0xFF3B82F6),
+    bg: Color(0xFFF0F4FF), gx: Color(0xD9F4F6FF), bd: Color(0xE8C7D2FE), bd2: Color(0x301E3A8A),
   );
 
   static const moriMono = AppThemeColors(
@@ -162,6 +171,24 @@ class AppThemeColors {
     og: Color(0xFF4B5563),
     tx: Color(0xFF111827), tx2: Color(0xFF374151), mu: Color(0xFF9CA3AF),
     bg: Color(0xFFFFFFFF), gx: Color(0xFFFFFFFF), bd: Color(0xFFE5E7EB), bd2: Color(0xFFD1D5DB),
+  );
+
+  static const moriMint = AppThemeColors(
+    pk: Color(0xFF06B6D4), pkD: Color(0xFF0E7490), pkL: Color(0x1406B6D4),
+    lv: Color(0xFF22D3EE), lvD: Color(0xFF0891B2), lvL: Color(0x1422D3EE),
+    lm: Color(0xFFA5F3FC), lmD: Color(0xFF67E8F9), lmG: Color(0x57A5F3FC),
+    og: Color(0xFF0284C7),
+    tx: Color(0xFF083344), tx2: Color(0xFF155E75), mu: Color(0xFF0E7490),
+    bg: Color(0xFFECFEFF), gx: Color(0xD9F0FDFF), bd: Color(0xE8A5F3FC), bd2: Color(0x3006B6D4),
+  );
+
+  static const moriLime = AppThemeColors(
+    pk: Color(0xFF65A30D), pkD: Color(0xFF4D7C0F), pkL: Color(0x2065A30D),
+    lv: Color(0xFF84CC16), lvD: Color(0xFF65A30D), lvL: Color(0x2084CC16),
+    lm: Color(0xFFD9F99D), lmD: Color(0xFFBEF264), lmG: Color(0x57D9F99D),
+    og: Color(0xFF16A34A),
+    tx: Color(0xFF1A2E05), tx2: Color(0xFF365314), mu: Color(0xFF65A30D),
+    bg: Color(0xFFF7FEE7), gx: Color(0xD9FAFFF0), bd: Color(0xE8ECFCCB), bd2: Color(0x3065A30D),
   );
 
   static AppThemeColors of(AppThemeMode mode) {
@@ -178,6 +205,9 @@ class AppThemeColors {
       case AppThemeMode.moriYellow:  return moriYellow;
       case AppThemeMode.moriNavy:    return moriNavy;
       case AppThemeMode.moriMono:    return moriMono;
+      case AppThemeMode.moriCream:   return moriCream;
+      case AppThemeMode.moriMint:    return moriMint;
+      case AppThemeMode.moriLime:    return moriLime;
     }
   }
 

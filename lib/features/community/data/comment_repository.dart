@@ -34,3 +34,26 @@ class CommentRepository {
     });
   }
 }
+
+/// 갤러리(public_projects) 전용 댓글 저장소
+class GalleryCommentRepository {
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  CollectionReference<Map<String, dynamic>> _ref(String entryId) =>
+      _db.collection('public_projects').doc(entryId).collection('comments');
+
+  Stream<List<CommentModel>> watchComments(String entryId) {
+    return _ref(entryId)
+        .orderBy('createdAt')
+        .snapshots()
+        .map((snap) => snap.docs.map((doc) => CommentModel.fromFirestore(doc)).toList());
+  }
+
+  Future<void> addComment(String entryId, CommentModel comment) async {
+    await _ref(entryId).add(comment.toJson());
+  }
+
+  Future<void> deleteComment(String entryId, String commentId) async {
+    await _ref(entryId).doc(commentId).delete();
+  }
+}
