@@ -154,8 +154,11 @@ extension AdminImportKindX on AdminImportKind {
             'official,moriknit,케이블 비니 도안,케이블 무늬 비니 도안입니다,4500,#60A5FA,pattern,true,false,approved,https://example.com/beanie.jpg,https://example.com/beanie.pdf',
           ],
         AdminImportKind.encyclopedia => const [
-            'knit,겉뜨기,Knit,表目,K,technique,기본적인 겉뜨기 기법입니다,The basic knit stitch,基本の表目,plain knit|stockinette,k,,https://youtube.com/example-knit,1,approved',
-            'purl,안뜨기,Purl,裏目,P,technique,기본적인 안뜨기 기법입니다,The basic purl stitch,基本の裏目,purled stitch|reverse,p,,https://youtube.com/example-purl,2,approved',
+            'k,겉뜨기,knit,,k,abbreviation,오른바늘을 코에 앞→뒤로 넣고 실을 걸어 앞으로 빼냄,Insert right needle front-to-back wrap yarn and pull through,,,,https://firebasestorage.googleapis.com/v0/b/moriknit-ceea9.firebasestorage.app/o/knit_symbols%2Fknit.svg?alt=media,,1,approved',
+            'p,안뜨기,purl,,p,abbreviation,오른바늘을 코에 뒤→앞으로 넣고 실을 걸어 뒤로 빼냄,Insert right needle back-to-front wrap yarn and pull through,,,,https://firebasestorage.googleapis.com/v0/b/moriknit-ceea9.firebasestorage.app/o/knit_symbols%2Fpurl.svg?alt=media,,2,approved',
+            'yo,실 걸기,yarn over,,yo,abbreviation,오른바늘 위로 실을 한 번 감아 새 코 만들기,Wrap yarn over right needle to create a new stitch,,,,https://firebasestorage.googleapis.com/v0/b/moriknit-ceea9.firebasestorage.app/o/knit_symbols%2Fyarnover.svg?alt=media,,3,approved',
+            'k2tog,두코 모아 겉뜨기,knit two together,,k2tog,abbreviation,2코에 한번에 바늘을 넣어 겉뜨기 (오른코 줄임),Insert needle through 2 sts together and knit,,,,https://firebasestorage.googleapis.com/v0/b/moriknit-ceea9.firebasestorage.app/o/knit_symbols%2Fdecreaseright.svg?alt=media,,4,approved',
+            'ssk,왼코줄임,slip slip knit,,ssk,abbreviation,1·2코를 각각 겉뜨기 방향으로 넘긴 뒤 왼바늘로 2코 함께 겉뜨기,Slip 2 sts knitwise then knit together through back loops,,,,https://firebasestorage.googleapis.com/v0/b/moriknit-ceea9.firebasestorage.app/o/knit_symbols%2Fdecreaseleft.svg?alt=media,,5,approved',
           ],
         AdminImportKind.communityPost => const [
             'official,moriknit,showcase,첫 완성작 자랑하기,처음 완성한 작품을 자유롭게 소개해보세요,https://example.com/post1.jpg,,,0,0,',

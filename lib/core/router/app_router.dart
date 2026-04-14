@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 import 'package:moriknit_flutter/core/widgets/main_shell.dart';
 import 'package:moriknit_flutter/features/auth/presentation/login_screen.dart';
 import 'package:moriknit_flutter/features/auth/presentation/splash_screen.dart';
-import 'package:moriknit_flutter/features/landing/presentation/landing_screen.dart';
 import 'package:moriknit_flutter/features/counter/presentation/counter_list_screen.dart';
 import 'package:moriknit_flutter/features/community/presentation/community_screen.dart';
 import 'package:moriknit_flutter/features/counter/presentation/counter_screen.dart';
@@ -20,6 +19,8 @@ import 'package:moriknit_flutter/features/home/presentation/home_screen.dart';
 import 'package:moriknit_flutter/features/market/presentation/market_screen.dart';
 import 'package:moriknit_flutter/features/my/presentation/delete_account_screen.dart';
 import 'package:moriknit_flutter/features/my/presentation/my_page_screen.dart';
+import 'package:moriknit_flutter/features/my/presentation/accessory_detail_screen.dart';
+import 'package:moriknit_flutter/features/my/presentation/accessory_list_screen.dart';
 import 'package:moriknit_flutter/features/my/presentation/needle_detail_screen.dart';
 import 'package:moriknit_flutter/features/my/presentation/needle_list_screen.dart';
 import 'package:moriknit_flutter/features/pattern/presentation/pattern_editor_screen.dart';
@@ -29,6 +30,8 @@ import 'package:moriknit_flutter/features/project/presentation/project_input_scr
 import 'package:moriknit_flutter/features/project/presentation/project_list_screen.dart';
 import 'package:moriknit_flutter/features/project/presentation/project_patterns_screen.dart';
 import 'package:moriknit_flutter/features/project/presentation/template_list_screen.dart';
+import 'package:moriknit_flutter/features/project/domain/user_template.dart';
+import 'package:moriknit_flutter/features/project/presentation/template_detail_screen.dart';
 import 'package:moriknit_flutter/features/project/presentation/template_editor_screen.dart';
 import 'package:moriknit_flutter/features/ravelry/data/ravelry_auth_provider.dart';
 import 'package:moriknit_flutter/features/swatch/presentation/swatch_detail_screen.dart';
@@ -38,6 +41,7 @@ import 'package:moriknit_flutter/features/tools/presentation/tools_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/tool_memo_screen.dart';
 import 'package:moriknit_flutter/features/ravelry/presentation/ravelry_screen.dart';
 import 'package:moriknit_flutter/features/etsy/presentation/etsy_screen.dart';
+import 'package:moriknit_flutter/features/tools/presentation/needle_size_converter_screen.dart';
 import 'package:moriknit_flutter/features/yarn/domain/yarn_model.dart';
 import 'package:moriknit_flutter/features/yarn/presentation/yarn_input_screen.dart';
 import 'package:moriknit_flutter/features/yarn/presentation/yarn_detail_screen.dart';
@@ -60,7 +64,14 @@ Page<void> _fadePage(Widget child) => CustomTransitionPage(
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authRepository = ref.watch(authRepositoryProvider);
-  final authRefresh = GoRouterRefreshStream(authRepository.authStateChanges);
+  bool authInitialized = false;
+  // .map() 변환 안에서 동기적으로 플래그 세팅 → notifyListeners() 이전에 확정됨
+  final authRefresh = GoRouterRefreshStream(
+    authRepository.authStateChanges.map((user) {
+      authInitialized = true;
+      return user;
+    }),
+  );
   ref.onDispose(authRefresh.dispose);
 
   return GoRouter(
@@ -68,31 +79,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     refreshListenable: authRefresh,
 
     redirect: (context, state) {
+      // auth 상태가 아직 초기화되지 않은 경우 redirect 보류 (로그인 화면 깜빡임 방지)
+      if (!authInitialized) return null;
+
       final isLoggedIn = authRepository.currentUser != null;
       final location = state.matchedLocation;
       final isSplash = location == Routes.splash;
       final isLogin = location == Routes.login;
-      final isLanding = location == Routes.landing;
       final isPublicWebRoute = kIsWeb && (location == Routes.market || location == Routes.community || location == Routes.projectList);
 
       if (isSplash) {
         return null; // SplashScreen handles its own navigation after animation
       }
-      if (!isLoggedIn && !isLogin && !isLanding && !isPublicWebRoute) {
-        return kIsWeb ? Routes.landing : Routes.login;
+      if (!isLoggedIn && !isLogin && !isPublicWebRoute) {
+        return Routes.login;
       }
-      if (isLoggedIn && (isLogin || isLanding)) {
-        if (isLogin) {
-          final from = state.uri.queryParameters['from'];
-          if (from != null && from.isNotEmpty) return from;
-        }
+      if (isLoggedIn && isLogin) {
+        final from = state.uri.queryParameters['from'];
+        if (from != null && from.isNotEmpty) return from;
         return Routes.home;
       }
       return null;
     },
     routes: [
       GoRoute(path: Routes.splash, builder: (_, _) => const SplashScreen()),
-      GoRoute(path: Routes.landing, pageBuilder: (_, _) => _fadePage(const LandingScreen())),
       GoRoute(path: Routes.login, pageBuilder: (_, _) => _fadePage(const LoginScreen())),
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),
@@ -136,6 +146,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(path: 'memo', pageBuilder: (_, _) => _fadePage(const ToolMemoScreen())),
               GoRoute(path: 'ravelry', pageBuilder: (_, _) => _fadePage(const RavelryScreen())),
               GoRoute(path: 'etsy', pageBuilder: (_, _) => _fadePage(const EtsyScreen())),
+              GoRoute(path: 'needle-size', pageBuilder: (_, _) => _fadePage(const NeedleSizeConverterScreen())),
             ],
           ),
           GoRoute(path: Routes.community, pageBuilder: (_, _) => _noTransitionPage(const CommunityScreen())),
@@ -153,6 +164,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             pageBuilder: (_, _) => _noTransitionPage(const MyPageScreen()),
             routes: [
               GoRoute(path: 'needles', pageBuilder: (_, _) => _fadePage(const NeedleListScreen())),
+              GoRoute(path: 'accessories', pageBuilder: (_, _) => _fadePage(const AccessoryListScreen())),
               GoRoute(path: 'delete-account', pageBuilder: (_, _) => _fadePage(const DeleteAccountScreen())),
             ],
           ),
@@ -173,6 +185,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   ));
                 },
               ),
+              GoRoute(
+                path: 'detail',
+                pageBuilder: (_, state) {
+                  final tmpl = state.extra as UserTemplate;
+                  return _fadePage(TemplateDetailScreen(template: tmpl));
+                },
+              ),
             ],
           ),
         ],
@@ -181,6 +200,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/yarn-list', pageBuilder: (_, _) => _fadePage(const YarnListScreen())),
       GoRoute(path: '/yarn-detail/:id', pageBuilder: (_, state) => _fadePage(YarnDetailScreen(yarnId: state.pathParameters['id']!))),
       GoRoute(path: '/needle-detail/:id', pageBuilder: (_, state) => _fadePage(NeedleDetailScreen(needleId: state.pathParameters['id']!))),
+      GoRoute(path: '/accessory-detail/:id', pageBuilder: (_, state) => _fadePage(AccessoryDetailScreen(itemId: state.pathParameters['id']!))),
       GoRoute(
         path: '/yarn-input',
         pageBuilder: (_, state) {

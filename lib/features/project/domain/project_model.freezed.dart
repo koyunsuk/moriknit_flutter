@@ -35,6 +35,8 @@ mixin _$ProjectModel {
   String get needleBrandName => throw _privateConstructorUsedError;
   String get swatchId => throw _privateConstructorUsedError;
   List<String> get counterIds => throw _privateConstructorUsedError;
+  List<String> get needleIds => throw _privateConstructorUsedError;
+  List<String> get yarnIds => throw _privateConstructorUsedError;
   List<String> get photoUrls => throw _privateConstructorUsedError;
   String get coverPhotoUrl => throw _privateConstructorUsedError;
   String get memo => throw _privateConstructorUsedError;
@@ -79,6 +81,8 @@ abstract class $ProjectModelCopyWith<$Res> {
       String needleBrandName,
       String swatchId,
       List<String> counterIds,
+      List<String> needleIds,
+      List<String> yarnIds,
       List<String> photoUrls,
       String coverPhotoUrl,
       String memo,
@@ -124,6 +128,8 @@ class _$ProjectModelCopyWithImpl<$Res, $Val extends ProjectModel>
     Object? needleBrandName = null,
     Object? swatchId = null,
     Object? counterIds = null,
+    Object? needleIds = null,
+    Object? yarnIds = null,
     Object? photoUrls = null,
     Object? coverPhotoUrl = null,
     Object? memo = null,
@@ -200,6 +206,14 @@ class _$ProjectModelCopyWithImpl<$Res, $Val extends ProjectModel>
       counterIds: null == counterIds
           ? _value.counterIds
           : counterIds // ignore: cast_nullable_to_non_nullable
+              as List<String>,
+      needleIds: null == needleIds
+          ? _value.needleIds
+          : needleIds // ignore: cast_nullable_to_non_nullable
+              as List<String>,
+      yarnIds: null == yarnIds
+          ? _value.yarnIds
+          : yarnIds // ignore: cast_nullable_to_non_nullable
               as List<String>,
       photoUrls: null == photoUrls
           ? _value.photoUrls
@@ -289,6 +303,8 @@ abstract class _$$ProjectModelImplCopyWith<$Res>
       String needleBrandName,
       String swatchId,
       List<String> counterIds,
+      List<String> needleIds,
+      List<String> yarnIds,
       List<String> photoUrls,
       String coverPhotoUrl,
       String memo,
@@ -332,6 +348,8 @@ class __$$ProjectModelImplCopyWithImpl<$Res>
     Object? needleBrandName = null,
     Object? swatchId = null,
     Object? counterIds = null,
+    Object? needleIds = null,
+    Object? yarnIds = null,
     Object? photoUrls = null,
     Object? coverPhotoUrl = null,
     Object? memo = null,
@@ -408,6 +426,14 @@ class __$$ProjectModelImplCopyWithImpl<$Res>
       counterIds: null == counterIds
           ? _value._counterIds
           : counterIds // ignore: cast_nullable_to_non_nullable
+              as List<String>,
+      needleIds: null == needleIds
+          ? _value._needleIds
+          : needleIds // ignore: cast_nullable_to_non_nullable
+              as List<String>,
+      yarnIds: null == yarnIds
+          ? _value._yarnIds
+          : yarnIds // ignore: cast_nullable_to_non_nullable
               as List<String>,
       photoUrls: null == photoUrls
           ? _value._photoUrls
@@ -492,6 +518,8 @@ class _$ProjectModelImpl implements _ProjectModel {
       this.needleBrandName = '',
       this.swatchId = '',
       final List<String> counterIds = const [],
+      final List<String> needleIds = const [],
+      final List<String> yarnIds = const [],
       final List<String> photoUrls = const [],
       this.coverPhotoUrl = '',
       this.memo = '',
@@ -508,6 +536,8 @@ class _$ProjectModelImpl implements _ProjectModel {
       this.originUserId = '',
       this.originOwnerName = ''})
       : _counterIds = counterIds,
+        _needleIds = needleIds,
+        _yarnIds = yarnIds,
         _photoUrls = photoUrls;
 
   factory _$ProjectModelImpl.fromJson(Map<String, dynamic> json) =>
@@ -561,6 +591,24 @@ class _$ProjectModelImpl implements _ProjectModel {
     return EqualUnmodifiableListView(_counterIds);
   }
 
+  final List<String> _needleIds;
+  @override
+  @JsonKey()
+  List<String> get needleIds {
+    if (_needleIds is EqualUnmodifiableListView) return _needleIds;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_needleIds);
+  }
+
+  final List<String> _yarnIds;
+  @override
+  @JsonKey()
+  List<String> get yarnIds {
+    if (_yarnIds is EqualUnmodifiableListView) return _yarnIds;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_yarnIds);
+  }
+
   final List<String> _photoUrls;
   @override
   @JsonKey()
@@ -611,7 +659,7 @@ class _$ProjectModelImpl implements _ProjectModel {
 
   @override
   String toString() {
-    return 'ProjectModel(id: $id, uid: $uid, title: $title, description: $description, status: $status, progressPercent: $progressPercent, yarnBrandId: $yarnBrandId, yarnBrandName: $yarnBrandName, yarnName: $yarnName, yarnColor: $yarnColor, yarnWeight: $yarnWeight, needleSize: $needleSize, needleBrandName: $needleBrandName, swatchId: $swatchId, counterIds: $counterIds, photoUrls: $photoUrls, coverPhotoUrl: $coverPhotoUrl, memo: $memo, startDate: $startDate, targetDate: $targetDate, finishDate: $finishDate, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty, completedStepCount: $completedStepCount, totalStepCount: $totalStepCount, sourcePatternId: $sourcePatternId, originProjectId: $originProjectId, originUserId: $originUserId, originOwnerName: $originOwnerName)';
+    return 'ProjectModel(id: $id, uid: $uid, title: $title, description: $description, status: $status, progressPercent: $progressPercent, yarnBrandId: $yarnBrandId, yarnBrandName: $yarnBrandName, yarnName: $yarnName, yarnColor: $yarnColor, yarnWeight: $yarnWeight, needleSize: $needleSize, needleBrandName: $needleBrandName, swatchId: $swatchId, counterIds: $counterIds, needleIds: $needleIds, yarnIds: $yarnIds, photoUrls: $photoUrls, coverPhotoUrl: $coverPhotoUrl, memo: $memo, startDate: $startDate, targetDate: $targetDate, finishDate: $finishDate, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty, completedStepCount: $completedStepCount, totalStepCount: $totalStepCount, sourcePatternId: $sourcePatternId, originProjectId: $originProjectId, originUserId: $originUserId, originOwnerName: $originOwnerName)';
   }
 
   @override
@@ -645,6 +693,9 @@ class _$ProjectModelImpl implements _ProjectModel {
                 other.swatchId == swatchId) &&
             const DeepCollectionEquality()
                 .equals(other._counterIds, _counterIds) &&
+            const DeepCollectionEquality()
+                .equals(other._needleIds, _needleIds) &&
+            const DeepCollectionEquality().equals(other._yarnIds, _yarnIds) &&
             const DeepCollectionEquality()
                 .equals(other._photoUrls, _photoUrls) &&
             (identical(other.coverPhotoUrl, coverPhotoUrl) ||
@@ -694,6 +745,8 @@ class _$ProjectModelImpl implements _ProjectModel {
         needleBrandName,
         swatchId,
         const DeepCollectionEquality().hash(_counterIds),
+        const DeepCollectionEquality().hash(_needleIds),
+        const DeepCollectionEquality().hash(_yarnIds),
         const DeepCollectionEquality().hash(_photoUrls),
         coverPhotoUrl,
         memo,
@@ -742,6 +795,8 @@ abstract class _ProjectModel implements ProjectModel {
       final String needleBrandName,
       final String swatchId,
       final List<String> counterIds,
+      final List<String> needleIds,
+      final List<String> yarnIds,
       final List<String> photoUrls,
       final String coverPhotoUrl,
       final String memo,
@@ -791,6 +846,10 @@ abstract class _ProjectModel implements ProjectModel {
   String get swatchId;
   @override
   List<String> get counterIds;
+  @override
+  List<String> get needleIds;
+  @override
+  List<String> get yarnIds;
   @override
   List<String> get photoUrls;
   @override

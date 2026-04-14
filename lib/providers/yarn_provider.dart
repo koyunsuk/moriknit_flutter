@@ -28,6 +28,7 @@ class YarnInputNotifier extends StateNotifier<YarnModel> {
   void updateAmountGrams(int v) => state = state.copyWith(amountGrams: v);
   void updateMemo(String v) => state = state.copyWith(memo: v);
   void updatePhotoUrl(String v) => state = state.copyWith(photoUrl: v);
+  void updateLabelPhotoUrl(String v) => state = state.copyWith(labelPhotoUrl: v);
   void updatePurchaseDate(DateTime? v) => state = state.copyWith(purchaseDate: v);
   void updateMaterial(String v) => state = state.copyWith(material: v);
   void updateColorCode(String v) => state = state.copyWith(colorCode: v);

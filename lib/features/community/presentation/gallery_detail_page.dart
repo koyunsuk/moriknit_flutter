@@ -34,6 +34,7 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
   late int _likeCount;
   final _commentCtrl = TextEditingController();
   bool _sendingComment = false;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -69,16 +70,16 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
   Future<void> _deleteEntry(BuildContext context, bool isKorean) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         title: Text(isKorean ? '게시물 삭제' : 'Delete Post'),
         content: Text(isKorean ? '갤러리에서 삭제하시겠어요?' : 'Remove from gallery?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogCtx, false),
             child: Text(isKorean ? '취소' : 'Cancel'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogCtx, true),
             child: Text(isKorean ? '삭제' : 'Delete',
                 style: TextStyle(color: C.og)),
           ),
@@ -87,23 +88,28 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
     );
     if (confirm != true) return;
     if (!context.mounted) return;
-    await runWithMoriLoadingDialog<void>(
-      context,
-      message: isKorean ? '삭제하는 중입니다.' : 'Deleting...',
-      subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
-      task: () => ref
+    setState(() => _saving = true);
+    try {
+      await ref
           .read(publicProjectServiceProvider)
-          .deleteEntry(widget.entry.id),
-    );
-    if (!context.mounted) return;
-    Navigator.pop(context);
+          .unpublishProject(uid: widget.entry.uid, projectId: widget.entry.projectId)
+          .timeout(const Duration(seconds: 15));
+      if (!context.mounted) return;
+      Navigator.pop(context);
+    } catch (e) {
+      if (!context.mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context),
+          message: '삭제 실패: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   Future<void> _editTitle(BuildContext context, bool isKorean) async {
     final ctrl = TextEditingController(text: widget.entry.title);
     final result = await showDialog<String>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         title: Text(isKorean ? '제목 수정' : 'Edit Title'),
         content: TextField(
           controller: ctrl,
@@ -113,11 +119,11 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogCtx),
             child: Text(isKorean ? '취소' : 'Cancel'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+            onPressed: () => Navigator.pop(dialogCtx, ctrl.text.trim()),
             child: Text(isKorean ? '저장' : 'Save'),
           ),
         ],
@@ -125,17 +131,22 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
     );
     if (result == null || result.isEmpty) return;
     if (!context.mounted) return;
-    await runWithMoriLoadingDialog<void>(
-      context,
-      message: isKorean ? '저장하는 중입니다.' : 'Saving...',
-      subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
-      task: () => ref
+    setState(() => _saving = true);
+    try {
+      await ref
           .read(publicProjectServiceProvider)
-          .updateEntryTitle(widget.entry.id, result),
-    );
-    if (!context.mounted) return;
-    showSavedSnackBar(ScaffoldMessenger.of(context),
-        message: isKorean ? '저장됐어요.' : 'Saved.');
+          .updateEntryTitle(widget.entry.id, result)
+          .timeout(const Duration(seconds: 15));
+      if (!context.mounted) return;
+      showSavedSnackBar(ScaffoldMessenger.of(context),
+          message: isKorean ? '저장됐어요.' : 'Saved.');
+    } catch (e) {
+      if (!context.mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context),
+          message: '저장 실패: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   Future<void> _forkProject(BuildContext context, bool isKorean) async {
@@ -278,7 +289,12 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
               ),
             ),
           if (isOwner)
-            PopupMenuButton<String>(
+            _saving
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                  )
+                : PopupMenuButton<String>(
               icon: Icon(Icons.more_vert, size: 20, color: C.mu),
               onSelected: (v) {
                 if (v == 'edit') _editTitle(context, isKorean);

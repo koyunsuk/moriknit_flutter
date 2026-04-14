@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'core/localization/app_language.dart';
 import 'core/router/admin_router.dart';
@@ -14,6 +15,7 @@ import 'providers/theme_provider.dart';
 void main() async {
   usePathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
+  GoogleFonts.config.allowRuntimeFetching = false;
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,

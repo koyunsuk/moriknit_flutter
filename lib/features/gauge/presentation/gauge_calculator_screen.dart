@@ -10,6 +10,9 @@ import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../providers/auth_provider.dart';
+import '../../swatch/domain/swatch_model.dart';
+import '../../swatch/presentation/swatch_input_screen.dart';
 
 enum _GaugeMode { myGauge, patternConvert, bidirectional, photoReading }
 
@@ -132,6 +135,12 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
               ] else ...[
                 _buildModePhotoReading(isKorean, t),
               ],
+              const SizedBox(height: 20),
+              _RegisterSwatchButton(
+                isKorean: isKorean,
+                myStsCtrl: _myStsCtrl,
+                myRowsCtrl: _myRowsCtrl,
+              ),
             ],
           ),
         ],
@@ -1271,4 +1280,53 @@ class _SelectionOverlayPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _SelectionOverlayPainter oldDelegate) =>
       start != oldDelegate.start || end != oldDelegate.end;
+}
+
+// ── 스와치 등록 버튼 ─────────────────────────────────────────────
+class _RegisterSwatchButton extends ConsumerWidget {
+  final bool isKorean;
+  final TextEditingController myStsCtrl;
+  final TextEditingController myRowsCtrl;
+
+  const _RegisterSwatchButton({
+    required this.isKorean,
+    required this.myStsCtrl,
+    required this.myRowsCtrl,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sts = int.tryParse(myStsCtrl.text) ?? 0;
+    final rows = int.tryParse(myRowsCtrl.text) ?? 0;
+    final isEnabled = sts > 0 && rows > 0;
+
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: isEnabled
+            ? () {
+                final uid = ref.read(authStateProvider).valueOrNull?.uid ?? '';
+                final initial = SwatchModel.empty(uid: uid).copyWith(
+                  beforeStitchCount: sts,
+                  beforeRowCount: rows,
+                );
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SwatchInputScreen(initialSwatch: initial),
+                  ),
+                );
+              }
+            : null,
+        icon: const Icon(Icons.add_circle_outline, size: 18),
+        label: Text(isKorean ? '이 게이지로 스와치 등록하기' : 'Register Swatch with This Gauge'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: C.lv,
+          side: BorderSide(color: isEnabled ? C.lv : C.bd),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      ),
+    );
+  }
 }

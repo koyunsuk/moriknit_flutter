@@ -4,6 +4,7 @@ class UserTemplate {
   final String description;
   final List<String> stepTitles;
   final List<String> stepDescs;
+  final String photoUrl;
   final DateTime createdAt;
   final DateTime? updatedAt;
 
@@ -13,6 +14,7 @@ class UserTemplate {
     this.description = '',
     required this.stepTitles,
     required this.stepDescs,
+    this.photoUrl = '',
     required this.createdAt,
     this.updatedAt,
   });
@@ -24,6 +26,7 @@ class UserTemplate {
       description: data['description'] as String? ?? '',
       stepTitles: List<String>.from(data['stepTitles'] as List? ?? []),
       stepDescs: List<String>.from(data['stepDescs'] as List? ?? []),
+      photoUrl: data['photoUrl'] as String? ?? '',
       createdAt: DateTime.tryParse(data['createdAt'] as String? ?? '') ?? DateTime.now(),
       updatedAt: data['updatedAt'] != null ? DateTime.tryParse(data['updatedAt'] as String) : null,
     );
@@ -34,6 +37,7 @@ class UserTemplate {
         'description': description,
         'stepTitles': stepTitles,
         'stepDescs': stepDescs,
+        'photoUrl': photoUrl,
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt?.toIso8601String(),
       };

@@ -229,6 +229,7 @@ mixin _$CounterModel {
   int get targetStitchCount => throw _privateConstructorUsedError;
   int get targetRowCount => throw _privateConstructorUsedError;
   List<CounterMark> get marks => throw _privateConstructorUsedError;
+  String get photoUrl => throw _privateConstructorUsedError;
   DateTime? get createdAt => throw _privateConstructorUsedError;
   DateTime? get updatedAt => throw _privateConstructorUsedError;
   bool get isDirty => throw _privateConstructorUsedError;
@@ -256,6 +257,7 @@ abstract class $CounterModelCopyWith<$Res> {
       int targetStitchCount,
       int targetRowCount,
       List<CounterMark> marks,
+      String photoUrl,
       DateTime? createdAt,
       DateTime? updatedAt,
       bool isDirty});
@@ -284,6 +286,7 @@ class _$CounterModelCopyWithImpl<$Res, $Val extends CounterModel>
     Object? targetStitchCount = null,
     Object? targetRowCount = null,
     Object? marks = null,
+    Object? photoUrl = null,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
     Object? isDirty = null,
@@ -329,6 +332,10 @@ class _$CounterModelCopyWithImpl<$Res, $Val extends CounterModel>
           ? _value.marks
           : marks // ignore: cast_nullable_to_non_nullable
               as List<CounterMark>,
+      photoUrl: null == photoUrl
+          ? _value.photoUrl
+          : photoUrl // ignore: cast_nullable_to_non_nullable
+              as String,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -364,6 +371,7 @@ abstract class _$$CounterModelImplCopyWith<$Res>
       int targetStitchCount,
       int targetRowCount,
       List<CounterMark> marks,
+      String photoUrl,
       DateTime? createdAt,
       DateTime? updatedAt,
       bool isDirty});
@@ -390,6 +398,7 @@ class __$$CounterModelImplCopyWithImpl<$Res>
     Object? targetStitchCount = null,
     Object? targetRowCount = null,
     Object? marks = null,
+    Object? photoUrl = null,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
     Object? isDirty = null,
@@ -435,6 +444,10 @@ class __$$CounterModelImplCopyWithImpl<$Res>
           ? _value._marks
           : marks // ignore: cast_nullable_to_non_nullable
               as List<CounterMark>,
+      photoUrl: null == photoUrl
+          ? _value.photoUrl
+          : photoUrl // ignore: cast_nullable_to_non_nullable
+              as String,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -465,6 +478,7 @@ class _$CounterModelImpl implements _CounterModel {
       this.targetStitchCount = 0,
       this.targetRowCount = 0,
       final List<CounterMark> marks = const [],
+      this.photoUrl = '',
       this.createdAt,
       this.updatedAt,
       this.isDirty = false})
@@ -507,6 +521,9 @@ class _$CounterModelImpl implements _CounterModel {
   }
 
   @override
+  @JsonKey()
+  final String photoUrl;
+  @override
   final DateTime? createdAt;
   @override
   final DateTime? updatedAt;
@@ -516,7 +533,7 @@ class _$CounterModelImpl implements _CounterModel {
 
   @override
   String toString() {
-    return 'CounterModel(id: $id, uid: $uid, name: $name, projectId: $projectId, projectStepId: $projectStepId, stitchCount: $stitchCount, rowCount: $rowCount, targetStitchCount: $targetStitchCount, targetRowCount: $targetRowCount, marks: $marks, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty)';
+    return 'CounterModel(id: $id, uid: $uid, name: $name, projectId: $projectId, projectStepId: $projectStepId, stitchCount: $stitchCount, rowCount: $rowCount, targetStitchCount: $targetStitchCount, targetRowCount: $targetRowCount, marks: $marks, photoUrl: $photoUrl, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty)';
   }
 
   @override
@@ -540,6 +557,8 @@ class _$CounterModelImpl implements _CounterModel {
             (identical(other.targetRowCount, targetRowCount) ||
                 other.targetRowCount == targetRowCount) &&
             const DeepCollectionEquality().equals(other._marks, _marks) &&
+            (identical(other.photoUrl, photoUrl) ||
+                other.photoUrl == photoUrl) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
@@ -561,6 +580,7 @@ class _$CounterModelImpl implements _CounterModel {
       targetStitchCount,
       targetRowCount,
       const DeepCollectionEquality().hash(_marks),
+      photoUrl,
       createdAt,
       updatedAt,
       isDirty);
@@ -591,6 +611,7 @@ abstract class _CounterModel implements CounterModel {
       final int targetStitchCount,
       final int targetRowCount,
       final List<CounterMark> marks,
+      final String photoUrl,
       final DateTime? createdAt,
       final DateTime? updatedAt,
       final bool isDirty}) = _$CounterModelImpl;
@@ -618,6 +639,8 @@ abstract class _CounterModel implements CounterModel {
   int get targetRowCount;
   @override
   List<CounterMark> get marks;
+  @override
+  String get photoUrl;
   @override
   DateTime? get createdAt;
   @override

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
@@ -476,6 +477,16 @@ class _OfficialEntryCard extends ConsumerWidget {
           children: [
             Row(
               children: [
+                if (entry.referenceUrl.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 10),
+                    child: SvgPicture.network(
+                      entry.referenceUrl,
+                      width: 28,
+                      height: 28,
+                      placeholderBuilder: (_) => const SizedBox(width: 28, height: 28),
+                    ),
+                  ),
                 if (entry.abbreviation.isNotEmpty) ...[
                   MoriChip(label: entry.abbreviation, type: ChipType.lavender),
                   const SizedBox(width: 8),
@@ -563,18 +574,48 @@ class _OfficialEntryCard extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (entry.abbreviation.isNotEmpty) ...[
-                  MoriChip(label: entry.abbreviation, type: ChipType.lavender),
-                  const SizedBox(width: 8),
-                ],
-                Expanded(child: Text(entry.term, style: T.h2)),
+                if (entry.referenceUrl.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 14, top: 2),
+                    child: Container(
+                      width: 52,
+                      height: 52,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: C.lvL,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: C.bd2),
+                      ),
+                      child: SvgPicture.network(
+                        entry.referenceUrl,
+                        placeholderBuilder: (_) => const SizedBox.shrink(),
+                      ),
+                    ),
+                  ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          if (entry.abbreviation.isNotEmpty) ...[
+                            MoriChip(label: entry.abbreviation, type: ChipType.lavender),
+                            const SizedBox(width: 8),
+                          ],
+                          Expanded(child: Text(entry.term, style: T.h2)),
+                        ],
+                      ),
+                      if (entry.termEn.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(entry.termEn, style: T.body.copyWith(color: C.mu)),
+                      ],
+                    ],
+                  ),
+                ),
               ],
             ),
-            if (entry.termEn.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(entry.termEn, style: T.body.copyWith(color: C.mu)),
-            ],
             const SizedBox(height: 14),
             Text(entry.description, style: T.body.copyWith(height: 1.6)),
             if (entry.descriptionEn.isNotEmpty) ...[

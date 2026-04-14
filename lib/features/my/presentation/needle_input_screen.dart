@@ -578,12 +578,12 @@ class _NeedlePhotoSection extends StatelessWidget {
     if (localPhotoPath != null) {
       child = ClipRRect(
         borderRadius: BorderRadius.circular(14),
-        child: Image.file(File(localPhotoPath!), fit: BoxFit.cover, width: double.infinity),
+        child: Image.file(File(localPhotoPath!), fit: BoxFit.contain, width: double.infinity),
       );
     } else if (existingPhotoUrl != null) {
       child = ClipRRect(
         borderRadius: BorderRadius.circular(14),
-        child: Image.network(existingPhotoUrl!, fit: BoxFit.cover, width: double.infinity,
+        child: Image.network(existingPhotoUrl!, fit: BoxFit.contain, width: double.infinity,
             errorBuilder: (_, _, _) => const SizedBox()),
       );
     } else {

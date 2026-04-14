@@ -98,11 +98,26 @@ class _SwatchListScreenState extends ConsumerState<SwatchListScreen> {
                         separatorBuilder: (_, i) => i == 0 ? const SizedBox(height: 14) : const SizedBox(height: 10),
                         itemBuilder: (context, index) {
                           if (index == 0) {
+                            final projects = projectListAsync.valueOrNull ?? [];
+                            bool isSwatchDone(s) {
+                              if (s.hasAfterWash) return true;
+                              if (s.projectId.isNotEmpty) {
+                                final proj = projects.where((p) => p.id == s.projectId).firstOrNull;
+                                if (proj != null && proj.status == 'finished') return true;
+                              }
+                              return false;
+                            }
+                            final done = swatches.where(isSwatchDone).length;
+                            final inProgress = swatches.where((s) => !isSwatchDone(s) && s.beforeStitchCount > 0).length;
+                            final unset = swatches.where((s) => !isSwatchDone(s) && s.beforeStitchCount == 0).length;
                             return Column(
                               children: [
                                 WorkspaceSummaryBar(
                                   stats: [
                                     WorkStat('${swatches.length}', isKorean ? '전체' : 'Total', color: C.lmD),
+                                    WorkStat('$inProgress', isKorean ? '진행' : 'Active', color: C.lv),
+                                    WorkStat('$done', isKorean ? '완료' : 'Done', color: C.pkD),
+                                    WorkStat('$unset', isKorean ? '미지정' : 'Free', color: C.mu),
                                   ],
                                   addLabel: isKorean ? '추가' : 'Add',
                                   onAdd: isLimitReached
@@ -136,14 +151,6 @@ class _SwatchListScreenState extends ConsumerState<SwatchListScreen> {
                                 builder: (_) => SwatchDetailScreen(swatchId: swatch.id),
                               ),
                             ),
-                            onEdit: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => SwatchInputScreen(swatchId: swatch.id),
-                              ),
-                            ),
-                            onDelete: () => _confirmDelete(ref, swatch.id, isKorean),
-                            onDuplicate: () => _confirmDuplicate(ref, swatch, isKorean),
                           );
                         },
                       ),
@@ -156,59 +163,6 @@ class _SwatchListScreenState extends ConsumerState<SwatchListScreen> {
         ),
       ),
     );
-  }
-
-  Future<void> _confirmDelete(WidgetRef ref, String swatchId, bool isKorean) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(isKorean ? '스와치 삭제' : 'Delete swatch', style: T.h3),
-        content: Text(isKorean ? '이 스와치를 삭제할까요? 되돌릴 수 없어요.' : 'Delete this swatch? This cannot be undone.', style: T.body),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(isKorean ? '취소' : 'Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: C.og, foregroundColor: Colors.white),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(isKorean ? '삭제' : 'Delete'),
-          ),
-        ],
-      ),
-    );
-    if (confirm == true && mounted) {
-      try {
-        await runWithMoriLoadingDialog<void>(
-          context,
-          message: isKorean ? '삭제하는 중입니다.' : 'Deleting...',
-          subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
-          task: () async {
-            await ref.read(swatchRepositoryProvider).deleteSwatch(swatchId);
-          },
-        );
-        if (!mounted) return;
-        showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '삭제됐어요.' : 'Deleted.');
-      } catch (e) {
-        if (!mounted) return;
-        showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
-      }
-    }
-  }
-
-  Future<void> _confirmDuplicate(WidgetRef ref, dynamic swatch, bool isKorean) async {
-    try {
-      await runWithMoriLoadingDialog<void>(
-        context,
-        message: isKorean ? '복사하는 중입니다.' : 'Duplicating...',
-        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
-        task: () async {
-          await ref.read(swatchRepositoryProvider).duplicateSwatch(swatch);
-        },
-      );
-      if (!mounted) return;
-      showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '복사됐어요.' : 'Duplicated.');
-    } catch (e) {
-      if (!mounted) return;
-      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
-    }
   }
 
   void _showSwatchStartSheet(BuildContext context) {
@@ -320,7 +274,19 @@ class _SwatchListScreenState extends ConsumerState<SwatchListScreen> {
                     child: GlassCard(
                       onTap: () async {
                         Navigator.pop(ctx);
-                        await _confirmDuplicate(ref, s, isKorean);
+                        try {
+                          await runWithMoriLoadingDialog<void>(
+                            context,
+                            message: isKorean ? '복사하는 중입니다.' : 'Duplicating...',
+                            subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+                            task: () async {
+                              await ref.read(swatchRepositoryProvider).duplicateSwatch(s);
+                            },
+                          );
+                          if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '복사됐어요.' : 'Duplicated.');
+                        } catch (e) {
+                          if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+                        }
                       },
                       child: Row(
                         children: [

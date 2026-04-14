@@ -49,6 +49,10 @@ class SwatchInputNotifier extends StateNotifier<SwatchModel> {
   void updateYarnBrand(String id, String name) => state = state.copyWith(yarnBrandId: id, yarnBrandName: name);
   void updateNeedleBrand(String id, String name) => state = state.copyWith(needleBrandId: id, needleBrandName: name);
   void updateNeedleSize(double size) => state = state.copyWith(needleSize: size);
+  void updateMyNeedleId(String id) => state = state.copyWith(myNeedleId: id);
+  void updateMyNeedlePhotoUrl(String url) => state = state.copyWith(myNeedlePhotoUrl: url);
+  void updateMyYarnId(String id) => state = state.copyWith(myYarnId: id);
+  void updateMyYarnPhotoUrl(String url) => state = state.copyWith(myYarnPhotoUrl: url);
   void updateBeforeStitchCount(int count) => state = state.copyWith(beforeStitchCount: count);
   void updateBeforeRowCount(int count) => state = state.copyWith(beforeRowCount: count);
   void toggleAfterWash(bool value) => state = state.copyWith(hasAfterWash: value);

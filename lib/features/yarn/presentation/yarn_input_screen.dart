@@ -37,7 +37,9 @@ class _YarnInputScreenState extends ConsumerState<YarnInputScreen> {
   final _purchasePlaceController = TextEditingController();
   bool _isSaving = false;
   bool _uploading = false;
+  bool _uploadingLabel = false;
   String? _localPhotoPath;
+  String? _localLabelPhotoPath;
 
   static const List<String> _weightOptions = [
     'Lace', 'Fingering', 'Sport', 'DK', 'Worsted', 'Bulky', 'Super Bulky',
@@ -126,13 +128,50 @@ class _YarnInputScreenState extends ConsumerState<YarnInputScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 사진
-                _YarnPhotoPicker(
-                  photoUrl: yarn.photoUrl,
-                  localPath: _localPhotoPath,
-                  uploading: _uploading,
-                  isKorean: isKorean,
-                  onTap: () => _pickPhoto(notifier),
+                // 사진 (실사진 + 라벨사진 2단)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(isKorean ? '실 사진' : 'Yarn Photo',
+                              style: T.caption.copyWith(color: C.mu, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 6),
+                          _YarnPhotoPicker(
+                            photoUrl: yarn.photoUrl,
+                            localPath: _localPhotoPath,
+                            uploading: _uploading,
+                            isKorean: isKorean,
+                            emptyIcon: Icons.texture,
+                            emptyLabel: isKorean ? '실 사진' : 'Yarn',
+                            onTap: () => _pickPhoto(notifier),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(isKorean ? '라벨 사진' : 'Label Photo',
+                              style: T.caption.copyWith(color: C.mu, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 6),
+                          _YarnPhotoPicker(
+                            photoUrl: yarn.labelPhotoUrl,
+                            localPath: _localLabelPhotoPath,
+                            uploading: _uploadingLabel,
+                            isKorean: isKorean,
+                            emptyIcon: Icons.label_outline_rounded,
+                            emptyLabel: isKorean ? '라벨 사진' : 'Label',
+                            onTap: () => _pickLabelPhoto(notifier),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 14),
                 // 브랜드명
@@ -419,6 +458,25 @@ class _YarnInputScreenState extends ConsumerState<YarnInputScreen> {
     );
   }
 
+  Future<void> _pickLabelPhoto(YarnInputNotifier notifier) async {
+    final source = await _showImageSourceDialog();
+    if (source == null) return;
+    final picked = await ImagePicker().pickImage(source: source, maxWidth: 1600, imageQuality: 88);
+    if (picked == null) return;
+    setState(() { _localLabelPhotoPath = picked.path; _uploadingLabel = true; });
+    final uid = ref.read(authStateProvider).valueOrNull?.uid ?? 'unknown';
+    try {
+      final ref2 = FirebaseStorage.instance.ref().child('yarn/$uid/label_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final task = await ref2.putFile(File(picked.path));
+      notifier.updateLabelPhotoUrl(await task.ref.getDownloadURL());
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'), backgroundColor: C.og));
+    } finally {
+      if (mounted) setState(() => _uploadingLabel = false);
+    }
+  }
+
   Future<void> _pickPhoto(YarnInputNotifier notifier) async {
     final source = await _showImageSourceDialog();
     if (source == null) return;
@@ -521,6 +579,8 @@ class _YarnPhotoPicker extends StatelessWidget {
   final bool uploading;
   final bool isKorean;
   final VoidCallback onTap;
+  final IconData emptyIcon;
+  final String emptyLabel;
 
   const _YarnPhotoPicker({
     required this.photoUrl,
@@ -528,6 +588,8 @@ class _YarnPhotoPicker extends StatelessWidget {
     required this.uploading,
     required this.isKorean,
     required this.onTap,
+    this.emptyIcon = Icons.add_photo_alternate_outlined,
+    this.emptyLabel = '',
   });
 
   @override
@@ -536,11 +598,10 @@ class _YarnPhotoPicker extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 220),
-        child: AspectRatio(
-          aspectRatio: 4 / 3,
-          child: Container(
+      child: SizedBox(
+        height: 140,
+        width: double.infinity,
+        child: Container(
             decoration: BoxDecoration(
               color: C.lvL,
               borderRadius: BorderRadius.circular(18),
@@ -553,37 +614,31 @@ class _YarnPhotoPicker extends StatelessWidget {
                         borderRadius: BorderRadius.circular(18),
                         child: localPath != null
                             ? Image.file(File(localPath!),
-                                fit: BoxFit.cover,
+                                fit: BoxFit.contain,
                                 width: double.infinity,
                                 height: double.infinity)
                             : Image.network(photoUrl,
-                                fit: BoxFit.cover,
+                                fit: BoxFit.contain,
                                 width: double.infinity,
                                 height: double.infinity),
                       )
                     : Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.add_photo_alternate_outlined,
-                              color: C.lv, size: 40),
-                          const SizedBox(height: 10),
+                          Icon(emptyIcon, color: C.lv, size: 36),
+                          const SizedBox(height: 8),
                           Text(
-                            isKorean ? '사진 추가' : 'Add Photo',
-                            style: T.bodyBold.copyWith(color: C.lvD),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            isKorean ? '실 사진을 추가해보세요' : 'Add a photo of your yarn',
-                            style: T.caption.copyWith(color: C.mu),
+                            emptyLabel.isNotEmpty ? emptyLabel : (isKorean ? '사진 추가' : 'Add Photo'),
+                            style: T.caption.copyWith(color: C.lvD, fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
           ),
         ),
-      ),
     );
   }
 }
+
 
 // ── 브랜드 픽커 필드 ──────────────────────────────────────
 class _PickerField extends StatelessWidget {

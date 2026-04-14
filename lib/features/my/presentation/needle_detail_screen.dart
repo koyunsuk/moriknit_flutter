@@ -11,6 +11,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/needle_provider.dart';
+import '../../../providers/project_provider.dart';
 import '../../swatch/presentation/brand_search_sheet.dart';
 import '../domain/needle_model.dart';
 
@@ -133,6 +134,73 @@ class _NeedleDetailScreenState extends ConsumerState<NeedleDetailScreen> {
     });
   }
 
+  void _linkToProject(BuildContext context, String needleId, bool isKorean) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Consumer(
+        builder: (ctx, cRef, _) {
+          final allProjects = cRef.watch(projectListProvider).valueOrNull ?? [];
+          return SafeArea(
+            child: DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.5,
+              maxChildSize: 0.9,
+              minChildSize: 0.3,
+              builder: (_, scrollCtrl) => Column(
+                children: [
+                  const SizedBox(height: 8),
+                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: Text(isKorean ? '프로젝트에 연결' : 'Link to Project', style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                  ),
+                  if (allProjects.isEmpty)
+                    Expanded(child: Center(child: Text(isKorean ? '등록된 프로젝트가 없어요.' : 'No projects available.', style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(color: Colors.grey))))
+                  else
+                    Expanded(
+                      child: ListView.builder(
+                        controller: scrollCtrl,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        itemCount: allProjects.length,
+                        itemBuilder: (_, i) {
+                          final project = allProjects[i];
+                          final alreadyLinked = project.needleIds.contains(needleId);
+                          return ListTile(
+                            leading: project.coverPhotoUrl.isNotEmpty
+                                ? ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.network(project.coverPhotoUrl, width: 40, height: 40, fit: BoxFit.cover))
+                                : Container(width: 40, height: 40, decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(6)), child: const Icon(Icons.folder_outlined, size: 20)),
+                            title: Text(project.title, style: Theme.of(ctx).textTheme.bodyMedium),
+                            trailing: alreadyLinked ? Icon(Icons.check_circle_rounded, color: Colors.green.shade400, size: 18) : null,
+                            onTap: alreadyLinked ? null : () async {
+                              Navigator.pop(ctx);
+                              await runWithMoriLoadingDialog<void>(
+                                context,
+                                message: isKorean ? '연결하는 중입니다.' : 'Linking...',
+                                subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+                                task: () => cRef.read(projectRepositoryProvider).updateProject(
+                                  project.copyWith(needleIds: [...project.needleIds, needleId]),
+                                ),
+                              );
+                              if (context.mounted) {
+                                showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '연결됐어요.' : 'Linked.');
+                              }
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _duplicateNeedle(NeedleModel needle, bool isKorean) async {
     try {
       await runWithMoriLoadingDialog<void>(
@@ -236,6 +304,7 @@ class _NeedleDetailScreenState extends ConsumerState<NeedleDetailScreen> {
                               onSelected: (v) {
                                 if (v == 'edit') _enterEditMode(needle);
                                 if (v == 'copy') _duplicateNeedle(needle, isKorean);
+                                if (v == 'link_project') _linkToProject(context, needle.id, isKorean);
                                 if (v == 'delete') _confirmDelete(needle, isKorean);
                               },
                               itemBuilder: (_) => [
@@ -253,6 +322,14 @@ class _NeedleDetailScreenState extends ConsumerState<NeedleDetailScreen> {
                                     Icon(Icons.copy_rounded, size: 18, color: C.lv),
                                     const SizedBox(width: 8),
                                     Text(isKorean ? '복사' : 'Duplicate'),
+                                  ]),
+                                ),
+                                PopupMenuItem(
+                                  value: 'link_project',
+                                  child: Row(children: [
+                                    Icon(Icons.folder_outlined, size: 18, color: C.lv),
+                                    const SizedBox(width: 8),
+                                    Text(isKorean ? '프로젝트 연결' : 'Link to project'),
                                   ]),
                                 ),
                                 PopupMenuItem(
@@ -299,75 +376,126 @@ class _NeedleDetailScreenState extends ConsumerState<NeedleDetailScreen> {
         ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
           children: [
-            // 기본 정보
-            SectionTitle(title: isKorean ? '기본 정보' : 'Basic Info'),
+            // ── 핵심 정보 히어로 카드 ──────────────────────────────
+            GlassCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 사이즈 강조
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              needle.sizeDisplay,
+                              style: TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: C.lvD, height: 1.0),
+                            ),
+                            const SizedBox(height: 4),
+                            if (needle.brandName.isNotEmpty)
+                              Text(needle.brandName, style: T.body.copyWith(color: C.tx2, fontWeight: FontWeight.w600)),
+                            if (needle.name.isNotEmpty)
+                              Text(needle.name, style: T.caption.copyWith(color: C.mu)),
+                          ],
+                        ),
+                      ),
+                      // 사진 (있을 때만)
+                      if (needle.photoUrl.isNotEmpty)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(
+                            needle.photoUrl,
+                            width: 80,
+                            height: 80,
+                            fit: BoxFit.cover,
+                            errorBuilder: (ctx, e, st) => const SizedBox.shrink(),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      _InfoChip(label: needle.localizedTypeLabel(isKorean), icon: Icons.circle_outlined, color: C.lv),
+                      _InfoChip(label: needle.localizedMaterialLabel(isKorean), icon: Icons.texture, color: C.pk),
+                      _InfoChip(
+                        label: isKorean ? '${needle.quantity}개 보유' : '${needle.quantity} pcs',
+                        icon: Icons.inventory_2_outlined,
+                        color: C.lmD,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // ── 구매 정보 ─────────────────────────────────────────
+            SectionTitle(title: isKorean ? '구매 정보' : 'Purchase Info'),
             const SizedBox(height: 8),
             GlassCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _InfoRow(label: isKorean ? '브랜드' : 'Brand', value: needle.brandName, isKorean: isKorean),
-                  const SizedBox(height: 8),
-                  _InfoRow(label: isKorean ? '이름' : 'Name', value: needle.name, isKorean: isKorean),
-                  if (needle.photoUrl.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        needle.photoUrl,
-                        height: 180,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, e, stack) => const SizedBox.shrink(),
-                      ),
+                  _InfoRow(
+                    label: isKorean ? '가격' : 'Price',
+                    value: needle.price > 0 ? (isKorean ? '${needle.price}원' : '${needle.price}') : '',
+                    isKorean: isKorean,
+                  ),
+                  if (needle.purchasePlace.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    _InfoRow(label: isKorean ? '구매처' : 'Purchased at', value: needle.purchasePlace, isKorean: isKorean),
+                  ],
+                  if (needle.purchaseDate != null) ...[
+                    const SizedBox(height: 8),
+                    _InfoRow(
+                      label: isKorean ? '구매일' : 'Purchase date',
+                      value: _formatDate(needle.purchaseDate!),
+                      isKorean: isKorean,
                     ),
                   ],
                 ],
               ),
             ),
             const SizedBox(height: 14),
-            // 상세 정보
-            SectionTitle(title: isKorean ? '상세 정보' : 'Details'),
-            const SizedBox(height: 8),
-            GlassCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _InfoRow(label: isKorean ? '사이즈' : 'Size', value: needle.sizeDisplay, isKorean: isKorean),
-                  const SizedBox(height: 8),
-                  _InfoRow(label: isKorean ? '종류' : 'Type', value: needle.localizedTypeLabel(isKorean), isKorean: isKorean),
-                  const SizedBox(height: 8),
-                  _InfoRow(label: isKorean ? '재질' : 'Material', value: needle.localizedMaterialLabel(isKorean), isKorean: isKorean),
-                  const SizedBox(height: 8),
-                  _InfoRow(label: isKorean ? '수량' : 'Quantity', value: isKorean ? '${needle.quantity}개' : '${needle.quantity}', isKorean: isKorean),
-                  const SizedBox(height: 8),
-                  _InfoRow(
-                    label: isKorean ? '가격' : 'Price',
-                    value: needle.price > 0 ? (isKorean ? '${needle.price}원' : '${needle.price}') : '',
-                    isKorean: isKorean,
-                  ),
-                  const SizedBox(height: 8),
-                  _InfoRow(label: isKorean ? '구매처' : 'Purchased at', value: needle.purchasePlace, isKorean: isKorean),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            // 메모
+
+            // ── 메모 ─────────────────────────────────────────────
             SectionTitle(title: isKorean ? '메모' : 'Notes'),
             const SizedBox(height: 8),
             GlassCard(
               child: Text(
-                needle.memo.isNotEmpty ? needle.memo : (isKorean ? '(없음)' : '(none)'),
+                needle.memo.isNotEmpty ? needle.memo : (isKorean ? '메모가 없어요.' : 'No notes.'),
                 style: needle.memo.isNotEmpty ? T.body : T.body.copyWith(color: C.mu),
               ),
             ),
-            if (needle.createdAt != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                '${isKorean ? '저장일' : 'Saved on'}: ${_formatDate(needle.createdAt!)}',
-                style: T.caption.copyWith(color: C.mu),
+            const SizedBox(height: 14),
+
+            // ── 날짜 정보 ──────────────────────────────────────────
+            GlassCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (needle.createdAt != null)
+                    _InfoRow(
+                      label: isKorean ? '등록일' : 'Added on',
+                      value: _formatDate(needle.createdAt!),
+                      isKorean: isKorean,
+                    ),
+                  if (needle.updatedAt != null) ...[
+                    const SizedBox(height: 8),
+                    _InfoRow(
+                      label: isKorean ? '수정일' : 'Updated on',
+                      value: _formatDate(needle.updatedAt!),
+                      isKorean: isKorean,
+                    ),
+                  ],
+                ],
               ),
-            ],
+            ),
           ],
         ),
       ],
@@ -613,6 +741,34 @@ class _InfoRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+
+  const _InfoChip({required this.label, required this.icon, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 5),
+          Text(label, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600)),
+        ],
+      ),
     );
   }
 }

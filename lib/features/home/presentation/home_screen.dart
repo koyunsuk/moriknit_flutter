@@ -1,6 +1,5 @@
 ﻿import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -24,18 +23,14 @@ import '../../project/domain/project_model.dart';
 import '../../../providers/course_provider.dart';
 import '../../../providers/ui_copy_provider.dart';
 import '../../community/presentation/gallery_detail_page.dart';
+import '../../landing/data/landing_board_repository.dart';
 import '../../project/data/public_project_service.dart';
 import '../domain/editorial_post.dart';
 import 'editorial_screen.dart';
 
 // 공지사항 Provider
-final landingNoticesProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
-  return FirebaseFirestore.instance
-      .collection('landing_notices')
-      .orderBy('createdAt', descending: true)
-      .limit(5)
-      .snapshots()
-      .map((snap) => snap.docs.map((d) => {'id': d.id, ...d.data()}).toList());
+final landingNoticesProvider = StreamProvider<List<LandingPost>>((ref) {
+  return LandingBoardRepository().getNotices();
 });
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -1651,18 +1646,19 @@ class _NoticesPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          height: 48,
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: C.gx,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: C.bd, width: 0.5),
-          ),
-          child: Row(children: [
+    return Container(
+      height: 80,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: C.gx,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: C.bd, width: 0.5),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
             Icon(Icons.campaign_outlined, size: 14, color: C.mu),
             const SizedBox(width: 8),
             Text(
@@ -1670,25 +1666,13 @@ class _NoticesPlaceholder extends StatelessWidget {
               style: T.caption.copyWith(color: C.mu),
             ),
           ]),
-        ),
-        Container(
-          height: 48,
-          margin: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(
-            color: C.gx,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: C.bd, width: 0.5),
+          const SizedBox(height: 4),
+          Text(
+            isKorean ? '새로운 소식이 생기면 여기에 표시됩니다.' : 'New announcements will appear here.',
+            style: T.caption.copyWith(color: C.mu, fontSize: 11),
           ),
-        ),
-        Container(
-          height: 48,
-          decoration: BoxDecoration(
-            color: C.gx,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: C.bd, width: 0.5),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -1702,24 +1686,15 @@ class _HomeNoticesSection extends ConsumerStatefulWidget {
 }
 
 class _HomeNoticesSectionState extends ConsumerState<_HomeNoticesSection> {
-  bool _isExpanded = false;
-
   bool get isKorean => widget.isKorean;
 
-  String _formatDate(dynamic createdAt) {
-    if (createdAt == null) return '';
-    try {
-      final ts = createdAt as Timestamp;
-      final dt = ts.toDate();
-      return '${dt.year}.${dt.month.toString().padLeft(2, '0')}.${dt.day.toString().padLeft(2, '0')}';
-    } catch (_) {
-      return '';
-    }
+  String _formatDateDt(DateTime dt) {
+    return '${dt.year}.${dt.month.toString().padLeft(2, '0')}.${dt.day.toString().padLeft(2, '0')}';
   }
 
-  void _showNoticeDetail(BuildContext context, Map<String, dynamic> notice) {
-    final title = notice['title'] as String? ?? '';
-    final content = notice['content'] as String? ?? '';
+  void _showNoticeDetailPost(BuildContext context, LandingPost notice) {
+    final title = notice.title;
+    final content = notice.content;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1787,63 +1762,41 @@ class _HomeNoticesSectionState extends ConsumerState<_HomeNoticesSection> {
         SectionTitle(title: isKorean ? '공지사항' : 'Notices'),
         const SizedBox(height: 10),
         noticesAsync.when(
-          loading: () => _NoticesPlaceholder(isKorean: isKorean),
-          error: (_, _) => _NoticesPlaceholder(isKorean: isKorean),
-          data: (notices) {
-            if (notices.isEmpty) {
-              return _NoticesPlaceholder(isKorean: isKorean);
-            }
-            final displayed = _isExpanded ? notices : notices.take(1).toList();
-            final hiddenCount = notices.length - 1;
-
+          loading: () => const SizedBox.shrink(),
+          error: (e, _) => const SizedBox.shrink(),
+          data: (rawNotices) {
+            final notices = rawNotices.where((n) => n.title.isNotEmpty).toList();
+            if (notices.isEmpty) return const SizedBox.shrink();
             return Column(
               children: [
-                ...displayed.map((notice) {
-                  final isPinned = notice['isPinned'] as bool? ?? false;
-                  final title = notice['title'] as String? ?? '';
-                  final dateStr = _formatDate(notice['createdAt']);
-
-                  return GestureDetector(
-                    onTap: () => _showNoticeDetail(context, notice),
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      decoration: BoxDecoration(
-                        color: isPinned ? C.lv.withValues(alpha: 0.08) : C.gx,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border(
-                          left: BorderSide(
-                            color: isPinned ? C.lv : Colors.transparent,
-                            width: 3,
-                          ),
-                          top: BorderSide(color: C.bd, width: 0.5),
-                          right: BorderSide(color: C.bd, width: 0.5),
-                          bottom: BorderSide(color: C.bd, width: 0.5),
-                        ),
-                      ),
+                ...notices.map((notice) {
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    elevation: 1,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => _showNoticeDetailPost(context, notice),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            if (isPinned) ...[
+                            if (notice.isPinned) ...[
                               Icon(Icons.push_pin_rounded, size: 14, color: C.lv),
                               const SizedBox(width: 6),
                             ],
                             Expanded(
                               child: Text(
-                                title,
-                                style: T.body.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: C.tx,
-                                ),
+                                notice.title,
+                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              dateStr,
-                              style: T.caption.copyWith(color: C.mu),
+                              _formatDateDt(notice.createdAt),
+                              style: TextStyle(fontSize: 12, color: C.mu),
                             ),
                             const SizedBox(width: 4),
                             Icon(Icons.chevron_right_rounded, size: 16, color: C.mu),
@@ -1853,31 +1806,6 @@ class _HomeNoticesSectionState extends ConsumerState<_HomeNoticesSection> {
                     ),
                   );
                 }),
-                if (notices.length > 1)
-                  GestureDetector(
-                    onTap: () => setState(() => _isExpanded = !_isExpanded),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            _isExpanded
-                                ? (isKorean ? '접기' : 'Collapse')
-                                : (isKorean ? '공지 더 보기 ($hiddenCount)' : 'More notices ($hiddenCount)'),
-                            style: T.caption.copyWith(color: C.mu, fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(width: 4),
-                          Icon(
-                            _isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                            size: 16,
-                            color: C.mu,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
               ],
             );
           },

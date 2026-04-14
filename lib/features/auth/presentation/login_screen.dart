@@ -214,7 +214,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         width: 88,
                         height: 88,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, err) => Container(
+                        errorBuilder: (_, _, err) => Container(
                           width: 88,
                           height: 88,
                           decoration: BoxDecoration(

@@ -1,29 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/widgets/common_widgets.dart';
-import 'landing_top_bar.dart';
+import 'landing_scaffold.dart';
 
 const double _landingMaxWidth = 1160;
-const Color _landingBg = Color(0xFFFFF8FB);
+const Color _landingBg = kLandingBg;
 
 class LandingPricingScreen extends StatelessWidget {
   const LandingPricingScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _landingBg,
-      body: CustomScrollView(
-        slivers: [
-          const SliverToBoxAdapter(child: LandingTopBar()),
-          SliverToBoxAdapter(child: _HeroSection()),
-          SliverToBoxAdapter(child: _PlanCardsSection()),
-          SliverToBoxAdapter(child: _FaqSection()),
-          SliverToBoxAdapter(child: _CtaSection()),
-          SliverToBoxAdapter(child: _Footer()),
-        ],
-      ),
+    return LandingScaffold(
+      slivers: [
+        SliverToBoxAdapter(child: _HeroSection()),
+        SliverToBoxAdapter(child: _PlanCardsSection()),
+        SliverToBoxAdapter(child: _FaqSection()),
+        SliverToBoxAdapter(child: _CtaSection()),
+      ],
     );
   }
 }
@@ -627,46 +621,3 @@ class _CtaSection extends StatelessWidget {
   }
 }
 
-// ── 푸터 ─────────────────────────────────────────────────────────────────────
-
-class _Footer extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFF1A1A2E),
-      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: _landingMaxWidth),
-          child: Column(
-            children: [
-              const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  MoriLogo(size: 28),
-                  SizedBox(width: 8),
-                  MoriKnitTitle(fontSize: 16),
-                ],
-              ),
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: () => context.go('/'),
-                child: const Text(
-                  '홈으로 돌아가기',
-                  style:
-                      TextStyle(color: Color(0xFFB0A8D8), fontSize: 14),
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                '© 2025 MoriKnit. All rights reserved.',
-                style:
-                    TextStyle(color: Color(0xFF6B6B8A), fontSize: 12),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

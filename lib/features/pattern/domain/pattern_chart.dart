@@ -173,7 +173,7 @@ class PatternChart {
       },
     );
     return PatternChart(
-      id: json['id'] as String,
+      id: json['id'] as String? ?? '',
       title: json['title'] as String,
       rows: rows,
       cols: cols,

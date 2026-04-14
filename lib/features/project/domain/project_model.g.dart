@@ -26,6 +26,14 @@ _$ProjectModelImpl _$$ProjectModelImplFromJson(Map<String, dynamic> json) =>
               ?.map((e) => e as String)
               .toList() ??
           const [],
+      needleIds: (json['needleIds'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const [],
+      yarnIds: (json['yarnIds'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const [],
       photoUrls: (json['photoUrls'] as List<dynamic>?)
               ?.map((e) => e as String)
               .toList() ??
@@ -73,6 +81,8 @@ Map<String, dynamic> _$$ProjectModelImplToJson(_$ProjectModelImpl instance) =>
       'needleBrandName': instance.needleBrandName,
       'swatchId': instance.swatchId,
       'counterIds': instance.counterIds,
+      'needleIds': instance.needleIds,
+      'yarnIds': instance.yarnIds,
       'photoUrls': instance.photoUrls,
       'coverPhotoUrl': instance.coverPhotoUrl,
       'memo': instance.memo,

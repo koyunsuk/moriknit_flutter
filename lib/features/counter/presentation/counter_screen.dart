@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/localization/app_language.dart';
@@ -10,6 +13,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/counter_provider.dart';
+import '../../../providers/project_provider.dart';
 import '../../../providers/project_step_provider.dart';
 import '../domain/counter_model.dart';
 
@@ -23,6 +27,175 @@ class CounterScreen extends ConsumerStatefulWidget {
 
 class _CounterScreenState extends ConsumerState<CounterScreen> {
   int _stepSize = 1;
+  bool _isEditing = false;
+  bool _isSaving = false;
+  String? _localPhotoPath;
+  String? _photoUrl;
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _stitchCtrl;
+  late final TextEditingController _rowCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController();
+    _stitchCtrl = TextEditingController();
+    _rowCtrl = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _stitchCtrl.dispose();
+    _rowCtrl.dispose();
+    super.dispose();
+  }
+
+  void _enterEditMode(CounterModel counter) {
+    _nameCtrl.text = counter.name;
+    _stitchCtrl.text = counter.targetStitchCount > 0 ? '${counter.targetStitchCount}' : '';
+    _rowCtrl.text = counter.targetRowCount > 0 ? '${counter.targetRowCount}' : '';
+    _photoUrl = counter.photoUrl.isNotEmpty ? counter.photoUrl : null;
+    setState(() {
+      _isEditing = true;
+      _localPhotoPath = null;
+    });
+  }
+
+  void _cancelEdit() => setState(() => _isEditing = false);
+
+  Future<void> _pickPhoto(bool isKorean) async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.photo_library_outlined, color: C.lv),
+              title: Text(isKorean ? '갤러리에서 선택' : 'Choose from gallery', style: T.body),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: Icon(Icons.camera_alt_outlined, color: C.lv),
+              title: Text(isKorean ? '사진 촬영' : 'Take a photo', style: T.body),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+    final picked = await ImagePicker().pickImage(source: source, imageQuality: 88);
+    if (picked == null) return;
+    setState(() => _localPhotoPath = picked.path);
+  }
+
+  Future<void> _saveEdit(CounterModel counter, bool isKorean) async {
+    final newName = _nameCtrl.text.trim();
+    if (newName.isEmpty) return;
+    final newStitch = int.tryParse(_stitchCtrl.text.trim()) ?? 0;
+    final newRow = int.tryParse(_rowCtrl.text.trim()) ?? 0;
+    setState(() => _isSaving = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () async {
+          String? uploadedUrl = _photoUrl;
+          if (_localPhotoPath != null) {
+            final file = File(_localPhotoPath!);
+            final storageRef = FirebaseStorage.instance
+                .ref()
+                .child('counters/${DateTime.now().millisecondsSinceEpoch}.jpg');
+            await storageRef.putFile(file);
+            uploadedUrl = await storageRef.getDownloadURL();
+          }
+          await ref.read(counterRepositoryProvider).updateCounter(
+            counter.copyWith(
+              name: newName,
+              targetStitchCount: newStitch,
+              targetRowCount: newRow,
+              photoUrl: uploadedUrl ?? '',
+            ),
+          );
+        },
+      );
+      if (!mounted) return;
+      showSavedSnackBar(messenger, message: isKorean ? '수정됐어요.' : 'Updated.');
+      setState(() => _isEditing = false);
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(messenger, message: '$e');
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Widget _buildEditBody(CounterModel counter, bool isKorean) {
+    return Stack(
+      children: [
+        const BgOrbs(),
+        SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _CounterPhotoSection(
+                localPath: _localPhotoPath,
+                networkUrl: _photoUrl,
+                isKorean: isKorean,
+                onTap: () => _pickPhoto(isKorean),
+                onRemove: () => setState(() {
+                  _localPhotoPath = null;
+                  _photoUrl = null;
+                }),
+              ),
+              const SizedBox(height: 20),
+              SectionTitle(title: isKorean ? '카운터 이름' : 'Counter name'),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _nameCtrl,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: isKorean ? '카운터 이름' : 'Counter name',
+                  hintText: isKorean ? '예: 소매 카운터' : 'e.g. Sleeve counter',
+                ),
+              ),
+              const SizedBox(height: 20),
+              SectionTitle(title: isKorean ? '목표 코수 (선택)' : 'Target stitches (optional)'),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _stitchCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: isKorean ? '목표 코수' : 'Target stitches',
+                  hintText: '0',
+                  suffixText: isKorean ? '코' : 'sts',
+                ),
+              ),
+              const SizedBox(height: 20),
+              SectionTitle(title: isKorean ? '목표 단수 (선택)' : 'Target rows (optional)'),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _rowCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: isKorean ? '목표 단수' : 'Target rows',
+                  hintText: '0',
+                  suffixText: isKorean ? '단' : 'rows',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
   Future<void> _update(CounterModel counter, {int stitchDelta = 0, int rowDelta = 0}) async {
     final repo = ref.read(counterRepositoryProvider);
@@ -178,91 +351,71 @@ class _CounterScreenState extends ConsumerState<CounterScreen> {
     );
   }
 
-  Future<void> _showTargetDialog(CounterModel counter, bool isKorean) async {
-    final stitchCtrl = TextEditingController(text: counter.targetStitchCount > 0 ? '${counter.targetStitchCount}' : '');
-    final rowCtrl = TextEditingController(text: counter.targetRowCount > 0 ? '${counter.targetRowCount}' : '');
-    final confirm = await showDialog<bool>(
+  void _linkToProject(BuildContext context, String counterId, bool isKorean) {
+    showModalBottomSheet<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(isKorean ? '목표 설정' : 'Set targets', style: T.h3),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: stitchCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: isKorean ? '목표 코수 (선택)' : 'Target stitches (optional)',
-                hintText: '0',
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Consumer(
+        builder: (ctx, cRef, _) {
+          final allProjects = cRef.watch(projectListProvider).valueOrNull ?? [];
+          return SafeArea(
+            child: DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.5,
+              maxChildSize: 0.9,
+              minChildSize: 0.3,
+              builder: (_, scrollCtrl) => Column(
+                children: [
+                  const SizedBox(height: 8),
+                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: Text(isKorean ? '프로젝트에 연결' : 'Link to Project', style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                  ),
+                  if (allProjects.isEmpty)
+                    Expanded(child: Center(child: Text(isKorean ? '등록된 프로젝트가 없어요.' : 'No projects available.', style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(color: Colors.grey))))
+                  else
+                    Expanded(
+                      child: ListView.builder(
+                        controller: scrollCtrl,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        itemCount: allProjects.length,
+                        itemBuilder: (_, i) {
+                          final project = allProjects[i];
+                          final alreadyLinked = project.counterIds.contains(counterId);
+                          return ListTile(
+                            leading: project.coverPhotoUrl.isNotEmpty
+                                ? ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.network(project.coverPhotoUrl, width: 40, height: 40, fit: BoxFit.cover))
+                                : Container(width: 40, height: 40, decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(6)), child: const Icon(Icons.folder_outlined, size: 20)),
+                            title: Text(project.title, style: Theme.of(ctx).textTheme.bodyMedium),
+                            trailing: alreadyLinked ? Icon(Icons.check_circle_rounded, color: Colors.green.shade400, size: 18) : null,
+                            onTap: alreadyLinked ? null : () async {
+                              Navigator.pop(ctx);
+                              await runWithMoriLoadingDialog<void>(
+                                context,
+                                message: isKorean ? '연결하는 중입니다.' : 'Linking...',
+                                subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+                                task: () => ref.read(projectRepositoryProvider).updateProject(
+                                      project.copyWith(counterIds: [...project.counterIds, counterId]),
+                                    ),
+                              );
+                              if (context.mounted) {
+                                showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '연결됐어요.' : 'Linked.');
+                              }
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: rowCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: isKorean ? '목표 단수 (선택)' : 'Target rows (optional)',
-                hintText: '0',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(isKorean ? '취소' : 'Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: Text(isKorean ? '저장' : 'Save')),
-        ],
+          );
+        },
       ),
     );
-    final newStitch = int.tryParse(stitchCtrl.text.trim()) ?? 0;
-    final newRow = int.tryParse(rowCtrl.text.trim()) ?? 0;
-    if (confirm == true && mounted) {
-      await runWithMoriLoadingDialog<void>(
-        context,
-        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
-        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
-        task: () => ref.read(counterRepositoryProvider).updateTargets(
-          counter.id,
-          targetStitchCount: newStitch,
-          targetRowCount: newRow,
-        ),
-      );
-      if (mounted) {
-        showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '저장됐어요.' : 'Saved.');
-      }
-    }
-  }
-
-  Future<void> _showRenameDialog(CounterModel counter, bool isKorean) async {
-    final nameCtrl = TextEditingController(text: counter.name);
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(isKorean ? '이름 변경' : 'Rename counter', style: T.h3),
-        content: TextField(
-          controller: nameCtrl,
-          autofocus: true,
-          decoration: InputDecoration(hintText: isKorean ? '카운터 이름' : 'Counter name'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(isKorean ? '취소' : 'Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(isKorean ? '저장' : 'Save'),
-          ),
-        ],
-      ),
-    );
-    final newName = nameCtrl.text.trim();
-    if (confirm == true && newName.isNotEmpty && mounted) {
-      await runWithMoriLoadingDialog<void>(
-        context,
-        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
-        task: () => ref.read(counterRepositoryProvider).updateCounter(counter.copyWith(name: newName)),
-      );
-    }
   }
 
   Future<void> _duplicateCounter(CounterModel counter, bool isKorean) async {
@@ -306,83 +459,122 @@ class _CounterScreenState extends ConsumerState<CounterScreen> {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
     final counterAsync = ref.watch(counterByIdProvider(widget.counterId));
 
+    final counter = counterAsync.valueOrNull;
+
     return Scaffold(
       backgroundColor: C.bg,
       appBar: AppBar(
         backgroundColor: C.bg,
         elevation: 0,
-        actions: [
-          PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert_rounded, color: C.mu),
-            onSelected: (value) {
-              final counter = counterAsync.valueOrNull;
-              if (counter == null) return;
-              if (value == 'rename') {
-                _showRenameDialog(counter, isKorean);
-              } else if (value == 'copy') {
-                _duplicateCounter(counter, isKorean);
-              } else if (value == 'target') {
-                _showTargetDialog(counter, isKorean);
-              } else if (value == 'delete') {
-                _confirmDelete(isKorean);
-              }
-            },
-            itemBuilder: (ctx) => [
-              PopupMenuItem(
-                value: 'rename',
-                child: Row(
-                  children: [
-                    Icon(Icons.edit_rounded, color: C.mu, size: 18),
-                    const SizedBox(width: 10),
-                    Text(isKorean ? '이름 변경' : 'Rename', style: T.body),
+        leading: _isEditing
+            ? TextButton(
+                onPressed: _cancelEdit,
+                child: Text(isKorean ? '취소' : 'Cancel', style: T.body.copyWith(color: C.mu)),
+              )
+            : IconButton(
+                icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
+                onPressed: () => Navigator.pop(context),
+              ),
+        title: Text(
+          _isEditing
+              ? (isKorean ? '카운터 수정' : 'Edit Counter')
+              : (counter?.name ?? ''),
+          style: T.h3,
+        ),
+        actions: _isEditing
+            ? [
+                TextButton(
+                  onPressed: _isSaving || counter == null ? null : () => _saveEdit(counter, isKorean),
+                  child: Text(isKorean ? '저장' : 'Save', style: T.bodyBold.copyWith(color: C.lv)),
+                ),
+              ]
+            : [
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.more_vert_rounded, color: C.mu),
+                  onSelected: (value) {
+                    final c = counterAsync.valueOrNull;
+                    if (c == null) return;
+                    if (value == 'edit') {
+                      _enterEditMode(c);
+                    } else if (value == 'copy') {
+                      _duplicateCounter(c, isKorean);
+                    } else if (value == 'link_project') {
+                      _linkToProject(context, c.id, isKorean);
+                    } else if (value == 'delete') {
+                      _confirmDelete(isKorean);
+                    }
+                  },
+                  itemBuilder: (ctx) => [
+                    PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_rounded, color: C.lv, size: 18),
+                          const SizedBox(width: 10),
+                          Text(isKorean ? '수정' : 'Edit', style: T.body),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'copy',
+                      child: Row(
+                        children: [
+                          Icon(Icons.copy_rounded, color: C.lmD, size: 18),
+                          const SizedBox(width: 10),
+                          Text(isKorean ? '복사' : 'Duplicate', style: T.body),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'link_project',
+                      child: Row(
+                        children: [
+                          Icon(Icons.folder_outlined, color: C.lv, size: 18),
+                          const SizedBox(width: 10),
+                          Text(isKorean ? '프로젝트 연결' : 'Link to project', style: T.body),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline, color: C.og, size: 18),
+                          const SizedBox(width: 10),
+                          Text(isKorean ? '삭제' : 'Delete', style: T.body.copyWith(color: C.og)),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
-              ),
-              PopupMenuItem(
-                value: 'copy',
-                child: Row(
-                  children: [
-                    Icon(Icons.copy_rounded, color: C.lmD, size: 18),
-                    const SizedBox(width: 10),
-                    Text(isKorean ? '복사' : 'Duplicate', style: T.body),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: 'target',
-                child: Row(
-                  children: [
-                    Icon(Icons.flag_rounded, color: C.lmD, size: 18),
-                    const SizedBox(width: 10),
-                    Text(isKorean ? '목표단수 설정' : 'Set target rows', style: T.body),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: 'delete',
-                child: Row(
-                  children: [
-                    Icon(Icons.delete_outline, color: C.og, size: 18),
-                    const SizedBox(width: 10),
-                    Text(isKorean ? '삭제' : 'Delete', style: T.body.copyWith(color: C.og)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
+              ],
       ),
       body: counterAsync.when(
         data: (counter) {
           if (counter == null) {
             return Center(child: Text(isKorean ? '카운터를 찾을 수 없어요.' : 'Counter not found.', style: T.body));
           }
+          if (_isEditing) return _buildEditBody(counter, isKorean);
           return Stack(
             children: [
               const BgOrbs(),
               ListView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                 children: [
+                  if (counter.photoUrl.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.network(
+                          counter.photoUrl,
+                          width: double.infinity,
+                          height: 220,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                        ),
+                      ),
+                    ),
                   if (counter.projectId.isNotEmpty && counter.projectStepId.isNotEmpty)
                     _StepGuideBanner(
                       projectId: counter.projectId,
@@ -723,6 +915,78 @@ class _CounterPanelState extends State<_CounterPanel> {
           ),
         ],
       ]),
+    );
+  }
+}
+
+class _CounterPhotoSection extends StatelessWidget {
+  final String? localPath;
+  final String? networkUrl;
+  final bool isKorean;
+  final VoidCallback onTap;
+  final VoidCallback onRemove;
+
+  const _CounterPhotoSection({
+    required this.isKorean,
+    required this.onTap,
+    required this.onRemove,
+    this.localPath,
+    this.networkUrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhoto = localPath != null || networkUrl != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (hasPhoto) ...[
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: localPath != null
+                    ? Image.file(File(localPath!), width: double.infinity, height: 220, fit: BoxFit.contain)
+                    : Image.network(
+                        networkUrl!,
+                        width: double.infinity,
+                        height: 220,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                      ),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: GestureDetector(
+                  onTap: onRemove,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                    child: const Icon(Icons.close, color: Colors.white, size: 16),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+        ],
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: onTap,
+            icon: Icon(hasPhoto ? Icons.edit_rounded : Icons.add_photo_alternate_outlined, size: 18),
+            label: Text(hasPhoto
+                ? (isKorean ? '사진 변경' : 'Change photo')
+                : (isKorean ? '사진 추가' : 'Add photo')),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: C.lv,
+              side: BorderSide(color: C.lv.withValues(alpha: 0.4)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

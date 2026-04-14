@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/common_widgets.dart';
-import 'landing_top_bar.dart';
+import 'landing_scaffold.dart';
 
 // ── 기능 데이터 ────────────────────────────────────────────────────────────────
 class FeatureInfo {
@@ -248,12 +247,9 @@ class _FeatureDetailPage extends StatelessWidget {
     final width = MediaQuery.of(context).size.width;
     const maxWidth = 860.0;
 
-    return Scaffold(
+    return LandingScaffold(
       backgroundColor: const Color(0xFFF9F5FF),
-      body: CustomScrollView(
-        slivers: [
-          // ── 공통 탑바 ────────────────────────────────────────────────────────
-          const SliverToBoxAdapter(child: LandingTopBar()),
+      slivers: [
           // ── 기능 타이틀 서브바 ────────────────────────────────────────────────
           SliverToBoxAdapter(
             child: Container(
@@ -521,29 +517,7 @@ class _FeatureDetailPage extends StatelessWidget {
               ),
             ),
           ),
-          // ── 푸터 ─────────────────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Container(
-              color: const Color(0xFF1A1A2E),
-              padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
-              child: Center(
-                child: Column(
-                  children: [
-                    const MoriKnitTitle(fontSize: 18),
-                    const SizedBox(height: 8),
-                    Text('뜨개 기록의 모든 것', style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 13)),
-                    const SizedBox(height: 12),
-                    TextButton(
-                      onPressed: () => context.go('/'),
-                      child: Text('랜딩 페이지로 돌아가기', style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 12)),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
         ],
-      ),
     );
   }
 }

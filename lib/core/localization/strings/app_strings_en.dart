@@ -14,7 +14,7 @@ class AppStringsEn extends BaseAppStrings {
   @override String get toolHub => 'Tools hub';
   @override String get toolHubDescription => 'A quick popup works better than a full page jump for multi-tool access.';
   @override String get patternEditor => 'Pattern Editor';
-  @override String get gaugeCalculator => 'Gauge Calculator';
+  @override String get gaugeCalculator => 'AI Gauge Calculator';
   @override String get newCounter => 'New Counter';
   @override String get openToolsPage => 'Open full tools page';
   @override String get languageLabel => 'Language';

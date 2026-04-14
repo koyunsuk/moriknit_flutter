@@ -31,6 +31,7 @@ class CounterModel with _$CounterModel {
     @Default(0) int targetStitchCount,
     @Default(0) int targetRowCount,
     @Default([]) List<CounterMark> marks,
+    @Default('') String photoUrl,
     DateTime? createdAt,
     DateTime? updatedAt,
     @Default(false) bool isDirty,

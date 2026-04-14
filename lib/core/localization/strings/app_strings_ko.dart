@@ -14,7 +14,7 @@ class AppStringsKo extends BaseAppStrings {
   @override String get toolHub => '도구 허브';
   @override String get toolHubDescription => '여러 도구는 화면 이동보다 빠른 팝업 허브가 더 자연스럽습니다.';
   @override String get patternEditor => '도안 제작';
-  @override String get gaugeCalculator => '게이지 계산기';
+  @override String get gaugeCalculator => 'AI 게이지 계산기';
   @override String get newCounter => '새 카운터';
   @override String get openToolsPage => '도구 전체 보기';
   @override String get languageLabel => '언어';

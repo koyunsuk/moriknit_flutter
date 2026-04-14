@@ -14,6 +14,7 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/project_step_provider.dart';
 import '../../../providers/swatch_provider.dart';
+import '../../pattern/data/pattern_repository.dart';
 import '../../my/data/mori_service.dart';
 import '../domain/builtin_template.dart';
 import '../domain/project_model.dart';
@@ -261,6 +262,14 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                   isKorean: isKorean,
                   onChanged: notifier.setSwatchId,
                 ),
+                const SizedBox(height: 20),
+                SectionTitle(title: isKorean ? '연결된 도안 (선택)' : 'Linked Pattern (optional)'),
+                const SizedBox(height: 8),
+                _PatternDropdown(
+                  selectedPatternId: project.sourcePatternId,
+                  isKorean: isKorean,
+                  onChanged: notifier.setSourcePatternId,
+                ),
               ],
             ),
           ),
@@ -490,8 +499,8 @@ class _CoverImagePicker extends StatelessWidget {
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(18),
                             child: localPath != null
-                                ? Image.file(File(localPath!), fit: BoxFit.cover, width: double.infinity, height: double.infinity)
-                                : Image.network(photoUrl, fit: BoxFit.cover, width: double.infinity, height: double.infinity),
+                                ? Image.file(File(localPath!), fit: BoxFit.contain, width: double.infinity, height: double.infinity)
+                                : Image.network(photoUrl, fit: BoxFit.contain, width: double.infinity, height: double.infinity),
                           )
                         : Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -744,6 +753,59 @@ class _SwatchDropdown extends ConsumerWidget {
               value: swatch.id,
               child: Text(
                 swatch.swatchName.isNotEmpty ? swatch.swatchName : swatch.yarnBrandName.isNotEmpty ? swatch.yarnBrandName : 'Swatch',
+                style: T.body,
+                overflow: TextOverflow.ellipsis,
+              ),
+            )),
+          ],
+          onChanged: (value) => onChanged(value ?? ''),
+        ),
+      ),
+    );
+  }
+}
+
+class _PatternDropdown extends ConsumerWidget {
+  final String selectedPatternId;
+  final bool isKorean;
+  final ValueChanged<String> onChanged;
+
+  const _PatternDropdown({
+    required this.selectedPatternId,
+    required this.isKorean,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final patternsAsync = ref.watch(patternListProvider);
+    final patterns = patternsAsync.valueOrNull ?? [];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      decoration: BoxDecoration(
+        color: C.gx,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: C.bd2),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: patterns.any((p) => p.id == selectedPatternId) ? selectedPatternId : '',
+          isExpanded: true,
+          dropdownColor: C.bg,
+          style: T.body.copyWith(color: C.tx),
+          items: [
+            DropdownMenuItem(
+              value: '',
+              child: Text(
+                isKorean ? '연결 안 함' : 'No pattern linked',
+                style: T.body.copyWith(color: C.mu),
+              ),
+            ),
+            ...patterns.map((p) => DropdownMenuItem(
+              value: p.id,
+              child: Text(
+                p.title.isNotEmpty ? p.title : 'Untitled',
                 style: T.body,
                 overflow: TextOverflow.ellipsis,
               ),

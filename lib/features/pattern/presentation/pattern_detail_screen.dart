@@ -19,6 +19,7 @@ import '../../market/presentation/pdf_viewer_screen.dart';
 import '../../../providers/auth_provider.dart';
 import '../domain/pattern_chart.dart';
 import '../data/pattern_repository.dart';
+import '../../../providers/project_provider.dart';
 
 class PatternDetailScreen extends ConsumerStatefulWidget {
   final PatternChart chart;
@@ -44,15 +45,25 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
   bool _memoLoading = false;
   String? _uid;
 
+  bool _isEditing = false;
+  bool _isSaving = false;
+  late final TextEditingController _editTitleCtrl;
+  late final TextEditingController _editNarrativeCtrl;
+  ChartMode _editMode = ChartMode.color;
+
   @override
   void initState() {
     super.initState();
     _loadMemo();
+    _editTitleCtrl = TextEditingController();
+    _editNarrativeCtrl = TextEditingController();
   }
 
   @override
   void dispose() {
     _memoCtrl.dispose();
+    _editTitleCtrl.dispose();
+    _editNarrativeCtrl.dispose();
     super.dispose();
   }
 
@@ -107,6 +118,280 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
   /// chart 타입이고 다른 사용자의 패턴일 때 Fork 가능합니다.
   bool get _canFork =>
       widget.chart.type == PatternType.chart && _isOtherUser;
+
+  void _enterEditMode() {
+    _editTitleCtrl.text = widget.chart.title;
+    _editNarrativeCtrl.text = widget.chart.narrativeText;
+    _editMode = widget.chart.mode;
+    setState(() => _isEditing = true);
+  }
+
+  void _cancelEdit() => setState(() => _isEditing = false);
+
+  Future<void> _saveEdit(bool isKorean) async {
+    final newTitle = _editTitleCtrl.text.trim();
+    if (newTitle.isEmpty) return;
+    final newNarrative = _editNarrativeCtrl.text.trim();
+    setState(() => _isSaving = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () => ref.read(patternRepositoryProvider).save(
+          PatternChart(
+            id: widget.chart.id,
+            title: newTitle,
+            rows: widget.chart.rows,
+            cols: widget.chart.cols,
+            mode: _editMode,
+            grid: widget.chart.grid,
+            narrativeText: newNarrative,
+            type: widget.chart.type,
+            imageUrl: widget.chart.imageUrl,
+            pdfUrl: widget.chart.pdfUrl,
+            forkCount: widget.chart.forkCount,
+            sourcePatternId: widget.chart.sourcePatternId,
+            sourceOwnerName: widget.chart.sourceOwnerName,
+            sourceType: widget.chart.sourceType,
+          ),
+        ),
+      );
+      if (!mounted) return;
+      showSavedSnackBar(messenger, message: isKorean ? '수정됐어요.' : 'Updated.');
+      setState(() => _isEditing = false);
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(messenger, message: '$e');
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Widget _buildEditBody(bool isKorean) {
+    return Stack(
+      children: [
+        const BgOrbs(),
+        StatefulBuilder(
+          builder: (ctx, setEditState) => SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SectionTitle(title: isKorean ? '도안 이름' : 'Pattern name'),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _editTitleCtrl,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: isKorean ? '도안 이름' : 'Pattern name',
+                    hintText: isKorean ? '예: 비니 도안' : 'e.g. Beanie chart',
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SectionTitle(title: isKorean ? '설명 / 메모 (선택)' : 'Notes (optional)'),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _editNarrativeCtrl,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                    labelText: isKorean ? '설명 / 메모' : 'Notes',
+                    hintText: isKorean ? '도안에 대한 설명이나 메모를 입력하세요' : 'Add notes about this pattern',
+                  ),
+                ),
+                if (widget.chart.type == PatternType.chart) ...[
+                  const SizedBox(height: 20),
+                  SectionTitle(title: isKorean ? '도안 모드' : 'Pattern mode'),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      for (final mode in [ChartMode.color, ChartMode.symbol])
+                        Padding(
+                          padding: const EdgeInsets.only(right: 10),
+                          child: GestureDetector(
+                            onTap: () => setEditState(() => _editMode = mode),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: _editMode == mode ? C.lv : C.lvL,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: _editMode == mode ? C.lv : C.lv.withValues(alpha: 0.20)),
+                              ),
+                              child: Text(
+                                mode == ChartMode.color
+                                    ? (isKorean ? '컬러' : 'Color')
+                                    : (isKorean ? '기호' : 'Symbol'),
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: _editMode == mode ? Colors.white : C.lvD,
+                                  fontWeight: _editMode == mode ? FontWeight.w700 : FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _duplicatePattern(bool isKorean) async {
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '복사하는 중입니다.' : 'Duplicating...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () => ref.read(patternRepositoryProvider).duplicate(widget.chart),
+      );
+      if (mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '복사됐어요.' : 'Duplicated.');
+    } catch (e) {
+      if (mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+
+  Future<void> _confirmDelete(bool isKorean) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(isKorean ? '도안 삭제' : 'Delete Pattern', style: T.h3),
+        content: Text(isKorean ? '이 도안을 삭제할까요? 되돌릴 수 없어요.' : 'Delete this pattern? This cannot be undone.', style: T.body),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(isKorean ? '취소' : 'Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: C.og),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(isKorean ? '삭제' : 'Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '삭제하는 중입니다.' : 'Deleting...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () => ref.read(patternRepositoryProvider).delete(widget.chart.id),
+      );
+      if (!mounted) return;
+      Navigator.pop(context);
+      showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '삭제됐어요.' : 'Deleted.');
+    } catch (e) {
+      if (mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+
+  void _linkToProject(BuildContext context, bool isKorean) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Consumer(
+        builder: (ctx, cRef, _) {
+          final allProjects = cRef.watch(projectListProvider).valueOrNull ?? [];
+          return SafeArea(
+            child: DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.5,
+              maxChildSize: 0.9,
+              minChildSize: 0.3,
+              builder: (_, scrollCtrl) => Column(
+                children: [
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: Text(
+                      isKorean ? '프로젝트에 연결' : 'Link to Project',
+                      style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  if (allProjects.isEmpty)
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          isKorean ? '등록된 프로젝트가 없어요.' : 'No projects available.',
+                          style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                        ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: ListView.builder(
+                        controller: scrollCtrl,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        itemCount: allProjects.length,
+                        itemBuilder: (_, i) {
+                          final project = allProjects[i];
+                          final alreadyLinked = project.sourcePatternId == widget.chart.id;
+                          return ListTile(
+                            leading: project.coverPhotoUrl.isNotEmpty
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: Image.network(project.coverPhotoUrl, width: 40, height: 40, fit: BoxFit.cover),
+                                  )
+                                : Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade200,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Icon(Icons.folder_outlined, size: 20),
+                                  ),
+                            title: Text(project.title, style: Theme.of(ctx).textTheme.bodyMedium),
+                            trailing: alreadyLinked
+                                ? Icon(Icons.check_circle_rounded, color: Colors.green.shade400, size: 18)
+                                : null,
+                            onTap: alreadyLinked ? null : () async {
+                              Navigator.pop(ctx);
+                              await runWithMoriLoadingDialog<void>(
+                                context,
+                                message: isKorean ? '연결하는 중입니다.' : 'Linking...',
+                                subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+                                task: () => ref.read(projectRepositoryProvider).updateProject(
+                                      project.copyWith(sourcePatternId: widget.chart.id),
+                                    ),
+                              );
+                              if (context.mounted) {
+                                showSavedSnackBar(
+                                  ScaffoldMessenger.of(context),
+                                  message: isKorean ? '연결됐어요.' : 'Linked.',
+                                );
+                              }
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
 
   Future<void> _forkPattern() async {
     final isKorean = ref.read(appLanguageProvider).isKorean;
@@ -445,16 +730,80 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(widget.chart.title, style: T.h3),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: Stack(
+      appBar: _isEditing
+          ? AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              leading: TextButton(
+                onPressed: _cancelEdit,
+                child: Text(isKorean ? '취소' : 'Cancel', style: TextStyle(color: C.mu)),
+              ),
+              title: Text(isKorean ? '도안 수정' : 'Edit Pattern', style: T.h3),
+              actions: [
+                TextButton(
+                  onPressed: _isSaving ? null : () => _saveEdit(isKorean),
+                  child: Text(isKorean ? '저장' : 'Save', style: TextStyle(color: C.lv, fontWeight: FontWeight.w700)),
+                ),
+              ],
+            )
+          : AppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_ios, size: 20),
+                onPressed: () => Navigator.pop(context),
+              ),
+              title: Text(widget.chart.title, style: T.h3),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              actions: [
+                if (!_isOtherUser && widget.chart.id.isNotEmpty)
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert_rounded, color: C.tx),
+                    onSelected: (v) {
+                      if (v == 'edit') _enterEditMode();
+                      if (v == 'copy') _duplicatePattern(isKorean);
+                      if (v == 'link_project') _linkToProject(context, isKorean);
+                      if (v == 'delete') _confirmDelete(isKorean);
+                    },
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: Row(children: [
+                          Icon(Icons.edit_outlined, size: 18, color: C.lv),
+                          const SizedBox(width: 8),
+                          Text(isKorean ? '수정' : 'Edit'),
+                        ]),
+                      ),
+                      PopupMenuItem(
+                        value: 'copy',
+                        child: Row(children: [
+                          Icon(Icons.copy_rounded, size: 18, color: C.lv),
+                          const SizedBox(width: 8),
+                          Text(isKorean ? '복사' : 'Duplicate'),
+                        ]),
+                      ),
+                      PopupMenuItem(
+                        value: 'link_project',
+                        child: Row(children: [
+                          Icon(Icons.folder_outlined, size: 18, color: C.lv),
+                          const SizedBox(width: 8),
+                          Text(isKorean ? '프로젝트 연결' : 'Link to project'),
+                        ]),
+                      ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Row(children: [
+                          Icon(Icons.delete_outline, size: 18, color: C.og),
+                          const SizedBox(width: 8),
+                          Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og)),
+                        ]),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+      body: _isEditing
+          ? _buildEditBody(isKorean)
+          : Stack(
         children: [
           const BgOrbs(),
           SingleChildScrollView(

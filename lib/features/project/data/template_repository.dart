@@ -28,6 +28,7 @@ class TemplateRepository {
     required String description,
     required List<String> stepTitles,
     required List<String> stepDescs,
+    String photoUrl = '',
   }) async {
     if (_uid.isEmpty) return;
     await _col.add({
@@ -35,6 +36,7 @@ class TemplateRepository {
       'description': description,
       'stepTitles': stepTitles,
       'stepDescs': stepDescs,
+      'photoUrl': photoUrl,
       'createdAt': DateTime.now().toIso8601String(),
       'updatedAt': null,
     });
@@ -46,6 +48,7 @@ class TemplateRepository {
     required String description,
     required List<String> stepTitles,
     required List<String> stepDescs,
+    String photoUrl = '',
   }) async {
     if (_uid.isEmpty) return;
     await _col.doc(id).update({
@@ -53,6 +56,7 @@ class TemplateRepository {
       'description': description,
       'stepTitles': stepTitles,
       'stepDescs': stepDescs,
+      'photoUrl': photoUrl,
       'updatedAt': DateTime.now().toIso8601String(),
     });
   }

@@ -10,6 +10,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/project_provider.dart';
 import '../../../providers/yarn_provider.dart';
 import '../../swatch/presentation/brand_search_sheet.dart';
 import '../domain/yarn_model.dart';
@@ -29,7 +30,9 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
   bool _isEditing = false;
   bool _isSaving = false;
   bool _uploading = false;
+  bool _uploadingLabel = false;
   String? _localPhotoPath;
+  String? _localLabelPhotoPath;
 
   final _nameController = TextEditingController();
   final _colorController = TextEditingController();
@@ -70,10 +73,15 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
     setState(() {
       _isEditing = true;
       _localPhotoPath = null;
+      _localLabelPhotoPath = null;
     });
   }
 
-  void _cancelEdit() => setState(() => _isEditing = false);
+  void _cancelEdit() => setState(() {
+    _isEditing = false;
+    _localPhotoPath = null;
+    _localLabelPhotoPath = null;
+  });
 
   Future<void> _save(BuildContext context, bool isKorean) async {
     final authUser = ref.read(authStateProvider).valueOrNull;
@@ -155,6 +163,102 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
+  }
+
+  Future<void> _pickLabelPhoto(YarnInputNotifier notifier, bool isKorean) async {
+    final source = await _showImageSourceDialog(isKorean);
+    if (source == null) return;
+
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: source, maxWidth: 1600, imageQuality: 88);
+    if (picked == null) return;
+
+    setState(() { _localLabelPhotoPath = picked.path; _uploadingLabel = true; });
+
+    final authUser = ref.read(authStateProvider).valueOrNull;
+    final uid = authUser?.uid ?? 'unknown';
+
+    try {
+      final ref2 = FirebaseStorage.instance.ref().child('yarn/$uid/label_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final task = await ref2.putFile(File(picked.path));
+      final url = await task.ref.getDownloadURL();
+      notifier.updateLabelPhotoUrl(url);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(isKorean ? '라벨 사진 업로드 실패: $e' : 'Label upload failed: $e'),
+        backgroundColor: C.og,
+      ));
+    } finally {
+      if (mounted) setState(() => _uploadingLabel = false);
+    }
+  }
+
+  void _linkToProject(BuildContext context, String yarnId, bool isKorean) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Consumer(
+        builder: (ctx, cRef, _) {
+          final allProjects = cRef.watch(projectListProvider).valueOrNull ?? [];
+          return SafeArea(
+            child: DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.5,
+              maxChildSize: 0.9,
+              minChildSize: 0.3,
+              builder: (_, scrollCtrl) => Column(
+                children: [
+                  const SizedBox(height: 8),
+                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: Text(isKorean ? '프로젝트에 연결' : 'Link to Project', style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                  ),
+                  if (allProjects.isEmpty)
+                    Expanded(child: Center(child: Text(isKorean ? '등록된 프로젝트가 없어요.' : 'No projects available.', style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(color: Colors.grey))))
+                  else
+                    Expanded(
+                      child: ListView.builder(
+                        controller: scrollCtrl,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        itemCount: allProjects.length,
+                        itemBuilder: (_, i) {
+                          final project = allProjects[i];
+                          final alreadyLinked = project.yarnIds.contains(yarnId);
+                          return ListTile(
+                            leading: project.coverPhotoUrl.isNotEmpty
+                                ? ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.network(project.coverPhotoUrl, width: 40, height: 40, fit: BoxFit.cover))
+                                : Container(width: 40, height: 40, decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(6)), child: const Icon(Icons.folder_outlined, size: 20)),
+                            title: Text(project.title, style: Theme.of(ctx).textTheme.bodyMedium),
+                            trailing: alreadyLinked ? Icon(Icons.check_circle_rounded, color: Colors.green.shade400, size: 18) : null,
+                            onTap: alreadyLinked ? null : () async {
+                              Navigator.pop(ctx);
+                              await runWithMoriLoadingDialog<void>(
+                                context,
+                                message: isKorean ? '연결하는 중입니다.' : 'Linking...',
+                                subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+                                task: () => cRef.read(projectRepositoryProvider).updateProject(
+                                  project.copyWith(yarnIds: [...project.yarnIds, yarnId]),
+                                ),
+                              );
+                              if (context.mounted) {
+                                showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '연결됐어요.' : 'Linked.');
+                              }
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _duplicateYarn(YarnModel yarn, bool isKorean) async {
@@ -249,6 +353,7 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
                               onSelected: (v) {
                                 if (v == 'edit') _enterEditMode(yarn);
                                 if (v == 'copy') _duplicateYarn(yarn, isKorean);
+                                if (v == 'link_project') _linkToProject(context, yarn.id, isKorean);
                                 if (v == 'delete') _confirmDelete(yarn, isKorean);
                               },
                               itemBuilder: (_) => [
@@ -266,6 +371,14 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
                                     Icon(Icons.copy_rounded, size: 18, color: C.lv),
                                     const SizedBox(width: 8),
                                     Text(isKorean ? '복사' : 'Duplicate'),
+                                  ]),
+                                ),
+                                PopupMenuItem(
+                                  value: 'link_project',
+                                  child: Row(children: [
+                                    Icon(Icons.folder_outlined, size: 18, color: C.lv),
+                                    const SizedBox(width: 8),
+                                    Text(isKorean ? '프로젝트 연결' : 'Link to project'),
                                   ]),
                                 ),
                                 PopupMenuItem(
@@ -321,17 +434,44 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
                     value: yarn.name.isNotEmpty ? yarn.name : (isKorean ? '이름 없음' : 'No name'),
                     isKorean: isKorean,
                   ),
-                  if (yarn.photoUrl.isNotEmpty) ...[
+                  if (yarn.photoUrl.isNotEmpty || yarn.labelPhotoUrl.isNotEmpty) ...[
                     const SizedBox(height: 14),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        yarn.photoUrl,
-                        height: 180,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, e, stack) => const SizedBox.shrink(),
-                      ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (yarn.photoUrl.isNotEmpty)
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(isKorean ? '실 사진' : 'Yarn', style: T.caption.copyWith(color: C.mu)),
+                                const SizedBox(height: 4),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Image.network(yarn.photoUrl, height: 120, width: double.infinity,
+                                      fit: BoxFit.cover, errorBuilder: (c, e, s) => const SizedBox.shrink()),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (yarn.photoUrl.isNotEmpty && yarn.labelPhotoUrl.isNotEmpty)
+                          const SizedBox(width: 10),
+                        if (yarn.labelPhotoUrl.isNotEmpty)
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(isKorean ? '라벨 사진' : 'Label', style: T.caption.copyWith(color: C.mu)),
+                                const SizedBox(height: 4),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Image.network(yarn.labelPhotoUrl, height: 120, width: double.infinity,
+                                      fit: BoxFit.cover, errorBuilder: (c, e, s) => const SizedBox.shrink()),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
                     ),
                   ],
                 ],
@@ -426,43 +566,50 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 사진
-              GestureDetector(
-                onTap: () => _pickPhoto(notifier, isKorean),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 200),
-                  child: AspectRatio(
-                    aspectRatio: 4 / 3,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: C.lvL,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: C.bd2),
-                      ),
-                      child: _uploading
-                          ? const Center(child: CircularProgressIndicator())
-                          : (_localPhotoPath != null)
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: Image.file(File(_localPhotoPath!), fit: BoxFit.cover),
-                                )
-                              : yarn.photoUrl.isNotEmpty
-                                  ? ClipRRect(
-                                      borderRadius: BorderRadius.circular(16),
-                                      child: Image.network(yarn.photoUrl, fit: BoxFit.cover),
-                                    )
-                                  : Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.add_photo_alternate_outlined, color: C.lv, size: 36),
-                                        const SizedBox(height: 8),
-                                        Text(isKorean ? '사진 추가' : 'Add photo',
-                                            style: T.body.copyWith(color: C.lv)),
-                                      ],
-                                    ),
+              // 사진 (실사진 + 라벨사진 2단)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(isKorean ? '실 사진' : 'Yarn Photo',
+                            style: T.caption.copyWith(color: C.mu, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 6),
+                        _EditPhotoPicker(
+                          photoUrl: yarn.photoUrl,
+                          localPath: _localPhotoPath,
+                          uploading: _uploading,
+                          emptyIcon: Icons.texture,
+                          emptyLabel: isKorean ? '실 사진' : 'Yarn',
+                          isKorean: isKorean,
+                          onTap: () => _pickPhoto(notifier, isKorean),
+                        ),
+                      ],
                     ),
                   ),
-                ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(isKorean ? '라벨 사진' : 'Label Photo',
+                            style: T.caption.copyWith(color: C.mu, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 6),
+                        _EditPhotoPicker(
+                          photoUrl: yarn.labelPhotoUrl,
+                          localPath: _localLabelPhotoPath,
+                          uploading: _uploadingLabel,
+                          emptyIcon: Icons.label_outline_rounded,
+                          emptyLabel: isKorean ? '라벨 사진' : 'Label',
+                          isKorean: isKorean,
+                          onTap: () => _pickLabelPhoto(notifier, isKorean),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 14),
               // 브랜드
@@ -758,6 +905,62 @@ class _PickerField extends StatelessWidget {
             ),
             Icon(Icons.chevron_right, color: C.mu, size: 18),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EditPhotoPicker extends StatelessWidget {
+  final String photoUrl;
+  final String? localPath;
+  final bool uploading;
+  final IconData emptyIcon;
+  final String emptyLabel;
+  final bool isKorean;
+  final VoidCallback onTap;
+
+  const _EditPhotoPicker({
+    required this.photoUrl,
+    this.localPath,
+    required this.uploading,
+    required this.emptyIcon,
+    required this.emptyLabel,
+    required this.isKorean,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhoto = localPath != null || photoUrl.isNotEmpty;
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        height: 140,
+        width: double.infinity,
+        child: Container(
+          decoration: BoxDecoration(
+            color: C.lvL,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: C.bd2),
+          ),
+          child: uploading
+              ? Center(child: CircularProgressIndicator(color: C.lv))
+              : hasPhoto
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: localPath != null
+                          ? Image.file(File(localPath!), fit: BoxFit.contain, width: double.infinity, height: double.infinity)
+                          : Image.network(photoUrl, fit: BoxFit.contain, width: double.infinity, height: double.infinity),
+                    )
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(emptyIcon, color: C.lv, size: 36),
+                        const SizedBox(height: 8),
+                        Text(emptyLabel, style: T.caption.copyWith(color: C.lvD, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
         ),
       ),
     );

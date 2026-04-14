@@ -56,6 +56,7 @@ class ProjectInputNotifier extends StateNotifier<ProjectModel> {
   void setStartDate(DateTime? value) => state = state.copyWith(startDate: value);
   void setTargetDate(DateTime? value) => state = state.copyWith(targetDate: value);
   void setCoverPhoto(String url) => state = state.copyWith(coverPhotoUrl: url);
+  void setSourcePatternId(String value) => state = state.copyWith(sourcePatternId: value);
 
   void load(ProjectModel project) => state = project;
   void reset(String uid) => state = ProjectModel.empty(uid: uid);

@@ -178,11 +178,15 @@ class CounterRepository {
   // ── Hive ─────────────────────────────────────────────────
   Future<void> _saveToHive(CounterModel counter) async {
     if (kIsWeb) return;
-    final box = Hive.box<Map>(SubscriptionConstants.boxCounters);
-    final key = counter.id.isEmpty
-        ? 'temp_${DateTime.now().millisecondsSinceEpoch}'
-        : counter.id;
-    await box.put(key, counter.toJson());
+    try {
+      final box = Hive.box<Map>(SubscriptionConstants.boxCounters);
+      final key = counter.id.isEmpty
+          ? 'temp_${DateTime.now().millisecondsSinceEpoch}'
+          : counter.id;
+      await box.put(key, counter.toJson());
+    } catch (_) {
+      // Hive 캐시 실패는 무시 — Firestore가 primary
+    }
   }
 
   Future<void> _removeFromHive(String id) async {

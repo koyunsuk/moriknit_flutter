@@ -1,6 +1,3 @@
-import 'dart:math';
-
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,12 +7,9 @@ import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
-import '../../../providers/auth_provider.dart';
-import '../../../providers/market_provider.dart';
 import '../../../providers/template_provider.dart';
-import '../../market/domain/market_item.dart';
 import '../domain/builtin_template.dart';
-import '../domain/user_template.dart';
+import '../domain/user_template.dart'; // ignore: unused_import — UserTemplate passed via extra
 
 // ---------------------------------------------------------------------------
 // 기본 템플릿 seed 데이터 (어드민 초기 데이터 입력용 — UI에는 미사용)
@@ -226,235 +220,6 @@ class _CustomTemplateSection extends ConsumerWidget {
   final bool isKorean;
   const _CustomTemplateSection({required this.isKorean});
 
-  void _showTemplateDetail(BuildContext context, UserTemplate tmpl, bool isKorean) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: C.bg,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 36, height: 36,
-                    decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-                    child: Icon(Icons.folder_special_rounded, color: C.lvD, size: 18),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text(tmpl.title, style: T.h3)),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Text(isKorean ? '단계별 진행' : 'Steps', style: T.caption.copyWith(color: C.mu)),
-              const SizedBox(height: 8),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 320),
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: tmpl.stepTitles.asMap().entries.map((entry) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 26, height: 26,
-                            decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
-                            child: Center(child: Text('${entry.key + 1}', style: T.caption.copyWith(color: C.lvD, fontWeight: FontWeight.w700))),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(entry.value, style: T.body),
-                                if (entry.key < tmpl.stepDescs.length && tmpl.stepDescs[entry.key].isNotEmpty)
-                                  Text(tmpl.stepDescs[entry.key], style: T.caption.copyWith(color: C.mu)),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    )).toList(),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _delete(BuildContext context, WidgetRef ref, UserTemplate tmpl) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(isKorean ? '템플릿 삭제' : 'Delete template', style: T.h3),
-        content: Text(isKorean ? '"${tmpl.title}"을 삭제할까요?' : 'Delete "${tmpl.title}"?', style: T.body),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(isKorean ? '취소' : 'Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade400, foregroundColor: Colors.white),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(isKorean ? '삭제' : 'Delete'),
-          ),
-        ],
-      ),
-    );
-    if (confirm == true && context.mounted) {
-      try {
-        await runWithMoriLoadingDialog<void>(
-          context,
-          message: isKorean ? '삭제하는 중입니다.' : 'Deleting...',
-          subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
-          task: () => ref.read(templateRepositoryProvider).delete(tmpl.id),
-        );
-        if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '삭제됐어요.' : 'Deleted.');
-      } catch (e) {
-        if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
-      }
-    }
-  }
-
-  Future<void> _registerToMarket(BuildContext context, WidgetRef ref, UserTemplate tmpl) async {
-    final user = ref.read(authStateProvider).valueOrNull;
-    if (user == null) {
-      await showLoginRequiredDialog(context, isKorean: isKorean, fromRoute: Routes.templateList);
-      return;
-    }
-    final titleCtrl = TextEditingController(text: tmpl.title);
-    final descCtrl = TextEditingController();
-    final priceCtrl = TextEditingController();
-    bool isFree = true;
-    String? imageFilePath;
-    String? pdfFilePath;
-    final accentHex = ['#FA5BB4', '#B47EEB', '#A3E635', '#F472B6', '#60A5FA', '#34D399', '#FB923C', '#F9A8D4'][Random().nextInt(8)];
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: C.bg,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 18, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
-        child: StatefulBuilder(
-          builder: (ctx, setState) => SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(isKorean ? '마켓에 등록하기' : 'Sell on Market', style: T.h3),
-                const SizedBox(height: 4),
-                Text(isKorean ? '도안 마켓에 나의 템플릿을 등록해요. 관리자 승인 후 게시됩니다.' : 'List your template on the market. Posted after admin approval.',
-                    style: T.caption.copyWith(color: C.mu)),
-                const SizedBox(height: 14),
-                TextField(controller: titleCtrl, decoration: InputDecoration(labelText: isKorean ? '상품 이름' : 'Title', hintText: tmpl.title, fillColor: C.gx, filled: true)),
-                const SizedBox(height: 10),
-                TextField(controller: descCtrl, maxLines: 3, decoration: InputDecoration(labelText: isKorean ? '설명' : 'Description', hintText: isKorean ? '템플릿에 대해 설명해주세요' : 'Describe your template', fillColor: C.gx, filled: true)),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    _PriceChip(label: isKorean ? '무료' : 'Free', selected: isFree, onTap: () => setState(() { isFree = true; priceCtrl.clear(); })),
-                    const SizedBox(width: 8),
-                    _PriceChip(label: isKorean ? '유료' : 'Paid', selected: !isFree, onTap: () => setState(() => isFree = false)),
-                  ],
-                ),
-                if (!isFree) ...[
-                  const SizedBox(height: 10),
-                  TextField(controller: priceCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: isKorean ? '가격 (모리)' : 'Price (Mori)', hintText: '0', fillColor: C.gx, filled: true)),
-                ],
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      final result = await FilePicker.platform.pickFiles(type: FileType.image);
-                      if (result != null) setState(() => imageFilePath = result.files.single.path);
-                    },
-                    icon: const Icon(Icons.image_rounded, size: 18),
-                    label: Text(imageFilePath != null ? (isKorean ? '✓ 이미지 선택됨' : '✓ Image selected') : (isKorean ? '썸네일 이미지 선택' : 'Select thumbnail')),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: imageFilePath != null ? C.lmD : C.tx2,
-                      side: BorderSide(color: imageFilePath != null ? C.lmD : C.bd),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
-                      if (result != null) setState(() => pdfFilePath = result.files.single.path);
-                    },
-                    icon: const Icon(Icons.description_rounded, size: 18),
-                    label: Text(pdfFilePath != null ? (isKorean ? '✓ PDF 선택됨' : '✓ PDF selected') : (isKorean ? 'PDF 파일 선택 (선택)' : 'Select PDF (optional)')),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: pdfFilePath != null ? C.lmD : C.tx2,
-                      side: BorderSide(color: pdfFilePath != null ? C.lmD : C.bd),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      final price = isFree ? 0 : (int.tryParse(priceCtrl.text.trim()) ?? 0);
-                      if (titleCtrl.text.trim().isEmpty) {
-                        showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: isKorean ? '상품 이름을 입력해주세요.' : 'Please enter a title.');
-                        return;
-                      }
-                      try {
-                        await runWithMoriLoadingDialog<void>(
-                          ctx,
-                          message: isKorean ? '저장하는 중입니다.' : 'Saving...',
-                          subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
-                          task: () async {
-                            final item = MarketItem(
-                              id: '',
-                              sellerUid: user.uid,
-                              sellerName: user.displayName ?? user.email ?? '',
-                              title: titleCtrl.text.trim(),
-                              description: descCtrl.text.trim(),
-                              price: price,
-                              category: 'pattern',
-                              accentHex: accentHex,
-                              imageType: 'pattern',
-                              isSoldOut: false,
-                              isOfficial: false,
-                              status: price > 0 ? 'pending' : 'approved',
-                              createdAt: DateTime.now(),
-                            );
-                            await ref.read(marketRepositoryProvider).createItem(item, imageFile: imageFilePath, pdfFile: pdfFilePath);
-                          },
-                        );
-                        if (ctx.mounted) {
-                          Navigator.pop(ctx);
-                          showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '마켓에 등록됐어요.' : 'Listed on market.');
-                        }
-                      } catch (e) {
-                        if (ctx.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '$e');
-                      }
-                    },
-                    child: Text(isKorean ? '마켓에 등록하기' : 'List on Market'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final templatesAsync = ref.watch(userTemplateListProvider);
@@ -485,37 +250,32 @@ class _CustomTemplateSection extends ConsumerWidget {
               margin: const EdgeInsets.only(bottom: 4),
               child: ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                onTap: () => _showTemplateDetail(context, tmpl, isKorean),
-                leading: Container(
-                  width: 42, height: 42,
-                  decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
-                  child: Icon(Icons.folder_special_rounded, color: C.lvD, size: 20),
-                ),
+                onTap: () => context.push(Routes.templateDetail, extra: tmpl),
+                leading: tmpl.photoUrl.isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.network(
+                        tmpl.photoUrl,
+                        width: 42, height: 42,
+                        fit: BoxFit.cover,
+                        errorBuilder: (ctx, err, st) => Container(
+                          width: 42, height: 42,
+                          decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+                          child: Icon(Icons.folder_special_rounded, color: C.lvD, size: 20),
+                        ),
+                      ),
+                    )
+                  : Container(
+                      width: 42, height: 42,
+                      decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+                      child: Icon(Icons.folder_special_rounded, color: C.lvD, size: 20),
+                    ),
                 title: Text(tmpl.title, style: T.bodyBold),
                 subtitle: Text(
                   isKorean ? '${tmpl.stepTitles.length}개 단계' : '${tmpl.stepTitles.length} steps',
                   style: T.caption.copyWith(color: C.mu),
                 ),
-                trailing: PopupMenuButton<String>(
-                  icon: Icon(Icons.more_vert_rounded, color: C.mu, size: 22),
-                  onSelected: (value) {
-                    if (value == 'edit') {
-                      context.push(Routes.templateEditor, extra: {
-                        'templateId': tmpl.id,
-                        'title': tmpl.title,
-                        'steps': tmpl.stepTitles,
-                        'stepDescs': tmpl.stepDescs,
-                      });
-                    }
-                    if (value == 'market') _registerToMarket(context, ref, tmpl);
-                    if (value == 'delete') _delete(context, ref, tmpl);
-                  },
-                  itemBuilder: (_) => [
-                    PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: C.lvD), const SizedBox(width: 8), Text(isKorean ? '수정' : 'Edit')])),
-                    PopupMenuItem(value: 'market', child: Row(children: [Icon(Icons.storefront_rounded, size: 18, color: C.lmD), const SizedBox(width: 8), Text(isKorean ? '마켓에 등록하기' : 'Sell on Market', style: TextStyle(color: C.lmD))])),
-                    PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline_rounded, size: 18, color: C.og), const SizedBox(width: 8), Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og))])),
-                  ],
-                ),
+                trailing: Icon(Icons.chevron_right_rounded, color: C.mu, size: 20),
               ),
             )).toList(),
           ),
@@ -575,40 +335,6 @@ class _BuiltinTemplateRow extends StatelessWidget {
             ),
             Icon(Icons.chevron_right_rounded, color: C.mu, size: 18),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// 가격 타입 칩 (무료/유료 선택)
-// ---------------------------------------------------------------------------
-class _PriceChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _PriceChip({required this.label, required this.selected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? C.lv : C.lvL,
-          border: Border.all(color: selected ? C.lv : C.lv.withValues(alpha: 0.20)),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          label,
-          style: T.body.copyWith(
-            color: selected ? Colors.white : C.lvD,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-          ),
         ),
       ),
     );

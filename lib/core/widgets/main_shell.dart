@@ -574,32 +574,36 @@ class _WebShell extends ConsumerWidget {
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         backgroundColor: C.bg,
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(t.createActivity, style: T.h3),
-                  const Spacer(),
-                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  _CreateChip(icon: Icons.grid_view_rounded, label: t.swatches, color: C.lmD, onTap: () { Navigator.pop(ctx); context.push(Routes.swatchInput); }),
-                  _CreateChip(icon: Icons.folder_rounded, label: t.projects, color: C.lv, onTap: () { Navigator.pop(ctx); context.push(Routes.projectInput); }),
-                  _CreateChip(icon: Icons.grid_on_rounded, label: t.patternEditor, color: C.pk, onTap: () { Navigator.pop(ctx); context.push(Routes.toolsPattern); }),
-                  _CreateChip(icon: Icons.people_alt_rounded, label: t.community, color: C.og, onTap: () { Navigator.pop(ctx); context.go(Routes.community); }),
-                  _CreateChip(icon: Icons.storefront_rounded, label: t.market, color: C.lvD, onTap: () { Navigator.pop(ctx); context.go(Routes.market); }),
-                ],
-              ),
-            ],
+        insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+        child: SizedBox(
+          width: 340,
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(t.createActivity, style: T.h3),
+                    const Spacer(),
+                    IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    _CreateChip(icon: Icons.grid_view_rounded, label: t.swatches, color: C.pkD, onTap: () { Navigator.pop(ctx); context.push(Routes.swatchInput); }),
+                    _CreateChip(icon: Icons.folder_rounded, label: t.projects, color: C.lv, onTap: () { Navigator.pop(ctx); context.push(Routes.projectInput); }),
+                    _CreateChip(icon: Icons.grid_on_rounded, label: t.patternEditor, color: C.pk, onTap: () { Navigator.pop(ctx); context.push(Routes.toolsPattern); }),
+                    _CreateChip(icon: Icons.people_alt_rounded, label: t.community, color: C.og, onTap: () { Navigator.pop(ctx); context.go(Routes.community); }),
+                    _CreateChip(icon: Icons.storefront_rounded, label: t.market, color: C.lvD, onTap: () { Navigator.pop(ctx); context.go(Routes.market); }),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

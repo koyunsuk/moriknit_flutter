@@ -94,13 +94,13 @@ class PublicProjectService {
 
   Stream<List<PublicProjectEntry>> watchPublicProjects() {
     return _col
-        .orderBy('createdAt', descending: true)
         .limit(50)
         .snapshots()
-        .map(
-          (snap) =>
-              snap.docs.map(PublicProjectEntry.fromFirestore).toList(),
-        );
+        .map((snap) {
+          final entries = snap.docs.map(PublicProjectEntry.fromFirestore).toList();
+          entries.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return entries;
+        });
   }
 
   Future<void> publishProject({

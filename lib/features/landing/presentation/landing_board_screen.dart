@@ -5,10 +5,9 @@ import 'package:intl/intl.dart';
 
 import '../../../providers/auth_provider.dart';
 import '../data/landing_board_repository.dart';
-import 'landing_top_bar.dart';
+import 'landing_scaffold.dart';
 
 const double _landingMaxWidth = 1160;
-const Color _landingBg = Color(0xFFFFF8FB);
 
 // ── 게시판 제목 헬퍼 ──────────────────────────────────────────────────────────
 
@@ -50,8 +49,7 @@ class LandingBoardListScreen extends ConsumerWidget {
     final repo = ref.read(landingBoardRepositoryProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
 
-    return Scaffold(
-      backgroundColor: _landingBg,
+    return LandingScaffold(
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           if (user == null) {
@@ -65,39 +63,51 @@ class LandingBoardListScreen extends ConsumerWidget {
         icon: const Icon(Icons.edit_outlined),
         label: const Text('글쓰기', style: TextStyle(fontWeight: FontWeight.w700)),
       ),
-      body: CustomScrollView(
-        slivers: [
-          const SliverToBoxAdapter(child: LandingTopBar()),
-
+      slivers: [
           // 페이지 헤더
           SliverToBoxAdapter(
             child: Container(
               width: double.infinity,
-              color: const Color(0xFF1A1A2E),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF17172A), Color(0xFF272247), Color(0xFF3A2D63)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
               padding:
                   const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
               child: Center(
                 child: ConstrainedBox(
                   constraints:
                       const BoxConstraints(maxWidth: _landingMaxWidth),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _boardTitle(boardType),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 36,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _boardSubtitle(boardType),
-                        style: const TextStyle(
-                            color: Color(0xFFB0A8D8), fontSize: 15),
-                      ),
-                    ],
+                  child: _BoardHeroCard(
+                    title: _boardTitle(boardType),
+                    subtitle: _boardSubtitle(boardType),
+                    accent: boardType == 'qa'
+                        ? const Color(0xFF34D399)
+                        : boardType == 'release'
+                            ? const Color(0xFF60A5FA)
+                            : const Color(0xFFF472B6),
+                    trailing: boardType == 'qa'
+                        ? FilledButton.icon(
+                            onPressed: () {
+                              if (user == null) {
+                                context.go('/login?source=board');
+                              } else {
+                                context.push('/board/$boardType/write');
+                              }
+                            },
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF8B5CF6),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            icon: const Icon(Icons.edit_note_rounded, size: 18),
+                            label: const Text('문의 작성', style: TextStyle(fontWeight: FontWeight.w700)),
+                          )
+                        : null,
                   ),
                 ),
               ),
@@ -156,7 +166,6 @@ class LandingBoardListScreen extends ConsumerWidget {
 
           const SliverToBoxAdapter(child: SizedBox(height: 80)),
         ],
-      ),
     );
   }
 }
@@ -332,130 +341,126 @@ class _LandingBoardDetailScreenState
     final repo = ref.read(landingBoardRepositoryProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
 
-    return Scaffold(
-      backgroundColor: _landingBg,
-      body: CustomScrollView(
-        slivers: [
-          const SliverToBoxAdapter(child: LandingTopBar()),
-          SliverToBoxAdapter(
-            child: Center(
-              child: ConstrainedBox(
-                constraints:
-                    const BoxConstraints(maxWidth: _landingMaxWidth),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 24, vertical: 32),
-                  child: _loading
-                      ? const Center(child: CircularProgressIndicator())
-                      : _post == null
-                          ? const Center(child: Text('게시글을 찾을 수 없어요.'))
-                          : Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // 뒤로가기
-                                TextButton.icon(
-                                  onPressed: () => context
-                                      .go('/${_backRoute(widget.boardType)}'),
-                                  icon: const Icon(Icons.arrow_back_ios,
-                                      size: 16),
-                                  label: Text(
-                                      _boardTitle(widget.boardType)),
-                                  style: TextButton.styleFrom(
-                                      foregroundColor:
-                                          const Color(0xFF8B5CF6)),
-                                ),
-                                const SizedBox(height: 16),
+    return LandingScaffold(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Center(
+            child: ConstrainedBox(
+              constraints:
+                  const BoxConstraints(maxWidth: _landingMaxWidth),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 24, vertical: 32),
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _post == null
+                        ? const Center(child: Text('게시글을 찾을 수 없어요.'))
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // 뒤로가기
+                              TextButton.icon(
+                                onPressed: () => context
+                                    .go('/${_backRoute(widget.boardType)}'),
+                                icon: const Icon(Icons.arrow_back_ios,
+                                    size: 16),
+                                label: Text(
+                                    _boardTitle(widget.boardType)),
+                                style: TextButton.styleFrom(
+                                    foregroundColor:
+                                        const Color(0xFF8B5CF6)),
+                              ),
+                              const SizedBox(height: 16),
 
-                                // 제목
-                                Text(
-                                  _post!.title,
-                                  style: const TextStyle(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF1E1B4B),
-                                  ),
+                              // 제목
+                              Text(
+                                _post!.title,
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF1E1B4B),
                                 ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    Text(
-                                      _post!.authorName,
-                                      style: const TextStyle(
-                                          fontSize: 13,
-                                          color: Color(0xFF7C5CBF)),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    const Text('·',
-                                        style: TextStyle(
-                                            color: Color(0xFFB0A8D8))),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      DateFormat('yyyy년 MM월 dd일')
-                                          .format(_post!.createdAt),
-                                      style: const TextStyle(
-                                          fontSize: 13,
-                                          color: Color(0xFFB0A8D8)),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    const Icon(Icons.visibility_outlined,
-                                        size: 14,
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Text(
+                                    _post!.authorName,
+                                    style: const TextStyle(
+                                        fontSize: 13,
+                                        color: Color(0xFF7C5CBF)),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text('·',
+                                      style: TextStyle(
+                                          color: Color(0xFFB0A8D8))),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    DateFormat('yyyy년 MM월 dd일')
+                                        .format(_post!.createdAt),
+                                    style: const TextStyle(
+                                        fontSize: 13,
                                         color: Color(0xFFB0A8D8)),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '${_post!.viewCount}',
-                                      style: const TextStyle(
-                                          fontSize: 12,
-                                          color: Color(0xFFB0A8D8)),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 24),
-                                const Divider(color: Color(0xFFEEE8FF)),
-                                const SizedBox(height: 24),
-
-                                // 내용
-                                Text(
-                                  _post!.content,
-                                  style: const TextStyle(
-                                      fontSize: 15,
-                                      height: 1.8,
-                                      color: Color(0xFF1E1B4B)),
-                                ),
-                                const SizedBox(height: 40),
-                                const Divider(color: Color(0xFFEEE8FF)),
-                                const SizedBox(height: 24),
-
-                                // 댓글
-                                _CommentsSection(
-                                  commentsStream:
-                                      repo.getBoardComments(
-                                          widget.boardType,
-                                          widget.postId),
-                                ),
-                                const SizedBox(height: 20),
-
-                                // 댓글 입력
-                                if (user != null)
-                                  _CommentInput(
-                                    controller: _commentController,
-                                    submitting: _submitting,
-                                    onSubmit: _submitComment,
-                                  )
-                                else
-                                  _LoginPrompt(
-                                    onTap: () => context
-                                        .go('/login?source=board'),
                                   ),
+                                  const SizedBox(width: 12),
+                                  const Icon(Icons.visibility_outlined,
+                                      size: 14,
+                                      color: Color(0xFFB0A8D8)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${_post!.viewCount}',
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFFB0A8D8)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 24),
+                              const Divider(color: Color(0xFFEEE8FF)),
+                              const SizedBox(height: 24),
 
-                                const SizedBox(height: 60),
-                              ],
-                            ),
-                ),
+                              // 내용
+                              Text(
+                                _post!.content,
+                                style: const TextStyle(
+                                    fontSize: 15,
+                                    height: 1.8,
+                                    color: Color(0xFF1E1B4B)),
+                              ),
+                              const SizedBox(height: 40),
+                              const Divider(color: Color(0xFFEEE8FF)),
+                              const SizedBox(height: 24),
+
+                              // 댓글
+                              _CommentsSection(
+                                commentsStream:
+                                    repo.getBoardComments(
+                                        widget.boardType,
+                                        widget.postId),
+                              ),
+                              const SizedBox(height: 20),
+
+                              // 댓글 입력
+                              if (user != null)
+                                _CommentInput(
+                                  controller: _commentController,
+                                  submitting: _submitting,
+                                  onSubmit: _submitComment,
+                                )
+                              else
+                                _LoginPrompt(
+                                  onTap: () => context
+                                      .go('/login?source=board'),
+                                ),
+
+                              const SizedBox(height: 60),
+                            ],
+                          ),
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -553,152 +558,154 @@ class _LandingBoardWriteScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _landingBg,
-      body: CustomScrollView(
-        slivers: [
-          const SliverToBoxAdapter(child: LandingTopBar()),
-          SliverToBoxAdapter(
-            child: Center(
-              child: ConstrainedBox(
-                constraints:
-                    const BoxConstraints(maxWidth: 760),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 24, vertical: 32),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 뒤로가기
-                      TextButton.icon(
-                        onPressed: () => context.pop(),
-                        icon: const Icon(Icons.arrow_back_ios, size: 16),
-                        label: const Text('목록으로'),
-                        style: TextButton.styleFrom(
-                            foregroundColor: const Color(0xFF8B5CF6)),
-                      ),
-                      const SizedBox(height: 16),
+    return LandingScaffold(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 760),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 24, vertical: 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 뒤로가기
+                    TextButton.icon(
+                      onPressed: () => context.pop(),
+                      icon: const Icon(Icons.arrow_back_ios, size: 16),
+                      label: const Text('목록으로'),
+                      style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFF8B5CF6)),
+                    ),
+                    const SizedBox(height: 16),
 
-                      Text(
-                        '${_boardTitle(widget.boardType)} 글쓰기',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF1E1B4B),
-                        ),
+                    Text(
+                      '${_boardTitle(widget.boardType)} 글쓰기',
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF1E1B4B),
                       ),
-                      const SizedBox(height: 28),
+                    ),
+                    const SizedBox(height: 12),
+                    _WriteGuideBanner(boardType: widget.boardType),
+                    const SizedBox(height: 28),
 
-                      // 제목
-                      const Text(
-                        '제목',
-                        style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF4C3D8A)),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _titleController,
-                        decoration: InputDecoration(
-                          hintText: '제목을 입력하세요',
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide:
-                                const BorderSide(color: Color(0xFFE5E0F8)),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide:
-                                const BorderSide(color: Color(0xFFE5E0F8)),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide:
-                                const BorderSide(color: Color(0xFF8B5CF6)),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 14),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // 내용
-                      const Text(
-                        '내용',
-                        style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF4C3D8A)),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _contentController,
-                        decoration: InputDecoration(
-                          hintText: '내용을 입력하세요',
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide:
-                                const BorderSide(color: Color(0xFFE5E0F8)),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide:
-                                const BorderSide(color: Color(0xFFE5E0F8)),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide:
-                                const BorderSide(color: Color(0xFF8B5CF6)),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 14),
-                        ),
-                        maxLines: 12,
-                        minLines: 8,
-                      ),
-                      const SizedBox(height: 28),
-
-                      // 제출 버튼
-                      SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: ElevatedButton(
-                          onPressed: _submitting ? null : _submit,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF8B5CF6),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
-                            elevation: 0,
-                            textStyle: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700),
-                          ),
-                          child: _submitting
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2.5,
-                                      color: Colors.white),
-                                )
-                              : const Text('게시글 등록'),
-                        ),
-                      ),
-                      const SizedBox(height: 60),
+                    if (widget.boardType == 'qa') ...[
+                      const _QaInputCard(),
+                      const SizedBox(height: 22),
                     ],
-                  ),
+
+                    // 제목
+                    const Text(
+                      '제목',
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF4C3D8A)),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _titleController,
+                      decoration: InputDecoration(
+                        hintText: '제목을 입력하세요',
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFE5E0F8)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFE5E0F8)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide:
+                              const BorderSide(color: Color(0xFF8B5CF6)),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // 내용
+                    const Text(
+                      '내용',
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF4C3D8A)),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _contentController,
+                      decoration: InputDecoration(
+                        hintText: '내용을 입력하세요',
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFE5E0F8)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFE5E0F8)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide:
+                              const BorderSide(color: Color(0xFF8B5CF6)),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                      ),
+                      maxLines: 12,
+                      minLines: 8,
+                    ),
+                    const SizedBox(height: 28),
+
+                    // 제출 버튼
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: _submitting ? null : _submit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF8B5CF6),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
+                          textStyle: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700),
+                        ),
+                        child: _submitting
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    color: Colors.white),
+                              )
+                            : const Text('게시글 등록'),
+                      ),
+                    ),
+                    const SizedBox(height: 60),
+                  ],
                 ),
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -903,6 +910,204 @@ class _LoginPrompt extends StatelessWidget {
               style: TextStyle(
                   color: Color(0xFF8B5CF6),
                   fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BoardHeroCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Color accent;
+  final Widget? trailing;
+
+  const _BoardHeroCard({
+    required this.title,
+    required this.subtitle,
+    required this.accent,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: accent.withValues(alpha: 0.45)),
+                  ),
+                  child: Text(
+                    'LANDING BOARD',
+                    style: TextStyle(
+                      color: accent,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.6,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 34,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  subtitle,
+                  style: const TextStyle(color: Color(0xFFD6CFEE), fontSize: 15, height: 1.5),
+                ),
+              ],
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: 16),
+            trailing!,
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _WriteGuideBanner extends StatelessWidget {
+  final String boardType;
+  const _WriteGuideBanner({required this.boardType});
+
+  @override
+  Widget build(BuildContext context) {
+    final isQa = boardType == 'qa';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E0F8)),
+      ),
+      child: Row(
+        children: [
+          Icon(isQa ? Icons.support_agent_rounded : Icons.edit_note_rounded, color: const Color(0xFF8B5CF6), size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              isQa
+                  ? '문의 내용을 자세히 적어주시면 더 빠르게 도와드릴 수 있어요.'
+                  : '핵심 내용을 먼저 적으면 다른 사용자들이 더 쉽게 이해할 수 있어요.',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF5B4A93)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QaInputCard extends StatelessWidget {
+  const _QaInputCard();
+
+  static OutlineInputBorder _border(Color color) => OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: color),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3EFFF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFD4C8F8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF7C5CBF)),
+              SizedBox(width: 6),
+              Text(
+                '문의 기본 정보',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF4C3D8A)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            '아래 항목은 빠른 응대를 위한 참고용 입력란입니다.',
+            style: TextStyle(fontSize: 12, color: Color(0xFF7C5CBF)),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  decoration: InputDecoration(
+                    labelText: '답변 받을 이메일(선택)',
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: _border(const Color(0xFFE5E0F8)),
+                    enabledBorder: _border(const Color(0xFFE5E0F8)),
+                    focusedBorder: _border(const Color(0xFF8B5CF6)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    isDense: true,
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  decoration: InputDecoration(
+                    labelText: '연락처(선택)',
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: _border(const Color(0xFFE5E0F8)),
+                    enabledBorder: _border(const Color(0xFFE5E0F8)),
+                    focusedBorder: _border(const Color(0xFF8B5CF6)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    isDense: true,
+                  ),
+                  keyboardType: TextInputType.phone,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            decoration: InputDecoration(
+              labelText: '사용 중인 환경 또는 버전(선택)',
+              hintText: '예: Android 14 / iOS 18 / 웹 크롬',
+              filled: true,
+              fillColor: Colors.white,
+              border: _border(const Color(0xFFE5E0F8)),
+              enabledBorder: _border(const Color(0xFFE5E0F8)),
+              focusedBorder: _border(const Color(0xFF8B5CF6)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              isDense: true,
             ),
           ),
         ],

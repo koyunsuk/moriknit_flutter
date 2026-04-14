@@ -1,101 +1,765 @@
+import 'dart:io';
+
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../providers/needle_provider.dart';
+import '../../../providers/project_provider.dart';
 import '../../../providers/swatch_provider.dart';
+import '../../../providers/yarn_provider.dart';
+import '../../my/domain/needle_model.dart';
 import '../domain/swatch_model.dart';
-import 'swatch_input_screen.dart';
+import 'brand_search_sheet.dart';
 
-class SwatchDetailScreen extends ConsumerWidget {
+class SwatchDetailScreen extends ConsumerStatefulWidget {
   final String swatchId;
 
   const SwatchDetailScreen({super.key, required this.swatchId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SwatchDetailScreen> createState() => _SwatchDetailScreenState();
+}
+
+class _SwatchDetailScreenState extends ConsumerState<SwatchDetailScreen> {
+  bool _isEditing = false;
+  bool _isSaving = false;
+  String? _linkedNeedleName;
+  String? _linkedYarnName;
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _memoCtrl;
+
+  String? _localBeforePhotoPath;
+  String? _localAfterPhotoPath;
+  String? _beforePhotoUrl;
+  String? _afterPhotoUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController();
+    _memoCtrl = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _memoCtrl.dispose();
+    super.dispose();
+  }
+
+  void _enterEditMode(SwatchModel swatch) {
+    ref.read(swatchInputProvider.notifier).loadSwatch(swatch);
+    _nameCtrl.text = swatch.swatchName;
+    _memoCtrl.text = swatch.memo;
+    _beforePhotoUrl = swatch.beforePhotoUrl.isNotEmpty ? swatch.beforePhotoUrl : null;
+    _afterPhotoUrl = swatch.afterPhotoUrl.isNotEmpty ? swatch.afterPhotoUrl : null;
+    setState(() {
+      _isEditing = true;
+      _localBeforePhotoPath = null;
+      _localAfterPhotoPath = null;
+    });
+  }
+
+  void _cancelEdit() => setState(() { _isEditing = false; _linkedNeedleName = null; _linkedYarnName = null; });
+
+  Future<void> _pickPhoto({required bool isBefore, required bool isKorean}) async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.photo_library_outlined, color: C.lv),
+              title: Text(isKorean ? '갤러리에서 선택' : 'Choose from gallery', style: T.body),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: Icon(Icons.camera_alt_outlined, color: C.lv),
+              title: Text(isKorean ? '사진 촬영' : 'Take a photo', style: T.body),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+    final picked = await ImagePicker().pickImage(source: source, imageQuality: 88);
+    if (picked == null) return;
+    setState(() {
+      if (isBefore) {
+        _localBeforePhotoPath = picked.path;
+      } else {
+        _localAfterPhotoPath = picked.path;
+      }
+    });
+  }
+
+  void _selectNeedleFromMyNeedles(BuildContext context, bool isKorean) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Consumer(
+        builder: (ctx, cRef, _) {
+          final notifier = ref.read(swatchInputProvider.notifier);
+          final needles = cRef.watch(needleListProvider).valueOrNull ?? [];
+          return DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 0.5,
+            maxChildSize: 0.9,
+            minChildSize: 0.3,
+            builder: (_, scrollCtrl) => Column(
+              children: [
+                const SizedBox(height: 8),
+                Center(
+                    child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                            color: C.bd2, borderRadius: BorderRadius.circular(2)))),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: Text(
+                      isKorean ? '나의 바늘에서 선택' : 'Select from My Needles',
+                      style: T.h3),
+                ),
+                if (needles.isEmpty)
+                  Expanded(
+                      child: Center(
+                          child: Text(
+                              isKorean ? '등록된 바늘이 없어요.' : 'No needles found.',
+                              style: T.body.copyWith(color: C.mu))))
+                else
+                  Expanded(
+                    child: ListView.builder(
+                      controller: scrollCtrl,
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      itemCount: needles.length,
+                      itemBuilder: (_, i) {
+                        final needle = needles[i];
+                        return ListTile(
+                          leading: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                                color: C.lv.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(10)),
+                            child: Icon(Icons.settings_outlined, color: C.lvD, size: 20),
+                          ),
+                          title: Text(
+                              needle.name.isNotEmpty ? needle.name : needle.sizeDisplay,
+                              style: T.bodyBold),
+                          subtitle: Text(
+                              '${needle.sizeDisplay} · ${needle.brandName.isNotEmpty ? needle.brandName : (isKorean ? "브랜드 없음" : "No brand")}',
+                              style: T.caption.copyWith(color: C.mu)),
+                          onTap: () {
+                            notifier.updateNeedleSize(needle.size);
+                            notifier.updateMyNeedleId(needle.id);
+                            notifier.updateMyNeedlePhotoUrl(needle.photoUrl);
+                            if (needle.brandName.isNotEmpty) {
+                              notifier.updateNeedleBrand('', needle.brandName);
+                            }
+                            setState(() => _linkedNeedleName = needle.name.isNotEmpty ? needle.name : needle.sizeDisplay);
+                            Navigator.pop(ctx);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _selectYarnFromMyYarns(BuildContext context, bool isKorean) {
+    final notifier = ref.read(swatchInputProvider.notifier);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      isScrollControlled: true,
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.6,
+          maxChildSize: 0.9,
+          builder: (_, controller) => Consumer(
+            builder: (context, ref, _) {
+              final yarnsAsync = ref.watch(yarnListProvider);
+              return yarnsAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Center(child: Text('$e')),
+                data: (yarns) => yarns.isEmpty
+                    ? Center(
+                        child: Text(
+                          isKorean ? '등록된 실이 없어요' : 'No yarns found',
+                          style: T.body.copyWith(color: C.mu),
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: controller,
+                        itemCount: yarns.length,
+                        itemBuilder: (ctx, i) {
+                          final yarn = yarns[i];
+                          return ListTile(
+                            leading: yarn.photoUrl.isNotEmpty
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(yarn.photoUrl,
+                                        width: 44, height: 44, fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => Container(
+                                          width: 44, height: 44,
+                                          decoration: BoxDecoration(
+                                            color: C.lv.withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Icon(Icons.color_lens_outlined, color: C.lvD, size: 20),
+                                        )),
+                                  )
+                                : Container(
+                                    width: 44, height: 44,
+                                    decoration: BoxDecoration(
+                                      color: C.lv.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(Icons.color_lens_outlined, color: C.lvD, size: 20),
+                                  ),
+                            title: Text(
+                                yarn.name.isNotEmpty ? yarn.name : yarn.brandName,
+                                style: T.bodyBold),
+                            subtitle: Text(
+                                '${yarn.brandName.isNotEmpty ? yarn.brandName : (isKorean ? "브랜드 없음" : "No brand")}${yarn.color.isNotEmpty ? " · ${yarn.color}" : ""}',
+                                style: T.caption.copyWith(color: C.mu)),
+                            onTap: () {
+                              notifier.updateMyYarnId(yarn.id);
+                              notifier.updateMyYarnPhotoUrl(yarn.photoUrl);
+                              if (yarn.brandName.isNotEmpty) {
+                                notifier.updateYarnBrand('', yarn.brandName);
+                              }
+                              setState(() => _linkedYarnName = yarn.name.isNotEmpty ? yarn.name : yarn.brandName);
+                              Navigator.pop(ctx);
+                            },
+                          );
+                        },
+                      ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _saveEdit(bool isKorean) async {
+    setState(() => _isSaving = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () async {
+          // 세탁 전 사진 업로드
+          if (_localBeforePhotoPath != null) {
+            final file = File(_localBeforePhotoPath!);
+            final storageRef = FirebaseStorage.instance
+                .ref()
+                .child('swatches/before_${DateTime.now().millisecondsSinceEpoch}.jpg');
+            await storageRef.putFile(file);
+            _beforePhotoUrl = await storageRef.getDownloadURL();
+          }
+          // 세탁 후 사진 업로드
+          if (_localAfterPhotoPath != null) {
+            final file = File(_localAfterPhotoPath!);
+            final storageRef = FirebaseStorage.instance
+                .ref()
+                .child('swatches/after_${DateTime.now().millisecondsSinceEpoch}.jpg');
+            await storageRef.putFile(file);
+            _afterPhotoUrl = await storageRef.getDownloadURL();
+          }
+          final updatedSwatch = ref.read(swatchInputProvider).copyWith(
+            memo: _memoCtrl.text.trim(),
+            swatchName: _nameCtrl.text.trim(),
+            beforePhotoUrl: _beforePhotoUrl ?? '',
+            afterPhotoUrl: _afterPhotoUrl ?? '',
+          );
+          await ref.read(swatchRepositoryProvider).updateSwatch(updatedSwatch);
+        },
+      );
+      if (!mounted) return;
+      showSavedSnackBar(messenger, message: isKorean ? '수정됐어요.' : 'Updated.');
+      setState(() => _isEditing = false);
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(messenger, message: '$e');
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final t = ref.watch(appStringsProvider);
-    final swatchAsync = ref.watch(swatchByIdProvider(swatchId));
+    final isKorean = ref.watch(appLanguageProvider).isKorean;
+    final swatchAsync = ref.watch(swatchByIdProvider(widget.swatchId));
 
     return Scaffold(
       backgroundColor: C.bg,
       appBar: AppBar(
         backgroundColor: C.bg,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-          onPressed: () => Navigator.pop(context),
+        leading: _isEditing
+            ? TextButton(
+                onPressed: _cancelEdit,
+                child: Text(isKorean ? '취소' : 'Cancel', style: T.body.copyWith(color: C.mu)),
+              )
+            : IconButton(
+                icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
+                onPressed: () => Navigator.pop(context),
+              ),
+        title: Text(
+          _isEditing ? (isKorean ? '스와치 수정' : 'Edit Swatch') : t.swatchDetails,
+          style: T.h3,
         ),
-        title: Text(t.swatchDetails, style: T.h3),
-        actions: [
-          swatchAsync.whenOrNull(
-                data: (swatch) => swatch == null
-                    ? null
-                    : Builder(
-                        builder: (ctx) {
-                          final isKorean = ref.watch(appLanguageProvider).isKorean;
-                          return PopupMenuButton<String>(
-                            icon: Icon(Icons.more_vert_rounded, color: C.tx),
-                            onSelected: (v) {
-                              if (v == 'edit') _navigateToEdit(context, swatch);
-                              if (v == 'copy') _duplicateSwatch(context, ref, swatch);
-                              if (v == 'delete') _confirmDelete(context, ref, swatch);
-                            },
-                            itemBuilder: (_) => [
-                              PopupMenuItem(
-                                value: 'edit',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.edit_outlined, size: 18, color: C.lv),
-                                    const SizedBox(width: 8),
-                                    Text(isKorean ? '수정' : 'Edit'),
-                                  ],
-                                ),
-                              ),
-                              PopupMenuItem(
-                                value: 'copy',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.copy_rounded, size: 18, color: C.lv),
-                                    const SizedBox(width: 8),
-                                    Text(isKorean ? '복사' : 'Duplicate'),
-                                  ],
-                                ),
-                              ),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.delete_outline, size: 18, color: Colors.red.shade400),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      isKorean ? '삭제' : 'Delete',
-                                      style: TextStyle(color: Colors.red.shade400),
+        actions: _isEditing
+            ? [
+                TextButton(
+                  onPressed: _isSaving ? null : () => _saveEdit(isKorean),
+                  child: Text(
+                    isKorean ? '저장' : 'Save',
+                    style: T.bodyBold.copyWith(color: C.lv),
+                  ),
+                ),
+              ]
+            : [
+                swatchAsync.whenOrNull(
+                      data: (swatch) => swatch == null
+                          ? null
+                          : Builder(
+                              builder: (ctx) {
+                                return PopupMenuButton<String>(
+                                  icon: Icon(Icons.more_vert_rounded, color: C.tx),
+                                  onSelected: (v) {
+                                    if (v == 'edit') _enterEditMode(swatch);
+                                    if (v == 'copy') _duplicateSwatch(context, ref, swatch);
+                                    if (v == 'link_project') _linkToProject(context, ref, swatch.id, isKorean);
+                                    if (v == 'delete') _confirmDelete(context, ref, swatch);
+                                  },
+                                  itemBuilder: (_) => [
+                                    PopupMenuItem(
+                                      value: 'edit',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.edit_outlined, size: 18, color: C.lv),
+                                          const SizedBox(width: 8),
+                                          Text(isKorean ? '수정' : 'Edit'),
+                                        ],
+                                      ),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'copy',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.copy_rounded, size: 18, color: C.lv),
+                                          const SizedBox(width: 8),
+                                          Text(isKorean ? '복사' : 'Duplicate'),
+                                        ],
+                                      ),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'link_project',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.folder_outlined, size: 18, color: C.lv),
+                                          const SizedBox(width: 8),
+                                          Text(isKorean ? '프로젝트 연결' : 'Link to project'),
+                                        ],
+                                      ),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'delete',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.delete_outline, size: 18, color: Colors.red.shade400),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            isKorean ? '삭제' : 'Delete',
+                                            style: TextStyle(color: Colors.red.shade400),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ],
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-              ) ??
-              const SizedBox.shrink(),
-        ],
+                                );
+                              },
+                            ),
+                    ) ??
+                    const SizedBox.shrink(),
+              ],
       ),
       body: swatchAsync.when(
         data: (swatch) {
           if (swatch == null) {
             return Center(child: Text(t.swatchNotFound, style: T.body.copyWith(color: C.mu)));
           }
+          if (_isEditing) return _buildEditBody(swatch, isKorean);
           return _SwatchDetailBody(swatch: swatch);
         },
         loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
         error: (error, _) => Center(
           child: Text(t.failedToLoadSwatch(error.toString()), style: T.body.copyWith(color: C.og)),
         ),
+      ),
+    );
+  }
+
+  Widget _buildEditBody(SwatchModel initialSwatch, bool isKorean) {
+    final swatch = ref.watch(swatchInputProvider);
+    final notifier = ref.read(swatchInputProvider.notifier);
+    final t = ref.watch(appStringsProvider);
+
+    return Stack(
+      children: [
+        const BgOrbs(),
+        SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 이름
+              GlassCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SectionTitle(title: isKorean ? '이름 (닉네임)' : 'Name (nickname)'),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _nameCtrl,
+                      autofocus: true,
+                      onChanged: notifier.updateSwatchName,
+                      decoration: InputDecoration(
+                        labelText: isKorean ? '스와치 이름 (선택)' : 'Swatch name (optional)',
+                        hintText: isKorean ? '예: 핑크 메리노 테스트' : 'e.g. Pink Merino Test',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              // 세탁 전 게이지
+              GlassCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SectionTitle(title: t.gaugeBeforeWash),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GaugeInput(
+                            label: t.stitches,
+                            value: swatch.beforeStitchCount,
+                            onMinus: () => notifier.updateBeforeStitchCount((swatch.beforeStitchCount - 1).clamp(0, 999)),
+                            onPlus: () => notifier.updateBeforeStitchCount((swatch.beforeStitchCount + 1).clamp(0, 999)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: GaugeInput(
+                            label: t.rows,
+                            value: swatch.beforeRowCount,
+                            onMinus: () => notifier.updateBeforeRowCount((swatch.beforeRowCount - 1).clamp(0, 999)),
+                            onPlus: () => notifier.updateBeforeRowCount((swatch.beforeRowCount + 1).clamp(0, 999)),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    _PhotoEditTile(
+                      label: isKorean ? '세탁 전 사진' : 'Before wash photo',
+                      localPath: _localBeforePhotoPath,
+                      networkUrl: _beforePhotoUrl,
+                      onTap: () => _pickPhoto(isBefore: true, isKorean: isKorean),
+                      onRemove: () => setState(() {
+                        _localBeforePhotoPath = null;
+                        _beforePhotoUrl = null;
+                      }),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              // 세탁 후 게이지
+              GlassCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SectionTitle(
+                      title: t.gaugeAfterWash,
+                      trailing: Switch(
+                        value: swatch.hasAfterWash,
+                        activeThumbColor: C.lv,
+                        onChanged: notifier.toggleAfterWash,
+                      ),
+                    ),
+                    if (swatch.hasAfterWash) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: GaugeInput(
+                              label: t.stitches,
+                              value: swatch.afterStitchCount,
+                              color: C.pk,
+                              onMinus: () => notifier.updateAfterStitchCount((swatch.afterStitchCount - 1).clamp(0, 999)),
+                              onPlus: () => notifier.updateAfterStitchCount((swatch.afterStitchCount + 1).clamp(0, 999)),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: GaugeInput(
+                              label: t.rows,
+                              value: swatch.afterRowCount,
+                              color: C.pk,
+                              onMinus: () => notifier.updateAfterRowCount((swatch.afterRowCount - 1).clamp(0, 999)),
+                              onPlus: () => notifier.updateAfterRowCount((swatch.afterRowCount + 1).clamp(0, 999)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      MoriChip(
+                        label: t.shrinkageLabel(swatch.calculateShrinkageRate()),
+                        type: ChipType.pink,
+                      ),
+                      const SizedBox(height: 10),
+                      _PhotoEditTile(
+                        label: isKorean ? '세탁 후 사진' : 'After wash photo',
+                        localPath: _localAfterPhotoPath,
+                        networkUrl: _afterPhotoUrl,
+                        onTap: () => _pickPhoto(isBefore: false, isKorean: isKorean),
+                        onRemove: () => setState(() {
+                          _localAfterPhotoPath = null;
+                          _afterPhotoUrl = null;
+                        }),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              // 바늘 정보
+              GlassCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SectionTitle(title: t.needleInfo),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: () => _selectNeedleFromMyNeedles(context, isKorean),
+                      icon: Icon(Icons.settings_outlined, size: 16, color: C.lv),
+                      label: Text(
+                        isKorean ? '나의 바늘에서 선택' : 'Select from My Needles',
+                        style: T.body.copyWith(color: C.lv),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: C.lv.withValues(alpha: 0.4)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    if (_linkedNeedleName != null)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: C.lv.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: C.lv.withValues(alpha: 0.30)),
+                        ),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Icons.check_circle_outline, color: C.lv, size: 14),
+                          const SizedBox(width: 6),
+                          Text(
+                            isKorean ? '나의 바늘 연동됨: $_linkedNeedleName' : 'Linked: $_linkedNeedleName',
+                            style: T.caption.copyWith(color: C.lvD, fontWeight: FontWeight.w600),
+                          ),
+                        ]),
+                      ),
+                    _NeedleSizeWrap(selectedSize: swatch.needleSize, onSelected: notifier.updateNeedleSize),
+                    const SizedBox(height: 12),
+                    _PickerField(
+                      label: t.needleBrand,
+                      value: swatch.needleBrandName,
+                      hint: t.needleBrandHint,
+                      onTap: () => BrandSearchSheet.show(
+                        context,
+                        brandType: BrandType.needle,
+                        onSelected: notifier.updateNeedleBrand,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              // 실 정보
+              GlassCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SectionTitle(title: t.yarnInfo),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: () => _selectYarnFromMyYarns(context, isKorean),
+                      icon: Icon(Icons.color_lens_outlined, size: 16, color: C.lv),
+                      label: Text(
+                        isKorean ? '나의 실에서 선택' : 'Select from My Yarns',
+                        style: T.body.copyWith(color: C.lv),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: C.lv.withValues(alpha: 0.4)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    if (_linkedYarnName != null)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: C.lv.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: C.lv.withValues(alpha: 0.30)),
+                        ),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Icons.check_circle_outline, color: C.lv, size: 14),
+                          const SizedBox(width: 6),
+                          Text(
+                            isKorean ? '나의 실 연동됨: $_linkedYarnName' : 'Linked: $_linkedYarnName',
+                            style: T.caption.copyWith(color: C.lvD, fontWeight: FontWeight.w600),
+                          ),
+                        ]),
+                      ),
+                    const SizedBox(height: 4),
+                    _PickerField(
+                      label: t.yarnBrand,
+                      value: swatch.yarnBrandName,
+                      hint: t.yarnBrandHintSwatch,
+                      onTap: () => BrandSearchSheet.show(
+                        context,
+                        brandType: BrandType.yarn,
+                        onSelected: notifier.updateYarnBrand,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              // 메모
+              GlassCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SectionTitle(title: t.memo),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _memoCtrl,
+                      minLines: 3,
+                      maxLines: 5,
+                      onChanged: notifier.updateMemo,
+                      decoration: InputDecoration(
+                        hintText: t.memoHintSwatch,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _linkToProject(BuildContext context, WidgetRef ref, String swatchId, bool isKorean) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Consumer(
+        builder: (ctx, cRef, _) {
+          final allProjects = cRef.watch(projectListProvider).valueOrNull ?? [];
+          return SafeArea(
+            child: DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.5,
+              maxChildSize: 0.9,
+              minChildSize: 0.3,
+              builder: (_, scrollCtrl) => Column(
+                children: [
+                  const SizedBox(height: 8),
+                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: Text(isKorean ? '프로젝트에 연결' : 'Link to Project', style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                  ),
+                  if (allProjects.isEmpty)
+                    Expanded(child: Center(child: Text(isKorean ? '등록된 프로젝트가 없어요.' : 'No projects available.', style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(color: Colors.grey))))
+                  else
+                    Expanded(
+                      child: ListView.builder(
+                        controller: scrollCtrl,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        itemCount: allProjects.length,
+                        itemBuilder: (_, i) {
+                          final project = allProjects[i];
+                          final alreadyLinked = project.swatchId == swatchId;
+                          return ListTile(
+                            leading: project.coverPhotoUrl.isNotEmpty
+                                ? ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.network(project.coverPhotoUrl, width: 40, height: 40, fit: BoxFit.cover))
+                                : Container(width: 40, height: 40, decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(6)), child: const Icon(Icons.folder_outlined, size: 20)),
+                            title: Text(project.title, style: Theme.of(ctx).textTheme.bodyMedium),
+                            trailing: alreadyLinked ? Icon(Icons.check_circle_rounded, color: Colors.green.shade400, size: 18) : null,
+                            onTap: alreadyLinked ? null : () async {
+                              Navigator.pop(ctx);
+                              await runWithMoriLoadingDialog<void>(
+                                context,
+                                message: isKorean ? '연결하는 중입니다.' : 'Linking...',
+                                subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+                                task: () => ref.read(projectRepositoryProvider).updateProject(project.copyWith(swatchId: swatchId)),
+                              );
+                              if (context.mounted) {
+                                showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '연결됐어요.' : 'Linked.');
+                              }
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -117,15 +781,6 @@ class SwatchDetailScreen extends ConsumerWidget {
         showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
       }
     }
-  }
-
-  void _navigateToEdit(BuildContext context, SwatchModel swatch) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => SwatchInputScreen(swatchId: swatch.id, initialSwatch: swatch),
-      ),
-    );
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref, SwatchModel swatch) async {
@@ -191,40 +846,33 @@ class _SwatchDetailBody extends ConsumerWidget {
         ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
           children: [
+            _PhotoHeader(photoUrl: swatch.beforePhotoUrl, swatchId: swatch.id),
+            const SizedBox(height: 12),
             GlassCard(
-              padding: EdgeInsets.zero,
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _PhotoHeader(photoUrl: swatch.beforePhotoUrl, swatchId: swatch.id),
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (swatch.isDirty) ...[
-                          _SyncPendingBadge(label: t.pendingSync),
-                          const SizedBox(height: 12),
-                        ],
-                        if (swatch.swatchName.isNotEmpty) ...[
-                          Text(swatch.swatchName, style: T.h2.copyWith(fontWeight: FontWeight.w800)),
-                          const SizedBox(height: 4),
-                        ],
-                        if (swatch.yarnName.isNotEmpty) ...[
-                          Text(swatch.yarnName, style: T.h2),
-                          const SizedBox(height: 4),
-                        ],
-                        Text(
-                          t.stitchesRows(swatch.beforeStitchCount, swatch.beforeRowCount),
-                          style: T.h2.copyWith(fontSize: 18),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          swatch.yarnBrandName.isEmpty ? t.yarnBrandNotSet : swatch.yarnBrandName,
-                          style: T.body.copyWith(color: C.mu),
-                        ),
-                      ],
-                    ),
+                  if (swatch.isDirty) ...[
+                    _SyncPendingBadge(label: t.pendingSync),
+                    const SizedBox(height: 12),
+                  ],
+                  if (swatch.swatchName.isNotEmpty) ...[
+                    Text(swatch.swatchName, style: T.h2.copyWith(fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 4),
+                  ],
+                  if (swatch.yarnName.isNotEmpty) ...[
+                    Text(swatch.yarnName, style: T.h2),
+                    const SizedBox(height: 4),
+                  ],
+                  Text(
+                    t.stitchesRows(swatch.beforeStitchCount, swatch.beforeRowCount),
+                    style: T.h2.copyWith(fontSize: 18),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    swatch.yarnBrandName.isEmpty ? t.yarnBrandNotSet : swatch.yarnBrandName,
+                    style: T.body.copyWith(color: C.mu),
                   ),
                 ],
               ),
@@ -312,7 +960,7 @@ class _PhotoHeader extends StatelessWidget {
           child: SizedBox(
             height: 220,
             width: double.infinity,
-            child: Image.network(photoUrl, fit: BoxFit.cover),
+            child: Image.network(photoUrl, fit: BoxFit.contain),
           ),
         ),
       ),
@@ -503,6 +1151,139 @@ class _MemoCard extends StatelessWidget {
           Text(memo, style: T.body),
         ],
       ),
+    );
+  }
+}
+
+class _NeedleSizeWrap extends StatelessWidget {
+  final double selectedSize;
+  final ValueChanged<double> onSelected;
+
+  const _NeedleSizeWrap({required this.selectedSize, required this.onSelected});
+
+  static const List<double> _sizes = <double>[2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0, 8.0, 9.0, 10.0, 12.0];
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: _sizes.map((size) {
+        final isSelected = size == selectedSize;
+        final label = size % 1 == 0 ? '${size.toInt()} mm' : '$size mm';
+        return MoriChip(
+          label: label,
+          type: isSelected ? ChipType.lavender : ChipType.white,
+          onTap: () => onSelected(size),
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _PickerField extends StatelessWidget {
+  final String label;
+  final String value;
+  final String hint;
+  final VoidCallback onTap;
+
+  const _PickerField({required this.label, required this.value, required this.hint, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: T.captionBold.copyWith(color: C.mu)),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              color: C.gx,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: C.bd),
+            ),
+            child: Row(
+              children: [
+                Expanded(child: Text(value.isEmpty ? hint : value, style: value.isEmpty ? T.body.copyWith(color: C.mu) : T.body)),
+                Icon(Icons.search_rounded, color: C.mu, size: 18),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PhotoEditTile extends StatelessWidget {
+  final String label;
+  final String? localPath;
+  final String? networkUrl;
+  final VoidCallback onTap;
+  final VoidCallback onRemove;
+
+  const _PhotoEditTile({
+    required this.label,
+    required this.onTap,
+    required this.onRemove,
+    this.localPath,
+    this.networkUrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhoto = localPath != null || networkUrl != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (hasPhoto) ...[
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: localPath != null
+                    ? Image.file(File(localPath!),
+                        height: 160, width: double.infinity, fit: BoxFit.contain)
+                    : Image.network(networkUrl!,
+                        height: 160,
+                        width: double.infinity,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: GestureDetector(
+                  onTap: onRemove,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: const BoxDecoration(
+                        color: Colors.black54, shape: BoxShape.circle),
+                    child: const Icon(Icons.close, color: Colors.white, size: 16),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+        OutlinedButton.icon(
+          onPressed: onTap,
+          icon: Icon(
+              hasPhoto ? Icons.edit_rounded : Icons.add_photo_alternate_outlined,
+              size: 18),
+          label: Text(hasPhoto ? label : '+ $label'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: C.lv,
+            side: BorderSide(color: C.lv.withValues(alpha: 0.4)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+      ],
     );
   }
 }

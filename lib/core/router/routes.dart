@@ -20,16 +20,20 @@ class Routes {
   static const market = '/market';
   static const my = '/my';
   static const needles = '/my/needles';
+  static const accessories = '/my/accessories';
+  static const accessoryDetail = '/accessory-detail/:id';
   static const counterList = '/counters';
   static const counter = '/counter/:id';
   static const admin = '/admin';
   static const messenger = '/messenger';
   static const templateList = '/templates';
   static const templateEditor = '/templates/editor';
+  static const templateDetail = '/templates/detail';
   static const dm = '/dm';
   static const dmChat = '/dm/:roomId';
   static const yarnDetail = '/yarn-detail/:id';
   static const needleDetail = '/needle-detail/:id';
   static const ravelry = '/tools/ravelry';
   static const etsy = '/tools/etsy';
+  static const toolsNeedleSize = '/tools/needle-size';
 }

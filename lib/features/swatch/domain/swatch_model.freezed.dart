@@ -33,6 +33,9 @@ mixin _$SwatchModel {
   String get needleMaterial => throw _privateConstructorUsedError;
   double get needleSize => throw _privateConstructorUsedError;
   String get myNeedleId => throw _privateConstructorUsedError;
+  String get myYarnId => throw _privateConstructorUsedError;
+  String get myNeedlePhotoUrl => throw _privateConstructorUsedError;
+  String get myYarnPhotoUrl => throw _privateConstructorUsedError;
   int get beforeStitchCount => throw _privateConstructorUsedError;
   int get beforeRowCount => throw _privateConstructorUsedError;
   double get beforeWidthCm => throw _privateConstructorUsedError;
@@ -80,6 +83,9 @@ abstract class $SwatchModelCopyWith<$Res> {
       String needleMaterial,
       double needleSize,
       String myNeedleId,
+      String myYarnId,
+      String myNeedlePhotoUrl,
+      String myYarnPhotoUrl,
       int beforeStitchCount,
       int beforeRowCount,
       double beforeWidthCm,
@@ -128,6 +134,9 @@ class _$SwatchModelCopyWithImpl<$Res, $Val extends SwatchModel>
     Object? needleMaterial = null,
     Object? needleSize = null,
     Object? myNeedleId = null,
+    Object? myYarnId = null,
+    Object? myNeedlePhotoUrl = null,
+    Object? myYarnPhotoUrl = null,
     Object? beforeStitchCount = null,
     Object? beforeRowCount = null,
     Object? beforeWidthCm = null,
@@ -201,6 +210,18 @@ class _$SwatchModelCopyWithImpl<$Res, $Val extends SwatchModel>
       myNeedleId: null == myNeedleId
           ? _value.myNeedleId
           : myNeedleId // ignore: cast_nullable_to_non_nullable
+              as String,
+      myYarnId: null == myYarnId
+          ? _value.myYarnId
+          : myYarnId // ignore: cast_nullable_to_non_nullable
+              as String,
+      myNeedlePhotoUrl: null == myNeedlePhotoUrl
+          ? _value.myNeedlePhotoUrl
+          : myNeedlePhotoUrl // ignore: cast_nullable_to_non_nullable
+              as String,
+      myYarnPhotoUrl: null == myYarnPhotoUrl
+          ? _value.myYarnPhotoUrl
+          : myYarnPhotoUrl // ignore: cast_nullable_to_non_nullable
               as String,
       beforeStitchCount: null == beforeStitchCount
           ? _value.beforeStitchCount
@@ -308,6 +329,9 @@ abstract class _$$SwatchModelImplCopyWith<$Res>
       String needleMaterial,
       double needleSize,
       String myNeedleId,
+      String myYarnId,
+      String myNeedlePhotoUrl,
+      String myYarnPhotoUrl,
       int beforeStitchCount,
       int beforeRowCount,
       double beforeWidthCm,
@@ -354,6 +378,9 @@ class __$$SwatchModelImplCopyWithImpl<$Res>
     Object? needleMaterial = null,
     Object? needleSize = null,
     Object? myNeedleId = null,
+    Object? myYarnId = null,
+    Object? myNeedlePhotoUrl = null,
+    Object? myYarnPhotoUrl = null,
     Object? beforeStitchCount = null,
     Object? beforeRowCount = null,
     Object? beforeWidthCm = null,
@@ -427,6 +454,18 @@ class __$$SwatchModelImplCopyWithImpl<$Res>
       myNeedleId: null == myNeedleId
           ? _value.myNeedleId
           : myNeedleId // ignore: cast_nullable_to_non_nullable
+              as String,
+      myYarnId: null == myYarnId
+          ? _value.myYarnId
+          : myYarnId // ignore: cast_nullable_to_non_nullable
+              as String,
+      myNeedlePhotoUrl: null == myNeedlePhotoUrl
+          ? _value.myNeedlePhotoUrl
+          : myNeedlePhotoUrl // ignore: cast_nullable_to_non_nullable
+              as String,
+      myYarnPhotoUrl: null == myYarnPhotoUrl
+          ? _value.myYarnPhotoUrl
+          : myYarnPhotoUrl // ignore: cast_nullable_to_non_nullable
               as String,
       beforeStitchCount: null == beforeStitchCount
           ? _value.beforeStitchCount
@@ -529,6 +568,9 @@ class _$SwatchModelImpl implements _SwatchModel {
       this.needleMaterial = '',
       this.needleSize = 0.0,
       this.myNeedleId = '',
+      this.myYarnId = '',
+      this.myNeedlePhotoUrl = '',
+      this.myYarnPhotoUrl = '',
       this.beforeStitchCount = 0,
       this.beforeRowCount = 0,
       this.beforeWidthCm = 0.0,
@@ -592,6 +634,15 @@ class _$SwatchModelImpl implements _SwatchModel {
   final String myNeedleId;
   @override
   @JsonKey()
+  final String myYarnId;
+  @override
+  @JsonKey()
+  final String myNeedlePhotoUrl;
+  @override
+  @JsonKey()
+  final String myYarnPhotoUrl;
+  @override
+  @JsonKey()
   final int beforeStitchCount;
   @override
   @JsonKey()
@@ -650,7 +701,7 @@ class _$SwatchModelImpl implements _SwatchModel {
 
   @override
   String toString() {
-    return 'SwatchModel(id: $id, uid: $uid, swatchName: $swatchName, yarnBrandId: $yarnBrandId, yarnBrandName: $yarnBrandName, yarnName: $yarnName, yarnColor: $yarnColor, yarnWeight: $yarnWeight, needleBrandId: $needleBrandId, needleBrandName: $needleBrandName, needleMaterial: $needleMaterial, needleSize: $needleSize, myNeedleId: $myNeedleId, beforeStitchCount: $beforeStitchCount, beforeRowCount: $beforeRowCount, beforeWidthCm: $beforeWidthCm, beforeHeightCm: $beforeHeightCm, beforePhotoUrl: $beforePhotoUrl, hasAfterWash: $hasAfterWash, afterStitchCount: $afterStitchCount, afterRowCount: $afterRowCount, afterWidthCm: $afterWidthCm, afterHeightCm: $afterHeightCm, afterPhotoUrl: $afterPhotoUrl, shrinkageRate: $shrinkageRate, memo: $memo, isPublic: $isPublic, isArchived: $isArchived, archivedDate: $archivedDate, createdAt: $createdAt, updatedAt: $updatedAt, projectId: $projectId, isDirty: $isDirty)';
+    return 'SwatchModel(id: $id, uid: $uid, swatchName: $swatchName, yarnBrandId: $yarnBrandId, yarnBrandName: $yarnBrandName, yarnName: $yarnName, yarnColor: $yarnColor, yarnWeight: $yarnWeight, needleBrandId: $needleBrandId, needleBrandName: $needleBrandName, needleMaterial: $needleMaterial, needleSize: $needleSize, myNeedleId: $myNeedleId, myYarnId: $myYarnId, myNeedlePhotoUrl: $myNeedlePhotoUrl, myYarnPhotoUrl: $myYarnPhotoUrl, beforeStitchCount: $beforeStitchCount, beforeRowCount: $beforeRowCount, beforeWidthCm: $beforeWidthCm, beforeHeightCm: $beforeHeightCm, beforePhotoUrl: $beforePhotoUrl, hasAfterWash: $hasAfterWash, afterStitchCount: $afterStitchCount, afterRowCount: $afterRowCount, afterWidthCm: $afterWidthCm, afterHeightCm: $afterHeightCm, afterPhotoUrl: $afterPhotoUrl, shrinkageRate: $shrinkageRate, memo: $memo, isPublic: $isPublic, isArchived: $isArchived, archivedDate: $archivedDate, createdAt: $createdAt, updatedAt: $updatedAt, projectId: $projectId, isDirty: $isDirty)';
   }
 
   @override
@@ -682,6 +733,12 @@ class _$SwatchModelImpl implements _SwatchModel {
                 other.needleSize == needleSize) &&
             (identical(other.myNeedleId, myNeedleId) ||
                 other.myNeedleId == myNeedleId) &&
+            (identical(other.myYarnId, myYarnId) ||
+                other.myYarnId == myYarnId) &&
+            (identical(other.myNeedlePhotoUrl, myNeedlePhotoUrl) ||
+                other.myNeedlePhotoUrl == myNeedlePhotoUrl) &&
+            (identical(other.myYarnPhotoUrl, myYarnPhotoUrl) ||
+                other.myYarnPhotoUrl == myYarnPhotoUrl) &&
             (identical(other.beforeStitchCount, beforeStitchCount) ||
                 other.beforeStitchCount == beforeStitchCount) &&
             (identical(other.beforeRowCount, beforeRowCount) ||
@@ -739,6 +796,9 @@ class _$SwatchModelImpl implements _SwatchModel {
         needleMaterial,
         needleSize,
         myNeedleId,
+        myYarnId,
+        myNeedlePhotoUrl,
+        myYarnPhotoUrl,
         beforeStitchCount,
         beforeRowCount,
         beforeWidthCm,
@@ -790,6 +850,9 @@ abstract class _SwatchModel implements SwatchModel {
       final String needleMaterial,
       final double needleSize,
       final String myNeedleId,
+      final String myYarnId,
+      final String myNeedlePhotoUrl,
+      final String myYarnPhotoUrl,
       final int beforeStitchCount,
       final int beforeRowCount,
       final double beforeWidthCm,
@@ -840,6 +903,12 @@ abstract class _SwatchModel implements SwatchModel {
   double get needleSize;
   @override
   String get myNeedleId;
+  @override
+  String get myYarnId;
+  @override
+  String get myNeedlePhotoUrl;
+  @override
+  String get myYarnPhotoUrl;
   @override
   int get beforeStitchCount;
   @override

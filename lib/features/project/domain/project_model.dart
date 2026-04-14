@@ -90,6 +90,8 @@ class ProjectModel with _$ProjectModel {
     @Default('') String needleBrandName,
     @Default('') String swatchId,
     @Default([]) List<String> counterIds,
+    @Default([]) List<String> needleIds,
+    @Default([]) List<String> yarnIds,
     @Default([]) List<String> photoUrls,
     @Default('') String coverPhotoUrl,
     @Default('') String memo,

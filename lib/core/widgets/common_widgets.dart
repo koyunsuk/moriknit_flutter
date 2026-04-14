@@ -1,5 +1,4 @@
 ﻿import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 export 'save_feedback.dart';
 
@@ -577,7 +576,14 @@ class MoriKnitTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final base = GoogleFonts.outfit(
+    final base = const TextStyle(
+      fontFamilyFallback: [
+        'Noto Sans KR',
+        'Noto Sans CJK KR',
+        'Segoe UI',
+        'sans-serif',
+      ],
+    ).copyWith(
       fontSize: fontSize,
       height: 0.96,
       fontWeight: FontWeight.w800,
@@ -1058,7 +1064,16 @@ class MoriOptionChips<V> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final active = activeColor ?? C.lv;
-    final textStyle = GoogleFonts.notoSans(fontSize: 13, fontWeight: FontWeight.w400);
+    const textStyle = TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w400,
+      fontFamilyFallback: [
+        'Noto Sans KR',
+        'Noto Sans CJK KR',
+        'Segoe UI',
+        'sans-serif',
+      ],
+    );
     return Wrap(
       spacing: 8,
       runSpacing: 8,

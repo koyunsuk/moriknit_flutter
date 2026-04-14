@@ -295,12 +295,15 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
           final swatches = project.swatchId.isNotEmpty
               ? allSwatches.where((s) => s.id == project.swatchId).toList()
               : <SwatchModel>[];
+          final patterns = project.sourcePatternId.isNotEmpty
+              ? allPatterns.where((p) => p.id == project.sourcePatternId).toList()
+              : allPatterns;
 
           return ProjectPdfService.generateProjectPdfBytes(
             project: project,
             steps: steps,
             swatches: swatches,
-            patterns: allPatterns,
+            patterns: patterns,
             counters: counters,
             isKorean: isKorean,
             userName: userName,
@@ -1294,6 +1297,109 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
               ),
             ),
             const SizedBox(height: 12),
+            // ── 도안 연결 섹션 ─────────────────────────
+            GlassCard(
+              color: C.bg,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.grid_on_rounded, color: C.lmD, size: 18),
+                      const SizedBox(width: 6),
+                      Text(isKorean ? '연결된 도안' : 'Linked Pattern', style: T.bodyBold),
+                      const Spacer(),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Builder(builder: (context) {
+                    final patternsAsync = ref.watch(patternListProvider);
+                    final allPatterns = patternsAsync.valueOrNull ?? [];
+                    final linked = project.sourcePatternId.isNotEmpty
+                        ? allPatterns.where((p) => p.id == project.sourcePatternId).firstOrNull
+                        : null;
+
+                    if (linked == null) {
+                      return Column(
+                        children: [
+                          Center(
+                            child: Text(
+                              isKorean ? '연결된 도안 없어요.' : 'No linked pattern.',
+                              style: T.body.copyWith(color: C.mu),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          _CardEditActions(
+                            isKorean: isKorean,
+                            onLinkFromWork: () => _linkPattern(context, ref),
+                            onCreateNew: null,
+                          ),
+                        ],
+                      );
+                    }
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: isCardEditMode ? null : () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => PatternDetailScreen(chart: linked)),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: C.bg,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            _MaterialThumbnail(
+                              photoUrl: linked.imageUrl,
+                              defaultIcon: Icons.grid_on_rounded,
+                              iconColor: C.lmD,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                linked.title.isNotEmpty ? linked.title : (isKorean ? '이름 없음' : 'Untitled'),
+                                style: T.bodyBold,
+                              ),
+                            ),
+                            if (isCardEditMode)
+                              IconButton(
+                                icon: Icon(Icons.link_off_rounded, size: 18, color: C.mu),
+                                onPressed: () async {
+                                  await runWithMoriLoadingDialog<void>(
+                                    context,
+                                    message: isKorean ? '연결 해제 중입니다.' : 'Unlinking...',
+                                    subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+                                    task: () => ref.read(projectRepositoryProvider).updateProject(
+                                          project.copyWith(sourcePatternId: ''),
+                                        ),
+                                  );
+                                  if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '연결이 해제됐어요.' : 'Unlinked.');
+                                },
+                              )
+                            else
+                              Icon(Icons.chevron_right, color: C.mu, size: 18),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                  if (isCardEditMode) ...[
+                    const SizedBox(height: 10),
+                    _CardEditActions(
+                      isKorean: isKorean,
+                      onLinkFromWork: () => _linkPattern(context, ref),
+                      onCreateNew: null,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
             GlassCard(
               color: C.bg,
               child: Column(
@@ -1476,6 +1582,98 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
           ),
         ),
         actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(isKorean ? '닫기' : 'Close'))],
+      ),
+    );
+  }
+
+  void _linkPattern(BuildContext context, WidgetRef ref) {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Consumer(
+        builder: (ctx, cRef, _) {
+          final allPatterns = cRef.watch(patternListProvider).valueOrNull ?? [];
+          return SafeArea(
+            child: DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.5,
+              maxChildSize: 0.9,
+              minChildSize: 0.3,
+              builder: (_, scrollCtrl) => Column(
+                children: [
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(2)),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: Text(isKorean ? '내 도안에서 연결' : 'Link from My Patterns', style: T.h3),
+                  ),
+                  if (allPatterns.isEmpty)
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          isKorean ? '등록된 도안이 없어요.' : 'No patterns available.',
+                          style: T.body.copyWith(color: C.mu),
+                        ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: ListView.builder(
+                        controller: scrollCtrl,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        itemCount: allPatterns.length,
+                        itemBuilder: (_, i) {
+                          final pattern = allPatterns[i];
+                          return ListTile(
+                            leading: pattern.imageUrl.isNotEmpty
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: Image.network(pattern.imageUrl, width: 40, height: 40, fit: BoxFit.cover),
+                                  )
+                                : Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(6)),
+                                    child: Icon(Icons.grid_on_rounded, size: 20, color: C.lv),
+                                  ),
+                            title: Text(
+                              pattern.title.isNotEmpty ? pattern.title : (isKorean ? '이름 없음' : 'Untitled'),
+                              style: T.body,
+                            ),
+                            onTap: () async {
+                              Navigator.pop(ctx);
+                              await runWithMoriLoadingDialog<void>(
+                                context,
+                                message: isKorean ? '연결하는 중입니다.' : 'Linking...',
+                                subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+                                task: () => ref.read(projectRepositoryProvider).updateProject(
+                                      widget.project.copyWith(sourcePatternId: pattern.id),
+                                    ),
+                              );
+                              if (context.mounted) {
+                                showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '연결됐어요.' : 'Linked.');
+                              }
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -3362,12 +3560,12 @@ class _MaterialThumbnail extends StatelessWidget {
 class _CardEditActions extends StatelessWidget {
   final bool isKorean;
   final VoidCallback onLinkFromWork;
-  final VoidCallback onCreateNew;
+  final VoidCallback? onCreateNew;
 
   const _CardEditActions({
     required this.isKorean,
     required this.onLinkFromWork,
-    required this.onCreateNew,
+    this.onCreateNew,
   });
 
   @override
@@ -3386,19 +3584,21 @@ class _CardEditActions extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: onCreateNew,
-            icon: const Icon(Icons.add_rounded, size: 16),
-            label: Text(isKorean ? '새로만들기' : 'Create new', style: const TextStyle(fontSize: 12)),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              foregroundColor: C.lvD,
-              side: BorderSide(color: C.lvD.withValues(alpha: 0.4)),
+        if (onCreateNew != null) ...[
+          const SizedBox(width: 8),
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: onCreateNew,
+              icon: const Icon(Icons.add_rounded, size: 16),
+              label: Text(isKorean ? '새로만들기' : 'Create new', style: const TextStyle(fontSize: 12)),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                foregroundColor: C.lvD,
+                side: BorderSide(color: C.lvD.withValues(alpha: 0.4)),
+              ),
             ),
           ),
-        ),
+        ],
       ],
     );
   }

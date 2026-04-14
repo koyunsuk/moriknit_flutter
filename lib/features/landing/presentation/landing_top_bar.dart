@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -19,28 +19,38 @@ const String _mainAppUrl = 'https://moriknit-ceea9.web.app';
 const _kNavTextColor = Color(0xFF1A1A2E);
 const _kDesktopBreakpoint = 900.0;
 
-// ── 메뉴 데이터 ───────────────────────────────────────────────────────────────
+// ?? ?≫떚鍮꾪떚 硫붿떆吏 ???????????????????????????????????????????????????????????
+const _kActMessages = [
+  '누군가가 방금 모리니트를 시작했어요.',
+  '새 프로젝트 기록이 추가됐어요.',
+  '뜨개 기록이 업데이트됐어요.',
+  '새 도안이 공유됐어요.',
+  '지금 많은 메이커들이 함께하고 있어요.',
+  '오늘도 즐거운 뜨개 시간 보내세요.',
+];
+
+// ?? 硫붾돱 ?곗씠?????????????????????????????????????????????????????????????????
 
 const _featureItems = [
   ('project', '프로젝트 기록'),
   ('swatch', '스와치 보관함'),
   ('market', '도안 마켓'),
   ('community', '커뮤니티'),
-  ('encyclopedia', '뜨개백과사전'),
+  ('encyclopedia', '뜨개 백과사전'),
   ('gauge', '게이지 계산기'),
   ('ravelry', 'Ravelry 연동'),
   ('etsy', 'Etsy 연동'),
-  ('ai-gauge', 'AI 게이지 판독기'),
+  ('ai-gauge', 'AI 게이지 판독'),
 ];
 
 const _boardItems = [
   ('/notices', '공지사항', Icons.campaign_rounded),
-  ('/reviews', '리뷰게시판', Icons.star_rounded),
-  ('/releases', '릴리즈노트', Icons.new_releases_rounded),
+  ('/reviews', '리뷰 게시판', Icons.star_rounded),
+  ('/releases', '릴리즈 노트', Icons.new_releases_rounded),
   ('/qa', '문의하기 Q&A', Icons.help_outline_rounded),
 ];
 
-// ── 버튼 스타일 ───────────────────────────────────────────────────────────────
+// ?? 踰꾪듉 ?ㅽ??????????????????????????????????????????????????????????????????
 
 ButtonStyle _topBarButtonStyle() => ElevatedButton.styleFrom(
       minimumSize: const Size(0, 44),
@@ -50,7 +60,7 @@ ButtonStyle _topBarButtonStyle() => ElevatedButton.styleFrom(
       textStyle: T.bodyBold.copyWith(fontSize: 15, height: 1.1),
     );
 
-// ── 스파클 파티클 ──────────────────────────────────────────────────────────────
+// ?? ?ㅽ뙆???뚰떚????????????????????????????????????????????????????????????????
 class SparkleParticle {
   final AnimationController controller;
   final double x;
@@ -67,7 +77,7 @@ class SparkleParticle {
   });
 }
 
-// ── 드롭다운 오버레이 ──────────────────────────────────────────────────────────
+// ?? ?쒕∼?ㅼ슫 ?ㅻ쾭?덉씠 ??????????????????????????????????????????????????????????
 
 class _DropdownOverlay extends StatefulWidget {
   const _DropdownOverlay({
@@ -125,7 +135,7 @@ class _DropdownOverlayState extends State<_DropdownOverlay> {
         child: GestureDetector(
           onTap: _show,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -133,8 +143,9 @@ class _DropdownOverlayState extends State<_DropdownOverlay> {
                   widget.label,
                   style: const TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
                     color: _kNavTextColor,
+                    letterSpacing: 0.1,
                   ),
                 ),
                 const SizedBox(width: 2),
@@ -168,7 +179,6 @@ class _DropdownPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // 바깥 탭 → 닫기
         Positioned.fill(
           child: GestureDetector(
             onTap: onClose,
@@ -253,7 +263,7 @@ class _DropdownItemState extends State<_DropdownItem> {
   }
 }
 
-// ── 네비게이션 텍스트 버튼 ─────────────────────────────────────────────────────
+// ?? ?ㅻ퉬寃뚯씠???띿뒪??踰꾪듉 ?????????????????????????????????????????????????????
 
 class _NavTextButton extends StatefulWidget {
   const _NavTextButton({required this.label, required this.onTap});
@@ -277,12 +287,13 @@ class _NavTextButtonState extends State<_NavTextButton> {
       child: GestureDetector(
         onTap: widget.onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           child: Text(
             widget.label,
             style: TextStyle(
               fontSize: 14,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.1,
               color: _hovered ? C.lv : _kNavTextColor,
             ),
           ),
@@ -292,7 +303,7 @@ class _NavTextButtonState extends State<_NavTextButton> {
   }
 }
 
-// ── 모바일 오버레이 드로어 ─────────────────────────────────────────────────────
+// ?? 紐⑤컮???ㅻ쾭?덉씠 ?쒕줈???????????????????????????????????????????????????????
 
 class _MobileDrawerOverlay extends StatefulWidget {
   const _MobileDrawerOverlay({
@@ -345,7 +356,6 @@ class _MobileDrawerOverlayState extends State<_MobileDrawerOverlay>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 헤더
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                 child: Row(
@@ -374,8 +384,7 @@ class _MobileDrawerOverlayState extends State<_MobileDrawerOverlay>
                 child: ListView(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   children: [
-                    _mobileTile('서비스소개', onTap: () => widget.onNavigate('/')),
-                    // 기능 ▾
+                    _mobileTile('서비스 소개', onTap: () => widget.onNavigate('/')),
                     _mobileExpansion(
                       label: '기능',
                       expanded: _featuresExpanded,
@@ -391,7 +400,6 @@ class _MobileDrawerOverlayState extends State<_MobileDrawerOverlay>
                           )
                           .toList(),
                     ),
-                    // 게시판 ▾
                     _mobileExpansion(
                       label: '게시판',
                       expanded: _boardExpanded,
@@ -418,8 +426,7 @@ class _MobileDrawerOverlayState extends State<_MobileDrawerOverlay>
                     ] else ...[
                       _mobileTile('로그인', onTap: () => widget.onNavigate('/login')),
                       _mobileTile('무료로 시작하기',
-                          onTap: () =>
-                              widget.onNavigate('/signup?source=topbar'),
+                          onTap: () => widget.onNavigate('/signup?source=topbar'),
                           highlight: true),
                     ],
                   ],
@@ -495,7 +502,7 @@ class _MobileDrawerOverlayState extends State<_MobileDrawerOverlay>
   }
 }
 
-// ── 랜딩 공용 탑바 ────────────────────────────────────────────────────────────
+// ?? ?쒕뵫 怨듭슜 ?묐컮 ????????????????????????????????????????????????????????????
 class LandingTopBar extends ConsumerStatefulWidget {
   const LandingTopBar({super.key});
 
@@ -504,17 +511,25 @@ class LandingTopBar extends ConsumerStatefulWidget {
 }
 
 class _LandingTopBarState extends ConsumerState<LandingTopBar> with TickerProviderStateMixin {
-  static const _emojis = ['❤️', '🩷', '♪', '♫', '✨', '💜', '🎵'];
+  static const _emojis = ['✨', '🧶', '💜', '🍵', '🌿', '📌', '🤍'];
   final _rng = Random();
   final _particles = <SparkleParticle>[];
-  Timer? _timer;
+  Timer? _sparkleTimer;
+
+  int _actIndex = 0;
+  Timer? _actTimer;
 
   OverlayEntry? _mobileOverlay;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(milliseconds: 700), (_) => _spawnParticle());
+    _sparkleTimer = Timer.periodic(const Duration(milliseconds: 700), (_) => _spawnParticle());
+    _actTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (mounted) {
+        setState(() => _actIndex = (_actIndex + 1) % _kActMessages.length);
+      }
+    });
   }
 
   void _spawnParticle() {
@@ -536,7 +551,8 @@ class _LandingTopBarState extends ConsumerState<LandingTopBar> with TickerProvid
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _sparkleTimer?.cancel();
+    _actTimer?.cancel();
     for (final p in _particles) {
       p.controller.dispose();
     }
@@ -575,18 +591,14 @@ class _LandingTopBarState extends ConsumerState<LandingTopBar> with TickerProvid
     _mobileOverlay = null;
   }
 
-  // ── 데스크탑 메뉴 ────────────────────────────────────────────────────────────
-
   Widget _featureDropdown(BuildContext context) {
     return _DropdownOverlay(
       label: '기능',
       children: _featureItems
-          .map(
-            (e) => _DropdownItem(
-              label: e.$2,
-              onTap: () => context.go('/features/${e.$1}'),
-            ),
-          )
+          .map((e) => _DropdownItem(
+                label: e.$2,
+                onTap: () => context.go('/features/${e.$1}'),
+              ))
           .toList(),
     );
   }
@@ -595,18 +607,16 @@ class _LandingTopBarState extends ConsumerState<LandingTopBar> with TickerProvid
     return _DropdownOverlay(
       label: '게시판',
       children: _boardItems
-          .map(
-            (e) => _DropdownItem(
-              label: e.$2,
-              icon: e.$3,
-              onTap: () => context.go(e.$1),
-            ),
-          )
+          .map((e) => _DropdownItem(
+                label: e.$2,
+                icon: e.$3,
+                onTap: () => context.go(e.$1),
+              ))
           .toList(),
     );
   }
 
-  // ── build ─────────────────────────────────────────────────────────────────
+  // ?? build ?????????????????????????????????????????????????????????????????
 
   @override
   Widget build(BuildContext context) {
@@ -616,7 +626,10 @@ class _LandingTopBarState extends ConsumerState<LandingTopBar> with TickerProvid
     final isDesktop = width >= _kDesktopBreakpoint;
 
     return Container(
-      color: Colors.white.withValues(alpha: 0.96),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.96),
+        border: Border(bottom: BorderSide(color: C.bd.withValues(alpha: 0.6))),
+      ),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -627,7 +640,7 @@ class _LandingTopBarState extends ConsumerState<LandingTopBar> with TickerProvid
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                 child: Row(
                   children: [
-                    // ── 로고 ──────────────────────────────────────────────
+                    // ?? 濡쒓퀬 ????????????????????????????????????????????????
                     GestureDetector(
                       onTap: () => context.go('/'),
                       child: const Row(
@@ -641,22 +654,36 @@ class _LandingTopBarState extends ConsumerState<LandingTopBar> with TickerProvid
 
                     if (isDesktop) ...[
                       const SizedBox(width: 32),
-                      // ── 데스크탑 네비게이션 ───────────────────────────────
-                      _NavTextButton(
-                        label: '서비스소개',
-                        onTap: () => context.go('/'),
-                      ),
-                      const SizedBox(width: 8),
+                      // ?? ?곗뒪?ы깙 ?ㅻ퉬寃뚯씠?????????????????????????????????
+                      _NavTextButton(label: '서비스 소개', onTap: () => context.go('/')),
                       _featureDropdown(context),
-                      const SizedBox(width: 8),
                       _boardDropdown(context),
-                      const SizedBox(width: 8),
-                      _NavTextButton(
-                        label: '요금제',
-                        onTap: () => context.go('/pricing'),
+                      _NavTextButton(label: '요금제', onTap: () => context.go('/pricing')),
+
+                      // ?? ?≫떚鍮꾪떚 ?띿뒪??(?몃씪?? 以묒븰) ???????????????????
+                      Expanded(
+                        child: Center(
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 400),
+                            transitionBuilder: (child, animation) => FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            ),
+                            child: Text(
+                              _kActMessages[_actIndex],
+                              key: ValueKey(_actIndex),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: C.lv.withValues(alpha: 0.75),
+                                letterSpacing: 0.1,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                      const Spacer(),
-                      // ── 데스크탑 우측 버튼 ────────────────────────────────
+
+                      // ?? ?곗뒪?ы깙 ?곗륫 踰꾪듉 ??????????????????????????????
                       if (isLoggedIn) ...[
                         TextButton(
                           onPressed: () => FirebaseAuth.instance.signOut(),
@@ -689,7 +716,7 @@ class _LandingTopBarState extends ConsumerState<LandingTopBar> with TickerProvid
                         ),
                       ],
                     ] else ...[
-                      // ── 모바일 ────────────────────────────────────────────
+                      // ?? 紐⑤컮??????????????????????????????????????????????
                       const Spacer(),
                       IconButton(
                         icon: const Icon(Icons.menu_rounded, size: 26),
@@ -703,7 +730,7 @@ class _LandingTopBarState extends ConsumerState<LandingTopBar> with TickerProvid
             ),
           ),
 
-          // ── 스파클 파티클 ──────────────────────────────────────────────────
+          // ?? ?ㅽ뙆???뚰떚??????????????????????????????????????????????????
           ..._particles.map((p) => AnimatedBuilder(
                 animation: p.controller,
                 builder: (context, _) {
@@ -728,3 +755,4 @@ class _LandingTopBarState extends ConsumerState<LandingTopBar> with TickerProvid
     );
   }
 }
+

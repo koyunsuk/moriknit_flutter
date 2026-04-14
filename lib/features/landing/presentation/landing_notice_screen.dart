@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../providers/auth_provider.dart';
 import '../data/landing_board_repository.dart';
+import 'landing_scaffold.dart';
 import 'landing_top_bar.dart';
 
 const double _landingMaxWidth = 1160;
@@ -19,12 +20,8 @@ class LandingNoticeListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final repo = ref.read(landingBoardRepositoryProvider);
 
-    return Scaffold(
-      backgroundColor: _landingBg,
-      body: CustomScrollView(
-        slivers: [
-          const SliverToBoxAdapter(child: LandingTopBar()),
-
+    return LandingScaffold(
+      slivers: [
           // 페이지 헤더
           SliverToBoxAdapter(
             child: Container(
@@ -110,7 +107,6 @@ class LandingNoticeListScreen extends ConsumerWidget {
 
           const SliverToBoxAdapter(child: SizedBox(height: 60)),
         ],
-      ),
     );
   }
 }
@@ -263,7 +259,7 @@ class _LandingNoticeDetailScreenState
       backgroundColor: _landingBg,
       body: CustomScrollView(
         slivers: [
-          const SliverToBoxAdapter(child: LandingTopBar()),
+          SliverToBoxAdapter(child: LandingTopBar()),
           SliverToBoxAdapter(
             child: Center(
               child: ConstrainedBox(

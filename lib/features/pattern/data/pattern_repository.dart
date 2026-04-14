@@ -118,9 +118,28 @@ class PatternRepository {
     return _ref
         .orderBy('updatedAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((d) => PatternChart.fromJson(d.data() as Map<String, dynamic>))
-            .toList());
+        .map((snap) => snap.docs.map((d) {
+              final data = Map<String, dynamic>.from(d.data() as Map<String, dynamic>);
+              // id 필드가 없는 구버전 문서는 doc.id로 보완
+              if ((data['id'] as String?)?.isEmpty != false) data['id'] = d.id;
+              return PatternChart.fromJson(data);
+            }).toList());
+  }
+
+  /// id 필드가 없는 구버전 도안에 id 필드를 자동 등록합니다.
+  Future<void> migrateIds() async {
+    if (_uid.isEmpty) return;
+    final snap = await _ref.get();
+    final batch = _db.batch();
+    bool hasUpdates = false;
+    for (final doc in snap.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      if ((data['id'] as String?)?.isEmpty != false) {
+        batch.update(doc.reference, {'id': doc.id});
+        hasUpdates = true;
+      }
+    }
+    if (hasUpdates) await batch.commit();
   }
 
   Future<PatternChart?> get(String id) async {
@@ -202,5 +221,7 @@ final patternRepositoryProvider = Provider<PatternRepository>((ref) => PatternRe
 
 final patternListProvider = StreamProvider<List<PatternChart>>((ref) {
   final repo = ref.watch(patternRepositoryProvider);
+  // 구버전 도안 id 마이그레이션 (1회성, 비동기)
+  Future.microtask(() => repo.migrateIds());
   return repo.watchAll();
 });

@@ -1759,7 +1759,7 @@ class _PublicProjectsSectionState extends ConsumerState<_PublicProjectsSection> 
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  widget.isKorean ? '다른 사람들의 프로젝트' : "Others' Projects",
+                  widget.isKorean ? '지금 진행중인 프로젝트' : "Others' Projects",
                   style: T.bodyBold,
                 ),
               ),

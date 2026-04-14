@@ -601,8 +601,8 @@ class _PhotoSectionState extends State<_PhotoSection> {
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(14),
                           child: _localPath != null
-                              ? Image.file(File(_localPath!), fit: BoxFit.cover, width: double.infinity)
-                              : Image.network(widget.photoUrl, fit: BoxFit.cover, width: double.infinity),
+                              ? Image.file(File(_localPath!), fit: BoxFit.contain, width: double.infinity)
+                              : Image.network(widget.photoUrl, fit: BoxFit.contain, width: double.infinity),
                         )
                       : Column(
                           mainAxisAlignment: MainAxisAlignment.center,

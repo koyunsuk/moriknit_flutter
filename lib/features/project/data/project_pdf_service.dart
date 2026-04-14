@@ -76,6 +76,93 @@ class ProjectPdfService {
         child: pw.Image(img, width: w, height: h, fit: fit),
       );
 
+  // ── 에디터 도안 격자를 PDF 위젯으로 렌더링 ───────────────
+  static pw.Widget _patternGrid(
+      PatternChart pattern, double w, double h, pw.Font regular, bool isKorean) {
+    final rows = pattern.rows;
+    final cols = pattern.cols;
+    final grid = pattern.grid;
+
+    final hasData = rows > 0 &&
+        cols > 0 &&
+        grid.isNotEmpty &&
+        grid.any((row) => row.any((cell) => cell.color != null || cell.symbolId != null));
+
+    if (!hasData) {
+      return pw.Container(
+        width: w,
+        height: h,
+        decoration: pw.BoxDecoration(
+          color: PdfColor.fromHex('FFFBEB'),
+          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+          border: pw.Border.all(
+            color: PdfColor.fromHex('FDE68A'),
+            width: 0.8,
+            style: pw.BorderStyle.dashed,
+          ),
+        ),
+        child: pw.Center(
+          child: pw.Text(
+            isKorean ? '도안 격자 없음' : 'No grid data',
+            style: pw.TextStyle(font: regular, fontSize: 8.5, color: _grey400),
+          ),
+        ),
+      );
+    }
+
+    final displayRows = rows.clamp(1, 20);
+    final displayCols = cols.clamp(1, 20);
+    final cellW = w / displayCols;
+    final cellH = h / displayRows;
+
+    return pw.ClipRect(
+      child: pw.Column(
+        mainAxisSize: pw.MainAxisSize.min,
+        children: List.generate(displayRows, (r) {
+          return pw.Row(
+            mainAxisSize: pw.MainAxisSize.min,
+            children: List.generate(displayCols, (c) {
+              final cellData = (r < grid.length && c < grid[r].length)
+                  ? grid[r][c]
+                  : const CellData();
+
+              PdfColor bgColor = PdfColors.white;
+              if (cellData.color != null) {
+                final argb = cellData.color!.toARGB32();
+                bgColor = PdfColor(
+                  ((argb >> 16) & 0xFF) / 255.0,
+                  ((argb >> 8) & 0xFF) / 255.0,
+                  (argb & 0xFF) / 255.0,
+                );
+              }
+
+              return pw.Container(
+                width: cellW,
+                height: cellH,
+                decoration: pw.BoxDecoration(
+                  color: bgColor,
+                  border: pw.Border.all(color: _grey300, width: 0.3),
+                ),
+                child: cellData.symbolId != null
+                    ? pw.Center(
+                        child: pw.Text(
+                          '×',
+                          style: pw.TextStyle(
+                            font: regular,
+                            fontSize: (cellH * 0.6).clamp(4.0, 10.0),
+                            color: _grey700,
+                          ),
+                        ),
+                      )
+                    : null,
+              );
+            }),
+          );
+        }),
+      ),
+    );
+  }
+
   // ── Section card (always shown) ───────────────────────
   static pw.Widget _card({
     required String title,
@@ -740,29 +827,31 @@ class ProjectPdfService {
                           patternImg != null
                               ? _photo(patternImg, col4W - 20, 100,
                                   fit: pw.BoxFit.contain)
-                              : pw.Container(
-                                  width: col4W - 20,
-                                  height: 100,
-                                  decoration: pw.BoxDecoration(
-                                    color: PdfColor.fromHex('FFFBEB'),
-                                    borderRadius: const pw.BorderRadius.all(
-                                        pw.Radius.circular(6)),
-                                    border: pw.Border.all(
-                                      color: PdfColor.fromHex('FDE68A'),
-                                      width: 0.8,
-                                      style: pw.BorderStyle.dashed,
+                              : firstPattern != null
+                                  ? _patternGrid(firstPattern, col4W - 20, 100, regular, isKorean)
+                                  : pw.Container(
+                                      width: col4W - 20,
+                                      height: 100,
+                                      decoration: pw.BoxDecoration(
+                                        color: PdfColor.fromHex('FFFBEB'),
+                                        borderRadius: const pw.BorderRadius.all(
+                                            pw.Radius.circular(6)),
+                                        border: pw.Border.all(
+                                          color: PdfColor.fromHex('FDE68A'),
+                                          width: 0.8,
+                                          style: pw.BorderStyle.dashed,
+                                        ),
+                                      ),
+                                      child: pw.Center(
+                                        child: pw.Text(
+                                          isKorean ? '도안 없음' : 'No pattern',
+                                          style: pw.TextStyle(
+                                              font: regular,
+                                              fontSize: 8.5,
+                                              color: _grey400),
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                  child: pw.Center(
-                                    child: pw.Text(
-                                      isKorean ? '도안 없음' : 'No pattern',
-                                      style: pw.TextStyle(
-                                          font: regular,
-                                          fontSize: 8.5,
-                                          color: _grey400),
-                                    ),
-                                  ),
-                                ),
                           pw.SizedBox(height: 6),
                           pw.Text(
                             firstPattern != null

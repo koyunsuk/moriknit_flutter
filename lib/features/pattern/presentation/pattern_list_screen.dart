@@ -152,8 +152,6 @@ class PatternListScreen extends ConsumerWidget {
                               chart: p,
                               isKorean: isKorean,
                               onTap: () => _openPattern(context, p),
-                              onDelete: () => _confirmDelete(context, ref, p, isKorean),
-                              onDuplicate: () => _confirmDuplicate(context, ref, p, isKorean),
                             )),
                           ],
                         );
@@ -178,24 +176,6 @@ class PatternListScreen extends ConsumerWidget {
     Navigator.push(context, MaterialPageRoute(
       builder: (_) => PatternDetailScreen(chart: chart),
     ));
-  }
-
-  Future<void> _confirmDuplicate(BuildContext context, WidgetRef ref, PatternChart chart, bool isKorean) async {
-    try {
-      await runWithMoriLoadingDialog<void>(
-        context,
-        message: isKorean ? '복사하는 중입니다.' : 'Duplicating...',
-        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
-        task: () => ref.read(patternRepositoryProvider).duplicate(chart),
-      );
-      if (context.mounted) {
-        showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '복사됐어요.' : 'Duplicated.');
-      }
-    } catch (e) {
-      if (context.mounted) {
-        showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
-      }
-    }
   }
 
   Future<void> _showImageSourceDialog(BuildContext context, WidgetRef ref, bool isKorean) async {
@@ -475,54 +455,13 @@ class PatternListScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref, PatternChart chart, bool isKorean) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(isKorean ? '도안 삭제' : 'Delete pattern', style: T.h3),
-        content: Text(
-          isKorean ? '"${chart.title}" 도안을 삭제할까요?' : 'Delete "${chart.title}"?',
-          style: T.body,
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(isKorean ? '취소' : 'Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade400, foregroundColor: Colors.white),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(isKorean ? '삭제' : 'Delete'),
-          ),
-        ],
-      ),
-    );
-    if (confirm == true && context.mounted) {
-      try {
-        await runWithMoriLoadingDialog<void>(
-          context,
-          message: isKorean ? '삭제하는 중입니다.' : 'Deleting...',
-          subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
-          task: () async {
-            await ref.read(patternRepositoryProvider).delete(chart.id);
-          },
-        );
-        if (context.mounted) {
-          showSavedSnackBar(context, message: isKorean ? '삭제됐어요.' : 'Deleted.');
-        }
-      } catch (e) {
-        if (context.mounted) {
-          showSaveErrorSnackBar(context, message: '$e');
-        }
-      }
-    }
-  }
 }
 
 class _PatternRow extends StatelessWidget {
   final PatternChart chart;
   final bool isKorean;
   final VoidCallback onTap;
-  final VoidCallback onDelete;
-  final VoidCallback onDuplicate;
-  const _PatternRow({required this.chart, required this.isKorean, required this.onTap, required this.onDelete, required this.onDuplicate});
+  const _PatternRow({required this.chart, required this.isKorean, required this.onTap});
 
   IconData get _typeIcon {
     switch (chart.type) {
@@ -562,29 +501,7 @@ class _PatternRow extends StatelessWidget {
       fallbackIconBg: _iconBgColor.withValues(alpha: 0.12),
       fallbackIconColor: _iconBgColor,
       onTap: onTap,
-      trailing: PopupMenuButton<String>(
-        icon: Icon(Icons.more_vert_rounded, color: C.mu, size: 22),
-        padding: EdgeInsets.zero,
-        onSelected: (value) {
-          if (value == 'edit') onTap();
-          if (value == 'delete') onDelete();
-          if (value == 'copy') onDuplicate();
-        },
-        itemBuilder: (_) => [
-          PopupMenuItem(
-            value: 'edit',
-            child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: C.lvD), const SizedBox(width: 8), const Text('수정')]),
-          ),
-          PopupMenuItem(
-            value: 'copy',
-            child: Row(children: [Icon(Icons.copy_rounded, size: 18, color: C.lvD), const SizedBox(width: 8), const Text('복사')]),
-          ),
-          PopupMenuItem(
-            value: 'delete',
-            child: Row(children: [const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red), const SizedBox(width: 8), const Text('삭제', style: TextStyle(color: Colors.red))]),
-          ),
-        ],
-      ),
+      trailing: Icon(Icons.chevron_right_rounded, color: C.mu),
     );
   }
 }

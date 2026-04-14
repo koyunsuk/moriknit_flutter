@@ -27,6 +27,7 @@ class YarnModel with _$YarnModel {
     @Default(0) int price,
     @Default('') String purchasePlace,
     @Default('') String colorCode,
+    @Default('') String labelPhotoUrl,
   }) = _YarnModel;
 
   factory YarnModel.fromJson(Map<String, dynamic> json) =>

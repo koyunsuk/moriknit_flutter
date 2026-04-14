@@ -195,10 +195,17 @@ class LandingBoardRepository {
   Stream<List<LandingPost>> getNotices() {
     return _db
         .collection('landing_notices')
-        .orderBy('isPinned', descending: true)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map(LandingPost.fromDoc).toList());
+        .map((snap) {
+          final posts = snap.docs.map(LandingPost.fromDoc).toList();
+          // 클라이언트 정렬: isPinned 우선, 같으면 createdAt 최신순
+          posts.sort((a, b) {
+            if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
+            return b.createdAt.compareTo(a.createdAt);
+          });
+          return posts;
+        });
   }
 
   // 공지사항 단건 조회

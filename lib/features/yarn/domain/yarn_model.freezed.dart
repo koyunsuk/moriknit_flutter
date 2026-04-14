@@ -39,6 +39,7 @@ mixin _$YarnModel {
   int get price => throw _privateConstructorUsedError;
   String get purchasePlace => throw _privateConstructorUsedError;
   String get colorCode => throw _privateConstructorUsedError;
+  String get labelPhotoUrl => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -70,7 +71,8 @@ abstract class $YarnModelCopyWith<$Res> {
       String lotNumber,
       int price,
       String purchasePlace,
-      String colorCode});
+      String colorCode,
+      String labelPhotoUrl});
 }
 
 /// @nodoc
@@ -105,6 +107,7 @@ class _$YarnModelCopyWithImpl<$Res, $Val extends YarnModel>
     Object? price = null,
     Object? purchasePlace = null,
     Object? colorCode = null,
+    Object? labelPhotoUrl = null,
   }) {
     return _then(_value.copyWith(
       id: null == id
@@ -183,6 +186,10 @@ class _$YarnModelCopyWithImpl<$Res, $Val extends YarnModel>
           ? _value.colorCode
           : colorCode // ignore: cast_nullable_to_non_nullable
               as String,
+      labelPhotoUrl: null == labelPhotoUrl
+          ? _value.labelPhotoUrl
+          : labelPhotoUrl // ignore: cast_nullable_to_non_nullable
+              as String,
     ) as $Val);
   }
 }
@@ -214,7 +221,8 @@ abstract class _$$YarnModelImplCopyWith<$Res>
       String lotNumber,
       int price,
       String purchasePlace,
-      String colorCode});
+      String colorCode,
+      String labelPhotoUrl});
 }
 
 /// @nodoc
@@ -247,6 +255,7 @@ class __$$YarnModelImplCopyWithImpl<$Res>
     Object? price = null,
     Object? purchasePlace = null,
     Object? colorCode = null,
+    Object? labelPhotoUrl = null,
   }) {
     return _then(_$YarnModelImpl(
       id: null == id
@@ -325,6 +334,10 @@ class __$$YarnModelImplCopyWithImpl<$Res>
           ? _value.colorCode
           : colorCode // ignore: cast_nullable_to_non_nullable
               as String,
+      labelPhotoUrl: null == labelPhotoUrl
+          ? _value.labelPhotoUrl
+          : labelPhotoUrl // ignore: cast_nullable_to_non_nullable
+              as String,
     ));
   }
 }
@@ -351,7 +364,8 @@ class _$YarnModelImpl implements _YarnModel {
       this.lotNumber = '',
       this.price = 0,
       this.purchasePlace = '',
-      this.colorCode = ''});
+      this.colorCode = '',
+      this.labelPhotoUrl = ''});
 
   factory _$YarnModelImpl.fromJson(Map<String, dynamic> json) =>
       _$$YarnModelImplFromJson(json);
@@ -408,10 +422,13 @@ class _$YarnModelImpl implements _YarnModel {
   @override
   @JsonKey()
   final String colorCode;
+  @override
+  @JsonKey()
+  final String labelPhotoUrl;
 
   @override
   String toString() {
-    return 'YarnModel(id: $id, uid: $uid, brandName: $brandName, name: $name, color: $color, weight: $weight, amountGrams: $amountGrams, memo: $memo, photoUrl: $photoUrl, purchaseDate: $purchaseDate, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty, material: $material, yarnLength: $yarnLength, lotNumber: $lotNumber, price: $price, purchasePlace: $purchasePlace, colorCode: $colorCode)';
+    return 'YarnModel(id: $id, uid: $uid, brandName: $brandName, name: $name, color: $color, weight: $weight, amountGrams: $amountGrams, memo: $memo, photoUrl: $photoUrl, purchaseDate: $purchaseDate, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty, material: $material, yarnLength: $yarnLength, lotNumber: $lotNumber, price: $price, purchasePlace: $purchasePlace, colorCode: $colorCode, labelPhotoUrl: $labelPhotoUrl)';
   }
 
   @override
@@ -448,7 +465,9 @@ class _$YarnModelImpl implements _YarnModel {
             (identical(other.purchasePlace, purchasePlace) ||
                 other.purchasePlace == purchasePlace) &&
             (identical(other.colorCode, colorCode) ||
-                other.colorCode == colorCode));
+                other.colorCode == colorCode) &&
+            (identical(other.labelPhotoUrl, labelPhotoUrl) ||
+                other.labelPhotoUrl == labelPhotoUrl));
   }
 
   @JsonKey(ignore: true)
@@ -473,7 +492,8 @@ class _$YarnModelImpl implements _YarnModel {
         lotNumber,
         price,
         purchasePlace,
-        colorCode
+        colorCode,
+        labelPhotoUrl
       ]);
 
   @JsonKey(ignore: true)
@@ -510,7 +530,8 @@ abstract class _YarnModel implements YarnModel {
       final String lotNumber,
       final int price,
       final String purchasePlace,
-      final String colorCode}) = _$YarnModelImpl;
+      final String colorCode,
+      final String labelPhotoUrl}) = _$YarnModelImpl;
 
   factory _YarnModel.fromJson(Map<String, dynamic> json) =
       _$YarnModelImpl.fromJson;
@@ -553,6 +574,8 @@ abstract class _YarnModel implements YarnModel {
   String get purchasePlace;
   @override
   String get colorCode;
+  @override
+  String get labelPhotoUrl;
   @override
   @JsonKey(ignore: true)
   _$$YarnModelImplCopyWith<_$YarnModelImpl> get copyWith =>

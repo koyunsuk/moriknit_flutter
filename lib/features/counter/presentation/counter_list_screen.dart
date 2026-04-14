@@ -85,9 +85,23 @@ class CounterListScreen extends ConsumerWidget {
                         separatorBuilder: (_, i) => i == 0 ? const SizedBox(height: 14) : const SizedBox(height: 10),
                         itemBuilder: (context, index) {
                           if (index == 0) {
+                            bool isCounterDone(CounterModel c) {
+                              if (c.hasTargets && c.stitchProgress >= 1.0 && c.rowProgress >= 1.0) return true;
+                              if (c.projectId.isNotEmpty) {
+                                final proj = projects.where((p) => p.id == c.projectId).firstOrNull;
+                                if (proj != null && proj.status == 'finished') return true;
+                              }
+                              return false;
+                            }
+                            final done = counters.where(isCounterDone).length;
+                            final inProgress = counters.where((c) => !isCounterDone(c) && (c.hasTargets || c.projectId.isNotEmpty)).length;
+                            final unset = counters.where((c) => !isCounterDone(c) && !c.hasTargets && c.projectId.isEmpty).length;
                             return WorkspaceSummaryBar(
                               stats: [
                                 WorkStat('${counters.length}', isKorean ? '전체' : 'Total', color: C.lmD),
+                                WorkStat('$inProgress', isKorean ? '진행' : 'Active', color: C.lv),
+                                WorkStat('$done', isKorean ? '완료' : 'Done', color: C.pkD),
+                                WorkStat('$unset', isKorean ? '미지정' : 'Free', color: C.mu),
                               ],
                               addLabel: isKorean ? '추가' : 'Add',
                               onAdd: () => _showCounterStartSheet(context, ref, isKorean, projects),
@@ -102,9 +116,6 @@ class CounterListScreen extends ConsumerWidget {
                             isKorean: isKorean,
                             projectName: linkedProject?.title,
                             onTap: () => context.push('/counter/${counter.id}'),
-                            onEdit: () => _showRenameDialog(context, ref, counter, isKorean),
-                            onDelete: () => _confirmDelete(context, ref, counter.id, isKorean),
-                            onDuplicate: () => _confirmDuplicate(context, ref, counter, isKorean),
                           );
                         },
                       ),
@@ -242,97 +253,6 @@ class CounterListScreen extends ConsumerWidget {
         ),
       ),
     );
-  }
-
-  Future<void> _showRenameDialog(
-    BuildContext context,
-    WidgetRef ref,
-    CounterModel counter,
-    bool isKorean,
-  ) async {
-    final nameCtrl = TextEditingController(text: counter.name);
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(isKorean ? '이름 변경' : 'Rename counter', style: T.h3),
-        content: TextField(
-          controller: nameCtrl,
-          autofocus: true,
-          decoration: InputDecoration(hintText: isKorean ? '카운터 이름' : 'Counter name'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(isKorean ? '취소' : 'Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(isKorean ? '저장' : 'Save'),
-          ),
-        ],
-      ),
-    );
-    final newName = nameCtrl.text.trim();
-    if (confirm == true && newName.isNotEmpty && context.mounted) {
-      await runWithMoriLoadingDialog<void>(
-        context,
-        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
-        task: () => ref.read(counterRepositoryProvider).updateCounter(counter.copyWith(name: newName)),
-      );
-    }
-  }
-
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref, String counterId, bool isKorean) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(isKorean ? '카운터 삭제' : 'Delete counter', style: T.h3),
-        content: Text(isKorean ? '이 카운터를 삭제할까요? 되돌릴 수 없어요.' : 'Delete this counter? This cannot be undone.', style: T.body),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(isKorean ? '취소' : 'Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: C.og, foregroundColor: Colors.white),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(isKorean ? '삭제' : 'Delete'),
-          ),
-        ],
-      ),
-    );
-    if (confirm == true && context.mounted) {
-      await runWithMoriLoadingDialog<void>(
-        context,
-        message: isKorean ? '삭제하는 중입니다.' : 'Deleting...',
-        task: () => ref.read(counterRepositoryProvider).deleteCounter(counterId),
-      );
-    }
-  }
-
-  Future<void> _confirmDuplicate(
-    BuildContext context,
-    WidgetRef ref,
-    CounterModel counter,
-    bool isKorean,
-  ) async {
-    try {
-      await runWithMoriLoadingDialog<void>(
-        context,
-        message: isKorean ? '복사하는 중입니다.' : 'Duplicating...',
-        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
-        task: () async {
-          await ref.read(counterRepositoryProvider).duplicateCounter(counter);
-        },
-      );
-      if (context.mounted) {
-        showSavedSnackBar(
-          ScaffoldMessenger.of(context),
-          message: isKorean ? '복사됐어요.' : 'Duplicated.',
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
-      }
-    }
   }
 
   void _showCounterStartSheet(BuildContext context, WidgetRef ref, bool isKorean, List<ProjectModel> projects) {
@@ -482,17 +402,11 @@ class _CounterListCard extends StatelessWidget {
   final bool isKorean;
   final String? projectName;
   final VoidCallback onTap;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-  final VoidCallback onDuplicate;
 
   const _CounterListCard({
     required this.counter,
     required this.isKorean,
     required this.onTap,
-    required this.onEdit,
-    required this.onDelete,
-    required this.onDuplicate,
     this.projectName,
   });
 
@@ -553,29 +467,6 @@ class _CounterListCard extends StatelessWidget {
                 ],
               ],
             ),
-          ),
-          PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert_rounded, color: C.mu, size: 20),
-            padding: EdgeInsets.zero,
-            onSelected: (value) {
-              if (value == 'edit') onEdit();
-              if (value == 'duplicate') onDuplicate();
-              if (value == 'delete') onDelete();
-            },
-            itemBuilder: (_) => [
-              PopupMenuItem(
-                value: 'edit',
-                child: Row(children: [Icon(Icons.edit_rounded, color: C.mu, size: 18), const SizedBox(width: 8), Text(isKorean ? '이름 변경' : 'Rename')]),
-              ),
-              PopupMenuItem(
-                value: 'duplicate',
-                child: Row(children: [Icon(Icons.copy_rounded, color: C.lmD, size: 18), const SizedBox(width: 8), Text(isKorean ? '복사' : 'Duplicate')]),
-              ),
-              PopupMenuItem(
-                value: 'delete',
-                child: Row(children: [Icon(Icons.delete_outline, color: C.og, size: 18), const SizedBox(width: 8), Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og))]),
-              ),
-            ],
           ),
           Icon(Icons.chevron_right_rounded, color: C.mu),
         ],

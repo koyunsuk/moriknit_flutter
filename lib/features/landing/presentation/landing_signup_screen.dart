@@ -11,7 +11,7 @@ import '../../../core/utils/web_utils_stub.dart'
     // ignore: uri_does_not_exist
     if (dart.library.js_interop) '../../../core/utils/web_utils.dart';
 import '../../../providers/auth_provider.dart';
-import 'landing_top_bar.dart';
+import 'landing_scaffold.dart';
 
 const String _mainAppUrl = 'https://moriknit-ceea9.web.app';
 
@@ -91,12 +91,10 @@ class _LandingSignupScreenState extends ConsumerState<LandingSignupScreen> {
     final width = MediaQuery.of(context).size.width;
     final isDesktop = width >= 900;
 
-    return Scaffold(
+    return LandingScaffold(
       backgroundColor: C.bg,
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(child: const LandingTopBar()),
-          SliverFillRemaining(
+      slivers: [
+        SliverFillRemaining(
             hasScrollBody: false,
             child: Center(
               child: ConstrainedBox(
@@ -194,7 +192,6 @@ class _LandingSignupScreenState extends ConsumerState<LandingSignupScreen> {
             ),
           ),
         ],
-      ),
     );
   }
 }

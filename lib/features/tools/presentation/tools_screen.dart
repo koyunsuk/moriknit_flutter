@@ -19,9 +19,11 @@ import '../../yarn/presentation/yarn_list_screen.dart';
 import '../../ravelry/data/ravelry_auth_provider.dart';
 import '../../ravelry/data/ravelry_repository.dart';
 import '../../ravelry/presentation/ravelry_screen.dart';
+import '../../pattern/data/pattern_repository.dart';
 import '../../etsy/data/etsy_auth_provider.dart';
 import '../../../providers/yarn_provider.dart';
-import '../../pattern/data/pattern_repository.dart';
+import '../../../providers/needle_provider.dart';
+import '../../../providers/accessory_provider.dart';
 
 String _youtubeThumbnail(String videoUrl) {
   final uri = Uri.tryParse(videoUrl);
@@ -45,9 +47,6 @@ class ToolsScreen extends ConsumerWidget {
     final isKorean = language.isKorean;
     final uiCopy = ref.watch(uiCopyProvider).valueOrNull;
     final headerSubtitle = resolveUiCopy(data: uiCopy, language: language, key: 'tools_header_subtitle', fallback: t.toolsHeaderSubtitle);
-    final swatchCount = ref.watch(swatchCountProvider);
-    final projectCount = ref.watch(projectCountProvider);
-    final counterCount = ref.watch(counterCountProvider);
     final activeProjects = ref.watch(activeProjectsProvider);
     final coursesAsync = ref.watch(courseProvider);
     final currentUser = ref.watch(currentUserProvider).valueOrNull;
@@ -79,26 +78,13 @@ class ToolsScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 모리니트 + 레이블리 캡슐 요약 카드
+                    // MoriKnit + Ravelry 2단 캡슐 카드 (최상단)
                     _MoriRavelryCapsuleCard(isKorean: isKorean),
                     const SizedBox(height: 16),
-                    // 1. 작업 요약 통계
-                    SectionTitle(title: isKorean ? '작업 요약' : 'Work Summary'),
-                    const SizedBox(height: 10),
-                    GlassCard(
-                      child: Row(
-                        children: [
-                          Expanded(child: GestureDetector(onTap: () => context.push(Routes.swatchList), child: _StatChip(label: t.swatches, value: '$swatchCount'))),
-                          const SizedBox(width: 10),
-                          Expanded(child: GestureDetector(onTap: () => context.push(Routes.projectList), child: _StatChip(label: t.projects, value: '$projectCount'))),
-                          const SizedBox(width: 10),
-                          Expanded(child: GestureDetector(onTap: () => context.push(Routes.counterList), child: _StatChip(label: t.counters, value: '$counterCount'))),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // 2. 진행중 프로젝트
+                    // 나의 Asset 요약 카드 (2x2 그리드)
+                    _AssetSummaryCard(isKorean: isKorean),
+                    const SizedBox(height: 16),
+                    // 진행중 프로젝트
                     SectionTitle(title: isKorean ? '진행중 프로젝트' : 'Active Projects'),
                     const SizedBox(height: 10),
                     if (activeProjects.isEmpty)
@@ -149,7 +135,8 @@ class ToolsScreen extends ConsumerWidget {
                           ),
                         ),
                     ],
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 8),
+                    Divider(color: C.bd, thickness: 1, height: 20),
 
                     // 3. 최근 강의실
                     SectionTitle(title: isKorean ? '최근 강의실' : 'Recent Course'),
@@ -199,6 +186,13 @@ class ToolsScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 20),
+
+                    // ── 구분선 ──────────────────────────────────────────
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Divider(color: C.bd, thickness: 1),
+                    ),
+                    const SizedBox(height: 4),
 
                     // 4. 나의 작업관리
                     SectionTitle(title: isKorean ? '나의 작업관리' : 'My Work Management'),
@@ -251,17 +245,10 @@ class ToolsScreen extends ConsumerWidget {
                       description: isKorean ? '프로젝트 시작 단계를 템플릿으로 관리해요' : 'Manage project steps as templates',
                       onTap: () => context.push(Routes.templateList),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 8),
+                    Divider(color: C.bd, thickness: 1, height: 20),
 
-                    // 5. Ravelry 연동
-                    SectionTitle(title: 'Ravelry'),
-                    const SizedBox(height: 10),
-                    _RavelryCard(isKorean: isKorean),
-                    const SizedBox(height: 10),
-                    _EtsyCard(isKorean: isKorean),
-                    const SizedBox(height: 20),
-
-                    // 6. 나의 Asset 관리
+                    // 5. 나의 Asset 관리
                     SectionTitle(title: isKorean ? '나의 Asset 관리' : 'My Asset Management'),
                     const SizedBox(height: 10),
                     _ToolCard(
@@ -279,7 +266,16 @@ class ToolsScreen extends ConsumerWidget {
                       description: isKorean ? '실 보유 현황과 실 정보를 관리해요' : 'Manage your yarn stash and info',
                       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const YarnListScreen())),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 10),
+                    _ToolCard(
+                      icon: Icons.build_rounded,
+                      color: C.pkD,
+                      title: isKorean ? '나의 악세사리 라이브러리' : 'My Accessory Library',
+                      description: isKorean ? '니팅 도구 및 악세사리를 관리해요' : 'Manage your knitting tools & accessories',
+                      onTap: () => context.push(Routes.accessories),
+                    ),
+                    const SizedBox(height: 8),
+                    Divider(color: C.bd, thickness: 1, height: 20),
 
                     // 6. 나의 학습관리
                     SectionTitle(title: isKorean ? '나의 학습관리' : 'My Learning'),
@@ -299,7 +295,8 @@ class ToolsScreen extends ConsumerWidget {
                       description: t.coursesToolDescription,
                       onTap: () => context.push(Routes.toolsCourse),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 8),
+                    Divider(color: C.bd, thickness: 1, height: 20),
 
                     // 7. 모든 도구
                     SectionTitle(title: isKorean ? '모든 도구' : 'All Tools'),
@@ -310,6 +307,14 @@ class ToolsScreen extends ConsumerWidget {
                       title: t.gaugeCalculator,
                       description: t.gaugeHeaderSubtitle,
                       onTap: () => context.push(Routes.toolsGauge),
+                    ),
+                    const SizedBox(height: 10),
+                    _ToolCard(
+                      icon: Icons.straighten_rounded,
+                      color: C.lvD,
+                      title: isKorean ? '바늘 크기 변환기' : 'Needle Size Converter',
+                      description: isKorean ? '대바늘/코바늘 Metric ↔ US ↔ JP 변환' : 'Knitting & Crochet: Metric ↔ US ↔ JP',
+                      onTap: () => context.push(Routes.toolsNeedleSize),
                     ),
                     const SizedBox(height: 10),
                     _ToolCard(
@@ -335,6 +340,15 @@ class ToolsScreen extends ConsumerWidget {
                       description: isKorean ? '게이지와 실 정보를 기록해요' : 'Record gauge and yarn info',
                       onTap: () => context.push(Routes.swatchList),
                     ),
+                    const SizedBox(height: 8),
+                    Divider(color: C.bd, thickness: 1, height: 20),
+
+                    // 8. 외부 연결
+                    SectionTitle(title: isKorean ? '외부 연결' : 'External Links'),
+                    const SizedBox(height: 10),
+                    _RavelryCard(isKorean: isKorean),
+                    const SizedBox(height: 10),
+                    _EtsyCard(isKorean: isKorean),
                   ],
                 ),
               ),
@@ -499,30 +513,6 @@ class _CourseCard extends StatelessWidget {
   }
 }
 
-class _StatChip extends StatelessWidget {
-  final String label;
-  final String value;
-  const _StatChip({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.84),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: C.bd),
-      ),
-      child: Column(
-        children: [
-          Text(value, style: T.h3.copyWith(color: C.lvD)),
-          const SizedBox(height: 4),
-          Text(label, style: T.caption.copyWith(color: C.mu)),
-        ],
-      ),
-    );
-  }
-}
 
 class _EtsyCard extends ConsumerWidget {
   const _EtsyCard({required this.isKorean});
@@ -616,6 +606,196 @@ class _RavelryCard extends ConsumerWidget {
   }
 }
 
+class _AssetSummaryCard extends ConsumerWidget {
+  final bool isKorean;
+  const _AssetSummaryCard({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final projectCount = ref.watch(projectCountProvider);
+    final swatchCount = ref.watch(swatchCountProvider);
+    final yarnCount = ref.watch(yarnCountProvider);
+    final needleAsync = ref.watch(needleListProvider);
+    final needleCount = needleAsync.maybeWhen(data: (n) => n.length, orElse: () => 0);
+    final accessoryAsync = ref.watch(accessoryListProvider);
+    final accessoryCount = accessoryAsync.maybeWhen(data: (a) => a.length, orElse: () => 0);
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: C.bd),
+        color: C.bg,
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(isKorean ? '나의 Asset' : 'My Assets',
+              style: T.caption.copyWith(color: C.mu, fontWeight: FontWeight.w700, letterSpacing: 0.4)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _AssetCell(
+                icon: Icons.folder_special_rounded,
+                color: C.lv,
+                label: isKorean ? '프로젝트' : 'Projects',
+                value: '$projectCount',
+                onTap: () => context.push(Routes.projectList),
+              )),
+              const SizedBox(width: 10),
+              Expanded(child: _AssetCell(
+                icon: Icons.grid_view_rounded,
+                color: C.lmD,
+                label: isKorean ? '스와치' : 'Swatches',
+                value: '$swatchCount',
+                onTap: () => context.push(Routes.swatchList),
+              )),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(child: _AssetCell(
+                icon: Icons.texture,
+                color: C.pk,
+                label: isKorean ? '실' : 'Yarn',
+                value: '$yarnCount',
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const YarnListScreen())),
+              )),
+              const SizedBox(width: 10),
+              Expanded(child: _AssetCell(
+                icon: Icons.circle_outlined,
+                color: C.lvD,
+                label: isKorean ? '바늘' : 'Needles',
+                value: '$needleCount',
+                onTap: () => context.push(Routes.needles),
+              )),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(child: _AssetCell(
+                icon: Icons.build_rounded,
+                color: C.pkD,
+                label: isKorean ? '악세사리' : 'Accessories',
+                value: '$accessoryCount',
+                onTap: () => context.push(Routes.accessories),
+              )),
+              const SizedBox(width: 10),
+              Expanded(child: SizedBox()),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AssetCell extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  const _AssetCell({
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.18)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 18),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: C.tx, height: 1.1)),
+                  Text(label, style: T.caption.copyWith(color: C.mu, fontSize: 11)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: C.mu, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+class _ToolCard extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String description;
+  final VoidCallback onTap;
+  final bool showLock;
+  const _ToolCard({required this.icon, required this.color, required this.title, required this.description, required this.onTap, this.showLock = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(14)),
+            child: Icon(icon, color: color),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(title, style: T.bodyBold),
+                    if (showLock) ...[
+                      const SizedBox(width: 5),
+                      Icon(Icons.lock_rounded, size: 13, color: C.mu),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(description, style: T.caption.copyWith(color: C.mu)),
+              ],
+            ),
+          ),
+          Icon(Icons.chevron_right_rounded, color: C.mu),
+        ],
+      ),
+    );
+  }
+}
+
+// ── MoriKnit + Ravelry 2단 캡슐 카드 ──────────────────────
 class _MoriRavelryCapsuleCard extends ConsumerWidget {
   final bool isKorean;
   const _MoriRavelryCapsuleCard({required this.isKorean});
@@ -667,15 +847,26 @@ class _MoriRavelryCapsuleCard extends ConsumerWidget {
                       color: C.pk.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Text('MoriKnit', style: T.caption.copyWith(color: C.pkD, fontWeight: FontWeight.w700), textAlign: TextAlign.center),
+                    child: Text('MoriKnit',
+                        style: T.caption.copyWith(color: C.pkD, fontWeight: FontWeight.w700),
+                        textAlign: TextAlign.center),
                   ),
                 ),
                 Container(width: 1, height: 28, color: C.bd, margin: const EdgeInsets.symmetric(horizontal: 10)),
-                Expanded(child: GestureDetector(onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const YarnListScreen())), child: _CapsuleStat(label: isKorean ? '실' : 'Yarn', value: '$yarnCount'))),
+                Expanded(child: GestureDetector(
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const YarnListScreen())),
+                  child: _CapsuleStat(label: isKorean ? '실' : 'Yarn', value: '$yarnCount'),
+                )),
                 Container(width: 1, height: 28, color: C.bd, margin: const EdgeInsets.symmetric(horizontal: 10)),
-                Expanded(child: GestureDetector(onTap: () => context.push(Routes.projectList), child: _CapsuleStat(label: isKorean ? '프로젝트' : 'Project', value: '$projectCount'))),
+                Expanded(child: GestureDetector(
+                  onTap: () => context.push(Routes.projectList),
+                  child: _CapsuleStat(label: isKorean ? '프로젝트' : 'Project', value: '$projectCount'),
+                )),
                 Container(width: 1, height: 28, color: C.bd, margin: const EdgeInsets.symmetric(horizontal: 10)),
-                Expanded(child: GestureDetector(onTap: () => context.push(Routes.toolsPatterns), child: _CapsuleStat(label: isKorean ? '도안' : 'Pattern', value: '$patternCount'))),
+                Expanded(child: GestureDetector(
+                  onTap: () => context.push(Routes.toolsPatterns),
+                  child: _CapsuleStat(label: isKorean ? '도안' : 'Pattern', value: '$patternCount'),
+                )),
               ],
             ),
           ),
@@ -701,43 +892,48 @@ class _MoriRavelryCapsuleCard extends ConsumerWidget {
                       color: C.lv.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Text('Ravelry', style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w700), textAlign: TextAlign.center),
+                    child: Text('Ravelry',
+                        style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w700),
+                        textAlign: TextAlign.center),
                   ),
                 ),
                 Container(width: 1, height: 28, color: C.bd, margin: const EdgeInsets.symmetric(horizontal: 10)),
                 if (!auth.isLoggedIn)
-                  Expanded(child: GestureDetector(onTap: () => context.push(Routes.ravelry), child: Text(isKorean ? '연결 안 됨' : 'Not connected', style: T.caption.copyWith(color: C.mu), textAlign: TextAlign.center)))
+                  Expanded(child: GestureDetector(
+                    onTap: () => context.push(Routes.ravelry),
+                    child: Text(isKorean ? '연결 안 됨' : 'Not connected',
+                        style: T.caption.copyWith(color: C.mu), textAlign: TextAlign.center),
+                  ))
                 else if (isRavelryLoading)
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          height: 3,
-                          child: LinearProgressIndicator(
-                            backgroundColor: C.bd2,
-                            valueColor: AlwaysStoppedAnimation(C.lv),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(isKorean ? '가져오는 중...' : 'Loading...', style: T.caption.copyWith(color: C.mu, fontSize: 9)),
-                      ],
-                    ),
-                  )
+                  Expanded(child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(height: 3, child: LinearProgressIndicator(
+                        backgroundColor: C.bd2,
+                        valueColor: AlwaysStoppedAnimation(C.lv),
+                        borderRadius: BorderRadius.circular(2),
+                      )),
+                      const SizedBox(height: 4),
+                      Text(isKorean ? '가져오는 중...' : 'Loading...',
+                          style: T.caption.copyWith(color: C.mu, fontSize: 9)),
+                    ],
+                  ))
                 else ...[
                   Expanded(child: GestureDetector(
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RavelryScreen(initialTab: 0))),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const RavelryScreen(initialTab: 0))),
                     child: _CapsuleStat(label: isKorean ? '스태시' : 'Stash', value: '${stashCount ?? 0}'),
                   )),
                   Container(width: 1, height: 28, color: C.bd, margin: const EdgeInsets.symmetric(horizontal: 10)),
                   Expanded(child: GestureDetector(
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RavelryScreen(initialTab: 2))),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const RavelryScreen(initialTab: 2))),
                     child: _CapsuleStat(label: isKorean ? '프로젝트' : 'Project', value: '${ravelryProjectCount ?? 0}'),
                   )),
                   Container(width: 1, height: 28, color: C.bd, margin: const EdgeInsets.symmetric(horizontal: 10)),
                   Expanded(child: GestureDetector(
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RavelryScreen(initialTab: 1))),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const RavelryScreen(initialTab: 1))),
                     child: _CapsuleStat(label: isKorean ? '라이브러리' : 'Library', value: '${libraryCount ?? 0}'),
                   )),
                 ],
@@ -764,53 +960,6 @@ class _CapsuleStat extends StatelessWidget {
         Text(value, style: T.bodyBold),
         Text(label, style: T.caption.copyWith(color: C.mu, fontSize: 10)),
       ],
-    );
-  }
-}
-
-class _ToolCard extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final String title;
-  final String description;
-  final VoidCallback onTap;
-  final bool showLock;
-  const _ToolCard({required this.icon, required this.color, required this.title, required this.description, required this.onTap, this.showLock = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return GlassCard(
-      onTap: onTap,
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(14)),
-            child: Icon(icon, color: color),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(title, style: T.bodyBold),
-                    if (showLock) ...[
-                      const SizedBox(width: 5),
-                      Icon(Icons.lock_rounded, size: 13, color: C.mu),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(description, style: T.caption.copyWith(color: C.mu)),
-              ],
-            ),
-          ),
-          Icon(Icons.chevron_right_rounded, color: C.mu),
-        ],
-      ),
     );
   }
 }

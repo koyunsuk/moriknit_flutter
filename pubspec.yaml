@@ -64,6 +64,7 @@ dependencies:
   video_player: ^2.9.2
   pdf: ^3.12.0
   printing: ^5.14.3
+  font_awesome_flutter: ^10.7.0
 
 dev_dependencies:
   flutter_test:
@@ -97,4 +98,3 @@ flutter:
     - assets/splash_cat.png
     - assets/fonts/NotoSansKR-Regular.ttf
     - assets/fonts/NotoSansKR-Bold.ttf
-    - assets/knit_symbols/
