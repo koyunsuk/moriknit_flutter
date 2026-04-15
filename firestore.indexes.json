@@ -1,6 +1,22 @@
 {
   "indexes": [
     {
+      "collectionGroup": "encyclopedia",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "craftType", "order": "ASCENDING" },
+        { "fieldPath": "order", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "encyclopedia",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "order", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "dm_rooms",
       "queryScope": "COLLECTION",
       "fields": [

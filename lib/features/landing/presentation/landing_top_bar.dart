@@ -126,25 +126,36 @@ class _DropdownOverlayState extends State<_DropdownOverlay> {
     super.dispose();
   }
 
+  bool _hovered = false;
+
   @override
   Widget build(BuildContext context) {
+    final active = _open || _hovered;
     return CompositedTransformTarget(
       link: _layerLink,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
         child: GestureDetector(
           onTap: _show,
-          child: Padding(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: active ? C.lv.withValues(alpha: 0.09) : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+            ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   widget.label,
-                  style: const TextStyle(
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: _kNavTextColor,
+                    color: active ? C.lv : _kNavTextColor,
                     letterSpacing: 0.1,
                   ),
                 ),
@@ -152,8 +163,8 @@ class _DropdownOverlayState extends State<_DropdownOverlay> {
                 AnimatedRotation(
                   turns: _open ? 0.5 : 0,
                   duration: const Duration(milliseconds: 180),
-                  child: const Icon(Icons.keyboard_arrow_down_rounded,
-                      size: 18, color: _kNavTextColor),
+                  child: Icon(Icons.keyboard_arrow_down_rounded,
+                      size: 18, color: active ? C.lv : _kNavTextColor),
                 ),
               ],
             ),
@@ -286,10 +297,16 @@ class _NavTextButtonState extends State<_NavTextButton> {
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         onTap: widget.onTap,
-        child: Padding(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: _hovered ? C.lv.withValues(alpha: 0.09) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
           child: Text(
             widget.label,
+            textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,

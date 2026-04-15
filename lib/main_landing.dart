@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -14,6 +17,7 @@ import 'features/landing/presentation/landing_board_screen.dart';
 import 'features/landing/presentation/landing_notice_screen.dart';
 import 'features/landing/presentation/landing_pricing_screen.dart';
 import 'features/landing/presentation/landing_screen.dart';
+import 'features/landing/presentation/landing_encyclopedia_screen.dart';
 import 'features/landing/presentation/landing_signup_screen.dart';
 import 'firebase_options.dart';
 import 'providers/theme_provider.dart';
@@ -25,15 +29,41 @@ void main() async {
   runApp(const ProviderScope(child: MoriKnitLandingApp()));
 }
 
+class _AuthRefresh extends ChangeNotifier {
+  _AuthRefresh(Stream<dynamic> stream) {
+    notifyListeners();
+    _sub = stream.asBroadcastStream().listen((_) => notifyListeners());
+  }
+  late final StreamSubscription<dynamic> _sub;
+  @override
+  void dispose() { _sub.cancel(); super.dispose(); }
+}
+
+final _authRefresh = _AuthRefresh(FirebaseAuth.instance.authStateChanges());
+
 final _landingRouter = GoRouter(
   initialLocation: '/',
+  refreshListenable: _authRefresh,
+  redirect: (context, state) {
+    final isLoggedIn = FirebaseAuth.instance.currentUser != null;
+    if (isLoggedIn && state.matchedLocation == '/login') return '/';
+    return null;
+  },
   routes: [
     GoRoute(path: '/', builder: (_, _) => const LandingScreen()),
     GoRoute(path: '/landing', redirect: (_, _) => '/'),
     GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
     GoRoute(path: '/signup', builder: (_, s) => LandingSignupScreen(source: s.uri.queryParameters['source'])),
     GoRoute(path: '/pricing', builder: (_, _) => const LandingPricingScreen()),
-    GoRoute(path: '/features/:feature', builder: (_, s) => FeatureDetailScreen(featureId: s.pathParameters['feature']!)),
+    GoRoute(
+      path: '/features/:feature',
+      builder: (_, s) {
+        final id = s.pathParameters['feature']!;
+        if (id == 'encyclopedia') return const LandingEncyclopediaScreen();
+        return FeatureDetailScreen(featureId: id);
+      },
+    ),
+    GoRoute(path: '/encyclopedia', builder: (_, _) => const LandingEncyclopediaScreen()),
     GoRoute(path: '/notices', builder: (_, _) => const LandingNoticeListScreen()),
     GoRoute(path: '/notices/:id', builder: (_, s) => LandingNoticeDetailScreen(noticeId: s.pathParameters['id']!)),
     GoRoute(path: '/reviews', builder: (_, _) => const LandingBoardListScreen(boardType: 'review')),

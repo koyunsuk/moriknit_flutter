@@ -5,11 +5,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:excel/excel.dart' hide Border;
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/localization/app_language.dart';
@@ -182,9 +184,9 @@ class _AdminNavItem {
       : groupLabel = null,
         tabIndex = index;
 
-  const _AdminNavItem.group({required this.label, required this.color})
+  const _AdminNavItem.group({required this.label, required this.color, IconData? groupIcon})
       : groupLabel = label,
-        icon = null,
+        icon = groupIcon,
         tabIndex = null;
 
   bool get isGroup => groupLabel != null;
@@ -201,24 +203,18 @@ class AdminScreen extends ConsumerWidget {
     final isKorean = language.isKorean;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF090F1D),
+      backgroundColor: const Color(0xFF0A1020),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1400),
+          constraints: const BoxConstraints(maxWidth: 1280),
           child: Container(
             width: double.infinity,
             height: double.infinity,
             decoration: BoxDecoration(
               color: const Color(0xFF0F172A),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFF1E2A44)),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.22), blurRadius: 22, offset: const Offset(0, 8)),
-              ],
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 16)],
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: SafeArea(
+            child: SafeArea(
               child: auth.when(
                 data: (user) {
                   if (user == null) return const _AdminNotLoggedIn();
@@ -238,7 +234,6 @@ class AdminScreen extends ConsumerWidget {
                 },
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (e, _) => _AdminMessageState(title: isKorean ? '로그인 상태 확인 불가' : 'Unable to read auth state', body: e.toString()),
-              ),
               ),
             ),
           ),
@@ -262,20 +257,20 @@ class _AdminConsoleState extends State<_AdminConsole> {
   static final _navItems = [
     _AdminNavItem.tab(index: 0, icon: Icons.dashboard_rounded, label: '대시보드', color: Color(0xFFA3E635)),
 
-    _AdminNavItem.group(label: '뜨개 자료', color: Color(0xFF4ADE80)),
+    _AdminNavItem.group(label: '뜨개 자료', color: Color(0xFF4ADE80), groupIcon: Icons.collections_bookmark_rounded),
     _AdminNavItem.tab(index: 13, icon: Icons.folder_special_rounded, label: '기본 템플릿', color: Color(0xFF4ADE80)),
     _AdminNavItem.tab(index: 1, icon: Icons.menu_book_rounded, label: '뜨개백과', color: Color(0xFF4ADE80)),
     _AdminNavItem.tab(index: 2, icon: Icons.grass_rounded, label: '실 브랜드', color: Color(0xFF4ADE80)),
     _AdminNavItem.tab(index: 3, icon: Icons.straighten_rounded, label: '바늘 브랜드', color: Color(0xFF4ADE80)),
 
-    _AdminNavItem.group(label: '사용자 데이터', color: Color(0xFFB47EEB)),
+    _AdminNavItem.group(label: '사용자 데이터', color: Color(0xFFB47EEB), groupIcon: Icons.manage_accounts_rounded),
     _AdminNavItem.tab(index: 4, icon: Icons.people_rounded, label: '회원', color: Color(0xFFB47EEB)),
     _AdminNavItem.tab(index: 5, icon: Icons.auto_fix_high_rounded, label: '도안목록', color: Color(0xFFB47EEB)),
     _AdminNavItem.tab(index: 6, icon: Icons.palette_rounded, label: '스와치', color: Color(0xFFB47EEB)),
     _AdminNavItem.tab(index: 7, icon: Icons.folder_copy_rounded, label: '프로젝트', color: Color(0xFFB47EEB)),
     _AdminNavItem.tab(index: 22, icon: Icons.list_alt_rounded, label: '템플릿', color: Color(0xFFB47EEB)),
 
-    _AdminNavItem.group(label: '콘텐츠', color: Color(0xFFF472B6)),
+    _AdminNavItem.group(label: '콘텐츠', color: Color(0xFFF472B6), groupIcon: Icons.article_rounded),
     _AdminNavItem.tab(index: 8, icon: Icons.storefront_rounded, label: '마켓상품', color: Color(0xFFF472B6)),
     _AdminNavItem.tab(index: 9, icon: Icons.forum_rounded, label: '커뮤니티', color: Color(0xFFF472B6)),
     _AdminNavItem.tab(index: 20, icon: Icons.grid_view_rounded, label: '게시판 관리', color: Color(0xFFF472B6)),
@@ -284,13 +279,14 @@ class _AdminConsoleState extends State<_AdminConsole> {
     _AdminNavItem.tab(index: 17, icon: Icons.new_releases_rounded, label: '릴리즈노트', color: Color(0xFFF472B6)),
     _AdminNavItem.tab(index: 18, icon: Icons.help_outline_rounded, label: '문의하기 Q&A', color: Color(0xFFF472B6)),
 
-    _AdminNavItem.group(label: '운영 지원', color: Color(0xFF94A3B8)),
+    _AdminNavItem.group(label: '운영 지원', color: Color(0xFF94A3B8), groupIcon: Icons.support_agent_rounded),
     _AdminNavItem.tab(index: 10, icon: Icons.text_fields_rounded, label: '문구관리', color: Color(0xFF94A3B8)),
     _AdminNavItem.tab(index: 11, icon: Icons.bug_report_rounded, label: '버그리포트', color: Color(0xFFFB7185)),
     _AdminNavItem.tab(index: 19, icon: Icons.mail_rounded, label: '1:1 문의', color: Color(0xFF34D399)),
     _AdminNavItem.tab(index: 12, icon: Icons.newspaper_rounded, label: '에디토리얼', color: Color(0xFF38BDF8)),
+    _AdminNavItem.tab(index: 23, icon: Icons.campaign_outlined, label: '팝업 설정', color: Color(0xFF94A3B8)),
 
-    _AdminNavItem.group(label: '설정', color: Color(0xFF64748B)),
+    _AdminNavItem.group(label: '설정', color: Color(0xFF64748B), groupIcon: Icons.tune_rounded),
     _AdminNavItem.tab(index: 14, icon: Icons.settings_rounded, label: '설정', color: Color(0xFF64748B)),
   ];
 
@@ -319,31 +315,19 @@ class _AdminConsoleState extends State<_AdminConsole> {
             children: [
               // 콘텐츠 상단 헤더
               Container(
-                height: 58,
-                padding: const EdgeInsets.symmetric(horizontal: 22),
+                height: 52,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
                 decoration: const BoxDecoration(
-                  color: Color(0xFF172236),
-                  border: Border(bottom: BorderSide(color: Color(0xFF27344F), width: 1)),
+                  color: Color(0xFF1E293B),
+                  border: Border(bottom: BorderSide(color: Color(0xFF334155), width: 1)),
                 ),
                 child: Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF8B5CF6).withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: const Color(0xFF8B5CF6).withValues(alpha: 0.35)),
-                      ),
-                      child: const Text('ADMIN', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFFC4B5FD), letterSpacing: 0.8)),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      _currentPageLabel,
-                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFFF8FAFC)),
-                    ),
+                    Text(_currentPageLabel,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC))),
                     const Spacer(),
                     Text(DateFormat('yyyy.MM.dd').format(DateTime.now()),
-                        style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
                   ],
                 ),
               ),
@@ -380,6 +364,7 @@ class _AdminConsoleState extends State<_AdminConsole> {
       case 20: return const _BoardManagementTab();
       case 21: return const _UserStatsAdminTab();
       case 22: return const _AdminTemplatesTab();
+      case 23: return _SupportSettingsTab(isKorean: widget.isKorean);
       default: return _DashboardTab(isKorean: widget.isKorean, onTabChange: (i) => setState(() => _selectedIndex = i));
     }
   }
@@ -404,9 +389,9 @@ class _AdminSidebar extends StatefulWidget {
 }
 
 class _AdminSidebarState extends State<_AdminSidebar> {
-  static const _bg = Color(0xFF182336);
+  static const _bg = Color(0xFF1E293B);
   static const _divider = Color(0x33FFFFFF);
-  static const _textDim = Color(0xFFCFD7E7);
+  static const _textDim = Color(0xFFCBD5E1);
 
   late final Set<String> _expandedGroups;
 
@@ -462,14 +447,14 @@ class _AdminSidebarState extends State<_AdminSidebar> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 236,
+      width: 210,
       color: _bg,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // ── 헤더 ──────────────────────────────────────────
           Container(
-            padding: const EdgeInsets.fromLTRB(16, 18, 16, 14),
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
             decoration: const BoxDecoration(
               border: Border(bottom: BorderSide(color: _divider, width: 1)),
             ),
@@ -483,7 +468,7 @@ class _AdminSidebarState extends State<_AdminSidebar> {
                     Text('MoriKnit',
                         style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.3)),
                     Text('Admin Console',
-                        style: TextStyle(color: Color(0xFFA3E635), fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+                        style: TextStyle(color: Color(0xFF84CC16), fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.8)),
                   ],
                 ),
               ],
@@ -571,13 +556,17 @@ class _AdminSidebarState extends State<_AdminSidebar> {
           GestureDetector(
             onTap: () => _toggleGroup(groupLabel),
             child: Container(
-              padding: const EdgeInsets.fromLTRB(14, 14, 10, 7),
+              padding: const EdgeInsets.fromLTRB(14, 14, 10, 6),
               child: Row(
                 children: [
+                  if (item.icon != null) ...[
+                    Icon(item.icon, size: 12, color: item.color),
+                    const SizedBox(width: 5),
+                  ],
                   Expanded(
                     child: Text(
-                      item.label,
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: item.color, letterSpacing: 0.2),
+                      item.label.toUpperCase(),
+                      style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: item.color, letterSpacing: 1.0),
                     ),
                   ),
                   Icon(
@@ -600,30 +589,27 @@ class _AdminSidebarState extends State<_AdminSidebar> {
               onTap: () => widget.onSelect(item.tabIndex!),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 120),
-                margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
                 decoration: BoxDecoration(
-                  color: isSelected ? accent.withValues(alpha: 0.18) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: isSelected ? accent.withValues(alpha: 0.45) : Colors.transparent),
+                  color: isSelected ? accent.withValues(alpha: 0.15) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border(
+                    left: BorderSide(
+                      color: isSelected ? accent : Colors.transparent,
+                      width: 3,
+                    ),
+                  ),
                 ),
                 child: Row(
                   children: [
-                    Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: isSelected ? accent.withValues(alpha: 0.18) : Colors.white.withValues(alpha: 0.04),
-                        borderRadius: BorderRadius.circular(7),
-                      ),
-                      child: Icon(item.icon, size: 14, color: isSelected ? accent : _textDim),
-                    ),
+                    Icon(item.icon, size: 15, color: isSelected ? accent : _textDim),
                     const SizedBox(width: 9),
                     Text(
                       item.label,
                       style: TextStyle(
                         fontSize: 13,
-                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
                         color: isSelected ? Colors.white : _textDim,
                       ),
                     ),
@@ -650,18 +636,17 @@ class _SidebarUtilBtn extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xFF0E192D),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFF2B3B5A)),
+          color: const Color(0xFF0F172A),
+          borderRadius: BorderRadius.circular(6),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 12, color: const Color(0xFFA9B8D4)),
+            Icon(icon, size: 12, color: const Color(0xFF94A3B8)),
             const SizedBox(width: 4),
-            Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFFA9B8D4), fontWeight: FontWeight.w600)),
+            Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
           ],
         ),
       ),
@@ -727,7 +712,7 @@ class _AdminMessageState extends StatelessWidget {
             children: [
               Icon(Icons.admin_panel_settings_rounded, color: C.lvD, size: 42),
               const SizedBox(height: 14),
-              Text(title, style: T.h3, textAlign: TextAlign.center),
+              Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3), textAlign: TextAlign.center),
               const SizedBox(height: 8),
               Text(body, style: T.body.copyWith(color: C.tx2), textAlign: TextAlign.center),
             ],
@@ -1083,7 +1068,7 @@ class _CollectionWithImportTabState extends ConsumerState<_CollectionWithImportT
 
   @override
   Widget build(BuildContext context) {
-    final Query<Map<String, dynamic>> query = FirebaseFirestore.instance.collection(widget.collection).limit(500);
+    final Query<Map<String, dynamic>> query = FirebaseFirestore.instance.collection(widget.collection).limit(100);
 
     return Column(
       children: [
@@ -1159,16 +1144,6 @@ class _CollectionWithImportTabState extends ConsumerState<_CollectionWithImportT
                           icon: const Icon(Icons.grid_on_rounded),
                           label: Text(widget.isKorean ? '엑셀 템플릿' : 'Excel template'),
                         ),
-                        if (widget.importKind == AdminImportKind.encyclopedia)
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: C.lv,
-                              foregroundColor: Colors.white,
-                            ),
-                            onPressed: _isBusy ? null : _downloadFullEncyclopediaTemplate,
-                            icon: const Icon(Icons.download_rounded),
-                            label: Text(widget.isKorean ? '전체 약어 샘플 (167행)' : 'Full abbr sample (167 rows)'),
-                          ),
                         OutlinedButton.icon(
                           onPressed: _isBusy ? null : _pickImportFile,
                           icon: const Icon(Icons.upload_file_rounded),
@@ -1248,11 +1223,6 @@ class _CollectionWithImportTabState extends ConsumerState<_CollectionWithImportT
       mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       fileName: fileName,
     );
-  }
-
-  Future<void> _downloadFullEncyclopediaTemplate() async {
-    const url = 'https://firebasestorage.googleapis.com/v0/b/moriknit-ceea9.firebasestorage.app/o/admin_templates%2Fencyclopedia_abbreviations.xlsx?alt=media';
-    await launchUrl(Uri.parse(url));
   }
 
   Future<void> _pickImportFile() async {
@@ -2078,7 +2048,7 @@ class _DashboardTab extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(isKorean ? '운영 메모' : 'Ops note', style: T.h3),
+              Text(isKorean ? '운영 메모' : 'Ops note', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
               const SizedBox(height: 10),
               Text(
                 isKorean
@@ -2096,7 +2066,7 @@ class _DashboardTab extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(isKorean ? '빠른 이동' : 'Quick access', style: T.h3),
+              Text(isKorean ? '빠른 이동' : 'Quick access', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
               const SizedBox(height: 12),
               Wrap(
                 spacing: 10,
@@ -2149,7 +2119,7 @@ class _OperationalSupportSection extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(isKorean ? '운영 지원 기능' : 'Operator support', style: T.h3),
+              Text(isKorean ? '운영 지원 기능' : 'Operator support', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
               const SizedBox(height: 10),
               Text(
                 isKorean
@@ -2180,7 +2150,7 @@ class _OperationalSupportSection extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(isKorean ? '검토 대기열' : 'Review queue', style: T.h3),
+                    Text(isKorean ? '검토 대기열' : 'Review queue', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
                     const SizedBox(height: 10),
                     marketPending.when(
                       data: (docs) => _PendingSummaryLine(
@@ -2209,7 +2179,7 @@ class _OperationalSupportSection extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(isKorean ? '데이터 건강상태' : 'Data health', style: T.h3),
+                    Text(isKorean ? '데이터 건강상태' : 'Data health', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
                     const SizedBox(height: 10),
                     health.when(
                       data: (data) => Column(
@@ -3131,7 +3101,7 @@ class _BulkImportTabState extends ConsumerState<_BulkImportTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(widget.isKorean ? '대량등록 항목' : 'Import target', style: T.h3),
+              Text(widget.isKorean ? '대량등록 항목' : 'Import target', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
               const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
@@ -3349,7 +3319,7 @@ class _PreviewCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(isKorean ? '미리보기' : 'Preview', style: T.h3),
+          Text(isKorean ? '미리보기' : 'Preview', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
           const SizedBox(height: 8),
           Text(
             '${isKorean ? '정상' : 'Valid'} ${preview.validCount} / ${isKorean ? '오류' : 'Errors'} ${preview.invalidCount}',
@@ -3402,7 +3372,7 @@ class _RecentImportLogs extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(isKorean ? '최근 반영 기록' : 'Recent import logs', style: T.h3),
+          Text(isKorean ? '최근 반영 기록' : 'Recent import logs', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
           const SizedBox(height: 10),
           logsAsync.when(
             data: (logs) {
@@ -3666,7 +3636,7 @@ class _SettingsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 2,
       child: Column(
         children: [
           TabBar(
@@ -3677,7 +3647,6 @@ class _SettingsTab extends StatelessWidget {
             indicatorColor: C.lv,
             tabs: [
               Tab(text: isKorean ? '소셜/API' : 'Social/API'),
-              Tab(text: isKorean ? '운영지원' : 'Support'),
               const Tab(text: 'GitHub'),
             ],
           ),
@@ -3686,7 +3655,6 @@ class _SettingsTab extends StatelessWidget {
             child: TabBarView(
               children: [
                 _SocialSettingsTab(isKorean: isKorean),
-                _SupportSettingsTab(isKorean: isKorean),
                 const _GitHubSettingsTab(),
               ],
             ),
@@ -3837,7 +3805,7 @@ class _SocialSettingsTabState extends ConsumerState<_SocialSettingsTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(widget.isKorean ? '소셜 계정 및 API 메모' : 'Social accounts and API notes', style: T.h3),
+                  Text(widget.isKorean ? '소셜 계정 및 API 메모' : 'Social accounts and API notes', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
                   const SizedBox(height: 12),
                   TextField(controller: _instagramCtrl, decoration: const InputDecoration(labelText: 'Instagram')),
                   const SizedBox(height: 10),
@@ -3899,13 +3867,9 @@ class _SupportSettingsTab extends ConsumerStatefulWidget {
 
 class _SupportSettingsTabState extends ConsumerState<_SupportSettingsTab> {
   final _noticeCtrl = TextEditingController();
-  final _backgroundCtrl = TextEditingController();
   final _popupTitleCtrl = TextEditingController();
   final _popupMessageCtrl = TextEditingController();
   final _popupLinkUrlCtrl = TextEditingController();
-  bool _communityEnabled = true;
-  bool _sellerEnabled = true;
-  bool _encyclopediaEnabled = true;
   bool _popupEnabled = false;
   String _noticeType = 'banner';
   bool _loaded = false;
@@ -3914,7 +3878,6 @@ class _SupportSettingsTabState extends ConsumerState<_SupportSettingsTab> {
   @override
   void dispose() {
     _noticeCtrl.dispose();
-    _backgroundCtrl.dispose();
     _popupTitleCtrl.dispose();
     _popupMessageCtrl.dispose();
     _popupLinkUrlCtrl.dispose();
@@ -3928,10 +3891,6 @@ class _SupportSettingsTabState extends ConsumerState<_SupportSettingsTab> {
       data: (data) {
         if (!_loaded) {
           _noticeCtrl.text = data['maintenanceNotice']?.toString() ?? '';
-          _backgroundCtrl.text = data['backgroundImageUrl']?.toString() ?? '';
-          _communityEnabled = data['communityWriteEnabled'] != false;
-          _sellerEnabled = data['sellerSubmissionEnabled'] != false;
-          _encyclopediaEnabled = data['encyclopediaSuggestionEnabled'] != false;
           _noticeType = data['noticeType']?.toString() ?? 'banner';
           _popupEnabled = data['popupEnabled'] == true;
           _popupTitleCtrl.text = data['popupTitle']?.toString() ?? '';
@@ -3949,7 +3908,7 @@ class _SupportSettingsTabState extends ConsumerState<_SupportSettingsTab> {
                 children: [
                   Row(
                     children: [
-                      Text(widget.isKorean ? '랜딩 팝업 관리' : 'Landing Popup', style: T.h3),
+                      Text(widget.isKorean ? '랜딩 팝업 관리' : 'Landing Popup', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
                       const Spacer(),
                       Switch(
                         value: _popupEnabled,
@@ -4022,43 +3981,7 @@ class _SupportSettingsTabState extends ConsumerState<_SupportSettingsTab> {
                       labelText: widget.isKorean ? '배너 공지 문구 (배너 유형 시)' : 'Banner notice text',
                     ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            // ── 서비스 제어 ────────────────────────────────────────────────
-            GlassCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(widget.isKorean ? '서비스 제어' : 'Service control', style: T.h3),
-                  const SizedBox(height: 8),
-                  SwitchListTile(
-                    value: _communityEnabled,
-                    onChanged: (value) => setState(() => _communityEnabled = value),
-                    title: Text(widget.isKorean ? '커뮤니티 글쓰기 허용' : 'Enable community posting'),
-                  ),
-                  SwitchListTile(
-                    value: _sellerEnabled,
-                    onChanged: (value) => setState(() => _sellerEnabled = value),
-                    title: Text(widget.isKorean ? '판매 등록 허용' : 'Enable seller submissions'),
-                  ),
-                  SwitchListTile(
-                    value: _encyclopediaEnabled,
-                    onChanged: (value) => setState(() => _encyclopediaEnabled = value),
-                    title: Text(widget.isKorean ? '백과사전 제안 허용' : 'Enable encyclopedia suggestions'),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _backgroundCtrl,
-                    decoration: InputDecoration(
-                      labelText: widget.isKorean ? '배경 이미지 URL' : 'Background image URL',
-                      helperText: widget.isKorean
-                          ? '지금은 저장만 합니다. 추후 앱 배경 커스터마이징과 연결될 예정입니다.'
-                          : 'Stored now for future background customization.',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
                   Align(
                     alignment: Alignment.centerRight,
                     child: ElevatedButton(
@@ -4088,10 +4011,6 @@ class _SupportSettingsTabState extends ConsumerState<_SupportSettingsTab> {
           'popupTitle': _popupTitleCtrl.text.trim(),
           'popupMessage': _popupMessageCtrl.text.trim(),
           'popupLinkUrl': _popupLinkUrlCtrl.text.trim(),
-          'communityWriteEnabled': _communityEnabled,
-          'sellerSubmissionEnabled': _sellerEnabled,
-          'encyclopediaSuggestionEnabled': _encyclopediaEnabled,
-          'backgroundImageUrl': _backgroundCtrl.text.trim(),
         },
         SetOptions(merge: true),
       );
@@ -4935,9 +4854,9 @@ class _EncyclopediaItemsTab extends StatefulWidget {
 
 class _EncyclopediaItemsTabState extends State<_EncyclopediaItemsTab> {
   String _searchQuery = '';
+  bool _showBulkImport = false;
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _docs = [];
   bool _loading = true;
-  bool _showBulkImport = false;  // 일괄등록 패널 토글
 
   @override
   void initState() {
@@ -4978,174 +4897,127 @@ class _EncyclopediaItemsTabState extends State<_EncyclopediaItemsTab> {
   // ── 단일 항목 추가/수정 다이얼로그 ────────────────────────────────────────────
 
   void _showEditDialog(BuildContext context, [Map<String, dynamic>? data, String? docId]) {
-    final abbrCtrl     = TextEditingController(text: data?['abbreviation'] as String? ?? '');
-    final termKeyCtrl  = TextEditingController(text: data?['termKey'] as String? ?? (data?['abbreviation'] as String? ?? '').toLowerCase());
-    final termCtrl     = TextEditingController(text: data?['term'] as String? ?? data?['term_ko'] as String? ?? '');
-    final termEnCtrl   = TextEditingController(text: data?['termEn'] as String? ?? data?['term_en'] as String? ?? '');
-    final descCtrl     = TextEditingController(text: data?['description'] as String? ?? data?['description_ko'] as String? ?? '');
-    final descEnCtrl   = TextEditingController(text: data?['descriptionEn'] as String? ?? data?['description_en'] as String? ?? '');
+    // 필드값 읽기 (구 필드명 fallback 포함)
+    final abbrCtrl    = TextEditingController(text: data?['abbreviation'] as String? ?? '');
+    final termCtrl    = TextEditingController(text: data?['term'] as String? ?? data?['term_ko'] as String? ?? '');
+    final termEnCtrl  = TextEditingController(text: data?['termEn'] as String? ?? data?['term_en'] as String? ?? '');
+    final descCtrl    = TextEditingController(text: data?['description'] as String? ?? data?['description_ko'] as String? ?? '');
+    final descEnCtrl  = TextEditingController(text: data?['descriptionEn'] as String? ?? data?['description_en'] as String? ?? '');
     final categoryCtrl = TextEditingController(text: data?['category'] as String? ?? data?['category_key'] as String? ?? 'abbreviation');
-    final symbolCtrl   = TextEditingController(text: data?['symbolKey'] as String? ?? data?['symbol'] as String? ?? '');
-    final refUrlCtrl   = TextEditingController(text: data?['referenceUrl'] as String? ?? '');
-    final orderCtrl    = TextEditingController(text: (data?['order'] as num?)?.toInt().toString() ?? '');
+    final symbolCtrl  = TextEditingController(text: data?['symbol'] as String? ?? '');
+    final orderCtrl   = TextEditingController(text: (data?['order'] as num?)?.toInt().toString() ?? '');
     final isNew = docId == null;
 
     showDialog<void>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, ss) {
-          final previewUrl = refUrlCtrl.text.trim();
-          return AlertDialog(
-            title: Text(isNew ? '새 항목 추가' : '항목 수정'),
-            content: SizedBox(
-              width: 600,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // SVG 미리보기
-                    if (previewUrl.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 56, height: 56,
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF3E8FF),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: const Color(0xFF6B21A8).withValues(alpha: 0.2)),
-                              ),
-                              child: SvgPicture.network(previewUrl, placeholderBuilder: (_) => const SizedBox.shrink()),
-                            ),
-                            const SizedBox(width: 10),
-                            Text('SVG 심볼 미리보기', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                          ],
-                        ),
-                      ),
-                    // 약어 + termKey + 순서
-                    Row(children: [
-                      Expanded(
-                        child: TextField(controller: abbrCtrl, decoration: const InputDecoration(labelText: '영문 약어 (abbreviation) *')),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(controller: termKeyCtrl, decoration: const InputDecoration(labelText: 'term_key (소문자)')),
-                      ),
-                      const SizedBox(width: 10),
-                      SizedBox(
-                        width: 80,
-                        child: TextField(
-                          controller: orderCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(labelText: '순서'),
-                        ),
-                      ),
-                    ]),
-                    const SizedBox(height: 10),
-                    // 한글/영문 용어
-                    Row(children: [
-                      Expanded(child: TextField(controller: termCtrl, decoration: const InputDecoration(labelText: '한글 용어 (term) *'))),
-                      const SizedBox(width: 10),
-                      Expanded(child: TextField(controller: termEnCtrl, decoration: const InputDecoration(labelText: '영문 용어 (termEn)'))),
-                    ]),
-                    const SizedBox(height: 10),
-                    // 한글 설명
-                    TextField(
-                      controller: descCtrl,
-                      maxLines: 3,
-                      decoration: const InputDecoration(labelText: '한글 설명 (description)'),
+      builder: (ctx) => AlertDialog(
+        title: Text(isNew ? '새 항목 추가' : '항목 수정'),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(children: [
+                  Expanded(
+                    flex: 2,
+                    child: TextField(controller: abbrCtrl, decoration: const InputDecoration(labelText: '영문 약어 (abbreviation) *')),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: orderCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: '순서 (order)'),
                     ),
-                    const SizedBox(height: 8),
-                    // 영문 설명
-                    TextField(
-                      controller: descEnCtrl,
-                      maxLines: 3,
-                      decoration: const InputDecoration(labelText: '영문 설명 (descriptionEn)'),
-                    ),
-                    const SizedBox(height: 10),
-                    // 카테고리 + symbolKey
-                    Row(children: [
-                      Expanded(child: TextField(controller: categoryCtrl, decoration: const InputDecoration(labelText: '카테고리 (category)'))),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(
-                          controller: symbolCtrl,
-                          decoration: const InputDecoration(labelText: 'symbolKey (예: knit, purl)'),
-                        ),
-                      ),
-                    ]),
-                    const SizedBox(height: 8),
-                    // SVG URL
-                    TextField(
-                      controller: refUrlCtrl,
-                      onChanged: (_) => ss(() {}),
-                      decoration: const InputDecoration(
-                        labelText: 'SVG URL (referenceUrl)',
-                        hintText: 'https://firebasestorage.googleapis.com/...',
-                      ),
-                    ),
-                  ],
+                  ),
+                ]),
+                const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(child: TextField(controller: termCtrl, decoration: const InputDecoration(labelText: '한글 용어 (term) *'))),
+                  const SizedBox(width: 12),
+                  Expanded(child: TextField(controller: termEnCtrl, decoration: const InputDecoration(labelText: '영문 용어 (termEn)'))),
+                ]),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: descCtrl,
+                  maxLines: 3,
+                  decoration: const InputDecoration(labelText: '한글 설명 (description)'),
                 ),
-              ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: descEnCtrl,
+                  maxLines: 3,
+                  decoration: const InputDecoration(labelText: '영문 설명 (descriptionEn)'),
+                ),
+                const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(child: TextField(controller: categoryCtrl, decoration: const InputDecoration(labelText: '카테고리 (category)'))),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: symbolCtrl,
+                      decoration: const InputDecoration(
+                        labelText: '기호 (symbol)',
+                        hintText: '□ 또는 이미지 URL',
+                      ),
+                    ),
+                  ),
+                ]),
+              ],
             ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
-              ElevatedButton(
-                onPressed: () async {
-                  final abbr = abbrCtrl.text.trim();
-                  final term = termCtrl.text.trim();
-                  if (abbr.isEmpty || term.isEmpty) return;
-                  final fields = <String, dynamic>{
-                    'termKey':       termKeyCtrl.text.trim().isEmpty ? abbr.toLowerCase() : termKeyCtrl.text.trim(),
-                    'abbreviation':  abbr,
-                    'term':          term,
-                    'termEn':        termEnCtrl.text.trim(),
-                    'description':   descCtrl.text.trim().isEmpty ? term : descCtrl.text.trim(),
-                    'descriptionEn': descEnCtrl.text.trim().isEmpty ? termEnCtrl.text.trim() : descEnCtrl.text.trim(),
-                    'category':      categoryCtrl.text.trim().isEmpty ? 'abbreviation' : categoryCtrl.text.trim(),
-                    'categoryKey':   categoryCtrl.text.trim().isEmpty ? 'abbreviation' : categoryCtrl.text.trim(),
-                    'symbolKey':     symbolCtrl.text.trim(),
-                    'symbol':        symbolCtrl.text.trim(),
-                    'referenceUrl':  refUrlCtrl.text.trim(),
-                    'order':         int.tryParse(orderCtrl.text.trim()) ?? 0,
-                    'status':        'approved',
-                    'createdBy':     widget.adminUid,
-                    'approvedBy':    widget.adminUid,
-                  };
-                  try {
-                    await runWithMoriLoadingDialog<void>(
-                      ctx,
-                      message: '저장하는 중입니다.',
-                      subtitle: '잠시만 기다려 주세요.',
-                      task: () async {
-                        if (isNew) {
-                          await FirebaseFirestore.instance.collection('encyclopedia').add({
-                            ...fields,
-                            'createdAt': FieldValue.serverTimestamp(),
-                          });
-                        } else {
-                          await FirebaseFirestore.instance.collection('encyclopedia').doc(docId).update(fields);
-                        }
-                      },
-                    );
-                    if (ctx.mounted) Navigator.pop(ctx);
-                    _loadDocs();
-                  } catch (e) {
-                    if (ctx.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '$e');
-                  }
-                },
-                child: const Text('저장'),
-              ),
-            ],
-          );
-        },
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+          ElevatedButton(
+            onPressed: () async {
+              final abbr = abbrCtrl.text.trim();
+              final term = termCtrl.text.trim();
+              if (abbr.isEmpty || term.isEmpty) return;
+              final fields = <String, dynamic>{
+                'abbreviation': abbr,
+                'term': term,
+                'termEn': termEnCtrl.text.trim(),
+                'description': descCtrl.text.trim().isEmpty ? term : descCtrl.text.trim(),
+                'descriptionEn': descEnCtrl.text.trim().isEmpty ? termEnCtrl.text.trim() : descEnCtrl.text.trim(),
+                'category': categoryCtrl.text.trim().isEmpty ? 'abbreviation' : categoryCtrl.text.trim(),
+                'symbol': symbolCtrl.text.trim(),
+                'order': int.tryParse(orderCtrl.text.trim()) ?? 0,
+                'status': 'approved',
+                'createdBy': widget.adminUid,
+                'approvedBy': widget.adminUid,
+              };
+              try {
+                await runWithMoriLoadingDialog<void>(
+                  ctx,
+                  message: '저장하는 중입니다.',
+                  subtitle: '잠시만 기다려 주세요.',
+                  task: () async {
+                    if (isNew) {
+                      await FirebaseFirestore.instance.collection('encyclopedia').add({
+                        ...fields,
+                        'createdAt': FieldValue.serverTimestamp(),
+                      });
+                    } else {
+                      await FirebaseFirestore.instance.collection('encyclopedia').doc(docId).update(fields);
+                    }
+                  },
+                );
+                if (ctx.mounted) Navigator.pop(ctx);
+                _loadDocs();
+              } catch (e) {
+                if (ctx.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '$e');
+              }
+            },
+            child: const Text('저장'),
+          ),
+        ],
       ),
     ).whenComplete(() {
-      abbrCtrl.dispose(); termKeyCtrl.dispose(); termCtrl.dispose(); termEnCtrl.dispose();
+      abbrCtrl.dispose(); termCtrl.dispose(); termEnCtrl.dispose();
       descCtrl.dispose(); descEnCtrl.dispose(); categoryCtrl.dispose();
-      symbolCtrl.dispose(); refUrlCtrl.dispose(); orderCtrl.dispose();
+      symbolCtrl.dispose(); orderCtrl.dispose();
     });
   }
 
@@ -5344,7 +5216,6 @@ class _EncyclopediaItemsTabState extends State<_EncyclopediaItemsTab> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // ── 상단 액션바 ────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
           child: Row(
@@ -5409,7 +5280,7 @@ class _EncyclopediaItemsTabState extends State<_EncyclopediaItemsTab> {
                     ),
                     ElevatedButton.icon(
                       onPressed: () async {
-                        final kind = AdminImportKind.encyclopedia;
+                        const kind = AdminImportKind.encyclopedia;
                         final bytes = Uint8List.fromList(utf8.encode(kind.buildTemplateCsv(widget.isKorean)));
                         final stamp = DateFormat('yyyyMMdd').format(DateTime.now());
                         await downloadBytes(bytes: bytes, mimeType: 'text/csv;charset=utf-8', fileName: 'moriknit_encyclopedia_$stamp.csv');
@@ -5483,14 +5354,14 @@ class _EncyclopediaDocRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final abbr       = data['abbreviation'] as String? ?? '';
-    final term       = data['term'] as String? ?? data['term_ko'] as String? ?? '(용어 없음)';
-    final termEn     = data['termEn'] as String? ?? data['term_en'] as String? ?? '';
-    final category   = data['category'] as String? ?? data['category_key'] as String? ?? '';
-    final order      = (data['order'] as num?)?.toInt();
-    final refUrl     = data['referenceUrl'] as String? ?? '';
-    final descKo     = data['description'] as String? ?? '';
-    final descEn     = data['descriptionEn'] as String? ?? '';
+    final abbr     = data['abbreviation'] as String? ?? '';
+    final term     = data['term'] as String? ?? data['term_ko'] as String? ?? '(용어 없음)';
+    final termEn   = data['termEn'] as String? ?? data['term_en'] as String? ?? '';
+    final category = data['category'] as String? ?? data['category_key'] as String? ?? '';
+    final order    = (data['order'] as num?)?.toInt();
+    final refUrl   = data['referenceUrl'] as String? ?? '';
+    final descKo   = data['description'] as String? ?? '';
+    final descEn   = data['descriptionEn'] as String? ?? '';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -5501,7 +5372,6 @@ class _EncyclopediaDocRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // 순서
           if (order != null)
             SizedBox(
               width: 32,
@@ -5558,7 +5428,6 @@ class _EncyclopediaDocRow extends StatelessWidget {
               ],
             ),
           ),
-          // 카테고리
           if (category.isNotEmpty)
             Container(
               margin: const EdgeInsets.only(right: 4),
@@ -6259,6 +6128,16 @@ class _BuiltinTemplateAdminTab extends ConsumerWidget {
     final orderCtrl = TextEditingController(text: '${existing?.order ?? 0}');
     final isAdd = existing == null;
 
+    InputDecoration adminDec(String label, {String? hint}) => InputDecoration(
+      labelText: label, hintText: hint,
+      labelStyle: const TextStyle(color: Colors.white70),
+      hintStyle: const TextStyle(color: Colors.white38),
+      fillColor: Colors.white.withValues(alpha: 0.10), filled: true,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white60)),
+    );
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -6268,25 +6147,19 @@ class _BuiltinTemplateAdminTab extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: titleKoCtrl, decoration: InputDecoration(labelText: '제목 (한국어)', fillColor: C.gx, filled: true)),
+              TextField(controller: titleKoCtrl, style: const TextStyle(color: Colors.white), decoration: adminDec('제목 (한국어)')),
               const SizedBox(height: 8),
-              TextField(controller: titleEnCtrl, decoration: InputDecoration(labelText: '제목 (English)', fillColor: C.gx, filled: true)),
+              TextField(controller: titleEnCtrl, style: const TextStyle(color: Colors.white), decoration: adminDec('제목 (English)')),
               const SizedBox(height: 8),
-              TextField(controller: descKoCtrl, decoration: InputDecoration(labelText: '설명 (한국어)', fillColor: C.gx, filled: true)),
+              TextField(controller: descKoCtrl, style: const TextStyle(color: Colors.white), decoration: adminDec('설명 (한국어)')),
               const SizedBox(height: 8),
-              TextField(controller: descEnCtrl, decoration: InputDecoration(labelText: '설명 (English)', fillColor: C.gx, filled: true)),
+              TextField(controller: descEnCtrl, style: const TextStyle(color: Colors.white), decoration: adminDec('설명 (English)')),
               const SizedBox(height: 8),
-              TextField(controller: iconCtrl, decoration: InputDecoration(
-                labelText: '아이콘 이름',
-                hintText: 'checkroom_rounded / loop_rounded / face_rounded ...',
-                fillColor: C.gx,
-                filled: true,
-              )),
+              TextField(controller: iconCtrl, style: const TextStyle(color: Colors.white), decoration: adminDec('아이콘 이름', hint: 'checkroom_rounded / loop_rounded / face_rounded ...')),
               const SizedBox(height: 8),
-              TextField(controller: colorCtrl, decoration: InputDecoration(labelText: '색상 HEX', hintText: '#B47EEB', fillColor: C.gx, filled: true)),
+              TextField(controller: colorCtrl, style: const TextStyle(color: Colors.white), decoration: adminDec('색상 HEX', hint: '#B47EEB')),
               const SizedBox(height: 8),
-              TextField(controller: orderCtrl, keyboardType: TextInputType.number,
-                  decoration: InputDecoration(labelText: '순서 (숫자)', fillColor: C.gx, filled: true)),
+              TextField(controller: orderCtrl, keyboardType: TextInputType.number, style: const TextStyle(color: Colors.white), decoration: adminDec('순서 (숫자)')),
             ],
           ),
         ),
@@ -6799,6 +6672,17 @@ class _NoticesAdminTabState extends State<_NoticesAdminTab> {
     final titleCtrl = TextEditingController(text: existing?.title ?? '');
     final contentCtrl = TextEditingController(text: existing?.content ?? '');
     bool isPinned = existing?.isPinned ?? false;
+    String imageUrl = existing?.imageUrl ?? '';
+    bool uploading = false;
+
+    InputDecoration adminDec(String label) => InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(color: Colors.white70),
+      fillColor: Colors.white.withValues(alpha: 0.10), filled: true,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white60)),
+    );
 
     showDialog(
       context: context,
@@ -6808,30 +6692,89 @@ class _NoticesAdminTabState extends State<_NoticesAdminTab> {
               style: const TextStyle(fontWeight: FontWeight.w700)),
           content: SizedBox(
             width: 480,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleCtrl,
-                  decoration: InputDecoration(labelText: '제목', fillColor: C.gx, filled: true),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: contentCtrl,
-                  maxLines: 6,
-                  decoration: InputDecoration(labelText: '내용', fillColor: C.gx, filled: true),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Checkbox(
-                      value: isPinned,
-                      onChanged: (v) => setDialogState(() => isPinned = v ?? false),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleCtrl,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: adminDec('제목'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: contentCtrl,
+                    maxLines: 6,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: adminDec('내용'),
+                  ),
+                  const SizedBox(height: 12),
+                  // ── 사진 첨부 ────────────────────────────────────────────
+                  Row(
+                    children: [
+                      const Text('사진 첨부', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                      const Spacer(),
+                      if (uploading)
+                        const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      else
+                        TextButton.icon(
+                          onPressed: () async {
+                            final picker = ImagePicker();
+                            final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+                            if (picked == null) return;
+                            setDialogState(() => uploading = true);
+                            try {
+                              final bytes = await picked.readAsBytes();
+                              final ext = picked.name.split('.').last.toLowerCase();
+                              final docId = existing?.id.isNotEmpty == true ? existing!.id : 'new_${DateTime.now().millisecondsSinceEpoch}';
+                              final ref = FirebaseStorage.instance.ref('announcements/$docId/cover.$ext');
+                              await ref.putData(bytes, SettableMetadata(contentType: 'image/$ext'));
+                              final url = await ref.getDownloadURL();
+                              setDialogState(() { imageUrl = url; uploading = false; });
+                            } catch (e) {
+                              setDialogState(() => uploading = false);
+                              if (ctx.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '업로드 실패: $e');
+                            }
+                          },
+                          icon: const Icon(Icons.upload_rounded, size: 16, color: Colors.white70),
+                          label: const Text('갤러리에서 선택', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                        ),
+                    ],
+                  ),
+                  if (imageUrl.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(imageUrl, height: 120, width: double.infinity, fit: BoxFit.cover),
+                        ),
+                        Positioned(
+                          top: 4, right: 4,
+                          child: GestureDetector(
+                            onTap: () => setDialogState(() => imageUrl = ''),
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                              child: const Icon(Icons.close, size: 14, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const Text('상단 고정 (isPinned)'),
                   ],
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: isPinned,
+                        onChanged: (v) => setDialogState(() => isPinned = v ?? false),
+                      ),
+                      const Text('상단 고정 (isPinned)', style: TextStyle(color: Colors.white)),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
           actions: [
@@ -6858,13 +6801,14 @@ class _NoticesAdminTabState extends State<_NoticesAdminTab> {
                           createdAt: DateTime.now(),
                           isPinned: isPinned,
                           isNotice: true,
+                          imageUrl: imageUrl,
                         );
                         await repo.createNotice(newPost);
                       } else {
                         await FirebaseFirestore.instance
                             .collection('landing_notices')
                             .doc(existing.id)
-                            .update({'title': title, 'content': content, 'isPinned': isPinned});
+                            .update({'title': title, 'content': content, 'isPinned': isPinned, 'imageUrl': imageUrl});
                       }
                     },
                   );
@@ -7070,13 +7014,15 @@ class _LandingBoardAdminTabState extends State<_LandingBoardAdminTab> {
             children: [
               TextField(
                 controller: titleCtrl,
-                decoration: InputDecoration(labelText: '제목', fillColor: C.gx, filled: true),
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(labelText: '제목', labelStyle: const TextStyle(color: Colors.white70), fillColor: Colors.white.withValues(alpha: 0.10), filled: true, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24))),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: contentCtrl,
                 maxLines: 8,
-                decoration: InputDecoration(labelText: '내용', fillColor: C.gx, filled: true),
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(labelText: '내용', labelStyle: const TextStyle(color: Colors.white70), fillColor: Colors.white.withValues(alpha: 0.10), filled: true, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24))),
               ),
             ],
           ),
@@ -7263,8 +7209,10 @@ class _InquiryDetailState extends State<_InquiryDetail> {
       await FirebaseFirestore.instance
           .collection('landing_boards').doc('qa').collection('posts').doc(widget.doc.id)
           .update({'adminMemo': _memoCtrl.text.trim(), 'isResolved': _isResolved});
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('??λ릱?댁슂'), duration: Duration(milliseconds: 1200)));
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -7505,7 +7453,7 @@ class _BoardPostList extends StatelessWidget {
         return ListView.separated(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
           itemCount: docs.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 6),
+          separatorBuilder: (_, _) => const SizedBox(height: 6),
           itemBuilder: (ctx, index) {
             final doc = docs[index];
             final data = doc.data();
@@ -7678,7 +7626,7 @@ class _AdminPatternsTabState extends ConsumerState<_AdminPatternsTab> {
               return ListView.separated(
                 padding: const EdgeInsets.all(16),
                 itemCount: filtered.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 6),
+                separatorBuilder: (_, _) => const SizedBox(height: 6),
                 itemBuilder: (context, i) {
                   final doc = filtered[i];
                   final data = doc.data();
@@ -7820,7 +7768,7 @@ class _AdminTemplatesTabState extends ConsumerState<_AdminTemplatesTab> {
               return ListView.separated(
                 padding: const EdgeInsets.all(16),
                 itemCount: filtered.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 6),
+                separatorBuilder: (_, _) => const SizedBox(height: 6),
                 itemBuilder: (context, i) {
                   final doc = filtered[i];
                   final data = doc.data();
@@ -7894,6 +7842,107 @@ class _AdminTemplatesTabState extends ConsumerState<_AdminTemplatesTab> {
   }
 }
 
+// ── 서비스 제어 카드 (회원관리 탭 상단에 표시) ─────────────────────────────────
+class _ServiceControlCard extends ConsumerStatefulWidget {
+  const _ServiceControlCard();
+
+  @override
+  ConsumerState<_ServiceControlCard> createState() => _ServiceControlCardState();
+}
+
+class _ServiceControlCardState extends ConsumerState<_ServiceControlCard> {
+  bool _communityEnabled = true;
+  bool _sellerEnabled = true;
+  bool _encyclopediaEnabled = true;
+  final _backgroundCtrl = TextEditingController();
+  bool _loaded = false;
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _backgroundCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final async = ref.watch(_supportConfigProvider);
+    return async.when(
+      data: (data) {
+        if (!_loaded) {
+          _communityEnabled = data['communityWriteEnabled'] != false;
+          _sellerEnabled = data['sellerSubmissionEnabled'] != false;
+          _encyclopediaEnabled = data['encyclopediaSuggestionEnabled'] != false;
+          _backgroundCtrl.text = data['backgroundImageUrl']?.toString() ?? '';
+          _loaded = true;
+        }
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: GlassCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('서비스 제어', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  value: _communityEnabled,
+                  onChanged: (v) => setState(() => _communityEnabled = v),
+                  title: const Text('커뮤니티 글쓰기 허용'),
+                ),
+                SwitchListTile(
+                  value: _sellerEnabled,
+                  onChanged: (v) => setState(() => _sellerEnabled = v),
+                  title: const Text('판매 등록 허용'),
+                ),
+                SwitchListTile(
+                  value: _encyclopediaEnabled,
+                  onChanged: (v) => setState(() => _encyclopediaEnabled = v),
+                  title: const Text('백과사전 제안 허용'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _backgroundCtrl,
+                  decoration: const InputDecoration(
+                    labelText: '배경 이미지 URL',
+                    helperText: '지금은 저장만 합니다. 추후 앱 배경 커스터마이징과 연결될 예정입니다.',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton(
+                    onPressed: _saving ? null : _save,
+                    child: const Text('저장'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (e, _) => const SizedBox.shrink(),
+    );
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    try {
+      await FirebaseFirestore.instance.collection('app_config').doc('admin_support').set(
+        {
+          'communityWriteEnabled': _communityEnabled,
+          'sellerSubmissionEnabled': _sellerEnabled,
+          'encyclopediaSuggestionEnabled': _encyclopediaEnabled,
+          'backgroundImageUrl': _backgroundCtrl.text.trim(),
+        },
+        SetOptions(merge: true),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+}
+
 // ── 사용자 통합관리 탭 (users 컬렉션 + plan + 프로젝트/스와치 수) ─────────────
 class _UserStatsAdminTab extends ConsumerStatefulWidget {
   const _UserStatsAdminTab();
@@ -7919,6 +7968,7 @@ class _UserStatsAdminTabState extends ConsumerState<_UserStatsAdminTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const _ServiceControlCard(),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: TextField(
@@ -7967,7 +8017,7 @@ class _UserStatsAdminTabState extends ConsumerState<_UserStatsAdminTab> {
               return ListView.separated(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
                 itemCount: filtered.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 4),
+                separatorBuilder: (_, _) => const SizedBox(height: 4),
                 itemBuilder: (ctx, index) {
                   final user = filtered[index];
                   return _UserStatsRow(user: user);

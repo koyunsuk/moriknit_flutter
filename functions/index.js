@@ -1,8 +1,9 @@
 const crypto = require('crypto');
 const admin = require('firebase-admin');
-const { onRequest } = require('firebase-functions/v2/https');
+const { onRequest, onCall } = require('firebase-functions/v2/https');
 const { onDocumentCreated, onDocumentDeleted } = require('firebase-functions/v2/firestore');
 const { defineSecret } = require('firebase-functions/params');
+const Anthropic = require('@anthropic-ai/sdk');
 
 admin.initializeApp();
 
@@ -15,6 +16,7 @@ const PROJECT_ID =
   'moriknit-ceea9';
 
 const RAVELRY_CLIENT_ID = 'e87a14a430bd98b1d5dcb3e851ce8a3d';
+const anthropicApiKey = defineSecret('ANTHROPIC_API_KEY');
 const ravelryClientSecret = defineSecret('RAVELRY_CLIENT_SECRET');
 const RAVELRY_AUTH_ENDPOINT = 'https://www.ravelry.com/oauth2/auth';
 const RAVELRY_TOKEN_ENDPOINT = 'https://www.ravelry.com/oauth2/token';
@@ -521,5 +523,116 @@ exports.kakaoCustomToken = onRequest(
       console.error('kakaoCustomToken error:', err);
       res.status(500).json({ error: 'Internal server error' });
     }
+  },
+);
+
+// ──────────────────────────────────────────────────────────────────────────────
+// parseKnittingPattern — PDF/이미지 도안을 Claude AI로 파싱하여 단계로그 구조로 반환
+// ──────────────────────────────────────────────────────────────────────────────
+exports.parseKnittingPattern = onCall(
+  {
+    region: REGION,
+    secrets: [anthropicApiKey],
+    timeoutSeconds: 120,
+    memory: '512MiB',
+  },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new Error('Unauthenticated');
+
+    const { storagePath, mimeType, fileName } = request.data;
+    if (!storagePath || !mimeType || !fileName) {
+      throw new Error('Missing required fields: storagePath, mimeType, fileName');
+    }
+
+    // Firebase Storage에서 파일 다운로드
+    const bucket = admin.storage().bucket();
+    const fileRef = bucket.file(storagePath);
+    const [fileBuffer] = await fileRef.download();
+    const base64Data = fileBuffer.toString('base64');
+
+    const client = new Anthropic({ apiKey: anthropicApiKey.value().trim() });
+
+    const systemPrompt = `You are a knitting pattern parser.
+Parse the provided knitting pattern (PDF or image) and extract structured step-by-step instructions.
+Output ONLY valid JSON, no markdown, no extra text.
+
+JSON structure:
+{
+  "title": "pattern title",
+  "materials": "yarn, needle size, other materials as a single string",
+  "gauge": "gauge information as a string",
+  "sizes": "available sizes as a string",
+  "sections": [
+    {
+      "id": "section_1",
+      "title": "Section name (e.g., Cast On, Body, Sleeve, etc.)",
+      "steps": [
+        {"id": "step_1_1", "instruction": "Step instruction text"},
+        {"id": "step_1_2", "instruction": "Next step"}
+      ]
+    }
+  ]
+}
+
+Important rules:
+- Keep each step as ONE actionable instruction (not too long, not too short)
+- Use the original language of the pattern for instructions
+- If Korean, keep Korean. If English, keep English.
+- section IDs: section_1, section_2, ...
+- step IDs: step_{sectionIndex}_{stepIndex} (1-based)`;
+
+    const contentBlock =
+      mimeType === 'application/pdf'
+        ? {
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: 'application/pdf',
+              data: base64Data,
+            },
+          }
+        : {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: mimeType,
+              data: base64Data,
+            },
+          };
+
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 8192,
+      system: systemPrompt,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            contentBlock,
+            {
+              type: 'text',
+              text: 'Parse this knitting pattern into the JSON structure described.',
+            },
+          ],
+        },
+      ],
+    });
+
+    const rawText = message.content[0]?.text ?? '';
+    let parsed;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      // JSON 코드블록 감지 후 재시도
+      const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) {
+        parsed = JSON.parse(jsonMatch[1]);
+      } else {
+        throw new Error('Failed to parse Claude response as JSON');
+      }
+    }
+
+    return { result: parsed };
   },
 );

@@ -1012,6 +1012,10 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
         player: YoutubePlayer(
           controller: _controller!,
           showVideoProgressIndicator: true,
+          progressColors: const ProgressBarColors(
+            playedColor: Colors.red,
+            handleColor: Colors.redAccent,
+          ),
         ),
         builder: (ctx, player) => player,
       );

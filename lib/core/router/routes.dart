@@ -36,4 +36,6 @@ class Routes {
   static const ravelry = '/tools/ravelry';
   static const etsy = '/tools/etsy';
   static const toolsNeedleSize = '/tools/needle-size';
+  static const toolsPatternConverter = '/tools/pattern-converter';
+  static const toolsMyParsedPatterns = '/tools/my-parsed-patterns';
 }

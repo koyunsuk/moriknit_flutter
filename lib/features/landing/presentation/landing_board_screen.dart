@@ -49,20 +49,14 @@ class LandingBoardListScreen extends ConsumerWidget {
     final repo = ref.read(landingBoardRepositoryProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
 
+    final writeLabel = boardType == 'qa' ? '문의 작성' : '글쓰기';
+    final accentColor = boardType == 'qa'
+        ? const Color(0xFF34D399)
+        : boardType == 'release'
+            ? const Color(0xFF60A5FA)
+            : const Color(0xFFF472B6);
+
     return LandingScaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          if (user == null) {
-            context.go('/login?source=board');
-          } else {
-            context.push('/board/$boardType/write');
-          }
-        },
-        backgroundColor: const Color(0xFF8B5CF6),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.edit_outlined),
-        label: const Text('글쓰기', style: TextStyle(fontWeight: FontWeight.w700)),
-      ),
       slivers: [
           // 페이지 헤더
           SliverToBoxAdapter(
@@ -84,30 +78,24 @@ class LandingBoardListScreen extends ConsumerWidget {
                   child: _BoardHeroCard(
                     title: _boardTitle(boardType),
                     subtitle: _boardSubtitle(boardType),
-                    accent: boardType == 'qa'
-                        ? const Color(0xFF34D399)
-                        : boardType == 'release'
-                            ? const Color(0xFF60A5FA)
-                            : const Color(0xFFF472B6),
-                    trailing: boardType == 'qa'
-                        ? FilledButton.icon(
-                            onPressed: () {
-                              if (user == null) {
-                                context.go('/login?source=board');
-                              } else {
-                                context.push('/board/$boardType/write');
-                              }
-                            },
-                            style: FilledButton.styleFrom(
-                              backgroundColor: const Color(0xFF8B5CF6),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            icon: const Icon(Icons.edit_note_rounded, size: 18),
-                            label: const Text('문의 작성', style: TextStyle(fontWeight: FontWeight.w700)),
-                          )
-                        : null,
+                    accent: accentColor,
+                    trailing: FilledButton.icon(
+                      onPressed: () {
+                        if (user == null) {
+                          context.go('/login?source=board');
+                        } else {
+                          context.push('/board/$boardType/write');
+                        }
+                      },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF8B5CF6),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.edit_note_rounded, size: 18),
+                      label: Text(writeLabel, style: const TextStyle(fontWeight: FontWeight.w700)),
+                    ),
                   ),
                 ),
               ),

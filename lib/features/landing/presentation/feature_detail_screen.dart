@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
 import 'landing_scaffold.dart';
+// LandingFeatureScaffold re-exported from landing_scaffold.dart
 
 // ── 기능 데이터 ────────────────────────────────────────────────────────────────
 class FeatureInfo {
@@ -189,6 +190,27 @@ const List<FeatureInfo> featureList = [
     ],
   ),
   FeatureInfo(
+    id: 'ai-pattern-converter',
+    icon: Icons.auto_awesome_rounded,
+    title: 'AI 도안 변환기',
+    tagline: 'PDF·이미지 도안을 단계별로 자동 변환 ✨',
+    color: Color(0xFF818CF8),
+    description: '종이 도안이나 PDF를 사진으로 찍으면 AI가 단계별 지시사항으로 바꿔드려요. '
+        '복잡한 영문 도안도, 스캔된 오래된 도안도 모두 따라하기 쉬운 단계로 변환됩니다. '
+        '변환된 도안은 나의 도안 라이브러리에 자동 저장돼요.',
+    highlights: [
+      'PDF·JPG·PNG 모두 지원',
+      '한국어·영어 도안 모두 인식',
+      '섹션별 단계로 자동 구조화',
+      '나의 도안 라이브러리에 자동 저장',
+    ],
+    steps: [
+      (Icons.upload_file_rounded, '도안 업로드', 'PDF 또는 이미지 도안 파일을 선택해요.'),
+      (Icons.auto_fix_high_rounded, 'AI 자동 분석', 'AI가 도안을 읽고 단계별 지시사항으로 변환해요.'),
+      (Icons.check_circle_outline_rounded, '라이브러리 저장', '변환된 도안이 나의 도안 라이브러리에 자동 저장돼요.'),
+    ],
+  ),
+  FeatureInfo(
     id: 'ai-gauge',
     icon: Icons.auto_awesome_rounded,
     title: 'AI 게이지 판독기',
@@ -247,7 +269,7 @@ class _FeatureDetailPage extends StatelessWidget {
     final width = MediaQuery.of(context).size.width;
     const maxWidth = 860.0;
 
-    return LandingScaffold(
+    return LandingFeatureScaffold(
       backgroundColor: const Color(0xFFF9F5FF),
       slivers: [
           // ── 기능 타이틀 서브바 ────────────────────────────────────────────────

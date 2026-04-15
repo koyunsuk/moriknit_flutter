@@ -33,6 +33,8 @@ class PatternRepository {
       forkCount: chart.forkCount,
       sourcePatternId: chart.sourcePatternId,
       sourceOwnerName: chart.sourceOwnerName,
+      sourceType: chart.sourceType,
+      aiSections: chart.aiSections,
     );
     await docRef.set({
       ...saved.toJson(),

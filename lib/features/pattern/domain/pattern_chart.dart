@@ -7,7 +7,7 @@ enum ChartTool { draw, erase, fill, select, move }
 
 enum PatternType { chart, image, pdf }
 
-enum PatternSourceType { editor, image, external }
+enum PatternSourceType { editor, image, external, aiConverted }
 
 class CellData {
   final Color? color;
@@ -63,6 +63,9 @@ class PatternChart {
   final String? sourceOwnerName;
   final PatternSourceType sourceType;
 
+  /// AI 변환 도안 섹션 데이터 (aiConverted 타입에서 사용)
+  final List<Map<String, dynamic>>? aiSections;
+
   PatternChart({
     required this.id,
     required this.title,
@@ -78,6 +81,7 @@ class PatternChart {
     this.sourcePatternId,
     this.sourceOwnerName,
     this.sourceType = PatternSourceType.editor,
+    this.aiSections,
   });
 
   PatternChart setCell(int row, int col, CellData cell) {
@@ -117,6 +121,7 @@ class PatternChart {
     String? sourcePatternId,
     String? sourceOwnerName,
     PatternSourceType? sourceType,
+    List<Map<String, dynamic>>? aiSections,
   }) {
     return PatternChart(
       id: id ?? this.id,
@@ -133,6 +138,7 @@ class PatternChart {
       sourcePatternId: sourcePatternId ?? this.sourcePatternId,
       sourceOwnerName: sourceOwnerName ?? this.sourceOwnerName,
       sourceType: sourceType ?? this.sourceType,
+      aiSections: aiSections ?? this.aiSections,
     );
   }
 
@@ -153,6 +159,7 @@ class PatternChart {
         if (sourcePatternId != null) 'sourcePatternId': sourcePatternId,
         if (sourceOwnerName != null) 'sourceOwnerName': sourceOwnerName,
         'sourceType': sourceType.name,
+        if (aiSections != null) 'aiSections': aiSections,
       };
 
   factory PatternChart.fromJson(Map<String, dynamic> json) {
@@ -188,6 +195,9 @@ class PatternChart {
       sourceOwnerName: json['sourceOwnerName'] as String?,
       sourceType: PatternSourceType.values.byName(
           json['sourceType'] as String? ?? 'editor'),
+      aiSections: (json['aiSections'] as List?)
+          ?.map((s) => Map<String, dynamic>.from(s as Map))
+          .toList(),
     );
   }
 

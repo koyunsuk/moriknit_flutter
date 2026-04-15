@@ -19,6 +19,7 @@ class EncyclopediaEntry {
   final String approvedBy;
   final int order;
   final DateTime createdAt;
+  final String craftType;
 
   const EncyclopediaEntry({
     required this.id,
@@ -39,6 +40,7 @@ class EncyclopediaEntry {
     this.approvedBy = '',
     this.order = 0,
     required this.createdAt,
+    this.craftType = 'knitting',
   });
 
   factory EncyclopediaEntry.fromFirestore(DocumentSnapshot doc) {
@@ -62,6 +64,7 @@ class EncyclopediaEntry {
       approvedBy: data['approvedBy'] as String? ?? '',
       order: (data['order'] as num?)?.toInt() ?? 0,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      craftType: data['craftType'] as String? ?? 'knitting',
     );
   }
 
@@ -82,5 +85,6 @@ class EncyclopediaEntry {
         'createdBy': createdBy,
         'approvedBy': approvedBy,
         'order': order,
+        'craftType': craftType,
       };
 }

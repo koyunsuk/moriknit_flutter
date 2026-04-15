@@ -15,9 +15,9 @@ import 'package:moriknit_flutter/features/project/presentation/widgets/project_p
 import 'package:moriknit_flutter/providers/auth_provider.dart';
 import 'package:moriknit_flutter/providers/project_provider.dart';
 import 'package:moriknit_flutter/providers/ui_copy_provider.dart';
-import 'package:moriknit_flutter/providers/template_provider.dart';
 import 'package:moriknit_flutter/features/ravelry/data/ravelry_auth_provider.dart';
 import 'package:moriknit_flutter/features/ravelry/data/ravelry_repository.dart';
+import 'widgets/project_start_sheet.dart';
 
 
 class ProjectListScreen extends ConsumerWidget {
@@ -203,7 +203,7 @@ class ProjectListScreen extends ConsumerWidget {
       );
       return;
     }
-    _showProjectStartSheet(context, ref);
+    showProjectStartSheet(context, ref);
   }
 
   Future<void> _duplicateProject(
@@ -226,261 +226,6 @@ class ProjectListScreen extends ConsumerWidget {
           ScaffoldMessenger.of(context),
           message: isKorean ? '복사됐어요.' : 'Duplicated.',
         );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
-      }
-    }
-  }
-
-  void _showProjectStartSheet(BuildContext context, WidgetRef ref) {
-    final builtinTemplates = ref.read(builtinTemplateListProvider).valueOrNull ?? [];
-    final isKorean = ref.read(appLanguageProvider).isKorean;
-
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: C.bg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.72,
-        maxChildSize: 0.92,
-        minChildSize: 0.5,
-        builder: (_, scrollCtrl) => Column(
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(2)),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  Text('새 프로젝트', style: T.h3),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: ListView(
-                controller: scrollCtrl,
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-                children: [
-                  GlassCard(
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      Navigator.push(context, MaterialPageRoute(
-                        builder: (_) => const ProjectInputScreen(),
-                      ));
-                    },
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: C.bd2,
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Icon(Icons.add_rounded, color: C.tx2),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('빈 프로젝트로 시작', style: T.bodyBold),
-                              const SizedBox(height: 4),
-                              Text('처음부터 직접 구성해요', style: T.caption.copyWith(color: C.mu)),
-                            ],
-                          ),
-                        ),
-                        Icon(Icons.chevron_right_rounded, color: C.mu),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  GlassCard(
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      _showCopyProjectSheet(context, ref);
-                    },
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: C.lv.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Icon(Icons.copy_rounded, color: C.lv),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('프로젝트 복사로 시작', style: T.bodyBold),
-                              const SizedBox(height: 4),
-                              Text('기존 프로젝트를 복사해서 시작해요', style: T.caption.copyWith(color: C.mu)),
-                            ],
-                          ),
-                        ),
-                        Icon(Icons.chevron_right_rounded, color: C.mu),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  if (builtinTemplates.isEmpty)
-                    const SizedBox.shrink()
-                  else ...[
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Text('템플릿으로 시작', style: T.bodyBold.copyWith(color: C.tx2)),
-                    ),
-                    ...builtinTemplates.map((tpl) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: GlassCard(
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          Navigator.push(context, MaterialPageRoute(
-                            builder: (_) => ProjectInputScreen(builtinTemplate: tpl),
-                          ));
-                        },
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: _colorFromHex(tpl.colorHex).withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: Icon(_iconFromName(tpl.iconName), color: _colorFromHex(tpl.colorHex)),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(isKorean ? tpl.titleKo : tpl.titleEn, style: T.bodyBold),
-                                  const SizedBox(height: 4),
-                                  Text(isKorean ? tpl.descKo : tpl.descEn, style: T.caption.copyWith(color: C.mu)),
-                                ],
-                              ),
-                            ),
-                            Icon(Icons.chevron_right_rounded, color: C.mu),
-                          ],
-                        ),
-                      ),
-                    )),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showCopyProjectSheet(BuildContext context, WidgetRef ref) {
-    final isKorean = ref.read(appLanguageProvider).isKorean;
-    final projects = ref.read(projectListProvider).valueOrNull ?? [];
-    if (projects.isEmpty) {
-      showSavedSnackBar(
-        ScaffoldMessenger.of(context),
-        message: isKorean ? '복사할 프로젝트가 없어요.' : 'No projects to copy.',
-      );
-      return;
-    }
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: C.bg,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.6,
-        maxChildSize: 0.9,
-        minChildSize: 0.4,
-        builder: (_, scrollCtrl) => Column(
-          children: [
-            const SizedBox(height: 12),
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text(isKorean ? '복사할 프로젝트 선택' : 'Select project to copy', style: T.h3),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: ListView.builder(
-                controller: scrollCtrl,
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-                itemCount: projects.length,
-                itemBuilder: (_, i) {
-                  final p = projects[i];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: GlassCard(
-                      onTap: () async {
-                        Navigator.pop(ctx);
-                        await _duplicateProjectFromSheet(context, ref, p, isKorean);
-                      },
-                      child: Row(
-                        children: [
-                          if (p.coverPhotoUrl.isNotEmpty)
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: Image.network(p.coverPhotoUrl, width: 48, height: 48, fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) => _ProjectIconPlaceholder()),
-                            )
-                          else
-                            _ProjectIconPlaceholder(),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(p.title, style: T.bodyBold),
-                                if (p.yarnBrandName.isNotEmpty || p.yarnName.isNotEmpty)
-                                  Text('${p.yarnBrandName} ${p.yarnName}'.trim(), style: T.caption.copyWith(color: C.mu)),
-                              ],
-                            ),
-                          ),
-                          Icon(Icons.copy_rounded, color: C.mu, size: 18),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _duplicateProjectFromSheet(BuildContext context, WidgetRef ref, dynamic project, bool isKorean) async {
-    try {
-      await runWithMoriLoadingDialog<void>(
-        context,
-        message: isKorean ? '복사하는 중입니다.' : 'Duplicating...',
-        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
-        task: () => ref.read(projectRepositoryProvider).duplicateProject(project),
-      );
-      if (context.mounted) {
-        showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '복사됐어요.' : 'Duplicated.');
       }
     } catch (e) {
       if (context.mounted) {
@@ -521,17 +266,6 @@ class ProjectListScreen extends ConsumerWidget {
         showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
       }
     }
-  }
-}
-
-class _ProjectIconPlaceholder extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 48, height: 48,
-      decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(10)),
-      child: Icon(Icons.folder_rounded, color: C.lv, size: 24),
-    );
   }
 }
 
@@ -1250,22 +984,3 @@ class _ProjStatCell extends StatelessWidget {
   }
 }
 
-IconData _iconFromName(String name) {
-  switch (name) {
-    case 'dry_cleaning': return Icons.dry_cleaning_rounded;
-    case 'hiking': return Icons.hiking_rounded;
-    case 'ac_unit': return Icons.ac_unit_rounded;
-    case 'back_hand': return Icons.back_hand_rounded;
-    case 'face': return Icons.face_rounded;
-    default: return Icons.article_rounded;
-  }
-}
-
-Color _colorFromHex(String hex) {
-  try {
-    final v = hex.replaceFirst('#', '');
-    return Color(int.parse('FF$v', radix: 16));
-  } catch (_) {
-    return C.lv;
-  }
-}

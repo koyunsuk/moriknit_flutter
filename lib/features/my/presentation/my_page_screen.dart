@@ -13,6 +13,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../providers/app_config_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/counter_provider.dart';
 import '../../../providers/market_provider.dart';
@@ -156,6 +157,8 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
     final t = ref.watch(appStringsProvider);
     final language = ref.watch(appLanguageProvider);
     final isKorean = language.isKorean;
+    final social = ref.watch(socialIntegrationsProvider).valueOrNull;
+    final youtubeUrl = social?.youtubeUrl ?? 'https://www.youtube.com/@moriknit';
     final currentTheme = ref.watch(appThemeProvider);
     final swatchCount = ref.watch(swatchCountProvider);
     final projectCount = ref.watch(projectCountProvider);
@@ -627,7 +630,7 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                       leading: Icon(Icons.play_circle_fill_rounded, color: C.og),
                       title: const Text('YouTube'),
                       subtitle: Text(isKorean ? '모리니트 채널' : 'MoriKnit Channel'),
-                      onTap: () => launchUrl(Uri.parse('https://youtube.com/@moriknit_official'), mode: LaunchMode.externalApplication),
+                      onTap: () => launchUrl(Uri.parse(youtubeUrl), mode: LaunchMode.externalApplication),
                     ),
                     Divider(height: 1, color: Colors.grey.shade100),
                     ListTile(

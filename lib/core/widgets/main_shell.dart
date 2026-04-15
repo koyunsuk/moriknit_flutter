@@ -16,6 +16,7 @@ import '../router/app_router.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'common_widgets.dart';
+import '../../features/project/presentation/widgets/project_start_sheet.dart';
 
 class MainShell extends ConsumerStatefulWidget {
   final Widget child;
@@ -148,7 +149,7 @@ class _MainShellState extends ConsumerState<MainShell> with TickerProviderStateM
     ];
 
     final speedItems = [
-      _SpeedItem(icon: Icons.folder_open_rounded, label: '새 프로젝트', color: C.lv, onTap: () { _closeFab(); context.push(Routes.projectInput); }),
+      _SpeedItem(icon: Icons.folder_open_rounded, label: '새 프로젝트', color: C.lv, onTap: () { _closeFab(); showProjectStartSheet(context, ref); }),
       _SpeedItem(icon: Icons.grid_view_rounded, label: t.swatches, color: C.lmD, onTap: () { _closeFab(); context.push(Routes.swatchInput); }),
       _SpeedItem(icon: Icons.edit_note_rounded, label: '새 메모', color: C.pk, onTap: () { _closeFab(); context.push(Routes.toolsMemo); }),
       _SpeedItem(icon: Icons.exposure_plus_1_rounded, label: t.newCounter, color: C.pkD, onTap: () { _closeFab(); context.push(Routes.counterList); }),
@@ -596,7 +597,7 @@ class _WebShell extends ConsumerWidget {
                   runSpacing: 10,
                   children: [
                     _CreateChip(icon: Icons.grid_view_rounded, label: t.swatches, color: C.pkD, onTap: () { Navigator.pop(ctx); context.push(Routes.swatchInput); }),
-                    _CreateChip(icon: Icons.folder_rounded, label: t.projects, color: C.lv, onTap: () { Navigator.pop(ctx); context.push(Routes.projectInput); }),
+                    _CreateChip(icon: Icons.folder_rounded, label: t.projects, color: C.lv, onTap: () { Navigator.pop(ctx); showProjectStartSheet(context, ref); }),
                     _CreateChip(icon: Icons.grid_on_rounded, label: t.patternEditor, color: C.pk, onTap: () { Navigator.pop(ctx); context.push(Routes.toolsPattern); }),
                     _CreateChip(icon: Icons.people_alt_rounded, label: t.community, color: C.og, onTap: () { Navigator.pop(ctx); context.go(Routes.community); }),
                     _CreateChip(icon: Icons.storefront_rounded, label: t.market, color: C.lvD, onTap: () { Navigator.pop(ctx); context.go(Routes.market); }),
@@ -628,7 +629,7 @@ class _WebContentAreaState extends ConsumerState<_WebContentArea> {
   Widget build(BuildContext context) {
     final t = ref.watch(appStringsProvider);
     final speedItems = [
-      _SpeedItem(icon: Icons.folder_open_rounded, label: '새 프로젝트', color: C.lv, onTap: () { _closeFab(); context.push(Routes.projectInput); }),
+      _SpeedItem(icon: Icons.folder_open_rounded, label: '새 프로젝트', color: C.lv, onTap: () { _closeFab(); showProjectStartSheet(context, ref); }),
       _SpeedItem(icon: Icons.grid_view_rounded, label: t.swatches, color: C.lmD, onTap: () { _closeFab(); context.push(Routes.swatchInput); }),
       _SpeedItem(icon: Icons.edit_note_rounded, label: '새 메모', color: C.pk, onTap: () { _closeFab(); context.push(Routes.toolsMemo); }),
       _SpeedItem(icon: Icons.exposure_plus_1_rounded, label: t.newCounter, color: C.pkD, onTap: () { _closeFab(); context.push(Routes.counterList); }),

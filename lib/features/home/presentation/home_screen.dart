@@ -25,6 +25,9 @@ import '../../../providers/ui_copy_provider.dart';
 import '../../community/presentation/gallery_detail_page.dart';
 import '../../landing/data/landing_board_repository.dart';
 import '../../project/data/public_project_service.dart';
+import '../../project/presentation/project_input_screen.dart';
+import '../../project/presentation/widgets/project_start_sheet.dart';
+import '../../../providers/template_provider.dart';
 import '../domain/editorial_post.dart';
 import 'editorial_screen.dart';
 
@@ -633,31 +636,66 @@ class _CommunityPreviewState extends ConsumerState<_CommunityPreview> with Singl
     );
   }
 
+  void _showProjectStartSheet() => showProjectStartSheet(context, ref);
+
   Widget _buildProjectsTab(List<ProjectModel> projects) {
     final totalHeight = _projectCardHeight * _projectCount + 8.0 * (_projectCount - 1);
-    return GestureDetector(
-      onTap: () => context.push(Routes.projectList),
-      child: SizedBox(
-        height: totalHeight,
-        child: Column(
-          children: List.generate(_projectCount, (i) {
-            final isLast = i == _projectCount - 1;
-            if (i >= projects.length) {
-              return Container(
-                height: _projectCardHeight,
-                margin: isLast ? null : const EdgeInsets.only(bottom: 8),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
+    return SizedBox(
+      height: totalHeight,
+      child: Column(
+        children: List.generate(_projectCount, (i) {
+          final isLast = i == _projectCount - 1;
+          if (i >= projects.length) {
+            // 첫 번째 빈 슬롯: 추가하기 카드
+            if (i == 0) {
+              return GestureDetector(
+                onTap: _showProjectStartSheet,
+                child: Container(
+                  height: _projectCardHeight,
+                  margin: isLast ? null : const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: C.lvL,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: C.lv.withValues(alpha: 0.35)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: _projectCardHeight,
+                        height: _projectCardHeight,
+                        decoration: BoxDecoration(
+                          color: C.lv.withValues(alpha: 0.10),
+                          borderRadius: const BorderRadius.horizontal(left: Radius.circular(11)),
+                        ),
+                        child: Icon(Icons.add_rounded, color: C.lv, size: 28),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        widget.isKorean ? '새 프로젝트 추가하기' : 'Add new project',
+                        style: T.bodyBold.copyWith(color: C.lv),
+                      ),
+                    ],
+                  ),
                 ),
               );
             }
+            return Container(
+              height: _projectCardHeight,
+              margin: isLast ? null : const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+            );
+          }
             final proj = projects[i];
             final imageUrl = proj.coverPhotoUrl.isNotEmpty
                 ? proj.coverPhotoUrl
                 : (proj.photoUrls.isNotEmpty ? proj.photoUrls.last : '');
-            return Container(
+            return GestureDetector(
+              onTap: () => context.push(Routes.projectList),
+              child: Container(
               height: _projectCardHeight,
               margin: isLast ? null : const EdgeInsets.only(bottom: 8),
               decoration: BoxDecoration(
@@ -706,9 +744,9 @@ class _CommunityPreviewState extends ConsumerState<_CommunityPreview> with Singl
                   const SizedBox(width: 10),
                 ],
               ),
-            );
+            ),
+          );
           }),
-        ),
       ),
     );
   }
@@ -725,6 +763,9 @@ class _CommunityPreviewState extends ConsumerState<_CommunityPreview> with Singl
     final postsAsync = ref.watch(postsProvider(communityAllCategory));
     final allProjects = ref.watch(projectListProvider).valueOrNull ?? [];
     final inProgressProjects = allProjects.where((p) => p.status == 'in_progress').take(_projectCount).toList();
+    // 템플릿 프로바이더 사전 로드 (추가 시트에서 즉시 표시되도록)
+    ref.watch(builtinTemplateListProvider);
+    ref.watch(userTemplateListProvider);
 
     return GlassCard(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -1695,6 +1736,7 @@ class _HomeNoticesSectionState extends ConsumerState<_HomeNoticesSection> {
   void _showNoticeDetailPost(BuildContext context, LandingPost notice) {
     final title = notice.title;
     final content = notice.content;
+    final imageUrl = notice.imageUrl;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1738,6 +1780,18 @@ class _HomeNoticesSectionState extends ConsumerState<_HomeNoticesSection> {
                   controller: controller,
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
                   children: [
+                    if (imageUrl.isNotEmpty) ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.network(
+                          imageUrl,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
                     Text(
                       content,
                       style: T.body.copyWith(color: C.tx2, height: 1.7),
@@ -1811,6 +1865,18 @@ class _HomeNoticesSectionState extends ConsumerState<_HomeNoticesSection> {
           },
         ),
       ],
+    );
+  }
+}
+
+
+class _HomeProjectIconPlaceholder extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 48, height: 48,
+      decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(10)),
+      child: Icon(Icons.folder_rounded, color: C.lv, size: 24),
     );
   }
 }

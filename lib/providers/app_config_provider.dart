@@ -1,6 +1,35 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+const String _kYoutubeFallback = 'https://www.youtube.com/@moriknit';
+
+class SocialIntegrations {
+  final String youtube;
+  final String instagram;
+
+  const SocialIntegrations({
+    this.youtube = '',
+    this.instagram = '',
+  });
+
+  String get youtubeUrl => youtube.isNotEmpty ? youtube : _kYoutubeFallback;
+}
+
+final socialIntegrationsProvider = StreamProvider<SocialIntegrations>((ref) {
+  return FirebaseFirestore.instance
+      .collection('app_config')
+      .doc('social_integrations')
+      .snapshots()
+      .map((snap) {
+    if (!snap.exists) return const SocialIntegrations();
+    final data = snap.data()!;
+    return SocialIntegrations(
+      youtube: data['youtube'] as String? ?? '',
+      instagram: data['instagram'] as String? ?? '',
+    );
+  });
+});
+
 class AppConfig {
   final String maintenanceNotice;
   final String noticeType; // 'banner' | 'popup' | 'push'

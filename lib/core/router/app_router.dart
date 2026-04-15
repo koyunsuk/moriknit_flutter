@@ -46,6 +46,9 @@ import 'package:moriknit_flutter/features/yarn/domain/yarn_model.dart';
 import 'package:moriknit_flutter/features/yarn/presentation/yarn_input_screen.dart';
 import 'package:moriknit_flutter/features/yarn/presentation/yarn_detail_screen.dart';
 import 'package:moriknit_flutter/features/yarn/presentation/yarn_list_screen.dart';
+import 'package:moriknit_flutter/features/pattern_converter/presentation/pattern_converter_screen.dart';
+import 'package:moriknit_flutter/features/pattern_converter/presentation/my_patterns_screen.dart';
+import 'package:moriknit_flutter/features/pattern_converter/presentation/pattern_reader_screen.dart';
 import 'package:moriknit_flutter/providers/auth_provider.dart';
 
 export 'routes.dart';
@@ -147,6 +150,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(path: 'ravelry', pageBuilder: (_, _) => _fadePage(const RavelryScreen())),
               GoRoute(path: 'etsy', pageBuilder: (_, _) => _fadePage(const EtsyScreen())),
               GoRoute(path: 'needle-size', pageBuilder: (_, _) => _fadePage(const NeedleSizeConverterScreen())),
+              GoRoute(path: 'pattern-converter', pageBuilder: (_, _) => _fadePage(const PatternConverterScreen())),
+              GoRoute(
+                path: 'my-parsed-patterns',
+                pageBuilder: (_, _) => _fadePage(const MyParsedPatternsScreen()),
+                routes: [
+                  GoRoute(
+                    path: ':id',
+                    pageBuilder: (_, state) => _fadePage(
+                      PatternReaderScreen(patternId: state.pathParameters['id']!),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
           GoRoute(path: Routes.community, pageBuilder: (_, _) => _noTransitionPage(const CommunityScreen())),

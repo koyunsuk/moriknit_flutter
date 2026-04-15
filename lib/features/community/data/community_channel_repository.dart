@@ -32,11 +32,17 @@ class CommunityContentItem {
   });
 }
 
+const String _kYoutubeFallback = 'https://www.youtube.com/@moriknit';
+
 class CommunityChannelRepository {
-  static List<CommunityChannelLink> channels(bool isKorean) {
+  static List<CommunityChannelLink> channels(
+    bool isKorean, {
+    String youtubeUrl = '',
+  }) {
+    final ytUrl = youtubeUrl.isNotEmpty ? youtubeUrl : _kYoutubeFallback;
     if (isKorean) {
-      return const [
-        CommunityChannelLink(
+      return [
+        const CommunityChannelLink(
           title: 'MoriKnit Instagram',
           handle: '@moriknit',
           url: 'https://www.instagram.com/moriknit/',
@@ -46,11 +52,11 @@ class CommunityChannelRepository {
         CommunityChannelLink(
           title: 'MoriKnit YouTube',
           handle: '@moriknit',
-          url: 'https://www.youtube.com/@moriknit',
+          url: ytUrl,
           summary: '튜토리얼, 브이로그, 도안 설명처럼 길게 체험하는 영상 채널',
           cta: '유튜브 열기',
         ),
-        CommunityChannelLink(
+        const CommunityChannelLink(
           title: 'MoriKnit Blog',
           handle: 'moriknit.com/blog',
           url: 'https://moriknit.com/blog',
@@ -60,8 +66,8 @@ class CommunityChannelRepository {
       ];
     }
 
-    return const [
-      CommunityChannelLink(
+    return [
+      const CommunityChannelLink(
         title: 'MoriKnit Instagram',
         handle: '@moriknit',
         url: 'https://www.instagram.com/moriknit/',
@@ -71,11 +77,11 @@ class CommunityChannelRepository {
       CommunityChannelLink(
         title: 'MoriKnit YouTube',
         handle: '@moriknit',
-        url: 'https://www.youtube.com/@moriknit',
+        url: ytUrl,
         summary: 'Long-form tutorials, vlogs, and pattern walkthrough videos.',
         cta: 'Open YouTube',
       ),
-      CommunityChannelLink(
+      const CommunityChannelLink(
         title: 'MoriKnit Blog',
         handle: 'moriknit.com/blog',
         url: 'https://moriknit.com/blog',
@@ -85,10 +91,14 @@ class CommunityChannelRepository {
     ];
   }
 
-  static List<CommunityContentItem> highlights(bool isKorean) {
+  static List<CommunityContentItem> highlights(
+    bool isKorean, {
+    String youtubeUrl = '',
+  }) {
+    final ytUrl = youtubeUrl.isNotEmpty ? youtubeUrl : _kYoutubeFallback;
     if (isKorean) {
-      return const [
-        CommunityContentItem(
+      return [
+        const CommunityContentItem(
           section: 'Instagram Reel',
           title: '스와치 기록 전후 비교 릴스',
           caption: '짧은 영상으로 스와치 저장 흐름과 결과를 빠르게 체험해볼 수 있어요.',
@@ -102,9 +112,9 @@ class CommunityChannelRepository {
           caption: '프로젝트, 카운터, 스와치를 실제 작업 흐름으로 길게 따라가볼 수 있어요.',
           badge: 'Deep Dive',
           actionLabel: '영상 보기',
-          url: 'https://www.youtube.com/@moriknit',
+          url: ytUrl,
         ),
-        CommunityContentItem(
+        const CommunityContentItem(
           section: 'Blog Article',
           title: '뜨개 기록을 남겨야 하는 이유',
           caption: '게이지와 프로젝트 메모를 어떻게 남기면 다음 작업이 쉬워지는지 읽어볼 수 있어요.',
@@ -115,8 +125,8 @@ class CommunityChannelRepository {
       ];
     }
 
-    return const [
-      CommunityContentItem(
+    return [
+      const CommunityContentItem(
         section: 'Instagram Reel',
         title: 'Before and after swatch reel',
         caption: 'A quick look at how swatches are saved and compared in practice.',
@@ -130,9 +140,9 @@ class CommunityChannelRepository {
         caption: 'Follow a full flow across projects, counters, and swatches.',
         badge: 'Deep Dive',
         actionLabel: 'Watch video',
-        url: 'https://www.youtube.com/@moriknit',
+        url: ytUrl,
       ),
-      CommunityContentItem(
+      const CommunityContentItem(
         section: 'Blog Article',
         title: 'Why knitting records matter',
         caption: 'See how gauge notes and project memos make the next project easier.',

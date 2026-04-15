@@ -15,6 +15,7 @@ class LandingPost {
   final String type; // 'review' | 'release' | 'qa'
   final bool isNotice;
   final bool isPinned;
+  final String imageUrl;
 
   const LandingPost({
     required this.id,
@@ -28,6 +29,7 @@ class LandingPost {
     this.type = '',
     this.isNotice = false,
     this.isPinned = false,
+    this.imageUrl = '',
   });
 
   factory LandingPost.fromDoc(DocumentSnapshot doc) {
@@ -44,6 +46,7 @@ class LandingPost {
       type: data['type'] as String? ?? '',
       isNotice: data['isNotice'] as bool? ?? false,
       isPinned: data['isPinned'] as bool? ?? false,
+      imageUrl: data['imageUrl'] as String? ?? '',
     );
   }
 
@@ -58,6 +61,7 @@ class LandingPost {
         'type': type,
         'isNotice': isNotice,
         'isPinned': isPinned,
+        'imageUrl': imageUrl,
       };
 }
 

@@ -11,7 +11,7 @@ import '../../../providers/encyclopedia_provider.dart';
 import '../domain/encyclopedia_entry.dart';
 import '../domain/personal_encyclopedia_entry.dart';
 
-const _encyclopediaCategories = ['all', 'term', 'technique', 'symbol'];
+const _encyclopediaCategories = ['all', 'term', 'symbol'];
 
 class EncyclopediaScreen extends ConsumerStatefulWidget {
   const EncyclopediaScreen({super.key});
@@ -38,7 +38,7 @@ class _EncyclopediaScreenState extends ConsumerState<EncyclopediaScreen> {
     final uid = ref.watch(authStateProvider).valueOrNull?.uid;
 
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         backgroundColor: C.bg,
         body: SafeArea(
@@ -61,7 +61,8 @@ class _EncyclopediaScreenState extends ConsumerState<EncyclopediaScreen> {
                       indicatorColor: C.pkD,
                       indicatorSize: TabBarIndicatorSize.tab,
                       tabs: [
-                        Tab(text: t.encyclopediaTabOfficial),
+                        Tab(text: isKorean ? '대바늘' : 'Knitting'),
+                        Tab(text: isKorean ? '코바늘' : 'Crochet'),
                         Tab(text: t.encyclopediaTabPersonal),
                       ],
                     ),
@@ -107,7 +108,18 @@ class _EncyclopediaScreenState extends ConsumerState<EncyclopediaScreen> {
               Expanded(
                 child: TabBarView(
                   children: [
-                    _OfficialTab(isKorean: isKorean, uid: uid, searchQuery: _searchQuery),
+                    _CraftTab(
+                      isKorean: isKorean,
+                      uid: uid,
+                      searchQuery: _searchQuery,
+                      craftType: 'knitting',
+                    ),
+                    _CraftTab(
+                      isKorean: isKorean,
+                      uid: uid,
+                      searchQuery: _searchQuery,
+                      craftType: 'crochet',
+                    ),
                     _PersonalTab(isKorean: isKorean, uid: uid, searchQuery: _searchQuery),
                   ],
                 ),
@@ -121,19 +133,27 @@ class _EncyclopediaScreenState extends ConsumerState<EncyclopediaScreen> {
 }
 
 // ---------------------------------------------------------------------------
-// Official Tab
+// Craft Tab (대바늘 / 코바늘)
 // ---------------------------------------------------------------------------
-class _OfficialTab extends ConsumerWidget {
+class _CraftTab extends ConsumerWidget {
   final bool isKorean;
   final String? uid;
   final String searchQuery;
+  final String craftType;
 
-  const _OfficialTab({required this.isKorean, required this.uid, required this.searchQuery});
+  const _CraftTab({
+    required this.isKorean,
+    required this.uid,
+    required this.searchQuery,
+    required this.craftType,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = ref.watch(appStringsProvider);
-    final entriesAsync = ref.watch(encyclopediaProvider);
+    final entriesAsync = craftType == 'crochet'
+        ? ref.watch(crochetEncyclopediaProvider)
+        : ref.watch(knittingEncyclopediaProvider);
     final selectedCategory = ref.watch(selectedEncyclopediaCategoryProvider);
     final bookmarkedIds = uid != null ? ref.watch(bookmarkedIdsProvider(uid!)) : <String>{};
 
@@ -225,7 +245,7 @@ class _OfficialTab extends ConsumerWidget {
 
               return ListView.separated(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
-                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                separatorBuilder: (_, _) => const SizedBox(height: 6),
                 itemCount: filtered.length,
                 itemBuilder: (_, index) => _OfficialEntryCard(
                   entry: filtered[index],
@@ -244,10 +264,8 @@ class _OfficialTab extends ConsumerWidget {
   bool _matchesCategory(String raw, String selected) {
     switch (selected) {
       case 'term':
-        return {'term', 'terms', '용어'}.contains(raw);
-      case 'technique':
-        return {'technique', 'techniques', '기법'}.contains(raw);
-      case 'symbol':
+        return {'term', 'terms', '용어', 'abbreviation'}.contains(raw);
+case 'symbol':
         return {'symbol', 'symbols', '기호'}.contains(raw);
       default:
         return true;
@@ -260,9 +278,7 @@ class _OfficialTab extends ConsumerWidget {
         return isKorean ? '전체' : 'All';
       case 'term':
         return isKorean ? '용어' : 'Terms';
-      case 'technique':
-        return isKorean ? '기법' : 'Techniques';
-      case 'symbol':
+case 'symbol':
         return isKorean ? '기호' : 'Symbols';
       default:
         return key;
@@ -448,9 +464,9 @@ class _PersonalTab extends ConsumerWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Official Entry Card (with bookmark icon)
+// Official Entry Card — 컴팩트 2단 구조
 // ---------------------------------------------------------------------------
-class _OfficialEntryCard extends ConsumerWidget {
+class _OfficialEntryCard extends ConsumerStatefulWidget {
   final EncyclopediaEntry entry;
   final bool isKorean;
   final bool isBookmarked;
@@ -464,69 +480,135 @@ class _OfficialEntryCard extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final accent = _accentFor(entry.category);
+  ConsumerState<_OfficialEntryCard> createState() => _OfficialEntryCardState();
+}
+
+class _OfficialEntryCardState extends ConsumerState<_OfficialEntryCard> {
+  bool _expanded = false;
+
+  EncyclopediaEntry get e => widget.entry;
+  bool get isKorean => widget.isKorean;
+
+  @override
+  Widget build(BuildContext context) {
     final t = ref.watch(appStringsProvider);
+    final hasSvg = e.referenceUrl.isNotEmpty;
 
     return GlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      radius: 12,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: () => _showDetail(context),
-        child: Column(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => setState(() => _expanded = !_expanded),
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                if (entry.referenceUrl.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 10),
-                    child: SvgPicture.network(
-                      entry.referenceUrl,
-                      width: 28,
-                      height: 28,
-                      placeholderBuilder: (_) => const SizedBox(width: 28, height: 28),
-                    ),
-                  ),
-                if (entry.abbreviation.isNotEmpty) ...[
-                  MoriChip(label: entry.abbreviation, type: ChipType.lavender),
-                  const SizedBox(width: 8),
-                ],
-                Expanded(child: Text(entry.term, style: T.bodyBold)),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                  child: Text(
-                    _displayCategory(entry.category, isKorean),
-                    style: T.captionBold.copyWith(color: accent),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                GestureDetector(
-                  onTap: () => _handleBookmark(context, ref, t),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(
-                      isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                      color: isBookmarked ? C.pkD : C.mu,
-                      size: 22,
-                    ),
-                  ),
-                ),
-              ],
+            // ── 좌: 썸네일 ──
+            Container(
+              width: 44,
+              height: 44,
+              margin: const EdgeInsets.only(right: 0),
+              decoration: BoxDecoration(
+                color: C.lvL,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: C.bd2),
+              ),
+              child: hasSvg
+                  ? Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: SvgPicture.network(
+                        e.referenceUrl,
+                        placeholderBuilder: (_) => Icon(Icons.texture_rounded, size: 18, color: C.mu),
+                      ),
+                    )
+                  : Icon(Icons.menu_book_rounded, size: 20, color: C.mu),
             ),
-            if (entry.termEn.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(entry.termEn, style: T.caption.copyWith(color: C.mu)),
-            ],
-            const SizedBox(height: 8),
-            Text(
-              isKorean || entry.descriptionEn.isEmpty ? entry.description : entry.descriptionEn,
-              style: T.body.copyWith(color: C.tx2, height: 1.5),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+            // ── 세로 구분선 ──
+            Container(
+              width: 1,
+              height: 44,
+              margin: const EdgeInsets.symmetric(horizontal: 10),
+              color: C.bd,
+            ),
+            // ── 우: 2단 내용 ──
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 1단: 약어 + 영문 설명
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      if (e.abbreviation.isNotEmpty) ...[
+                        Text(
+                          e.abbreviation,
+                          style: T.captionBold.copyWith(color: C.lvD),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      Expanded(
+                        child: Text(
+                          e.termEn.isNotEmpty ? e.termEn : e.term,
+                          style: T.caption.copyWith(color: C.mu),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      // 별표(즐겨찾기)
+                      GestureDetector(
+                        onTap: () => _handleBookmark(context, ref, t),
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 6),
+                          child: Icon(
+                            widget.isBookmarked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                            color: widget.isBookmarked ? const Color(0xFFE11D48) : C.mu,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  // 2단: 한글 명칭 + 한글 설명
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (e.term.isNotEmpty) ...[
+                        Text(
+                          e.term,
+                          style: T.captionBold.copyWith(color: C.tx),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      Expanded(
+                        child: Text(
+                          e.description,
+                          style: T.caption.copyWith(color: C.tx2),
+                          maxLines: _expanded ? null : 1,
+                          overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  // 탭 시 영문 설명 확장
+                  if (_expanded && e.descriptionEn.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: C.lvL,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: C.bd2),
+                      ),
+                      child: Text(
+                        e.descriptionEn,
+                        style: T.caption.copyWith(color: C.lvD, height: 1.5),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ],
         ),
@@ -535,110 +617,28 @@ class _OfficialEntryCard extends ConsumerWidget {
   }
 
   Future<void> _handleBookmark(BuildContext context, WidgetRef ref, dynamic t) async {
-    if (uid == null) {
+    if (widget.uid == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(t.loginRequiredFirst)),
       );
       return;
     }
-
+    final wasBookmarked = widget.isBookmarked;
     final repo = ref.read(personalEncyclopediaRepositoryProvider);
     await toggleBookmark(
       repo: repo,
-      uid: uid!,
-      entry: entry,
-      isCurrentlyBookmarked: isBookmarked,
+      uid: widget.uid!,
+      entry: widget.entry,
+      isCurrentlyBookmarked: wasBookmarked,
     );
-
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(isBookmarked ? t.encyclopediaBookmarkRemoved : t.encyclopediaBookmarkAdded),
+          content: Text(wasBookmarked ? t.encyclopediaBookmarkRemoved : t.encyclopediaBookmarkAdded),
           duration: const Duration(seconds: 2),
         ),
       );
     }
-  }
-
-  void _showDetail(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: C.bg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (entry.referenceUrl.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 14, top: 2),
-                    child: Container(
-                      width: 52,
-                      height: 52,
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: C.lvL,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: C.bd2),
-                      ),
-                      child: SvgPicture.network(
-                        entry.referenceUrl,
-                        placeholderBuilder: (_) => const SizedBox.shrink(),
-                      ),
-                    ),
-                  ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          if (entry.abbreviation.isNotEmpty) ...[
-                            MoriChip(label: entry.abbreviation, type: ChipType.lavender),
-                            const SizedBox(width: 8),
-                          ],
-                          Expanded(child: Text(entry.term, style: T.h2)),
-                        ],
-                      ),
-                      if (entry.termEn.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(entry.termEn, style: T.body.copyWith(color: C.mu)),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Text(entry.description, style: T.body.copyWith(height: 1.6)),
-            if (entry.descriptionEn.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text(entry.descriptionEn, style: T.body.copyWith(color: C.tx2, height: 1.6)),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Color _accentFor(String raw) {
-    if ({'technique', 'techniques', '기법'}.contains(raw)) return C.lvD;
-    if ({'symbol', 'symbols', '기호'}.contains(raw)) return C.pkD;
-    return C.lmD;
-  }
-
-  String _displayCategory(String raw, bool isKorean) {
-    if ({'term', 'terms', '용어'}.contains(raw)) return isKorean ? '용어' : 'Terms';
-    if ({'technique', 'techniques', '기법'}.contains(raw)) return isKorean ? '기법' : 'Techniques';
-    if ({'symbol', 'symbols', '기호'}.contains(raw)) return isKorean ? '기호' : 'Symbols';
-    return raw;
   }
 }
 
@@ -666,7 +666,7 @@ class _PersonalEntryCard extends ConsumerWidget {
                     if (entry.isBookmark)
                       Padding(
                         padding: const EdgeInsets.only(right: 6),
-                        child: Icon(Icons.bookmark_rounded, size: 14, color: C.pkD),
+                        child: Icon(Icons.favorite_rounded, size: 14, color: const Color(0xFFE11D48)),
                       ),
                     Expanded(child: Text(entry.term, style: T.bodyBold)),
                   ],

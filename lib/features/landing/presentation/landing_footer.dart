@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/widgets/common_widgets.dart';
+import '../../../providers/app_config_provider.dart';
 
 const double _landingMaxWidth = 1160;
 
 /// 랜딩 공통 푸터
-class LandingFooter extends StatelessWidget {
+class LandingFooter extends ConsumerWidget {
   const LandingFooter({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final social = ref.watch(socialIntegrationsProvider).valueOrNull;
+    final youtubeUrl = social?.youtubeUrl ?? 'https://www.youtube.com/@moriknit';
     return Container(
       color: const Color(0xFF1A1A2E),
       child: Center(
@@ -109,7 +113,7 @@ class LandingFooter extends StatelessWidget {
                     _FooterSnsIconButton(
                       icon: Icons.play_circle_outline_rounded,
                       tooltip: 'YouTube',
-                      url: 'https://youtube.com/@moriknit',
+                      url: youtubeUrl,
                     ),
                     const SizedBox(width: 6),
                     _FooterSnsIconButton(

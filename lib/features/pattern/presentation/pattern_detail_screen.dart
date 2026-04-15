@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -29,11 +30,19 @@ class PatternDetailScreen extends ConsumerStatefulWidget {
   final String? ownerId;
   final String? ownerName;
 
+  /// AI 변환 후 즉시 수정 모드로 열릴 때 true
+  final bool initialIsEditing;
+
+  /// AI 변환 후 저장 완료 시 호출 (확인 다이얼로그 → 저장 → 이 콜백 실행)
+  final VoidCallback? onSaveComplete;
+
   const PatternDetailScreen({
     super.key,
     required this.chart,
     this.ownerId,
     this.ownerName,
+    this.initialIsEditing = false,
+    this.onSaveComplete,
   });
 
   @override
@@ -57,6 +66,9 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
     _loadMemo();
     _editTitleCtrl = TextEditingController();
     _editNarrativeCtrl = TextEditingController();
+    if (widget.initialIsEditing) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _enterEditMode());
+    }
   }
 
   @override
@@ -69,17 +81,23 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
 
   Future<void> _loadMemo() async {
     final user = ref.read(authStateProvider).valueOrNull;
-    if (user == null || widget.chart.id.isEmpty) return;
+    if (user == null || widget.chart.id.isEmpty) {
+      if (mounted) setState(() => _memoLoading = false);
+      return;
+    }
     _uid = user.uid;
-    setState(() => _memoLoading = true);
+    if (mounted) setState(() => _memoLoading = true);
     try {
       final snap = await FirebaseFirestore.instance
           .collection('pattern_memos')
           .doc('${user.uid}_${widget.chart.id}')
-          .get();
+          .get()
+          .timeout(const Duration(seconds: 10));
       if (snap.exists && mounted) {
         _memoCtrl.text = snap.data()?['memo'] as String? ?? '';
       }
+    } catch (_) {
+      // 메모 로딩 실패 시 빈 상태로 처리
     } finally {
       if (mounted) setState(() => _memoLoading = false);
     }
@@ -131,6 +149,33 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
   Future<void> _saveEdit(bool isKorean) async {
     final newTitle = _editTitleCtrl.text.trim();
     if (newTitle.isEmpty) return;
+
+    // AI 변환 후 최초 저장 시: 확인 다이얼로그 표시
+    if (widget.onSaveComplete != null) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(isKorean ? '도안 저장' : 'Save Pattern', style: T.h3),
+          content: Text(
+            isKorean ? '도안 라이브러리에 저장할까요?' : 'Save to pattern library?',
+            style: T.body,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(isKorean ? '취소' : 'Cancel', style: TextStyle(color: C.mu)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(isKorean ? '확인' : 'Confirm'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+
     final newNarrative = _editNarrativeCtrl.text.trim();
     setState(() => _isSaving = true);
     final messenger = ScaffoldMessenger.of(context);
@@ -155,12 +200,17 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
             sourcePatternId: widget.chart.sourcePatternId,
             sourceOwnerName: widget.chart.sourceOwnerName,
             sourceType: widget.chart.sourceType,
+            aiSections: widget.chart.aiSections,
           ),
         ),
       );
       if (!mounted) return;
-      showSavedSnackBar(messenger, message: isKorean ? '수정됐어요.' : 'Updated.');
-      setState(() => _isEditing = false);
+      if (widget.onSaveComplete != null) {
+        widget.onSaveComplete!();
+      } else {
+        showSavedSnackBar(messenger, message: isKorean ? '수정됐어요.' : 'Updated.');
+        setState(() => _isEditing = false);
+      }
     } catch (e) {
       if (!mounted) return;
       showSaveErrorSnackBar(messenger, message: '$e');
@@ -692,7 +742,7 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
     }
   }
 
-  void _openViewer() {
+  Future<void> _openViewer() async {
     switch (widget.chart.type) {
       case PatternType.image:
         if (widget.chart.imageUrl.isNotEmpty) {
@@ -711,15 +761,28 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
           );
         }
       case PatternType.pdf:
-        if (widget.chart.pdfUrl.isNotEmpty) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PdfViewerScreen(
-                  url: widget.chart.pdfUrl, title: widget.chart.title),
-            ),
-          );
+        final rawUrl = widget.chart.pdfUrl;
+        if (rawUrl.isEmpty) return;
+        // Storage 경로(users/...)인 경우 다운로드 URL로 변환
+        String downloadUrl = rawUrl;
+        if (!rawUrl.startsWith('http')) {
+          try {
+            downloadUrl = await FirebaseStorage.instance.ref(rawUrl).getDownloadURL();
+          } catch (e) {
+            if (mounted) {
+              showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: 'PDF를 열 수 없어요: $e');
+            }
+            return;
+          }
         }
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PdfViewerScreen(
+                url: downloadUrl, title: widget.chart.title),
+          ),
+        );
       case PatternType.chart:
         context.push('${Routes.toolsPattern}/${widget.chart.id}');
     }
@@ -957,6 +1020,31 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                     ),
                   ),
                 ],
+                // AI 변환 도안: 단계 보기 버튼 + 섹션 요약
+                if (widget.chart.sourceType == PatternSourceType.aiConverted) ...[
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: OutlinedButton.icon(
+                      onPressed: () => context.push(
+                          '${Routes.toolsMyParsedPatterns}/${widget.chart.id}'),
+                      icon: const Icon(Icons.checklist_rounded),
+                      label: Text(isKorean ? '단계별 따라하기' : 'Step-by-step view'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: C.lv,
+                        side: BorderSide(color: C.lv),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ),
+                  if ((widget.chart.aiSections ?? []).isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    _AiSectionsSummary(
+                        chart: widget.chart, isKorean: isKorean),
+                  ],
+                ],
                 // PDF export button (chart type only)
                 if (widget.chart.type == PatternType.chart) ...[
                   const SizedBox(height: 10),
@@ -1012,6 +1100,102 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── AI 섹션 요약 위젯 ────────────────────────────────────────────────────────
+class _AiSectionsSummary extends StatelessWidget {
+  final PatternChart chart;
+  final bool isKorean;
+  const _AiSectionsSummary({required this.chart, required this.isKorean});
+
+  @override
+  Widget build(BuildContext context) {
+    final sections = chart.aiSections ?? [];
+    final totalSteps = sections.fold<int>(
+        0, (acc, s) => acc + ((s['steps'] as List?)?.length ?? 0));
+    final completedSteps = sections.fold<int>(
+        0,
+        (acc, s) =>
+            acc +
+            ((s['steps'] as List?)
+                    ?.where((st) => (st as Map)['isCompleted'] == true)
+                    .length ??
+                0));
+    final progress =
+        totalSteps == 0 ? 0.0 : completedSteps / totalSteps;
+
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.auto_awesome_rounded, size: 16, color: C.lv),
+              const SizedBox(width: 6),
+              Text(
+                isKorean ? 'AI 변환 도안' : 'AI Converted',
+                style: T.caption.copyWith(
+                    color: C.lv, fontWeight: FontWeight.w700),
+              ),
+              const Spacer(),
+              Text(
+                isKorean
+                    ? '$completedSteps/$totalSteps 완료'
+                    : '$completedSteps/$totalSteps done',
+                style: T.caption.copyWith(color: C.tx2),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: progress,
+            backgroundColor: C.lv.withValues(alpha: 0.12),
+            color: C.lv,
+            borderRadius: BorderRadius.circular(4),
+            minHeight: 4,
+          ),
+          const SizedBox(height: 10),
+          ...sections.take(3).map((sec) {
+            final steps = (sec['steps'] as List?) ?? [];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                children: [
+                  Icon(Icons.subdirectory_arrow_right_rounded,
+                      size: 14, color: C.tx2),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      sec['title'] as String? ?? '',
+                      style: T.sm.copyWith(color: C.tx),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Text(
+                    isKorean
+                        ? '${steps.length}단계'
+                        : '${steps.length} steps',
+                    style: T.caption.copyWith(color: C.tx2),
+                  ),
+                ],
+              ),
+            );
+          }),
+          if (sections.length > 3)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                isKorean
+                    ? '외 ${sections.length - 3}개 섹션...'
+                    : '+${sections.length - 3} more sections...',
+                style: T.caption.copyWith(color: C.tx2),
+              ),
+            ),
         ],
       ),
     );

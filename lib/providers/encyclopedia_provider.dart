@@ -15,6 +15,14 @@ final encyclopediaProvider = StreamProvider<List<EncyclopediaEntry>>((ref) {
   return ref.watch(encyclopediaRepositoryProvider).watchAll();
 });
 
+final knittingEncyclopediaProvider = StreamProvider<List<EncyclopediaEntry>>((ref) {
+  return ref.watch(encyclopediaRepositoryProvider).watchByCraftType('knitting');
+});
+
+final crochetEncyclopediaProvider = StreamProvider<List<EncyclopediaEntry>>((ref) {
+  return ref.watch(encyclopediaRepositoryProvider).watchByCraftType('crochet');
+});
+
 final selectedEncyclopediaCategoryProvider = StateProvider<String>((_) => 'all');
 
 /// 개인 사전 항목 스트림 (uid 기반)

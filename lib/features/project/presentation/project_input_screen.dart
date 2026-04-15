@@ -18,6 +18,7 @@ import '../../pattern/data/pattern_repository.dart';
 import '../../my/data/mori_service.dart';
 import '../domain/builtin_template.dart';
 import '../domain/project_model.dart';
+import '../domain/user_template.dart';
 import '../../swatch/presentation/brand_search_sheet.dart';
 
 class ProjectInputScreen extends ConsumerStatefulWidget {
@@ -25,8 +26,9 @@ class ProjectInputScreen extends ConsumerStatefulWidget {
   final ProjectModel? initialProject;
   final String? templateType;
   final BuiltinTemplate? builtinTemplate;
+  final UserTemplate? userTemplate;
 
-  const ProjectInputScreen({super.key, this.projectId, this.initialProject, this.templateType, this.builtinTemplate});
+  const ProjectInputScreen({super.key, this.projectId, this.initialProject, this.templateType, this.builtinTemplate, this.userTemplate});
 
   @override
   ConsumerState<ProjectInputScreen> createState() => _ProjectInputScreenState();
@@ -66,6 +68,14 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
         final isKorean = ref.read(appLanguageProvider).isKorean;
         final bt = widget.builtinTemplate!;
         final name = isKorean ? bt.titleKo : bt.titleEn;
+        _titleController.text = name;
+        ref.read(projectInputProvider.notifier).setTitle(name);
+      });
+    }
+
+    if (project == null && widget.userTemplate != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final name = widget.userTemplate!.title;
         _titleController.text = name;
         ref.read(projectInputProvider.notifier).setTitle(name);
       });
@@ -254,6 +264,15 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                   maxLines: 3,
                   onChanged: notifier.setMemo,
                 ),
+                // 템플릿 단계로그 미리보기
+                if (widget.builtinTemplate != null || widget.userTemplate != null) ...[
+                  const SizedBox(height: 20),
+                  _TemplateStepsPreview(
+                    isKorean: isKorean,
+                    builtinTemplate: widget.builtinTemplate,
+                    userTemplate: widget.userTemplate,
+                  ),
+                ],
                 const SizedBox(height: 20),
                 SectionTitle(title:isKorean ? '연결된 스와치 (선택)' : 'Linked Swatch (optional)'),
                 const SizedBox(height: 8),
@@ -394,6 +413,18 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
               final isKorean = ref.read(appLanguageProvider).isKorean;
               await ref.read(projectStepRepositoryProvider).addBuiltinTemplateSteps(saved.id, widget.builtinTemplate!, isKorean);
             }
+            if (widget.userTemplate != null) {
+              final tmpl = widget.userTemplate!;
+              final stepRepo = ref.read(projectStepRepositoryProvider);
+              for (int i = 0; i < tmpl.stepTitles.length; i++) {
+                await stepRepo.addStep(
+                  saved.id,
+                  tmpl.stepTitles[i],
+                  i,
+                  description: i < tmpl.stepDescs.length ? tmpl.stepDescs[i] : '',
+                );
+              }
+            }
           }
         },
       );
@@ -410,6 +441,86 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
   }
 }
 
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 템플릿 단계로그 미리보기
+// ──────────────────────────────────────────────────────────────────────────────
+class _TemplateStepsPreview extends StatelessWidget {
+  final bool isKorean;
+  final BuiltinTemplate? builtinTemplate;
+  final UserTemplate? userTemplate;
+
+  const _TemplateStepsPreview({
+    required this.isKorean,
+    this.builtinTemplate,
+    this.userTemplate,
+  });
+
+  List<String> get _steps {
+    if (builtinTemplate != null) {
+      return isKorean ? builtinTemplate!.stepsKo : builtinTemplate!.stepsEn;
+    }
+    if (userTemplate != null) return userTemplate!.stepTitles;
+    return [];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final steps = _steps;
+    if (steps.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionTitle(title: isKorean ? '단계로그 (저장 시 자동 생성)' : 'Steps (auto-created on save)'),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: C.gx,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: C.bd),
+          ),
+          child: Column(
+            children: [
+              for (int i = 0; i < steps.length; i++) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: C.lv.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Center(
+                          child: Text(
+                            '${i + 1}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: C.lv,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(steps[i], style: T.sm.copyWith(color: C.tx)),
+                      ),
+                    ],
+                  ),
+                ),
+                if (i < steps.length - 1)
+                  Divider(height: 1, color: C.bd),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _StyledField extends StatelessWidget {
   final TextEditingController controller;

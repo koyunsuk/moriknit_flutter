@@ -4,8 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
-
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
@@ -18,7 +16,6 @@ import '../../community/domain/post_model.dart';
 import '../../encyclopedia/domain/encyclopedia_entry.dart';
 import '../../market/domain/market_item.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'landing_footer.dart';
 import 'landing_scaffold.dart';
 
@@ -80,11 +77,6 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
     return LandingScaffold(
       slivers: [
         SliverToBoxAdapter(
-          child: _PromoBanner(
-            onTap: user == null ? () => context.go(Routes.login) : () => context.go(Routes.home),
-          ),
-        ),
-        SliverToBoxAdapter(
           child: _LandingHero(
             isLoggedIn: user != null,
             onLogin: () => context.go(Routes.login),
@@ -133,20 +125,20 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
           child: _LandingSectionFrame(
             title: '뜨개백과사전',
             subtitle: '뜨개 용어와 기법을 언제든지 찾아보세요.',
-            actionLabel: user == null ? '로그인 후 더 보기' : '사전으로',
-            onAction: () => user == null ? context.go(Routes.login) : context.go(Routes.toolsEncyclopedia),
+            actionLabel: '전체 보기',
+            onAction: () => context.go('/encyclopedia'),
             child: encyclopediaAsync.when(
               loading: () => const _LandingLoadingGrid(),
               error: (_, _) => const _LandingEmptyCard(icon: Icons.menu_book_outlined, title: '백과사전 데이터를 불러오지 못했어요', message: '잠시 후 다시 확인해 주세요.'),
               data: (entries) => entries.isEmpty
                   ? const _LandingEmptyCard(icon: Icons.menu_book_outlined, title: '뜨개백과사전이 곧 채워집니다', message: '관리자가 등록한 뜨개 용어와 기법 설명이 여기에 표시됩니다.')
-                  : _LandingCardGrid(children: entries.take(6).map((entry) => _EncyclopediaPreviewCard(entry: entry)).toList()),
+                  : _EncyclopediaCompactGrid(entries: entries.take(12).toList()),
             ),
           ),
         ),
-        const SliverToBoxAdapter(child: SizedBox(height: 28)),
+        const SliverToBoxAdapter(child: SizedBox(height: 72)),
         SliverToBoxAdapter(key: _featureSectionKey, child: const _FeatureSection()),
-        const SliverToBoxAdapter(child: _CtaSection()),
+        const SliverToBoxAdapter(child: LandingAppDownload()),
       ],
     );
   }
@@ -2215,6 +2207,33 @@ class _PostPreviewCard extends StatelessWidget {
 }
 
 // ── 백과사전 카드 ─────────────────────────────────────────────────────────────
+// ── 뜨개백과 컴팩트 그리드 ────────────────────────────────────────────────────
+
+class _EncyclopediaCompactGrid extends StatelessWidget {
+  final List<EncyclopediaEntry> entries;
+  const _EncyclopediaCompactGrid({required this.entries});
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final crossAxisCount = width >= 1100 ? 3 : width >= 700 ? 2 : 1;
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: entries.length,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        mainAxisExtent: 68,
+      ),
+      itemBuilder: (_, i) => _EncyclopediaPreviewCard(entry: entries[i]),
+    );
+  }
+}
+
+// ── 뜨개백과 프리뷰 카드 (컴팩트) ─────────────────────────────────────────────
+
 class _EncyclopediaPreviewCard extends StatelessWidget {
   final EncyclopediaEntry entry;
   const _EncyclopediaPreviewCard({required this.entry});
@@ -2223,70 +2242,64 @@ class _EncyclopediaPreviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasSvg = entry.referenceUrl.isNotEmpty;
     return GlassCard(
-      padding: const EdgeInsets.all(12),
-      radius: 14,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      radius: 10,
+      child: Row(
         children: [
-          // 심볼 + 약어
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: C.lv.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: C.lv.withValues(alpha: 0.2)),
-                ),
-                child: hasSvg
-                    ? Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: SvgPicture.network(
-                          entry.referenceUrl,
-                          placeholderBuilder: (_) => Icon(Icons.texture_rounded, size: 20, color: C.lv.withValues(alpha: 0.5)),
-                        ),
-                      )
-                    : Icon(Icons.menu_book_rounded, size: 22, color: C.lv.withValues(alpha: 0.6)),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          // SVG 심볼
+          Container(
+            width: 36,
+            height: 36,
+            margin: const EdgeInsets.only(right: 10),
+            decoration: BoxDecoration(
+              color: C.lv.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: C.lv.withValues(alpha: 0.2)),
+            ),
+            child: hasSvg
+                ? Padding(
+                    padding: const EdgeInsets.all(5),
+                    child: SvgPicture.network(
+                      entry.referenceUrl,
+                      placeholderBuilder: (_) => Icon(Icons.texture_rounded, size: 16, color: C.lv.withValues(alpha: 0.4)),
+                    ),
+                  )
+                : Icon(Icons.menu_book_rounded, size: 18, color: C.lv.withValues(alpha: 0.5)),
+          ),
+          // 내용
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Row(
                   children: [
-                    Text(entry.term, style: T.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    if (entry.abbreviation.isNotEmpty)
+                    Flexible(
+                      child: Text(entry.term, style: T.captionBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                    if (entry.abbreviation.isNotEmpty) ...[
+                      const SizedBox(width: 5),
                       Container(
-                        margin: const EdgeInsets.only(top: 2),
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                         decoration: BoxDecoration(
                           color: C.lvL,
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.circular(3),
                         ),
-                        child: Text(entry.abbreviation, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: C.lvD)),
+                        child: Text(entry.abbreviation, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: C.lvD)),
                       ),
+                    ],
                   ],
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          // 한글 설명
-          Text(
-            entry.description,
-            style: T.caption.copyWith(color: C.tx2, height: 1.4),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          if (entry.descriptionEn.isNotEmpty) ...[
-            const SizedBox(height: 3),
-            Text(
-              entry.descriptionEn,
-              style: T.caption.copyWith(color: C.mu, fontSize: 10, height: 1.3),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+                const SizedBox(height: 2),
+                Text(
+                  entry.description,
+                  style: T.caption.copyWith(color: C.tx2, fontSize: 11, height: 1.3),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -2389,162 +2402,6 @@ class _FeatureSection extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── CTA 섹션 ──────────────────────────────────────────────────────────────────
-class _CtaSection extends StatelessWidget {
-  const _CtaSection();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            const Color(0xFF191A33),
-            C.lv.withValues(alpha: 0.26),
-            C.pk.withValues(alpha: 0.22),
-            const Color(0xFF1A2137),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: _landingMaxWidth),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 56, 20, 56),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 34),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
-                boxShadow: [
-                  BoxShadow(color: C.lv.withValues(alpha: 0.20), blurRadius: 30, offset: const Offset(0, 10)),
-                ],
-              ),
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: C.lv.withValues(alpha: 0.45)),
-                    ),
-                    child: Text('APP DOWNLOAD', style: TextStyle(color: C.lv, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.7)),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    '모리니트를 앱으로\n더 편하게 사용해보세요',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.97), fontSize: 30, fontWeight: FontWeight.w800, height: 1.25),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '웹에서 크게 보고, 앱에서 빠르게 기록하세요.\n프로젝트, 스와치, 커뮤니티를 어디서든 이어갈 수 있어요.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.76), fontSize: 15, height: 1.7),
-                  ),
-                  const SizedBox(height: 28),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    alignment: WrapAlignment.center,
-                    children: [
-                      _DownloadButton(
-                        iconWidget: const FaIcon(FontAwesomeIcons.googlePlay, size: 18, color: Color(0xFF34A853)),
-                        title: 'Google Play',
-                        subtitle: '다운로드',
-                        iconColor: const Color(0xFF34A853),
-                        onTap: () => launchUrl(
-                          Uri.parse('https://play.google.com/store/apps/details?id=com.moriknit.app'),
-                          mode: LaunchMode.externalApplication,
-                        ),
-                      ),
-                      _DownloadButton(
-                        iconWidget: const FaIcon(FontAwesomeIcons.appStoreIos, size: 18, color: Color(0xFF007AFF)),
-                        title: 'App Store',
-                        subtitle: '다운로드',
-                        iconColor: const Color(0xFF007AFF),
-                        onTap: () => launchUrl(
-                          Uri.parse('https://apps.apple.com/app/moriknit/id6743618555'),
-                          mode: LaunchMode.externalApplication,
-                        ),
-                      ),
-                      _DownloadButton(
-                        iconWidget: const Icon(Icons.language_rounded, size: 20, color: Color(0xFF6BA800)),
-                        title: '웹에서 시작',
-                        subtitle: '로그인 후 바로 사용',
-                        iconColor: const Color(0xFFA78BFA),
-                        onTap: () => context.go(Routes.login),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DownloadButton extends StatelessWidget {
-  final Widget iconWidget;
-  final String title;
-  final String subtitle;
-  final Color iconColor;
-  final VoidCallback onTap;
-
-  const _DownloadButton({
-    required this.iconWidget,
-    required this.title,
-    required this.subtitle,
-    required this.iconColor,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Center(child: iconWidget),
-            ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.72), fontSize: 10)),
-                Text(title, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
-              ],
-            ),
-          ],
         ),
       ),
     );

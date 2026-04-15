@@ -20,6 +20,7 @@ import '../../ravelry/data/ravelry_auth_provider.dart';
 import '../../ravelry/data/ravelry_repository.dart';
 import '../../ravelry/presentation/ravelry_screen.dart';
 import '../../pattern/data/pattern_repository.dart';
+import '../../project/presentation/widgets/project_start_sheet.dart';
 import '../../etsy/data/etsy_auth_provider.dart';
 import '../../../providers/yarn_provider.dart';
 import '../../../providers/needle_provider.dart';
@@ -109,7 +110,7 @@ class ToolsScreen extends ConsumerWidget {
                             ),
                             const SizedBox(width: 8),
                             ElevatedButton.icon(
-                              onPressed: () => context.push(Routes.projectInput),
+                              onPressed: () => showProjectStartSheet(context, ref),
                               icon: const Icon(Icons.add_rounded, size: 16),
                               label: Text(isKorean ? '추가' : 'Add'),
                               style: ElevatedButton.styleFrom(
@@ -339,6 +340,16 @@ class ToolsScreen extends ConsumerWidget {
                       title: isKorean ? '스와치' : 'Swatch',
                       description: isKorean ? '게이지와 실 정보를 기록해요' : 'Record gauge and yarn info',
                       onTap: () => context.push(Routes.swatchList),
+                    ),
+                    const SizedBox(height: 10),
+                    _ToolCard(
+                      icon: Icons.auto_awesome_rounded,
+                      color: C.lv,
+                      title: isKorean ? 'AI 도안 변환기' : 'AI Pattern Converter',
+                      description: isKorean
+                          ? 'PDF·이미지 도안을 나의 도안 라이브러리로 변환'
+                          : 'Convert PDF/image patterns to your library',
+                      onTap: () => context.push(Routes.toolsPatternConverter),
                     ),
                     const SizedBox(height: 8),
                     Divider(color: C.bd, thickness: 1, height: 20),
