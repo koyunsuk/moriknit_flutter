@@ -108,6 +108,8 @@ class ProjectModel with _$ProjectModel {
     @Default('') String originProjectId,
     @Default('') String originUserId,
     @Default('') String originOwnerName,
+    // 참고 도서
+    @Default('') String referenceBookId,
   }) = _ProjectModel;
 
   factory ProjectModel.fromJson(Map<String, dynamic> json) => _$ProjectModelFromJson(json);

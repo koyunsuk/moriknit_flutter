@@ -21,6 +21,7 @@ class Routes {
   static const my = '/my';
   static const needles = '/my/needles';
   static const accessories = '/my/accessories';
+  static const books = '/my/books';
   static const accessoryDetail = '/accessory-detail/:id';
   static const counterList = '/counters';
   static const counter = '/counter/:id';

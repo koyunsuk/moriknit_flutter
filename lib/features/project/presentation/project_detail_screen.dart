@@ -16,6 +16,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/book_provider.dart';
 import '../../../providers/counter_provider.dart';
 import '../../../providers/market_provider.dart';
 import '../../../providers/project_provider.dart';
@@ -1396,6 +1397,113 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
                       onCreateNew: null,
                     ),
                   ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            // ── 참고 도서 섹션 ─────────────────────────
+            GlassCard(
+              color: C.bg,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.menu_book_rounded, color: C.lmD, size: 18),
+                      const SizedBox(width: 6),
+                      Text(isKorean ? '참고 도서' : 'Reference Book', style: T.bodyBold),
+                      const Spacer(),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Builder(builder: (context) {
+                    if (project.referenceBookId.isEmpty) {
+                      return Text(
+                        isKorean ? '연결된 도서 없어요.' : 'No reference book.',
+                        style: T.body.copyWith(color: C.mu),
+                      );
+                    }
+                    final bookAsync = ref.watch(bookDetailProvider(project.referenceBookId));
+                    return bookAsync.when(
+                      data: (book) {
+                        if (book == null) {
+                          return Text(
+                            isKorean ? '도서 정보를 불러올 수 없어요.' : 'Book not found.',
+                            style: T.body.copyWith(color: C.mu),
+                          );
+                        }
+                        return Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: SizedBox(
+                                width: 44,
+                                height: 60,
+                                child: book.coverUrl.isNotEmpty
+                                    ? Image.network(
+                                        book.coverUrl,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, _, _) => Container(
+                                          color: C.lvL,
+                                          child: Icon(Icons.menu_book_rounded, color: C.lv, size: 24),
+                                        ),
+                                      )
+                                    : Container(
+                                        color: C.lvL,
+                                        child: Icon(Icons.menu_book_rounded, color: C.lv, size: 24),
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    book.title.isNotEmpty ? book.title : (isKorean ? '(제목 없음)' : '(No title)'),
+                                    style: T.bodyBold,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (book.author.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(book.author, style: T.caption.copyWith(color: C.mu), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  ],
+                                  if (book.publisher.isNotEmpty || book.publishYear.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      [
+                                        if (book.publisher.isNotEmpty) book.publisher,
+                                        if (book.publishYear.isNotEmpty) book.publishYear,
+                                      ].join(' · '),
+                                      style: T.caption.copyWith(color: C.mu, fontSize: 11),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            if (isCardEditMode)
+                              IconButton(
+                                icon: Icon(Icons.link_off_rounded, size: 18, color: C.mu),
+                                onPressed: () async {
+                                  await runWithMoriLoadingDialog<void>(
+                                    context,
+                                    message: isKorean ? '연결 해제 중입니다.' : 'Unlinking...',
+                                    subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+                                    task: () => ref.read(projectRepositoryProvider).updateProject(
+                                          project.copyWith(referenceBookId: ''),
+                                        ),
+                                  );
+                                  if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '연결이 해제됐어요.' : 'Unlinked.');
+                                },
+                              ),
+                          ],
+                        );
+                      },
+                      loading: () => const Center(child: CircularProgressIndicator()),
+                      error: (e, _) => Text('$e', style: T.caption.copyWith(color: C.og)),
+                    );
+                  }),
                 ],
               ),
             ),

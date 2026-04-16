@@ -606,7 +606,41 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                 const SizedBox(height: 20),
               ],
 
-              // ── 5. 회사정보 ───────────────────────────────────────
+              // ── 5. 나의 자산 ─────────────────────────────────────
+              SectionTitle(title: isKorean ? '🗃️ 나의 자산' : '🗃️ My Assets'),
+              const SizedBox(height: 10),
+              GlassCard(
+                child: Column(
+                  children: [
+                    ListTile(
+                      leading: Icon(Icons.straighten_rounded, color: C.lv),
+                      title: Text(isKorean ? '나의 바늘' : 'My Needles'),
+                      subtitle: Text(isKorean ? '보유 바늘 목록 관리' : 'Manage your needles'),
+                      trailing: Icon(Icons.chevron_right_rounded, color: C.mu),
+                      onTap: () => context.push('/my/needles'),
+                    ),
+                    Divider(height: 1, color: Colors.grey.shade100),
+                    ListTile(
+                      leading: Icon(Icons.category_outlined, color: C.pk),
+                      title: Text(isKorean ? '나의 부자재' : 'My Accessories'),
+                      subtitle: Text(isKorean ? '보유 부자재 목록 관리' : 'Manage your accessories'),
+                      trailing: Icon(Icons.chevron_right_rounded, color: C.mu),
+                      onTap: () => context.push('/my/accessories'),
+                    ),
+                    Divider(height: 1, color: Colors.grey.shade100),
+                    ListTile(
+                      leading: Icon(Icons.menu_book_rounded, color: C.lmD),
+                      title: Text(isKorean ? '나의 도서 라이브러리' : 'My Book Library'),
+                      subtitle: Text(isKorean ? '참고 도서 목록 관리' : 'Manage your reference books'),
+                      trailing: Icon(Icons.chevron_right_rounded, color: C.mu),
+                      onTap: () => context.push('/my/books'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // ── 6. 회사정보 ───────────────────────────────────────
               SectionTitle(title: isKorean ? '🏢 회사정보' : '🏢 Company Info'),
               const SizedBox(height: 10),
               GlassCard(

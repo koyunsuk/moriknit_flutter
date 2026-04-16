@@ -17,6 +17,7 @@ import 'package:moriknit_flutter/features/encyclopedia/presentation/encyclopedia
 import 'package:moriknit_flutter/features/gauge/presentation/gauge_calculator_screen.dart';
 import 'package:moriknit_flutter/features/home/presentation/home_screen.dart';
 import 'package:moriknit_flutter/features/market/presentation/market_screen.dart';
+import 'package:moriknit_flutter/features/my/presentation/book_list_screen.dart';
 import 'package:moriknit_flutter/features/my/presentation/delete_account_screen.dart';
 import 'package:moriknit_flutter/features/my/presentation/my_page_screen.dart';
 import 'package:moriknit_flutter/features/my/presentation/accessory_detail_screen.dart';
@@ -181,6 +182,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(path: 'needles', pageBuilder: (_, _) => _fadePage(const NeedleListScreen())),
               GoRoute(path: 'accessories', pageBuilder: (_, _) => _fadePage(const AccessoryListScreen())),
+              GoRoute(path: 'books', pageBuilder: (_, _) => _fadePage(const BookListScreen())),
               GoRoute(path: 'delete-account', pageBuilder: (_, _) => _fadePage(const DeleteAccountScreen())),
             ],
           ),

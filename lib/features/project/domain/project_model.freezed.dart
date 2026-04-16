@@ -52,6 +52,7 @@ mixin _$ProjectModel {
   String get originProjectId => throw _privateConstructorUsedError;
   String get originUserId => throw _privateConstructorUsedError;
   String get originOwnerName => throw _privateConstructorUsedError;
+  String get referenceBookId => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -97,7 +98,8 @@ abstract class $ProjectModelCopyWith<$Res> {
       String sourcePatternId,
       String originProjectId,
       String originUserId,
-      String originOwnerName});
+      String originOwnerName,
+      String referenceBookId});
 }
 
 /// @nodoc
@@ -145,6 +147,7 @@ class _$ProjectModelCopyWithImpl<$Res, $Val extends ProjectModel>
     Object? originProjectId = null,
     Object? originUserId = null,
     Object? originOwnerName = null,
+    Object? referenceBookId = null,
   }) {
     return _then(_value.copyWith(
       id: null == id
@@ -275,6 +278,10 @@ class _$ProjectModelCopyWithImpl<$Res, $Val extends ProjectModel>
           ? _value.originOwnerName
           : originOwnerName // ignore: cast_nullable_to_non_nullable
               as String,
+      referenceBookId: null == referenceBookId
+          ? _value.referenceBookId
+          : referenceBookId // ignore: cast_nullable_to_non_nullable
+              as String,
     ) as $Val);
   }
 }
@@ -319,7 +326,8 @@ abstract class _$$ProjectModelImplCopyWith<$Res>
       String sourcePatternId,
       String originProjectId,
       String originUserId,
-      String originOwnerName});
+      String originOwnerName,
+      String referenceBookId});
 }
 
 /// @nodoc
@@ -365,6 +373,7 @@ class __$$ProjectModelImplCopyWithImpl<$Res>
     Object? originProjectId = null,
     Object? originUserId = null,
     Object? originOwnerName = null,
+    Object? referenceBookId = null,
   }) {
     return _then(_$ProjectModelImpl(
       id: null == id
@@ -495,6 +504,10 @@ class __$$ProjectModelImplCopyWithImpl<$Res>
           ? _value.originOwnerName
           : originOwnerName // ignore: cast_nullable_to_non_nullable
               as String,
+      referenceBookId: null == referenceBookId
+          ? _value.referenceBookId
+          : referenceBookId // ignore: cast_nullable_to_non_nullable
+              as String,
     ));
   }
 }
@@ -534,7 +547,8 @@ class _$ProjectModelImpl implements _ProjectModel {
       this.sourcePatternId = '',
       this.originProjectId = '',
       this.originUserId = '',
-      this.originOwnerName = ''})
+      this.originOwnerName = '',
+      this.referenceBookId = ''})
       : _counterIds = counterIds,
         _needleIds = needleIds,
         _yarnIds = yarnIds,
@@ -656,10 +670,13 @@ class _$ProjectModelImpl implements _ProjectModel {
   @override
   @JsonKey()
   final String originOwnerName;
+  @override
+  @JsonKey()
+  final String referenceBookId;
 
   @override
   String toString() {
-    return 'ProjectModel(id: $id, uid: $uid, title: $title, description: $description, status: $status, progressPercent: $progressPercent, yarnBrandId: $yarnBrandId, yarnBrandName: $yarnBrandName, yarnName: $yarnName, yarnColor: $yarnColor, yarnWeight: $yarnWeight, needleSize: $needleSize, needleBrandName: $needleBrandName, swatchId: $swatchId, counterIds: $counterIds, needleIds: $needleIds, yarnIds: $yarnIds, photoUrls: $photoUrls, coverPhotoUrl: $coverPhotoUrl, memo: $memo, startDate: $startDate, targetDate: $targetDate, finishDate: $finishDate, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty, completedStepCount: $completedStepCount, totalStepCount: $totalStepCount, sourcePatternId: $sourcePatternId, originProjectId: $originProjectId, originUserId: $originUserId, originOwnerName: $originOwnerName)';
+    return 'ProjectModel(id: $id, uid: $uid, title: $title, description: $description, status: $status, progressPercent: $progressPercent, yarnBrandId: $yarnBrandId, yarnBrandName: $yarnBrandName, yarnName: $yarnName, yarnColor: $yarnColor, yarnWeight: $yarnWeight, needleSize: $needleSize, needleBrandName: $needleBrandName, swatchId: $swatchId, counterIds: $counterIds, needleIds: $needleIds, yarnIds: $yarnIds, photoUrls: $photoUrls, coverPhotoUrl: $coverPhotoUrl, memo: $memo, startDate: $startDate, targetDate: $targetDate, finishDate: $finishDate, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty, completedStepCount: $completedStepCount, totalStepCount: $totalStepCount, sourcePatternId: $sourcePatternId, originProjectId: $originProjectId, originUserId: $originUserId, originOwnerName: $originOwnerName, referenceBookId: $referenceBookId)';
   }
 
   @override
@@ -723,7 +740,9 @@ class _$ProjectModelImpl implements _ProjectModel {
             (identical(other.originUserId, originUserId) ||
                 other.originUserId == originUserId) &&
             (identical(other.originOwnerName, originOwnerName) ||
-                other.originOwnerName == originOwnerName));
+                other.originOwnerName == originOwnerName) &&
+            (identical(other.referenceBookId, referenceBookId) ||
+                other.referenceBookId == referenceBookId));
   }
 
   @JsonKey(ignore: true)
@@ -761,7 +780,8 @@ class _$ProjectModelImpl implements _ProjectModel {
         sourcePatternId,
         originProjectId,
         originUserId,
-        originOwnerName
+        originOwnerName,
+        referenceBookId
       ]);
 
   @JsonKey(ignore: true)
@@ -811,7 +831,8 @@ abstract class _ProjectModel implements ProjectModel {
       final String sourcePatternId,
       final String originProjectId,
       final String originUserId,
-      final String originOwnerName}) = _$ProjectModelImpl;
+      final String originOwnerName,
+      final String referenceBookId}) = _$ProjectModelImpl;
 
   factory _ProjectModel.fromJson(Map<String, dynamic> json) =
       _$ProjectModelImpl.fromJson;
@@ -880,6 +901,8 @@ abstract class _ProjectModel implements ProjectModel {
   String get originUserId;
   @override
   String get originOwnerName;
+  @override
+  String get referenceBookId;
   @override
   @JsonKey(ignore: true)
   _$$ProjectModelImplCopyWith<_$ProjectModelImpl> get copyWith =>

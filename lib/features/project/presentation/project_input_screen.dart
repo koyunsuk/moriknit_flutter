@@ -11,6 +11,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/book_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/project_step_provider.dart';
 import '../../../providers/swatch_provider.dart';
@@ -288,6 +289,14 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                   selectedPatternId: project.sourcePatternId,
                   isKorean: isKorean,
                   onChanged: notifier.setSourcePatternId,
+                ),
+                const SizedBox(height: 20),
+                SectionTitle(title: isKorean ? '참고 도서 (선택)' : 'Reference Book (optional)'),
+                const SizedBox(height: 8),
+                _BookDropdown(
+                  selectedBookId: project.referenceBookId,
+                  isKorean: isKorean,
+                  onChanged: notifier.setReferenceBookId,
                 ),
               ],
             ),
@@ -917,6 +926,59 @@ class _PatternDropdown extends ConsumerWidget {
               value: p.id,
               child: Text(
                 p.title.isNotEmpty ? p.title : 'Untitled',
+                style: T.body,
+                overflow: TextOverflow.ellipsis,
+              ),
+            )),
+          ],
+          onChanged: (value) => onChanged(value ?? ''),
+        ),
+      ),
+    );
+  }
+}
+
+class _BookDropdown extends ConsumerWidget {
+  final String selectedBookId;
+  final bool isKorean;
+  final ValueChanged<String> onChanged;
+
+  const _BookDropdown({
+    required this.selectedBookId,
+    required this.isKorean,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final booksAsync = ref.watch(bookListProvider);
+    final books = booksAsync.valueOrNull ?? [];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      decoration: BoxDecoration(
+        color: C.gx,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: C.bd2),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: books.any((b) => b.id == selectedBookId) ? selectedBookId : '',
+          isExpanded: true,
+          dropdownColor: C.bg,
+          style: T.body.copyWith(color: C.tx),
+          items: [
+            DropdownMenuItem(
+              value: '',
+              child: Text(
+                isKorean ? '연결 안 함' : 'No book linked',
+                style: T.body.copyWith(color: C.mu),
+              ),
+            ),
+            ...books.map((book) => DropdownMenuItem(
+              value: book.id,
+              child: Text(
+                book.title.isNotEmpty ? book.title : 'ISBN: ${book.isbn}',
                 style: T.body,
                 overflow: TextOverflow.ellipsis,
               ),

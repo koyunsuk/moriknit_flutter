@@ -62,6 +62,7 @@ _$ProjectModelImpl _$$ProjectModelImplFromJson(Map<String, dynamic> json) =>
       originProjectId: json['originProjectId'] as String? ?? '',
       originUserId: json['originUserId'] as String? ?? '',
       originOwnerName: json['originOwnerName'] as String? ?? '',
+      referenceBookId: json['referenceBookId'] as String? ?? '',
     );
 
 Map<String, dynamic> _$$ProjectModelImplToJson(_$ProjectModelImpl instance) =>
@@ -98,4 +99,5 @@ Map<String, dynamic> _$$ProjectModelImplToJson(_$ProjectModelImpl instance) =>
       'originProjectId': instance.originProjectId,
       'originUserId': instance.originUserId,
       'originOwnerName': instance.originOwnerName,
+      'referenceBookId': instance.referenceBookId,
     };
