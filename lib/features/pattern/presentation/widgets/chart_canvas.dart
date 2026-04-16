@@ -2,7 +2,10 @@ import 'dart:collection';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../../../providers/knit_symbol_provider.dart';
 import '../../domain/knit_symbols.dart';
 import '../../domain/pattern_chart.dart';
 
@@ -11,7 +14,7 @@ const double _cellH = 24.0;
 const double _headerW = 20.0;
 const double _headerH = 20.0;
 
-class ChartCanvas extends StatefulWidget {
+class ChartCanvas extends ConsumerStatefulWidget {
   final PatternChart chart;
   final ChartTool tool;
   final Color activeColor;
@@ -20,7 +23,6 @@ class ChartCanvas extends StatefulWidget {
   final TransformationController? transformationController;
   /// 전체 조망: non-null Size가 들어오면 해당 크기에 맞게 셀 크기 자동 조정
   final ValueNotifier<Size?>? fitToScreenNotifier;
-
   const ChartCanvas({
     super.key,
     required this.chart,
@@ -33,10 +35,10 @@ class ChartCanvas extends StatefulWidget {
   });
 
   @override
-  State<ChartCanvas> createState() => _ChartCanvasState();
+  ConsumerState<ChartCanvas> createState() => _ChartCanvasState();
 }
 
-class _ChartCanvasState extends State<ChartCanvas> {
+class _ChartCanvasState extends ConsumerState<ChartCanvas> {
   TransformationController? _ownedCtrl;
   TransformationController get _transformCtrl =>
       widget.transformationController ?? (_ownedCtrl ??= TransformationController());
@@ -77,10 +79,10 @@ class _ChartCanvasState extends State<ChartCanvas> {
   }
 
   (int row, int col)? _hitCell(Offset localPos) {
-    final inverted = _transformCtrl.value.clone()..invert();
-    final canvasPos = MatrixUtils.transformPoint(inverted, localPos);
-    final x = canvasPos.dx - _headerW;
-    final y = canvasPos.dy - _headerH;
+    // Flutter hit testing이 InteractiveViewer transform을 자동 역변환하므로
+    // localPos는 이미 캔버스 좌표계 → 별도 역변환 불필요
+    final x = localPos.dx - _headerW;
+    final y = localPos.dy - _headerH;
     if (x < 0 || y < 0) return null;
     final col = (x / _cellW).floor();
     final row = (y / _cellH).floor();
@@ -88,6 +90,7 @@ class _ChartCanvasState extends State<ChartCanvas> {
     if (col < 0 || col >= widget.chart.cols) return null;
     return (row, col);
   }
+
 
   CellData get _activeCell {
     if (widget.chart.mode == ChartMode.symbol) {
@@ -100,12 +103,23 @@ class _ChartCanvasState extends State<ChartCanvas> {
     final hit = _hitCell(localPos);
     if (hit == null) return;
     final (row, col) = hit;
+    final byId = ref.read(knitSymbolByIdProvider);
     switch (widget.tool) {
       case ChartTool.draw:
-        widget.onChartChanged(widget.chart.setCell(row, col, _activeCell));
+        final sym = widget.activeSymbolId != null ? byId[widget.activeSymbolId] : null;
+        final sw = sym?.spanWidth ?? 1;
+        final sh = sym?.spanHeight ?? 1;
+        if (sw == 1 && sh == 1) {
+          widget.onChartChanged(widget.chart.setCell(row, col, _activeCell));
+        } else {
+          widget.onChartChanged(widget.chart.setSpanCell(row, col, _activeCell, sw, sh));
+        }
       case ChartTool.erase:
-        widget.onChartChanged(widget.chart.setCell(row, col, const CellData()));
+        widget.onChartChanged(widget.chart.eraseSpanCell(row, col));
       case ChartTool.fill:
+        // fill은 span 심볼 배치 시 무시
+        final sym = widget.activeSymbolId != null ? byId[widget.activeSymbolId] : null;
+        if ((sym?.spanWidth ?? 1) > 1 || (sym?.spanHeight ?? 1) > 1) break;
         final filled = _floodFill(widget.chart, row, col, _activeCell);
         widget.onChartChanged(filled);
       case ChartTool.select:
@@ -120,10 +134,18 @@ class _ChartCanvasState extends State<ChartCanvas> {
     final hit = _hitCell(localPos);
     if (hit == null) return;
     final (row, col) = hit;
+    final byId = ref.read(knitSymbolByIdProvider);
     if (widget.tool == ChartTool.draw) {
-      widget.onChartChanged(widget.chart.setCell(row, col, _activeCell));
+      final sym = widget.activeSymbolId != null ? byId[widget.activeSymbolId] : null;
+      final sw = sym?.spanWidth ?? 1;
+      final sh = sym?.spanHeight ?? 1;
+      if (sw == 1 && sh == 1) {
+        widget.onChartChanged(widget.chart.setCell(row, col, _activeCell));
+      } else {
+        widget.onChartChanged(widget.chart.setSpanCell(row, col, _activeCell, sw, sh));
+      }
     } else if (widget.tool == ChartTool.erase) {
-      widget.onChartChanged(widget.chart.setCell(row, col, const CellData()));
+      widget.onChartChanged(widget.chart.eraseSpanCell(row, col));
     }
   }
 
@@ -158,18 +180,59 @@ class _ChartCanvasState extends State<ChartCanvas> {
 
   bool get _interactiveEnabled => widget.tool == ChartTool.move;
 
+  /// symbolId → SVG URL 변환 (abbreviation 우선, id fallback)
+  String? _svgUrl(String symbolId, Map<String, String> svgUrls) {
+    final sym = KnitSymbolLibrary.byId(symbolId);
+    if (sym != null) {
+      final abbrKey = sym.abbr.toLowerCase().replaceAll(' ', '_');
+      if (svgUrls.containsKey(abbrKey)) return svgUrls[abbrKey];
+    }
+    final idKey = symbolId.toLowerCase().replaceAll(' ', '_');
+    return svgUrls[idKey];
+  }
+
   @override
   Widget build(BuildContext context) {
+    final svgUrls = ref.watch(knitSymbolSvgUrlProvider);
     final canvasWidth = _headerW + widget.chart.cols * _cellW;
     final canvasHeight = _headerH + widget.chart.rows * _cellH;
 
-    final painter = _ChartPainter(
-      chart: widget.chart,
-    );
+    // 기호 모드: SVG 오버레이만 사용 — 앵커 셀만 렌더링, span 크기 적용
+    final overlays = <Widget>[];
+    if (widget.chart.mode == ChartMode.symbol) {
+      for (int r = 0; r < widget.chart.rows; r++) {
+        for (int c = 0; c < widget.chart.cols; c++) {
+          final cell = widget.chart.grid[r][c];
+          // 점유 셀(occupied)은 앵커에서 이미 그리므로 건너뜀
+          if (!cell.isAnchor) continue;
+          final url = _svgUrl(cell.symbolId!, svgUrls);
+          if (url == null) continue;
+          final sw = cell.spanW ?? 1;
+          final sh = cell.spanH ?? 1;
+          overlays.add(Positioned(
+            left: _headerW + c * _cellW + 2,
+            top: _headerH + r * _cellH + 2,
+            width: _cellW * sw - 4,
+            height: _cellH * sh - 4,
+            child: SvgPicture.network(url, fit: BoxFit.contain),
+          ));
+        }
+      }
+    }
 
-    Widget canvas = CustomPaint(
-      size: Size(canvasWidth, canvasHeight),
-      painter: painter,
+    Widget canvas = SizedBox(
+      width: canvasWidth,
+      height: canvasHeight,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          CustomPaint(
+            size: Size(canvasWidth, canvasHeight),
+            painter: _ChartPainter(chart: widget.chart),
+          ),
+          ...overlays,
+        ],
+      ),
     );
 
     if (!_interactiveEnabled) {
@@ -190,8 +253,8 @@ class _ChartCanvasState extends State<ChartCanvas> {
     return InteractiveViewer(
       transformationController: _transformCtrl,
       panEnabled: _interactiveEnabled,
-      scaleEnabled: _interactiveEnabled,
-      minScale: 0.3,
+      scaleEnabled: true,   // 항상 핀치줌 허용 (전체화면 후 줌아웃 가능)
+      minScale: 0.1,
       maxScale: 5.0,
       constrained: false,
       child: canvas,
@@ -199,10 +262,12 @@ class _ChartCanvasState extends State<ChartCanvas> {
   }
 }
 
+/// 그리드 배경·셀(컬러모드)·격자·헤더 전용 Painter
+/// 기호 모드 셀은 SVG 오버레이로 처리하므로 Canvas 심볼 코드 없음
 class _ChartPainter extends CustomPainter {
   final PatternChart chart;
 
-  _ChartPainter({required this.chart});
+  const _ChartPainter({required this.chart});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -213,60 +278,25 @@ class _ChartPainter extends CustomPainter {
   }
 
   void _drawBackground(Canvas canvas) {
-    final paint = Paint()..color = Colors.white;
     canvas.drawRect(
-      Rect.fromLTWH(
-        _headerW,
-        _headerH,
-        chart.cols * _cellW,
-        chart.rows * _cellH,
-      ),
-      paint,
+      Rect.fromLTWH(_headerW, _headerH, chart.cols * _cellW, chart.rows * _cellH),
+      Paint()..color = Colors.white,
     );
   }
 
   void _drawCells(Canvas canvas) {
+    // 컬러 모드만 Canvas로 그림. 기호 모드는 SVG 오버레이만 사용.
+    if (chart.mode != ChartMode.color) return;
     for (int r = 0; r < chart.rows; r++) {
       for (int c = 0; c < chart.cols; c++) {
         final cell = chart.grid[r][c];
-        final rect = Rect.fromLTWH(
-          _headerW + c * _cellW,
-          _headerH + r * _cellH,
-          _cellW,
-          _cellH,
+        if (cell.color == null) continue;
+        canvas.drawRect(
+          Rect.fromLTWH(_headerW + c * _cellW, _headerH + r * _cellH, _cellW, _cellH),
+          Paint()..color = cell.color!,
         );
-
-        if (chart.mode == ChartMode.color) {
-          if (cell.color != null) {
-            canvas.drawRect(rect, Paint()..color = cell.color!);
-          }
-        } else {
-          if (cell.symbolId != null) {
-            final sym = KnitSymbolLibrary.byId(cell.symbolId!);
-            if (sym != null) {
-              _drawSymbol(canvas, rect, sym.unicode);
-            }
-          }
-        }
       }
     }
-  }
-
-  void _drawSymbol(Canvas canvas, Rect rect, String unicode) {
-    final pb = ui.ParagraphBuilder(
-      ui.ParagraphStyle(
-        textAlign: TextAlign.center,
-        fontSize: 13,
-      ),
-    )
-      ..pushStyle(ui.TextStyle(color: const Color(0xFF1A1A2E), fontSize: 13))
-      ..addText(unicode);
-
-    final paragraph = pb.build()
-      ..layout(ui.ParagraphConstraints(width: rect.width));
-
-    final dy = rect.top + (rect.height - paragraph.height) / 2;
-    canvas.drawParagraph(paragraph, Offset(rect.left, dy));
   }
 
   void _drawGrid(Canvas canvas) {
@@ -297,12 +327,11 @@ class _ChartPainter extends CustomPainter {
     );
 
     for (int c = 0; c < chart.cols; c++) {
-      final label = '${c + 1}';
       final pb = ui.ParagraphBuilder(
         ui.ParagraphStyle(textAlign: TextAlign.center, fontSize: 9),
       )
         ..pushStyle(style)
-        ..addText(label);
+        ..addText('${c + 1}');
       final p = pb.build()..layout(const ui.ParagraphConstraints(width: _cellW));
       final x = _headerW + c * _cellW;
       final dy = (_headerH - p.height) / 2;
@@ -310,12 +339,11 @@ class _ChartPainter extends CustomPainter {
     }
 
     for (int r = 0; r < chart.rows; r++) {
-      final label = '${r + 1}';
       final pb = ui.ParagraphBuilder(
         ui.ParagraphStyle(textAlign: TextAlign.right, fontSize: 9),
       )
         ..pushStyle(style)
-        ..addText(label);
+        ..addText('${r + 1}');
       final p = pb.build()..layout(const ui.ParagraphConstraints(width: _headerW - 2));
       final y = _headerH + r * _cellH + (_cellH - p.height) / 2;
       canvas.drawParagraph(p, Offset(0, y));
@@ -323,6 +351,10 @@ class _ChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_ChartPainter old) =>
-      old.chart != chart || !identical(old.chart.grid, chart.grid);
+  bool shouldRepaint(covariant CustomPainter old) {
+    if (old is _ChartPainter) {
+      return old.chart != chart || !identical(old.chart.grid, chart.grid);
+    }
+    return true;
+  }
 }

@@ -25,9 +25,13 @@ class _PatternConverterScreenState
     extends ConsumerState<PatternConverterScreen> {
   bool _isUploading = false;
   double _progress = 0;
+  int _stage = 1; // 1=업로드, 2=AI분석, 3=저장
   String _statusMessage = '';
 
   Future<void> _pickAndParse() async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final messenger = ScaffoldMessenger.of(context);
+
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
@@ -48,11 +52,24 @@ class _PatternConverterScreenState
             ? 'image/png'
             : 'image/jpeg';
 
-    final isKorean = ref.read(appLanguageProvider).isKorean;
+    // 파일 크기 제한 (10MB)
+    final fileSize = await file.length();
+    const maxBytes = 10 * 1024 * 1024;
+    if (fileSize > maxBytes) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(
+        messenger,
+        message: isKorean
+            ? '파일 크기가 너무 큽니다. 10MB 이하의 파일을 사용해 주세요.'
+            : 'File too large. Please use a file under 10MB.',
+      );
+      return;
+    }
 
     setState(() {
       _isUploading = true;
       _progress = 0;
+      _stage = 1;
       _statusMessage =
           isKorean ? '파일을 업로드하는 중...' : 'Uploading file...';
     });
@@ -68,13 +85,17 @@ class _PatternConverterScreenState
           setState(() {
             _progress = p;
             if (p < 0.5) {
+              _stage = 1;
               _statusMessage =
                   isKorean ? '파일을 업로드하는 중...' : 'Uploading...';
             } else if (p < 1.0) {
-              _statusMessage =
-                  isKorean ? 'AI가 도안을 분석하는 중...' : 'AI is analyzing...';
+              _stage = 2;
+              _statusMessage = isKorean
+                  ? 'AI가 도안을 분석하는 중...'
+                  : 'AI is analyzing...';
             } else {
-              _statusMessage = isKorean ? '분석 완료!' : 'Done!';
+              _stage = 3;
+              _statusMessage = isKorean ? '저장하는 중...' : 'Saving...';
             }
           });
         },
@@ -96,9 +117,14 @@ class _PatternConverterScreenState
       );
     } catch (e) {
       if (!mounted) return;
+      final errMsg = e
+          .toString()
+          .split('\n')
+          .first
+          .replaceAll(RegExp(r'^\[firebase_functions/[^\]]+\]\s*'), '');
       showSaveErrorSnackBar(
-        ScaffoldMessenger.of(context),
-        message: isKorean ? '오류가 발생했어요: $e' : 'Error: $e',
+        messenger,
+        message: isKorean ? '오류가 발생했어요: $errMsg' : 'Error: $errMsg',
       );
     } finally {
       if (mounted) setState(() => _isUploading = false);
@@ -189,7 +215,9 @@ class _PatternConverterScreenState
 
                 if (_isUploading)
                   _UploadProgress(
-                      progress: _progress, message: _statusMessage)
+                      progress: _progress,
+                      message: _statusMessage,
+                      stage: _stage)
                 else
                   _UploadButton(onTap: _pickAndParse),
 
@@ -286,11 +314,22 @@ class _UploadButton extends StatelessWidget {
 class _UploadProgress extends StatelessWidget {
   final double progress;
   final String message;
-  const _UploadProgress(
-      {required this.progress, required this.message});
+  final int stage; // 1=업로드, 2=AI분석, 3=저장
+
+  const _UploadProgress({
+    required this.progress,
+    required this.message,
+    required this.stage,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final stages = [
+      ('1', '업로드'),
+      ('2', 'AI 분석'),
+      ('3', '저장'),
+    ];
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -301,7 +340,70 @@ class _UploadProgress extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const SizedBox(height: 8),
+          // 단계 표시
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (int i = 0; i < stages.length; i++) ...[
+                if (i > 0)
+                  Container(
+                    width: 24,
+                    height: 1,
+                    color: i + 1 <= stage
+                        ? C.lv
+                        : C.lv.withValues(alpha: 0.2),
+                  ),
+                Column(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: i + 1 < stage
+                            ? C.lv
+                            : i + 1 == stage
+                                ? C.lv
+                                : C.lv.withValues(alpha: 0.15),
+                        border: Border.all(
+                          color: i + 1 <= stage
+                              ? C.lv
+                              : C.lv.withValues(alpha: 0.3),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Center(
+                        child: i + 1 < stage
+                            ? const Icon(Icons.check,
+                                size: 14, color: Colors.white)
+                            : Text(
+                                stages[i].$1,
+                                style: T.caption.copyWith(
+                                  color: i + 1 == stage
+                                      ? Colors.white
+                                      : C.lv.withValues(alpha: 0.5),
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      stages[i].$2,
+                      style: T.caption.copyWith(
+                        color: i + 1 <= stage ? C.lv : C.tx2,
+                        fontWeight: i + 1 == stage
+                            ? FontWeight.w700
+                            : FontWeight.w400,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 20),
           SizedBox(
             width: 64,
             height: 64,
@@ -326,6 +428,31 @@ class _UploadProgress extends StatelessWidget {
           Text(message,
               style: T.sm.copyWith(color: C.tx2),
               textAlign: TextAlign.center),
+          if (stage == 2) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: C.og.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border:
+                    Border.all(color: C.og.withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.schedule_rounded,
+                      size: 13, color: C.og),
+                  const SizedBox(width: 5),
+                  Text(
+                    '도안 크기에 따라 최대 3분이 소요될 수 있어요.',
+                    style: T.caption.copyWith(color: C.og),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
         ],
       ),

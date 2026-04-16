@@ -37,6 +37,7 @@ final bookmarkedIdsProvider = Provider.family<Set<String>, String>((ref, uid) {
   return entries.where((e) => e.isBookmark && e.sourceId.isNotEmpty).map((e) => e.sourceId).toSet();
 });
 
+
 /// 북마크 토글 (추가/제거)
 Future<void> toggleBookmark({
   required PersonalEncyclopediaRepository repo,

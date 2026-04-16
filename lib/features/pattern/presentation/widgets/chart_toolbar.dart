@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../providers/knit_symbol_provider.dart';
+import '../../domain/knit_symbol_entry.dart';
 import '../../domain/knit_symbols.dart';
 import '../../domain/pattern_chart.dart';
 
@@ -130,30 +134,41 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      child: Row(
-        children: [
-          _ModeToggle(mode: mode, onChanged: onModeChanged),
-          const SizedBox(width: 6),
-          const VerticalDivider(width: 1, indent: 4, endIndent: 4),
-          const SizedBox(width: 6),
-          for (final t in _tools)
-            _ToolBtn(
-              icon: t.icon,
-              active: activeTool == t.tool,
-              onTap: () => onToolChanged(t.tool),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 1행: 모드 토글 + 액션 버튼 (undo/redo/export/clear)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 6, 4, 2),
+          child: Row(
+            children: [
+              _ModeToggle(mode: mode, onChanged: onModeChanged),
+              const Spacer(),
+              if (onFitScreen != null)
+                _IconBtn(icon: Icons.fit_screen_rounded, enabled: true, onTap: onFitScreen!),
+              _IconBtn(icon: Icons.undo_rounded, enabled: canUndo, onTap: onUndo),
+              _IconBtn(icon: Icons.redo_rounded, enabled: canRedo, onTap: onRedo),
+              _IconBtn(icon: Icons.ios_share_rounded, enabled: true, onTap: onExport),
+              _IconBtn(icon: Icons.delete_outline_rounded, enabled: true, onTap: onClear, color: Colors.red.shade300),
+            ],
+          ),
+        ),
+        // 2행: 그리기 도구 (서술형 모드 제외)
+        if (mode != ChartMode.narrative)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+            child: Row(
+              children: [
+                for (final t in _tools)
+                  _ToolBtn(
+                    icon: t.icon,
+                    active: activeTool == t.tool,
+                    onTap: () => onToolChanged(t.tool),
+                  ),
+              ],
             ),
-          const Spacer(),
-          if (onFitScreen != null)
-            _IconBtn(icon: Icons.fit_screen_rounded, enabled: true, onTap: onFitScreen!),
-          _IconBtn(icon: Icons.undo_rounded, enabled: canUndo, onTap: onUndo),
-          _IconBtn(icon: Icons.redo_rounded, enabled: canRedo, onTap: onRedo),
-          const SizedBox(width: 4),
-          _IconBtn(icon: Icons.ios_share_rounded, enabled: true, onTap: onExport),
-          _IconBtn(icon: Icons.delete_outline_rounded, enabled: true, onTap: onClear, color: Colors.red.shade300),
-        ],
-      ),
+          ),
+      ],
     );
   }
 }
@@ -498,7 +513,7 @@ class _SimpleColorPickerState extends State<_SimpleColorPicker> {
       );
 }
 
-class _SymbolPanel extends StatelessWidget {
+class _SymbolPanel extends ConsumerWidget {
   final SymbolCategory selectedCategory;
   final String? activeSymbolId;
   final ValueChanged<SymbolCategory> onCategoryChanged;
@@ -511,18 +526,72 @@ class _SymbolPanel extends StatelessWidget {
     required this.onSymbolChanged,
   });
 
+  void _openExpanded(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.gx,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.55,
+        minChildSize: 0.35,
+        maxChildSize: 0.92,
+        expand: false,
+        snap: true,
+        snapSizes: const [0.55, 0.92],
+        builder: (_, scrollCtrl) => _ExpandedSymbolSheet(
+          initialCategory: selectedCategory,
+          activeSymbolId: activeSymbolId,
+          onSymbolChanged: (id) {
+            onSymbolChanged(id);
+            Navigator.pop(ctx);
+          },
+          scrollController: scrollCtrl,
+        ),
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
-    final symbols = KnitSymbolLibrary.byCategory(selectedCategory);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final allEntries = ref.watch(knitSymbolsProvider).valueOrNull ?? [];
+    // basic(전체) 탭은 모든 심볼, 나머지는 카테고리 필터
+    final symbols = selectedCategory == SymbolCategory.basic
+        ? allEntries
+        : allEntries.where((e) => e.symbolCategory == selectedCategory).toList();
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // ── 드래그 핸들 ──────────────────────────────────────
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _openExpanded(context),
+          onVerticalDragUpdate: (d) {
+            if (d.delta.dy < -4) _openExpanded(context);
+          },
+          child: SizedBox(
+            height: 40,
+            child: Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: C.bd2,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+          ),
+        ),
+        // ── 카테고리 탭 ─────────────────────────────────────
         SizedBox(
-          height: 36,
+          height: 32,
           child: ListView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             children: [
               for (final cat in SymbolCategory.values)
                 _CategoryTab(
@@ -534,20 +603,25 @@ class _SymbolPanel extends StatelessWidget {
           ),
         ),
         const Divider(height: 1),
+        // ── 기호 가로 스크롤 ────────────────────────────────
         SizedBox(
-          height: 80,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            children: [
-              for (final sym in symbols)
-                _SymbolCell(
-                  symbol: sym,
-                  active: activeSymbolId == sym.id,
-                  onTap: () => onSymbolChanged(sym.id),
+          height: 84,
+          child: symbols.isEmpty
+              ? Center(
+                  child: Text('더 많은 심볼이 계속 추가됩니다.', style: TextStyle(fontSize: 11, color: C.tx2)),
+                )
+              : ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  children: [
+                    for (final e in symbols)
+                      _SymbolCell(
+                        entry: e,
+                        active: activeSymbolId == e.symbolId,
+                        onTap: () => onSymbolChanged(e.symbolId),
+                      ),
+                  ],
                 ),
-            ],
-          ),
         ),
       ],
     );
@@ -555,13 +629,119 @@ class _SymbolPanel extends StatelessWidget {
 
   String _catLabel(SymbolCategory cat) {
     switch (cat) {
-      case SymbolCategory.basic:    return '기본';
+      case SymbolCategory.basic:    return '전체';
       case SymbolCategory.decrease: return '줄이기';
       case SymbolCategory.increase: return '늘리기';
       case SymbolCategory.cable:    return '케이블';
       case SymbolCategory.special:  return '특수';
       case SymbolCategory.lace:     return '레이스';
     }
+  }
+}
+
+// ── 확장 기호 바텀시트 ──────────────────────────────────────────────
+class _ExpandedSymbolSheet extends ConsumerStatefulWidget {
+  final SymbolCategory initialCategory;
+  final String? activeSymbolId;
+  final ValueChanged<String> onSymbolChanged;
+  final ScrollController scrollController;
+
+  const _ExpandedSymbolSheet({
+    required this.initialCategory,
+    required this.activeSymbolId,
+    required this.onSymbolChanged,
+    required this.scrollController,
+  });
+
+  @override
+  ConsumerState<_ExpandedSymbolSheet> createState() => _ExpandedSymbolSheetState();
+}
+
+class _ExpandedSymbolSheetState extends ConsumerState<_ExpandedSymbolSheet> {
+  late SymbolCategory _cat;
+
+  @override
+  void initState() {
+    super.initState();
+    _cat = widget.initialCategory;
+  }
+
+  String _catLabel(SymbolCategory cat) {
+    switch (cat) {
+      case SymbolCategory.basic:    return '전체';
+      case SymbolCategory.decrease: return '줄이기';
+      case SymbolCategory.increase: return '늘리기';
+      case SymbolCategory.cable:    return '케이블';
+      case SymbolCategory.special:  return '특수';
+      case SymbolCategory.lace:     return '레이스';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final allEntries = ref.watch(knitSymbolsProvider).valueOrNull ?? [];
+    // basic(전체) 탭은 모든 심볼, 나머지는 카테고리 필터
+    final symbols = _cat == SymbolCategory.basic
+        ? allEntries
+        : allEntries.where((e) => e.symbolCategory == _cat).toList();
+
+    return Column(
+      children: [
+        // 드래그 인디케이터
+        Container(
+          width: 40,
+          height: 4,
+          margin: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: C.bd2,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        // 카테고리 탭
+        SizedBox(
+          height: 36,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+            children: [
+              for (final cat in SymbolCategory.values)
+                _CategoryTab(
+                  label: _catLabel(cat),
+                  active: _cat == cat,
+                  onTap: () => setState(() => _cat = cat),
+                ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        // 기호 그리드
+        Expanded(
+          child: symbols.isEmpty
+              ? Center(
+                  child: Text('더 많은 심볼이 계속 추가됩니다.', style: TextStyle(fontSize: 13, color: C.tx2)),
+                )
+              : GridView.builder(
+                  controller: widget.scrollController,
+                  padding: const EdgeInsets.all(12),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 6,
+                    childAspectRatio: 0.82,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                  ),
+                  itemCount: symbols.length,
+                  itemBuilder: (_, i) {
+                    final e = symbols[i];
+                    return _SymbolCell(
+                      entry: e,
+                      active: widget.activeSymbolId == e.symbolId,
+                      onTap: () => widget.onSymbolChanged(e.symbolId),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
   }
 }
 
@@ -614,23 +794,30 @@ class _NarrativeHint extends StatelessWidget {
   }
 }
 
+/// knit_symbols 컬렉션 기반 심볼 셀 — Firebase Storage SVG 표시
 class _SymbolCell extends StatelessWidget {
-  final KnitSymbol symbol;
+  final KnitSymbolEntry entry;
   final bool active;
   final VoidCallback onTap;
 
-  const _SymbolCell({required this.symbol, required this.active, required this.onTap});
+  const _SymbolCell({
+    required this.entry,
+    required this.active,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final label = entry.abbreviation.isNotEmpty ? entry.abbreviation : entry.name;
+
     return GestureDetector(
       onTap: onTap,
       child: Tooltip(
-        message: '${symbol.name} (${symbol.abbr})',
+        message: '${entry.name} ($label)',
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
-          width: 44,
-          height: 44,
+          width: 56,
+          height: 72,
           margin: const EdgeInsets.symmetric(horizontal: 3),
           decoration: BoxDecoration(
             color: active ? C.lvL : Colors.white,
@@ -640,14 +827,27 @@ class _SymbolCell extends StatelessWidget {
               width: active ? 2 : 1,
             ),
           ),
-          child: Center(
-            child: Text(
-              symbol.unicode,
-              style: TextStyle(
-                fontSize: 18,
-                color: C.tx,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SvgPicture.network(
+                entry.svgUrl,
+                width: 30,
+                height: 30,
+                fit: BoxFit.contain,
+                placeholderBuilder: (_) => Text(
+                  label.length > 4 ? label.substring(0, 4) : label,
+                  style: TextStyle(fontSize: 9, color: C.tx2, fontWeight: FontWeight.w600),
+                ),
               ),
-            ),
+              const SizedBox(height: 3),
+              Text(
+                label.length > 6 ? label.substring(0, 6) : label,
+                style: TextStyle(fontSize: 8, color: C.tx2, fontWeight: FontWeight.w600),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
         ),
       ),
