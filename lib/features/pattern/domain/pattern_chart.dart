@@ -136,6 +136,35 @@ class PatternChart {
     return _copyWith(grid: newGrid);
   }
 
+  /// 색상 레이어만 업데이트 — 기호/span 정보 보존
+  PatternChart setCellColor(int row, int col, Color color) {
+    final newGrid = [for (final r in grid) List<CellData>.from(r)];
+    final existing = newGrid[row][col];
+    newGrid[row][col] = CellData(
+      color: color,
+      symbolId: existing.symbolId,
+      spanW: existing.spanW,
+      spanH: existing.spanH,
+      anchorRow: existing.anchorRow,
+      anchorCol: existing.anchorCol,
+    );
+    return _copyWith(grid: newGrid);
+  }
+
+  /// 기호 레이어만 업데이트 — 색상 보존, 점유 셀에는 적용 안 함
+  PatternChart setCellSymbol(int row, int col, String? symbolId) {
+    final newGrid = [for (final r in grid) List<CellData>.from(r)];
+    final existing = newGrid[row][col];
+    if (existing.isOccupied) return this;
+    newGrid[row][col] = CellData(
+      color: existing.color,
+      symbolId: symbolId,
+      spanW: existing.spanW,
+      spanH: existing.spanH,
+    );
+    return _copyWith(grid: newGrid);
+  }
+
   /// span 심볼 배치: 앵커 셀 + 점유 셀 자동 설정
   /// span 범위가 그리드 경계 초과 시 무시하고 반환
   PatternChart setSpanCell(int row, int col, CellData anchorCell, int spanW, int spanH) {
@@ -157,8 +186,9 @@ class PatternChart {
       }
     }
 
-    // 앵커 셀 배치
+    // 앵커 셀 배치 — 기존 색상 보존
     final anchor = CellData(
+      color: newGrid[row][col].color,
       symbolId: anchorCell.symbolId,
       spanW: spanW > 1 ? spanW : null,
       spanH: spanH > 1 ? spanH : null,

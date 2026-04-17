@@ -18,6 +18,11 @@ class LandingPost {
   final String imageUrl;
   final String fileUrl;
   final String fileName;
+  // 다중 이미지/파일 (imageUrls / fileUrls 배열 필드)
+  final List<String> imageUrls;
+  final List<String> fileUrls;
+  // 파일명 배열 (fileUrls와 1:1 대응)
+  final List<String> fileNames;
 
   const LandingPost({
     required this.id,
@@ -34,6 +39,9 @@ class LandingPost {
     this.imageUrl = '',
     this.fileUrl = '',
     this.fileName = '',
+    this.imageUrls = const [],
+    this.fileUrls = const [],
+    this.fileNames = const [],
   });
 
   factory LandingPost.fromDoc(DocumentSnapshot doc) {
@@ -53,6 +61,9 @@ class LandingPost {
       imageUrl: data['imageUrl'] as String? ?? '',
       fileUrl: data['fileUrl'] as String? ?? '',
       fileName: data['fileName'] as String? ?? '',
+      imageUrls: List<String>.from(data['imageUrls'] as List<dynamic>? ?? []),
+      fileUrls: List<String>.from(data['fileUrls'] as List<dynamic>? ?? []),
+      fileNames: List<String>.from(data['fileNames'] as List<dynamic>? ?? []),
     );
   }
 
@@ -70,6 +81,9 @@ class LandingPost {
         'imageUrl': imageUrl,
         'fileUrl': fileUrl,
         'fileName': fileName,
+        'imageUrls': imageUrls,
+        'fileUrls': fileUrls,
+        'fileNames': fileNames,
       };
 }
 

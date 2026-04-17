@@ -15,6 +15,8 @@ class LandingFooter extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final social = ref.watch(socialIntegrationsProvider).valueOrNull;
     final youtubeUrl = social?.youtubeUrl ?? 'https://www.youtube.com/@moriknit';
+    final instagramUrl = social?.instagramUrl ?? 'https://instagram.com/moriknit';
+    final blogUrl = social?.blogUrl ?? 'https://blog.naver.com/moriknit';
     return Container(
       color: const Color(0xFF1A1A2E),
       child: Center(
@@ -107,7 +109,7 @@ class LandingFooter extends ConsumerWidget {
                     _FooterSnsIconButton(
                       icon: Icons.camera_alt_outlined,
                       tooltip: 'Instagram',
-                      url: 'https://instagram.com/moriknit.official',
+                      url: instagramUrl,
                     ),
                     const SizedBox(width: 6),
                     _FooterSnsIconButton(
@@ -119,7 +121,7 @@ class LandingFooter extends ConsumerWidget {
                     _FooterSnsIconButton(
                       icon: Icons.article_outlined,
                       tooltip: 'Blog',
-                      url: 'https://blog.naver.com/moriknit',
+                      url: blogUrl,
                     ),
                   ],
                 ),

@@ -355,64 +355,10 @@ class _LandingNoticeDetailScreenState
                             style: const TextStyle(
                                 fontSize: 15, height: 1.8, color: Color(0xFF1E1B4B)),
                           ),
-                          // 첨부 이미지
-                          if (notice.imageUrl.isNotEmpty) ...[
-                            const SizedBox(height: 24),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.network(
-                                notice.imageUrl,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                              ),
-                            ),
-                          ],
-                          // 첨부 파일
-                          if (notice.fileUrl.isNotEmpty) ...[
-                            const SizedBox(height: 16),
-                            InkWell(
-                              onTap: () => launchUrl(
-                                Uri.parse(notice.fileUrl),
-                                mode: LaunchMode.externalApplication,
-                              ),
-                              borderRadius: BorderRadius.circular(10),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF5F0FF),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: const Color(0xFFDDD6FE)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.insert_drive_file_rounded,
-                                        color: Color(0xFF8B5CF6), size: 20),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        notice.fileName.isNotEmpty ? notice.fileName : '첨부 파일',
-                                        style: const TextStyle(
-                                            fontSize: 14,
-                                            color: Color(0xFF4C3D8A),
-                                            fontWeight: FontWeight.w500),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    const Icon(Icons.download_rounded,
-                                        color: Color(0xFF8B5CF6), size: 18),
-                                    const SizedBox(width: 4),
-                                    const Text('다운로드',
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            color: Color(0xFF8B5CF6),
-                                            fontWeight: FontWeight.w600)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
+                          // 첨부 이미지 (단건 imageUrl + 복수 imageUrls 통합)
+                          _NoticeImages(notice: notice),
+                          // 첨부 파일 (단건 fileUrl + 복수 fileUrls 통합)
+                          _NoticeFiles(notice: notice),
                           const SizedBox(height: 40),
                           const Divider(color: Color(0xFFEEE8FF)),
                           const SizedBox(height: 24),
@@ -650,6 +596,140 @@ class _LoginPrompt extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── 공지사항 첨부 이미지 위젯 ─────────────────────────────────────────────────
+
+class _NoticeImages extends StatelessWidget {
+  final LandingPost notice;
+
+  const _NoticeImages({required this.notice});
+
+  @override
+  Widget build(BuildContext context) {
+    // 단건 imageUrl + 복수 imageUrls 통합 (중복 제거)
+    final urls = <String>[
+      if (notice.imageUrl.isNotEmpty) notice.imageUrl,
+      ...notice.imageUrls.where((u) => u.isNotEmpty && u != notice.imageUrl),
+    ];
+
+    if (urls.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      children: urls.map((url) {
+        return Padding(
+          padding: const EdgeInsets.only(top: 24),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.network(
+              url,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, progress) {
+                if (progress == null) return child;
+                return Container(
+                  width: double.infinity,
+                  height: 200,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F0FF),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Center(
+                    child: CircularProgressIndicator(
+                      color: Color(0xFF8B5CF6),
+                      strokeWidth: 2,
+                    ),
+                  ),
+                );
+              },
+              errorBuilder: (context, error, stack) => const SizedBox.shrink(),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+// ── 공지사항 첨부 파일 위젯 ───────────────────────────────────────────────────
+
+class _NoticeFiles extends StatelessWidget {
+  final LandingPost notice;
+
+  const _NoticeFiles({required this.notice});
+
+  @override
+  Widget build(BuildContext context) {
+    // 단건 fileUrl + 복수 fileUrls 통합 (중복 제거)
+    final files = <({String url, String name})>[
+      if (notice.fileUrl.isNotEmpty)
+        (url: notice.fileUrl, name: notice.fileName),
+      ...notice.fileUrls
+          .asMap()
+          .entries
+          .where((e) => e.value.isNotEmpty && e.value != notice.fileUrl)
+          .map((e) => (
+                url: e.value,
+                name: e.key < notice.fileNames.length
+                    ? notice.fileNames[e.key]
+                    : '',
+              )),
+    ];
+
+    if (files.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      children: files.map((f) {
+        return Padding(
+          padding: const EdgeInsets.only(top: 16),
+          child: InkWell(
+            onTap: () => launchUrl(
+              Uri.parse(f.url),
+              mode: LaunchMode.externalApplication,
+            ),
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF5F0FF),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFDDD6FE)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.insert_drive_file_rounded,
+                      color: Color(0xFF8B5CF6), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      f.name.isNotEmpty ? f.name : '첨부 파일',
+                      style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF4C3D8A),
+                          fontWeight: FontWeight.w500),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.download_rounded,
+                      color: Color(0xFF8B5CF6), size: 18),
+                  const SizedBox(width: 4),
+                  const Text(
+                    '다운로드',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF8B5CF6),
+                        fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

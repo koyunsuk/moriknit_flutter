@@ -40,6 +40,7 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
   ChartTool _activeTool = ChartTool.draw;
   Color _activeColor = Colors.black;
   String? _activeSymbolId;
+  DrawLayer _activeLayer = DrawLayer.color;
   bool _isSaving = false;
   bool _showReference = false;
   late TextEditingController _narrativeController;
@@ -119,9 +120,74 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
         mode: _chart.mode,
       );
     });
-    if (_chart.mode == ChartMode.narrative) {
-      _narrativeController.clear();
-    }
+    _narrativeController.clear();
+  }
+
+  void _openNarrativeSheet() {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.92,
+        expand: false,
+        snap: true,
+        snapSizes: const [0.6, 0.92],
+        builder: (_, scrollCtrl) => StatefulBuilder(
+          builder: (ctx2, setSheetState) => Column(
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(2)),
+              ),
+              _GenerateFromGridBar(
+                chart: _chart,
+                isKorean: isKorean,
+                onGenerate: () async {
+                  await _generateNarrativeFromGrid();
+                  setSheetState(() {});
+                },
+              ),
+              Expanded(
+                child: _NarrativeEditor(
+                  controller: _narrativeController,
+                  onChanged: (text) {
+                    _pushUndo(_chart);
+                    setState(() {
+                      _chart = _chart.copyWith(narrativeText: text);
+                    });
+                    setSheetState(() {});
+                  },
+                ),
+              ),
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: C.lv,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 48),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text(isKorean ? '닫기' : 'Close'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   // 이슈 #96: 저장 진입점 — 제목 확인 후 _runSave 호출
@@ -537,43 +603,15 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
                   child: ClipRect(
                     child: RepaintBoundary(
                       key: _chartKey,
-                      child: _chart.mode == ChartMode.narrative
-                        ? Column(
-                            children: [
-                              _GenerateFromGridBar(
-                                chart: _chart,
-                                isKorean: isKorean,
-                                onGenerate: _generateNarrativeFromGrid,
-                              ),
-                              Expanded(
-                                child: _NarrativeEditor(
-                                  controller: _narrativeController,
-                                  onChanged: (text) {
-                                    _pushUndo(_chart);
-                                    setState(() {
-                                      _chart = PatternChart(
-                                        id: _chart.id,
-                                        title: _chart.title,
-                                        rows: _chart.rows,
-                                        cols: _chart.cols,
-                                        mode: _chart.mode,
-                                        grid: _chart.grid,
-                                        narrativeText: text,
-                                      );
-                                    });
-                                  },
-                                ),
-                              ),
-                            ],
-                          )
-                        : ChartCanvas(
-                            chart: _chart,
-                            tool: _activeTool,
-                            activeColor: _activeColor,
-                            activeSymbolId: _activeSymbolId,
-                            onChartChanged: _onChartChanged,
-                            fitToScreenNotifier: _fitToScreenNotifier,
-                          ),
+                      child: ChartCanvas(
+                        chart: _chart,
+                        tool: _activeTool,
+                        activeColor: _activeColor,
+                        activeSymbolId: _activeSymbolId,
+                        activeLayer: _activeLayer,
+                        onChartChanged: _onChartChanged,
+                        fitToScreenNotifier: _fitToScreenNotifier,
+                      ),
                     ),
                   ),
                 ),
@@ -583,25 +621,14 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
         ],
       ),
       bottomNavigationBar: ChartToolbar(
-        mode: _chart.mode,
         activeTool: _activeTool,
         activeColor: _activeColor,
         activeSymbolId: _activeSymbolId,
         canUndo: _undoStack.isNotEmpty,
         canRedo: _redoStack.isNotEmpty,
-        onModeChanged: (mode) {
-          setState(() {
-            _chart = PatternChart(
-              id: _chart.id,
-              title: _chart.title,
-              rows: _chart.rows,
-              cols: _chart.cols,
-              mode: mode,
-              grid: _chart.grid,
-              narrativeText: _chart.narrativeText,
-            );
-          });
-        },
+        activeLayer: _activeLayer,
+        onLayerChanged: (layer) => setState(() => _activeLayer = layer),
+        onNarrative: _openNarrativeSheet,
         onToolChanged: (tool) => setState(() => _activeTool = tool),
         onColorChanged: (color) => setState(() => _activeColor = color),
         onSymbolChanged: (id) => setState(() => _activeSymbolId = id),

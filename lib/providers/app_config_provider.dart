@@ -2,17 +2,25 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 const String _kYoutubeFallback = 'https://www.youtube.com/@moriknit';
+const String _kInstagramFallback = 'https://instagram.com/moriknit';
+const String _kBlogFallback = 'https://blog.naver.com/moriknit';
 
 class SocialIntegrations {
   final String youtube;
   final String instagram;
+  final String blog;
+  final String kakao;
 
   const SocialIntegrations({
     this.youtube = '',
     this.instagram = '',
+    this.blog = '',
+    this.kakao = '',
   });
 
   String get youtubeUrl => youtube.isNotEmpty ? youtube : _kYoutubeFallback;
+  String get instagramUrl => instagram.isNotEmpty ? instagram : _kInstagramFallback;
+  String get blogUrl => blog.isNotEmpty ? blog : _kBlogFallback;
 }
 
 final socialIntegrationsProvider = StreamProvider<SocialIntegrations>((ref) {
@@ -26,6 +34,8 @@ final socialIntegrationsProvider = StreamProvider<SocialIntegrations>((ref) {
     return SocialIntegrations(
       youtube: data['youtube'] as String? ?? '',
       instagram: data['instagram'] as String? ?? '',
+      blog: data['blog'] as String? ?? '',
+      kakao: data['kakao'] as String? ?? '',
     );
   });
 });

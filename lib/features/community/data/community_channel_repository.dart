@@ -33,19 +33,25 @@ class CommunityContentItem {
 }
 
 const String _kYoutubeFallback = 'https://www.youtube.com/@moriknit';
+const String _kInstagramFallback = 'https://www.instagram.com/moriknit/';
+const String _kBlogFallback = 'https://moriknit.com/blog';
 
 class CommunityChannelRepository {
   static List<CommunityChannelLink> channels(
     bool isKorean, {
     String youtubeUrl = '',
+    String instagramUrl = '',
+    String blogUrl = '',
   }) {
     final ytUrl = youtubeUrl.isNotEmpty ? youtubeUrl : _kYoutubeFallback;
+    final igUrl = instagramUrl.isNotEmpty ? instagramUrl : _kInstagramFallback;
+    final blUrl = blogUrl.isNotEmpty ? blogUrl : _kBlogFallback;
     if (isKorean) {
       return [
-        const CommunityChannelLink(
+        CommunityChannelLink(
           title: 'MoriKnit Instagram',
           handle: '@moriknit',
-          url: 'https://www.instagram.com/moriknit/',
+          url: igUrl,
           summary: '릴스, 완성작 사진, 뜨개 무드보드처럼 짧고 빠르게 보는 콘텐츠 채널',
           cta: '인스타그램 열기',
         ),
@@ -56,10 +62,10 @@ class CommunityChannelRepository {
           summary: '튜토리얼, 브이로그, 도안 설명처럼 길게 체험하는 영상 채널',
           cta: '유튜브 열기',
         ),
-        const CommunityChannelLink(
+        CommunityChannelLink(
           title: 'MoriKnit Blog',
           handle: 'moriknit.com/blog',
-          url: 'https://moriknit.com/blog',
+          url: blUrl,
           summary: '정리된 팁, 프로젝트 기록, 추천 도구를 읽기 좋은 포맷으로 보는 채널',
           cta: '블로그 열기',
         ),
@@ -67,10 +73,10 @@ class CommunityChannelRepository {
     }
 
     return [
-      const CommunityChannelLink(
+      CommunityChannelLink(
         title: 'MoriKnit Instagram',
         handle: '@moriknit',
-        url: 'https://www.instagram.com/moriknit/',
+        url: igUrl,
         summary: 'Quick reels, finished pieces, and visual knitting moodboards.',
         cta: 'Open Instagram',
       ),
@@ -81,10 +87,10 @@ class CommunityChannelRepository {
         summary: 'Long-form tutorials, vlogs, and pattern walkthrough videos.',
         cta: 'Open YouTube',
       ),
-      const CommunityChannelLink(
+      CommunityChannelLink(
         title: 'MoriKnit Blog',
         handle: 'moriknit.com/blog',
-        url: 'https://moriknit.com/blog',
+        url: blUrl,
         summary: 'Readable tips, project notes, and curated knitting tools.',
         cta: 'Open Blog',
       ),
@@ -94,17 +100,21 @@ class CommunityChannelRepository {
   static List<CommunityContentItem> highlights(
     bool isKorean, {
     String youtubeUrl = '',
+    String instagramUrl = '',
+    String blogUrl = '',
   }) {
     final ytUrl = youtubeUrl.isNotEmpty ? youtubeUrl : _kYoutubeFallback;
+    final igUrl = instagramUrl.isNotEmpty ? instagramUrl : _kInstagramFallback;
+    final blUrl = blogUrl.isNotEmpty ? blogUrl : _kBlogFallback;
     if (isKorean) {
       return [
-        const CommunityContentItem(
+        CommunityContentItem(
           section: 'Instagram Reel',
           title: '스와치 기록 전후 비교 릴스',
           caption: '짧은 영상으로 스와치 저장 흐름과 결과를 빠르게 체험해볼 수 있어요.',
           badge: 'Quick',
           actionLabel: '릴스 보러가기',
-          url: 'https://www.instagram.com/moriknit/',
+          url: igUrl,
         ),
         CommunityContentItem(
           section: 'YouTube Video',
@@ -114,25 +124,25 @@ class CommunityChannelRepository {
           actionLabel: '영상 보기',
           url: ytUrl,
         ),
-        const CommunityContentItem(
+        CommunityContentItem(
           section: 'Blog Article',
           title: '뜨개 기록을 남겨야 하는 이유',
           caption: '게이지와 프로젝트 메모를 어떻게 남기면 다음 작업이 쉬워지는지 읽어볼 수 있어요.',
           badge: 'Read',
           actionLabel: '아티클 보기',
-          url: 'https://moriknit.com/blog',
+          url: blUrl,
         ),
       ];
     }
 
     return [
-      const CommunityContentItem(
+      CommunityContentItem(
         section: 'Instagram Reel',
         title: 'Before and after swatch reel',
         caption: 'A quick look at how swatches are saved and compared in practice.',
         badge: 'Quick',
         actionLabel: 'Watch reel',
-        url: 'https://www.instagram.com/moriknit/',
+        url: igUrl,
       ),
       CommunityContentItem(
         section: 'YouTube Video',
@@ -142,13 +152,13 @@ class CommunityChannelRepository {
         actionLabel: 'Watch video',
         url: ytUrl,
       ),
-      const CommunityContentItem(
+      CommunityContentItem(
         section: 'Blog Article',
         title: 'Why knitting records matter',
         caption: 'See how gauge notes and project memos make the next project easier.',
         badge: 'Read',
         actionLabel: 'Read article',
-        url: 'https://moriknit.com/blog',
+        url: blUrl,
       ),
     ];
   }

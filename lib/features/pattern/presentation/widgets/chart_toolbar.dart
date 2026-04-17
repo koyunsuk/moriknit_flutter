@@ -7,18 +7,21 @@ import '../../../../providers/knit_symbol_provider.dart';
 import '../../domain/knit_symbol_entry.dart';
 import '../../domain/knit_symbols.dart';
 import '../../domain/pattern_chart.dart';
+import 'chart_canvas.dart' show DrawLayer;
+import 'chart_canvas.dart';
 
 class ChartToolbar extends StatefulWidget {
-  final ChartMode mode;
   final ChartTool activeTool;
   final Color activeColor;
   final String? activeSymbolId;
   final bool canUndo;
   final bool canRedo;
-  final ValueChanged<ChartMode> onModeChanged;
+  final DrawLayer activeLayer;
+  final VoidCallback onNarrative;
   final ValueChanged<ChartTool> onToolChanged;
   final ValueChanged<Color> onColorChanged;
   final ValueChanged<String> onSymbolChanged;
+  final ValueChanged<DrawLayer> onLayerChanged;
   final VoidCallback onUndo;
   final VoidCallback onRedo;
   final VoidCallback onClear;
@@ -27,16 +30,17 @@ class ChartToolbar extends StatefulWidget {
 
   const ChartToolbar({
     super.key,
-    required this.mode,
     required this.activeTool,
     required this.activeColor,
     this.activeSymbolId,
     required this.canUndo,
     required this.canRedo,
-    required this.onModeChanged,
+    required this.activeLayer,
+    required this.onNarrative,
     required this.onToolChanged,
     required this.onColorChanged,
     required this.onSymbolChanged,
+    required this.onLayerChanged,
     required this.onUndo,
     required this.onRedo,
     required this.onClear,
@@ -64,11 +68,10 @@ class _ChartToolbarState extends State<ChartToolbar> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _TopBar(
-              mode: widget.mode,
               activeTool: widget.activeTool,
               canUndo: widget.canUndo,
               canRedo: widget.canRedo,
-              onModeChanged: widget.onModeChanged,
+              onNarrative: widget.onNarrative,
               onToolChanged: widget.onToolChanged,
               onUndo: widget.onUndo,
               onRedo: widget.onRedo,
@@ -77,20 +80,16 @@ class _ChartToolbarState extends State<ChartToolbar> {
               onFitScreen: widget.onFitScreen,
             ),
             const Divider(height: 1),
-            if (widget.mode == ChartMode.color)
-              _ColorPanel(
-                activeColor: widget.activeColor,
-                onColorChanged: widget.onColorChanged,
-              )
-            else if (widget.mode == ChartMode.symbol)
-              _SymbolPanel(
-                selectedCategory: _selectedCategory,
-                activeSymbolId: widget.activeSymbolId,
-                onCategoryChanged: (cat) => setState(() => _selectedCategory = cat),
-                onSymbolChanged: widget.onSymbolChanged,
-              )
-            else
-              const _NarrativeHint(),
+            _UnifiedPanel(
+              activeLayer: widget.activeLayer,
+              activeColor: widget.activeColor,
+              activeSymbolId: widget.activeSymbolId,
+              selectedCategory: _selectedCategory,
+              onLayerChanged: widget.onLayerChanged,
+              onCategoryChanged: (cat) => setState(() => _selectedCategory = cat),
+              onColorChanged: widget.onColorChanged,
+              onSymbolChanged: widget.onSymbolChanged,
+            ),
           ],
         ),
       ),
@@ -99,11 +98,10 @@ class _ChartToolbarState extends State<ChartToolbar> {
 }
 
 class _TopBar extends StatelessWidget {
-  final ChartMode mode;
   final ChartTool activeTool;
   final bool canUndo;
   final bool canRedo;
-  final ValueChanged<ChartMode> onModeChanged;
+  final VoidCallback onNarrative;
   final ValueChanged<ChartTool> onToolChanged;
   final VoidCallback onUndo;
   final VoidCallback onRedo;
@@ -119,11 +117,10 @@ class _TopBar extends StatelessWidget {
   ];
 
   const _TopBar({
-    required this.mode,
     required this.activeTool,
     required this.canUndo,
     required this.canRedo,
-    required this.onModeChanged,
+    required this.onNarrative,
     required this.onToolChanged,
     required this.onUndo,
     required this.onRedo,
@@ -137,13 +134,18 @@ class _TopBar extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // 1행: 모드 토글 + 액션 버튼 (undo/redo/export/clear)
+        // 1행: 서술형 버튼 + 액션 버튼 (undo/redo/export/clear)
         Padding(
           padding: const EdgeInsets.fromLTRB(8, 6, 4, 2),
           child: Row(
             children: [
-              _ModeToggle(mode: mode, onChanged: onModeChanged),
               const Spacer(),
+              _IconBtn(
+                icon: Icons.article_outlined,
+                enabled: true,
+                onTap: onNarrative,
+                tooltip: '서술형 도안',
+              ),
               if (onFitScreen != null)
                 _IconBtn(icon: Icons.fit_screen_rounded, enabled: true, onTap: onFitScreen!),
               _IconBtn(icon: Icons.undo_rounded, enabled: canUndo, onTap: onUndo),
@@ -153,95 +155,25 @@ class _TopBar extends StatelessWidget {
             ],
           ),
         ),
-        // 2행: 그리기 도구 (서술형 모드 제외)
-        if (mode != ChartMode.narrative)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
-            child: Row(
-              children: [
-                for (final t in _tools)
-                  _ToolBtn(
-                    icon: t.icon,
-                    active: activeTool == t.tool,
-                    onTap: () => onToolChanged(t.tool),
-                  ),
-              ],
-            ),
+        // 2행: 그리기 도구
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+          child: Row(
+            children: [
+              for (final t in _tools)
+                _ToolBtn(
+                  icon: t.icon,
+                  active: activeTool == t.tool,
+                  onTap: () => onToolChanged(t.tool),
+                ),
+            ],
           ),
+        ),
       ],
     );
   }
 }
 
-class _ModeToggle extends StatelessWidget {
-  final ChartMode mode;
-  final ValueChanged<ChartMode> onChanged;
-
-  const _ModeToggle({required this.mode, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 32,
-      decoration: BoxDecoration(
-        color: C.lvL,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: C.lv.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _Tab(
-            label: '컬러',
-            active: mode == ChartMode.color,
-            onTap: () => onChanged(ChartMode.color),
-          ),
-          _Tab(
-            label: '기호',
-            active: mode == ChartMode.symbol,
-            onTap: () => onChanged(ChartMode.symbol),
-          ),
-          _Tab(
-            label: '서술형',
-            active: mode == ChartMode.narrative,
-            onTap: () => onChanged(ChartMode.narrative),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Tab extends StatelessWidget {
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  const _Tab({required this.label, required this.active, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: active ? C.lv : Colors.transparent,
-          borderRadius: BorderRadius.circular(7),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: active ? Colors.white : C.tx2,
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _ToolBtn extends StatelessWidget {
   final IconData icon;
@@ -275,8 +207,9 @@ class _IconBtn extends StatelessWidget {
   final bool enabled;
   final VoidCallback onTap;
   final Color? color;
+  final String? tooltip;
 
-  const _IconBtn({required this.icon, required this.enabled, required this.onTap, this.color});
+  const _IconBtn({required this.icon, required this.enabled, required this.onTap, this.color, this.tooltip});
 
   @override
   Widget build(BuildContext context) {
@@ -284,6 +217,7 @@ class _IconBtn extends StatelessWidget {
       icon: Icon(icon, size: 20),
       color: enabled ? (color ?? C.tx2) : C.mu,
       onPressed: enabled ? onTap : null,
+      tooltip: tooltip,
       visualDensity: VisualDensity.compact,
       padding: const EdgeInsets.all(6),
     );
@@ -777,17 +711,107 @@ class _CategoryTab extends StatelessWidget {
   }
 }
 
-class _NarrativeHint extends StatelessWidget {
-  const _NarrativeHint();
+// ── 통합 패널 (도안 모드 — 색상+기호 레이어 서브토글) ─────────────────────────
+class _UnifiedPanel extends StatelessWidget {
+  final DrawLayer activeLayer;
+  final Color activeColor;
+  final String? activeSymbolId;
+  final SymbolCategory selectedCategory;
+  final ValueChanged<DrawLayer> onLayerChanged;
+  final ValueChanged<SymbolCategory> onCategoryChanged;
+  final ValueChanged<Color> onColorChanged;
+  final ValueChanged<String> onSymbolChanged;
+
+  const _UnifiedPanel({
+    required this.activeLayer,
+    required this.activeColor,
+    required this.activeSymbolId,
+    required this.selectedCategory,
+    required this.onLayerChanged,
+    required this.onCategoryChanged,
+    required this.onColorChanged,
+    required this.onSymbolChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 72,
-      child: Center(
-        child: Text(
-          '위 텍스트 영역에 서술형 도안을 작성하세요.',
-          style: TextStyle(fontSize: 12, color: Colors.grey),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
+          child: Row(
+            children: [
+              _LayerTab(
+                icon: Icons.palette_rounded,
+                label: '색상',
+                active: activeLayer == DrawLayer.color,
+                onTap: () => onLayerChanged(DrawLayer.color),
+              ),
+              const SizedBox(width: 6),
+              _LayerTab(
+                icon: Icons.grid_on_rounded,
+                label: '기호',
+                active: activeLayer == DrawLayer.symbol,
+                onTap: () => onLayerChanged(DrawLayer.symbol),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        if (activeLayer == DrawLayer.color)
+          _ColorPanel(activeColor: activeColor, onColorChanged: onColorChanged)
+        else
+          _SymbolPanel(
+            selectedCategory: selectedCategory,
+            activeSymbolId: activeSymbolId,
+            onCategoryChanged: onCategoryChanged,
+            onSymbolChanged: onSymbolChanged,
+          ),
+      ],
+    );
+  }
+}
+
+class _LayerTab extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _LayerTab({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: active ? C.lv : C.lvL,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: active ? C.lv : C.lv.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: active ? Colors.white : C.tx2),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: active ? Colors.white : C.tx2,
+              ),
+            ),
+          ],
         ),
       ),
     );

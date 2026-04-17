@@ -159,6 +159,7 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
     final isKorean = language.isKorean;
     final social = ref.watch(socialIntegrationsProvider).valueOrNull;
     final youtubeUrl = social?.youtubeUrl ?? 'https://www.youtube.com/@moriknit';
+    final instagramUrl = social?.instagramUrl ?? 'https://instagram.com/moriknit';
     final currentTheme = ref.watch(appThemeProvider);
     final swatchCount = ref.watch(swatchCountProvider);
     final projectCount = ref.watch(projectCountProvider);
@@ -623,7 +624,7 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                       leading: Icon(Icons.camera_alt_outlined, color: C.pkD),
                       title: const Text('Instagram'),
                       subtitle: const Text('@moriknit'),
-                      onTap: () => launchUrl(Uri.parse('https://instagram.com/moriknit'), mode: LaunchMode.externalApplication),
+                      onTap: () => launchUrl(Uri.parse(instagramUrl), mode: LaunchMode.externalApplication),
                     ),
                     Divider(height: 1, color: Colors.grey.shade100),
                     ListTile(

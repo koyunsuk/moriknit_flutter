@@ -9,6 +9,9 @@ import '../../../../providers/knit_symbol_provider.dart';
 import '../../domain/knit_symbols.dart';
 import '../../domain/pattern_chart.dart';
 
+/// 도안 모드에서 현재 작업 중인 레이어 (색상 / 기호)
+enum DrawLayer { color, symbol }
+
 const double _cellW = 36.0;
 const double _cellH = 24.0;
 const double _headerW = 20.0;
@@ -19,6 +22,7 @@ class ChartCanvas extends ConsumerStatefulWidget {
   final ChartTool tool;
   final Color activeColor;
   final String? activeSymbolId;
+  final DrawLayer activeLayer;
   final ValueChanged<PatternChart> onChartChanged;
   final TransformationController? transformationController;
   /// 전체 조망: non-null Size가 들어오면 해당 크기에 맞게 셀 크기 자동 조정
@@ -29,6 +33,7 @@ class ChartCanvas extends ConsumerStatefulWidget {
     required this.tool,
     required this.activeColor,
     this.activeSymbolId,
+    required this.activeLayer,
     required this.onChartChanged,
     this.transformationController,
     this.fitToScreenNotifier,
@@ -93,7 +98,7 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
 
 
   CellData get _activeCell {
-    if (widget.chart.mode == ChartMode.symbol) {
+    if (widget.activeLayer == DrawLayer.symbol) {
       return CellData(symbolId: widget.activeSymbolId);
     }
     return CellData(color: widget.activeColor);
@@ -106,21 +111,28 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
     final byId = ref.read(knitSymbolByIdProvider);
     switch (widget.tool) {
       case ChartTool.draw:
-        final sym = widget.activeSymbolId != null ? byId[widget.activeSymbolId] : null;
-        final sw = sym?.spanWidth ?? 1;
-        final sh = sym?.spanHeight ?? 1;
-        if (sw == 1 && sh == 1) {
-          widget.onChartChanged(widget.chart.setCell(row, col, _activeCell));
+        if (widget.activeLayer == DrawLayer.symbol) {
+          // 기호 레이어 — 기존 span 로직 유지
+          final sym = widget.activeSymbolId != null ? byId[widget.activeSymbolId] : null;
+          final sw = sym?.spanWidth ?? 1;
+          final sh = sym?.spanHeight ?? 1;
+          if (sw == 1 && sh == 1) {
+            widget.onChartChanged(widget.chart.setCellSymbol(row, col, widget.activeSymbolId));
+          } else {
+            widget.onChartChanged(widget.chart.setSpanCell(row, col, _activeCell, sw, sh));
+          }
         } else {
-          widget.onChartChanged(widget.chart.setSpanCell(row, col, _activeCell, sw, sh));
+          // 색상 레이어 — 기호 보존
+          widget.onChartChanged(widget.chart.setCellColor(row, col, widget.activeColor));
         }
       case ChartTool.erase:
         widget.onChartChanged(widget.chart.eraseSpanCell(row, col));
       case ChartTool.fill:
         // fill은 span 심볼 배치 시 무시
         final sym = widget.activeSymbolId != null ? byId[widget.activeSymbolId] : null;
-        if ((sym?.spanWidth ?? 1) > 1 || (sym?.spanHeight ?? 1) > 1) break;
-        final filled = _floodFill(widget.chart, row, col, _activeCell);
+        if (widget.activeLayer == DrawLayer.symbol &&
+            ((sym?.spanWidth ?? 1) > 1 || (sym?.spanHeight ?? 1) > 1)) break;
+        final filled = _floodFill(widget.chart, row, col, _activeCell, widget.activeLayer);
         widget.onChartChanged(filled);
       case ChartTool.select:
         break;
@@ -136,46 +148,85 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
     final (row, col) = hit;
     final byId = ref.read(knitSymbolByIdProvider);
     if (widget.tool == ChartTool.draw) {
-      final sym = widget.activeSymbolId != null ? byId[widget.activeSymbolId] : null;
-      final sw = sym?.spanWidth ?? 1;
-      final sh = sym?.spanHeight ?? 1;
-      if (sw == 1 && sh == 1) {
-        widget.onChartChanged(widget.chart.setCell(row, col, _activeCell));
+      if (widget.activeLayer == DrawLayer.symbol) {
+        final sym = widget.activeSymbolId != null ? byId[widget.activeSymbolId] : null;
+        final sw = sym?.spanWidth ?? 1;
+        final sh = sym?.spanHeight ?? 1;
+        if (sw == 1 && sh == 1) {
+          widget.onChartChanged(widget.chart.setCellSymbol(row, col, widget.activeSymbolId));
+        } else {
+          widget.onChartChanged(widget.chart.setSpanCell(row, col, _activeCell, sw, sh));
+        }
       } else {
-        widget.onChartChanged(widget.chart.setSpanCell(row, col, _activeCell, sw, sh));
+        widget.onChartChanged(widget.chart.setCellColor(row, col, widget.activeColor));
       }
     } else if (widget.tool == ChartTool.erase) {
       widget.onChartChanged(widget.chart.eraseSpanCell(row, col));
     }
   }
 
-  PatternChart _floodFill(PatternChart chart, int startRow, int startCol, CellData newCell) {
-    final target = chart.grid[startRow][startCol];
-    if (target == newCell) return chart;
-
-    final newGrid = [for (final row in chart.grid) List<CellData>.from(row)];
-    final queue = Queue<(int, int)>();
-    queue.add((startRow, startCol));
-
-    while (queue.isNotEmpty) {
-      final (r, c) = queue.removeFirst();
-      if (r < 0 || r >= chart.rows || c < 0 || c >= chart.cols) continue;
-      if (newGrid[r][c] != target) continue;
-      newGrid[r][c] = newCell;
-      queue.add((r - 1, c));
-      queue.add((r + 1, c));
-      queue.add((r, c - 1));
-      queue.add((r, c + 1));
+  PatternChart _floodFill(
+      PatternChart chart, int startRow, int startCol, CellData newCell, DrawLayer layer) {
+    if (layer == DrawLayer.color) {
+      final targetColor = chart.grid[startRow][startCol].color;
+      if (targetColor?.toARGB32() == newCell.color?.toARGB32()) return chart;
+      final newGrid = [for (final row in chart.grid) List<CellData>.from(row)];
+      final queue = Queue<(int, int)>();
+      queue.add((startRow, startCol));
+      while (queue.isNotEmpty) {
+        final (r, c) = queue.removeFirst();
+        if (r < 0 || r >= chart.rows || c < 0 || c >= chart.cols) continue;
+        if (newGrid[r][c].color?.toARGB32() != targetColor?.toARGB32()) continue;
+        final existing = newGrid[r][c];
+        newGrid[r][c] = CellData(
+          color: newCell.color,
+          symbolId: existing.symbolId,
+          spanW: existing.spanW,
+          spanH: existing.spanH,
+          anchorRow: existing.anchorRow,
+          anchorCol: existing.anchorCol,
+        );
+        queue.add((r - 1, c));
+        queue.add((r + 1, c));
+        queue.add((r, c - 1));
+        queue.add((r, c + 1));
+      }
+      return PatternChart(
+        id: chart.id,
+        title: chart.title,
+        rows: chart.rows,
+        cols: chart.cols,
+        mode: chart.mode,
+        grid: newGrid,
+      );
+    } else {
+      // 기호 레이어 fill
+      final targetSymbol = chart.grid[startRow][startCol].symbolId;
+      if (targetSymbol == newCell.symbolId) return chart;
+      final newGrid = [for (final row in chart.grid) List<CellData>.from(row)];
+      final queue = Queue<(int, int)>();
+      queue.add((startRow, startCol));
+      while (queue.isNotEmpty) {
+        final (r, c) = queue.removeFirst();
+        if (r < 0 || r >= chart.rows || c < 0 || c >= chart.cols) continue;
+        if (newGrid[r][c].symbolId != targetSymbol) continue;
+        if (newGrid[r][c].isOccupied) continue;
+        final existing = newGrid[r][c];
+        newGrid[r][c] = CellData(color: existing.color, symbolId: newCell.symbolId);
+        queue.add((r - 1, c));
+        queue.add((r + 1, c));
+        queue.add((r, c - 1));
+        queue.add((r, c + 1));
+      }
+      return PatternChart(
+        id: chart.id,
+        title: chart.title,
+        rows: chart.rows,
+        cols: chart.cols,
+        mode: chart.mode,
+        grid: newGrid,
+      );
     }
-
-    return PatternChart(
-      id: chart.id,
-      title: chart.title,
-      rows: chart.rows,
-      cols: chart.cols,
-      mode: chart.mode,
-      grid: newGrid,
-    );
   }
 
   bool get _interactiveEnabled => widget.tool == ChartTool.move;
@@ -197,9 +248,9 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
     final canvasWidth = _headerW + widget.chart.cols * _cellW;
     final canvasHeight = _headerH + widget.chart.rows * _cellH;
 
-    // 기호 모드: SVG 오버레이만 사용 — 앵커 셀만 렌더링, span 크기 적용
+    // narrative 제외 항상 SVG 오버레이 표시 — 앵커 셀만 렌더링, span 크기 적용
     final overlays = <Widget>[];
-    if (widget.chart.mode == ChartMode.symbol) {
+    if (widget.chart.mode != ChartMode.narrative) {
       for (int r = 0; r < widget.chart.rows; r++) {
         for (int c = 0; c < widget.chart.cols; c++) {
           final cell = widget.chart.grid[r][c];
@@ -285,8 +336,8 @@ class _ChartPainter extends CustomPainter {
   }
 
   void _drawCells(Canvas canvas) {
-    // 컬러 모드만 Canvas로 그림. 기호 모드는 SVG 오버레이만 사용.
-    if (chart.mode != ChartMode.color) return;
+    // narrative 모드는 그리드를 그리지 않음. 그 외 항상 색상 렌더링.
+    if (chart.mode == ChartMode.narrative) return;
     for (int r = 0; r < chart.rows; r++) {
       for (int c = 0; c < chart.cols; c++) {
         final cell = chart.grid[r][c];
