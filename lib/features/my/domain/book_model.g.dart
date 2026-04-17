@@ -16,7 +16,13 @@ _$BookModelImpl _$$BookModelImplFromJson(Map<String, dynamic> json) =>
       publisher: json['publisher'] as String? ?? '',
       publishYear: json['publishYear'] as String? ?? '',
       coverUrl: json['coverUrl'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      tableOfContents: json['tableOfContents'] as String? ?? '',
       memo: json['memo'] as String? ?? '',
+      photoUrls: (json['photoUrls'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const <String>[],
       createdAt: json['createdAt'] == null
           ? null
           : DateTime.parse(json['createdAt'] as String),
@@ -36,7 +42,10 @@ Map<String, dynamic> _$$BookModelImplToJson(_$BookModelImpl instance) =>
       'publisher': instance.publisher,
       'publishYear': instance.publishYear,
       'coverUrl': instance.coverUrl,
+      'description': instance.description,
+      'tableOfContents': instance.tableOfContents,
       'memo': instance.memo,
+      'photoUrls': instance.photoUrls,
       'createdAt': instance.createdAt?.toIso8601String(),
       'updatedAt': instance.updatedAt?.toIso8601String(),
       'isDirty': instance.isDirty,

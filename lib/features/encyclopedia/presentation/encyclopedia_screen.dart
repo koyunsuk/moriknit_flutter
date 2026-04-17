@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
@@ -604,6 +605,28 @@ class _OfficialEntryCardState extends ConsumerState<_OfficialEntryCard> {
                       child: Text(
                         e.descriptionEn,
                         style: T.caption.copyWith(color: C.lvD, height: 1.5),
+                      ),
+                    ),
+                  ],
+                  if (_expanded && e.videoUrl.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    GestureDetector(
+                      onTap: () => launchUrl(Uri.parse(e.videoUrl), mode: LaunchMode.externalApplication),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF0000).withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFFF0000).withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.play_circle_filled_rounded, color: Color(0xFFFF0000), size: 18),
+                            const SizedBox(width: 6),
+                            Text('YouTube 영상 보기', style: T.caption.copyWith(color: const Color(0xFFCC0000), fontWeight: FontWeight.w600)),
+                          ],
+                        ),
                       ),
                     ),
                   ],

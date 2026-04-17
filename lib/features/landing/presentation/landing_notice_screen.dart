@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../providers/auth_provider.dart';
 import '../data/landing_board_repository.dart';
@@ -142,7 +143,22 @@ class _NoticeCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
-        child: Padding(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 이미지 썸네일
+            if (notice.imageUrl.isNotEmpty)
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                child: Image.network(
+                  notice.imageUrl,
+                  width: double.infinity,
+                  height: 180,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                ),
+              ),
+            Padding(
           padding:
               const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: Row(
@@ -188,6 +204,8 @@ class _NoticeCard extends StatelessWidget {
                   size: 20, color: Color(0xFF8B5CF6)),
             ],
           ),
+        ),
+          ],
         ),
       ),
     );
@@ -337,6 +355,64 @@ class _LandingNoticeDetailScreenState
                             style: const TextStyle(
                                 fontSize: 15, height: 1.8, color: Color(0xFF1E1B4B)),
                           ),
+                          // 첨부 이미지
+                          if (notice.imageUrl.isNotEmpty) ...[
+                            const SizedBox(height: 24),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                notice.imageUrl,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                              ),
+                            ),
+                          ],
+                          // 첨부 파일
+                          if (notice.fileUrl.isNotEmpty) ...[
+                            const SizedBox(height: 16),
+                            InkWell(
+                              onTap: () => launchUrl(
+                                Uri.parse(notice.fileUrl),
+                                mode: LaunchMode.externalApplication,
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF5F0FF),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFFDDD6FE)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.insert_drive_file_rounded,
+                                        color: Color(0xFF8B5CF6), size: 20),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        notice.fileName.isNotEmpty ? notice.fileName : '첨부 파일',
+                                        style: const TextStyle(
+                                            fontSize: 14,
+                                            color: Color(0xFF4C3D8A),
+                                            fontWeight: FontWeight.w500),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Icon(Icons.download_rounded,
+                                        color: Color(0xFF8B5CF6), size: 18),
+                                    const SizedBox(width: 4),
+                                    const Text('다운로드',
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            color: Color(0xFF8B5CF6),
+                                            fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 40),
                           const Divider(color: Color(0xFFEEE8FF)),
                           const SizedBox(height: 24),

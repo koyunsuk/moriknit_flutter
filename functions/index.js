@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const admin = require('firebase-admin');
-const { onRequest, onCall } = require('firebase-functions/v2/https');
+const { onRequest, onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onDocumentCreated, onDocumentDeleted } = require('firebase-functions/v2/firestore');
 const { defineSecret } = require('firebase-functions/params');
 const Anthropic = require('@anthropic-ai/sdk');
@@ -538,17 +538,29 @@ exports.parseKnittingPattern = onCall(
   },
   async (request) => {
     const uid = request.auth?.uid;
-    if (!uid) throw new Error('Unauthenticated');
+    if (!uid) throw new HttpsError('unauthenticated', '로그인이 필요합니다.');
 
     const { storagePath, mimeType, fileName } = request.data;
     if (!storagePath || !mimeType || !fileName) {
-      throw new Error('Missing required fields: storagePath, mimeType, fileName');
+      throw new HttpsError('invalid-argument', '필수 항목이 누락됐습니다.');
+    }
+
+    // 파일 크기 제한 (10MB)
+    const bucket = admin.storage().bucket();
+    const fileRef = bucket.file(storagePath);
+    const [metadata] = await fileRef.getMetadata();
+    const fileSize = parseInt(metadata.size, 10);
+    if (fileSize > 10 * 1024 * 1024) {
+      throw new HttpsError('invalid-argument', '파일 크기가 너무 큽니다. 10MB 이하의 파일을 사용해 주세요.');
     }
 
     // Firebase Storage에서 파일 다운로드
-    const bucket = admin.storage().bucket();
-    const fileRef = bucket.file(storagePath);
-    const [fileBuffer] = await fileRef.download();
+    let fileBuffer;
+    try {
+      [fileBuffer] = await fileRef.download();
+    } catch (err) {
+      throw new HttpsError('not-found', '파일을 불러올 수 없습니다. 다시 시도해 주세요.');
+    }
     const base64Data = fileBuffer.toString('base64');
 
     const client = new Anthropic({ apiKey: anthropicApiKey.value().trim() });
@@ -601,23 +613,28 @@ Important rules:
             },
           };
 
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 8192,
-      system: systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            contentBlock,
-            {
-              type: 'text',
-              text: 'Parse this knitting pattern into the JSON structure described.',
-            },
-          ],
-        },
-      ],
-    });
+    let message;
+    try {
+      message = await client.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 8192,
+        system: systemPrompt,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              contentBlock,
+              {
+                type: 'text',
+                text: 'Parse this knitting pattern into the JSON structure described.',
+              },
+            ],
+          },
+        ],
+      });
+    } catch (err) {
+      throw new HttpsError('internal', 'AI 분석 중 오류가 발생했습니다. 다시 시도해 주세요.');
+    }
 
     const rawText = message.content[0]?.text ?? '';
     let parsed;
@@ -627,9 +644,14 @@ Important rules:
       // JSON 코드블록 감지 후 재시도
       const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
       if (jsonMatch) {
-        parsed = JSON.parse(jsonMatch[1]);
+        try {
+          parsed = JSON.parse(jsonMatch[1]);
+        } catch {
+          throw new HttpsError('internal', '도안 파싱에 실패했습니다. 다른 파일로 시도해 주세요.');
+        }
       } else {
-        throw new Error('Failed to parse Claude response as JSON');
+        const { HttpsError } = require('firebase-functions/v2/https');
+        throw new HttpsError('internal', '도안 파싱에 실패했습니다. 다른 파일로 시도해 주세요.');
       }
     }
 

@@ -16,6 +16,8 @@ class LandingPost {
   final bool isNotice;
   final bool isPinned;
   final String imageUrl;
+  final String fileUrl;
+  final String fileName;
 
   const LandingPost({
     required this.id,
@@ -30,6 +32,8 @@ class LandingPost {
     this.isNotice = false,
     this.isPinned = false,
     this.imageUrl = '',
+    this.fileUrl = '',
+    this.fileName = '',
   });
 
   factory LandingPost.fromDoc(DocumentSnapshot doc) {
@@ -47,6 +51,8 @@ class LandingPost {
       isNotice: data['isNotice'] as bool? ?? false,
       isPinned: data['isPinned'] as bool? ?? false,
       imageUrl: data['imageUrl'] as String? ?? '',
+      fileUrl: data['fileUrl'] as String? ?? '',
+      fileName: data['fileName'] as String? ?? '',
     );
   }
 
@@ -62,6 +68,8 @@ class LandingPost {
         'isNotice': isNotice,
         'isPinned': isPinned,
         'imageUrl': imageUrl,
+        'fileUrl': fileUrl,
+        'fileName': fileName,
       };
 }
 

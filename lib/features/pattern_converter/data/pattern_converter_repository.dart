@@ -46,8 +46,11 @@ class PatternConverterRepository {
     await uploadTask;
     onProgress?.call(0.5);
 
-    // 2. Cloud Function 호출 (파싱)
-    final callable = _functions.httpsCallable('parseKnittingPattern');
+    // 2. Cloud Function 호출 (파싱) — 서버 타임아웃(120s)보다 여유 있게 설정
+    final callable = _functions.httpsCallable(
+      'parseKnittingPattern',
+      options: HttpsCallableOptions(timeout: const Duration(seconds: 180)),
+    );
     final result = await callable.call({
       'storagePath': storagePath,
       'mimeType': mimeType,

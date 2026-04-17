@@ -319,6 +319,11 @@ class _MobileProjectList extends StatelessWidget {
       physics: const AlwaysScrollableScrollPhysics(),
       children: [
         const SizedBox(height: 8),
+        // ── 요약 카드 ──────────────────────────────────────────────
+        _ProjectSummaryCard(projects: projects, isKorean: isKorean, onAdd: onAddTap),
+        const SizedBox(height: 8),
+        Divider(color: C.bd, thickness: 1, height: 20),
+        const SizedBox(height: 4),
         // ── 진행중 프로젝트 ───────────────────────────────────────
         if (featured != null)
           GestureDetector(
@@ -395,7 +400,7 @@ class _MobileProjectList extends StatelessWidget {
           )
         else
           ...active.map((project) => _projectCard(context, project)),
-        if (done.isNotEmpty) ...[
+        ...[
           const SizedBox(height: 8),
           Divider(color: C.bd, thickness: 1, height: 20),
           const SizedBox(height: 4),
@@ -412,43 +417,60 @@ class _MobileProjectList extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          GlassCard(
-            child: Column(
-              children: done.asMap().entries.map((entry) {
-                final i = entry.key;
-                final project = entry.value;
-                return Column(
+          if (done.isEmpty)
+            GlassCard(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                child: Row(
                   children: [
-                    if (i > 0) Divider(height: 1, color: C.bd),
-                    InkWell(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => ProjectDetailScreen(projectId: project.id)),
-                      ),
-                      borderRadius: BorderRadius.circular(10),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        child: Row(
-                          children: [
-                            project.coverPhotoUrl.isNotEmpty
-                                ? ClipRRect(
-                                    borderRadius: BorderRadius.circular(5),
-                                    child: Image.network(project.coverPhotoUrl, width: 22, height: 22, fit: BoxFit.cover,
-                                        errorBuilder: (ctx, e, st) => Container(width: 22, height: 22, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(5)), child: Icon(Icons.folder_rounded, color: C.lv, size: 13))),
-                                  )
-                                : Container(width: 22, height: 22, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(5)), child: Icon(Icons.folder_rounded, color: C.lv, size: 13)),
-                            const SizedBox(width: 10),
-                            Expanded(child: Text(project.title, style: T.body, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                            Icon(Icons.chevron_right_rounded, size: 16, color: C.mu),
-                          ],
-                        ),
-                      ),
+                    Icon(Icons.check_circle_outline_rounded, color: C.mu, size: 18),
+                    const SizedBox(width: 10),
+                    Text(
+                      isKorean ? '완료된 프로젝트가 없어요' : 'No completed projects yet',
+                      style: T.caption.copyWith(color: C.mu),
                     ),
                   ],
-                );
-              }).toList(),
+                ),
+              ),
+            )
+          else
+            GlassCard(
+              child: Column(
+                children: done.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final project = entry.value;
+                  return Column(
+                    children: [
+                      if (i > 0) Divider(height: 1, color: C.bd),
+                      InkWell(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => ProjectDetailScreen(projectId: project.id)),
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          child: Row(
+                            children: [
+                              project.coverPhotoUrl.isNotEmpty
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(5),
+                                      child: Image.network(project.coverPhotoUrl, width: 22, height: 22, fit: BoxFit.cover,
+                                          errorBuilder: (ctx, e, st) => Container(width: 22, height: 22, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(5)), child: Icon(Icons.folder_rounded, color: C.lv, size: 13))),
+                                    )
+                                  : Container(width: 22, height: 22, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(5)), child: Icon(Icons.folder_rounded, color: C.lv, size: 13)),
+                              const SizedBox(width: 10),
+                              Expanded(child: Text(project.title, style: T.body, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                              Icon(Icons.chevron_right_rounded, size: 16, color: C.mu),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList(),
+              ),
             ),
-          ),
         ],
         // ── 구분선 ────────────────────────────────────────────────
         const SizedBox(height: 8),

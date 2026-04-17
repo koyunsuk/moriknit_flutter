@@ -51,7 +51,7 @@ mixin _$ProjectModel {
   String get sourcePatternId => throw _privateConstructorUsedError;
   String get originProjectId => throw _privateConstructorUsedError;
   String get originUserId => throw _privateConstructorUsedError;
-  String get originOwnerName => throw _privateConstructorUsedError;
+  String get originOwnerName => throw _privateConstructorUsedError; // 참고 도서
   String get referenceBookId => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -670,6 +670,7 @@ class _$ProjectModelImpl implements _ProjectModel {
   @override
   @JsonKey()
   final String originOwnerName;
+// 참고 도서
   @override
   @JsonKey()
   final String referenceBookId;
@@ -901,7 +902,7 @@ abstract class _ProjectModel implements ProjectModel {
   String get originUserId;
   @override
   String get originOwnerName;
-  @override
+  @override // 참고 도서
   String get referenceBookId;
   @override
   @JsonKey(ignore: true)

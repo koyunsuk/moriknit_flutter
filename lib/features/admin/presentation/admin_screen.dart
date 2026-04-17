@@ -265,6 +265,7 @@ class _AdminConsoleState extends State<_AdminConsole> {
 
     _AdminNavItem.group(label: '사용자 데이터', color: Color(0xFFB47EEB), groupIcon: Icons.manage_accounts_rounded),
     _AdminNavItem.tab(index: 4, icon: Icons.people_rounded, label: '회원', color: Color(0xFFB47EEB)),
+    _AdminNavItem.tab(index: 21, icon: Icons.bar_chart_rounded, label: '사용자 통합관리', color: Color(0xFFB47EEB)),
     _AdminNavItem.tab(index: 5, icon: Icons.auto_fix_high_rounded, label: '도안목록', color: Color(0xFFB47EEB)),
     _AdminNavItem.tab(index: 6, icon: Icons.palette_rounded, label: '스와치', color: Color(0xFFB47EEB)),
     _AdminNavItem.tab(index: 7, icon: Icons.folder_copy_rounded, label: '프로젝트', color: Color(0xFFB47EEB)),
@@ -4906,6 +4907,8 @@ class _EncyclopediaItemsTabState extends State<_EncyclopediaItemsTab> {
     final categoryCtrl = TextEditingController(text: data?['category'] as String? ?? data?['category_key'] as String? ?? 'abbreviation');
     final symbolCtrl  = TextEditingController(text: data?['symbol'] as String? ?? '');
     final orderCtrl   = TextEditingController(text: (data?['order'] as num?)?.toInt().toString() ?? '');
+    final videoUrlCtrl = TextEditingController(text: data?['videoUrl'] as String? ?? '');
+    final referenceUrlCtrl = TextEditingController(text: data?['referenceUrl'] as String? ?? '');
     final isNew = docId == null;
 
     showDialog<void>(
@@ -4964,6 +4967,22 @@ class _EncyclopediaItemsTabState extends State<_EncyclopediaItemsTab> {
                     ),
                   ),
                 ]),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: referenceUrlCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'SVG/이미지 URL (referenceUrl)',
+                    hintText: 'https://... (기호 썸네일용 SVG 또는 이미지 URL)',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: videoUrlCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'YouTube URL (videoUrl)',
+                    hintText: 'https://youtu.be/xxxxx 또는 https://www.youtube.com/watch?v=xxxxx',
+                  ),
+                ),
               ],
             ),
           ),
@@ -4983,6 +5002,8 @@ class _EncyclopediaItemsTabState extends State<_EncyclopediaItemsTab> {
                 'descriptionEn': descEnCtrl.text.trim().isEmpty ? termEnCtrl.text.trim() : descEnCtrl.text.trim(),
                 'category': categoryCtrl.text.trim().isEmpty ? 'abbreviation' : categoryCtrl.text.trim(),
                 'symbol': symbolCtrl.text.trim(),
+                'referenceUrl': referenceUrlCtrl.text.trim(),
+                'videoUrl': videoUrlCtrl.text.trim(),
                 'order': int.tryParse(orderCtrl.text.trim()) ?? 0,
                 'status': 'approved',
                 'createdBy': widget.adminUid,
@@ -5017,7 +5038,7 @@ class _EncyclopediaItemsTabState extends State<_EncyclopediaItemsTab> {
     ).whenComplete(() {
       abbrCtrl.dispose(); termCtrl.dispose(); termEnCtrl.dispose();
       descCtrl.dispose(); descEnCtrl.dispose(); categoryCtrl.dispose();
-      symbolCtrl.dispose(); orderCtrl.dispose();
+      symbolCtrl.dispose(); orderCtrl.dispose(); videoUrlCtrl.dispose(); referenceUrlCtrl.dispose();
     });
   }
 
@@ -6624,9 +6645,52 @@ class _NoticesAdminTabState extends State<_NoticesAdminTab> {
                           const Divider(height: 1),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(post.content, style: TextStyle(fontSize: 13, color: C.tx2, height: 1.6)),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(post.content, style: TextStyle(fontSize: 13, color: C.tx2, height: 1.6)),
+                                ),
+                                if (post.imageUrl.isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(
+                                      post.imageUrl,
+                                      width: double.infinity,
+                                      height: 160,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, _, _) => const SizedBox(),
+                                    ),
+                                  ),
+                                ],
+                                if (post.fileUrl.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  GestureDetector(
+                                    onTap: () => launchUrl(Uri.parse(post.fileUrl), mode: LaunchMode.externalApplication),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                                      decoration: BoxDecoration(
+                                        color: C.lvL,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: C.lv.withValues(alpha: 0.3)),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.insert_drive_file_rounded, size: 14, color: C.lv),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            post.fileName.isNotEmpty ? post.fileName : '첨부파일',
+                                            style: TextStyle(fontSize: 12, color: C.lv, fontWeight: FontWeight.w600),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
                         ],
@@ -6673,7 +6737,10 @@ class _NoticesAdminTabState extends State<_NoticesAdminTab> {
     final contentCtrl = TextEditingController(text: existing?.content ?? '');
     bool isPinned = existing?.isPinned ?? false;
     String imageUrl = existing?.imageUrl ?? '';
+    String fileUrl = existing?.fileUrl ?? '';
+    String fileName = existing?.fileName ?? '';
     bool uploading = false;
+    bool fileUploading = false;
 
     InputDecoration adminDec(String label) => InputDecoration(
       labelText: label,
@@ -6763,6 +6830,61 @@ class _NoticesAdminTabState extends State<_NoticesAdminTab> {
                       ],
                     ),
                   ],
+                  const SizedBox(height: 12),
+                  // ── 파일 첨부 ────────────────────────────────────────────
+                  Row(
+                    children: [
+                      const Text('파일 첨부', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                      const Spacer(),
+                      if (fileUploading)
+                        const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      else
+                        TextButton.icon(
+                          onPressed: () async {
+                            final result = await FilePicker.platform.pickFiles(type: FileType.any);
+                            if (result == null || result.files.isEmpty) return;
+                            final picked = result.files.first;
+                            final bytes = picked.bytes;
+                            if (bytes == null) return;
+                            setDialogState(() => fileUploading = true);
+                            try {
+                              final docId = existing?.id.isNotEmpty == true ? existing!.id : 'new_${DateTime.now().millisecondsSinceEpoch}';
+                              final ref = FirebaseStorage.instance.ref('announcements/$docId/files/${picked.name}');
+                              await ref.putData(bytes);
+                              final url = await ref.getDownloadURL();
+                              setDialogState(() { fileUrl = url; fileName = picked.name; fileUploading = false; });
+                            } catch (e) {
+                              setDialogState(() => fileUploading = false);
+                              if (ctx.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '파일 업로드 실패: $e');
+                            }
+                          },
+                          icon: const Icon(Icons.attach_file_rounded, size: 16, color: Colors.white70),
+                          label: const Text('파일 선택', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                        ),
+                    ],
+                  ),
+                  if (fileUrl.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.insert_drive_file_rounded, size: 16, color: Colors.white60),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(fileName, style: const TextStyle(color: Colors.white70, fontSize: 13), overflow: TextOverflow.ellipsis)),
+                          GestureDetector(
+                            onTap: () => setDialogState(() { fileUrl = ''; fileName = ''; }),
+                            child: const Icon(Icons.close, size: 16, color: Colors.white60),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   Row(
                     children: [
@@ -6802,13 +6924,15 @@ class _NoticesAdminTabState extends State<_NoticesAdminTab> {
                           isPinned: isPinned,
                           isNotice: true,
                           imageUrl: imageUrl,
+                          fileUrl: fileUrl,
+                          fileName: fileName,
                         );
                         await repo.createNotice(newPost);
                       } else {
                         await FirebaseFirestore.instance
                             .collection('landing_notices')
                             .doc(existing.id)
-                            .update({'title': title, 'content': content, 'isPinned': isPinned, 'imageUrl': imageUrl});
+                            .update({'title': title, 'content': content, 'isPinned': isPinned, 'imageUrl': imageUrl, 'fileUrl': fileUrl, 'fileName': fileName});
                       }
                     },
                   );

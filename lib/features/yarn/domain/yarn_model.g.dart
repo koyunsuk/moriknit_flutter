@@ -34,6 +34,10 @@ _$YarnModelImpl _$$YarnModelImplFromJson(Map<String, dynamic> json) =>
       purchasePlace: json['purchasePlace'] as String? ?? '',
       colorCode: json['colorCode'] as String? ?? '',
       labelPhotoUrl: json['labelPhotoUrl'] as String? ?? '',
+      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+      composition: json['composition'] as String? ?? '',
+      lengthMeters: (json['lengthMeters'] as num?)?.toInt() ?? 0,
+      lengthYards: (json['lengthYards'] as num?)?.toInt() ?? 0,
     );
 
 Map<String, dynamic> _$$YarnModelImplToJson(_$YarnModelImpl instance) =>
@@ -58,4 +62,8 @@ Map<String, dynamic> _$$YarnModelImplToJson(_$YarnModelImpl instance) =>
       'purchasePlace': instance.purchasePlace,
       'colorCode': instance.colorCode,
       'labelPhotoUrl': instance.labelPhotoUrl,
+      'quantity': instance.quantity,
+      'composition': instance.composition,
+      'lengthMeters': instance.lengthMeters,
+      'lengthYards': instance.lengthYards,
     };

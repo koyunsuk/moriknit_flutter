@@ -45,6 +45,15 @@ class SwatchModel with _$SwatchModel {
     DateTime? updatedAt,
     @Default('') String projectId,
     @Default(false) bool isDirty,
+    /// 최종 완성 콧수 (10×10 게이지 콧수와 별개)
+    @Default(0) int finalStitchCount,
+    /// 최종 완성 단수 (10×10 게이지 단수와 별개)
+    @Default(0) int finalRowCount,
+    /// 스와치 시작 날짜 (시작 시점 기록용)
+    DateTime? startedAt,
+    /// 나의 악세사리 연결
+    @Default('') String myAccessoryId,
+    @Default('') String myAccessoryName,
   }) = _SwatchModel;
 
   factory SwatchModel.fromJson(Map<String, dynamic> json) => _$SwatchModelFromJson(json);

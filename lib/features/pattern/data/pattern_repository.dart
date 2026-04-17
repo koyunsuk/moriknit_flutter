@@ -36,10 +36,12 @@ class PatternRepository {
       sourceType: chart.sourceType,
       aiSections: chart.aiSections,
     );
+    final isNew = chart.id.isEmpty;
     await docRef.set({
       ...saved.toJson(),
       'updatedAt': FieldValue.serverTimestamp(),
-    });
+      if (isNew) 'createdAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
     return saved;
   }
 

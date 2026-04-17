@@ -35,6 +35,8 @@ class _YarnInputScreenState extends ConsumerState<YarnInputScreen> {
   final _lotNumberController = TextEditingController();
   final _priceController = TextEditingController();
   final _purchasePlaceController = TextEditingController();
+  final _quantityController = TextEditingController();
+  final _lengthController = TextEditingController();
   bool _isSaving = false;
   bool _uploading = false;
   bool _uploadingLabel = false;
@@ -51,7 +53,9 @@ class _YarnInputScreenState extends ConsumerState<YarnInputScreen> {
     final initial = widget.initialYarn;
     if (initial != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
         ref.read(yarnInputProvider.notifier).loadYarn(initial);
+        setState(() {});
         _nameController.text = initial.name;
         _colorController.text = initial.color;
         _amountController.text = initial.amountGrams > 0 ? '${initial.amountGrams}' : '';
@@ -60,6 +64,8 @@ class _YarnInputScreenState extends ConsumerState<YarnInputScreen> {
         _lotNumberController.text = initial.lotNumber;
         _priceController.text = initial.price > 0 ? '${initial.price}' : '';
         _purchasePlaceController.text = initial.purchasePlace;
+        _quantityController.text = initial.quantity > 0 ? '${initial.quantity}' : '';
+        _lengthController.text = initial.lengthMeters > 0 ? '${initial.lengthMeters}' : '';
       });
     }
   }
@@ -74,6 +80,8 @@ class _YarnInputScreenState extends ConsumerState<YarnInputScreen> {
     _lotNumberController.dispose();
     _priceController.dispose();
     _purchasePlaceController.dispose();
+    _quantityController.dispose();
+    _lengthController.dispose();
     super.dispose();
   }
 
@@ -335,8 +343,30 @@ class _YarnInputScreenState extends ConsumerState<YarnInputScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SectionTitle(title: isKorean ? '보유 정보' : 'Stock Info'),
+                      SectionTitle(title: isKorean ? '보유 현황' : 'Stock'),
                       const SizedBox(height: 10),
+                      TextField(
+                        controller: _quantityController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: isKorean ? '갯수 (볼/타래)' : 'Quantity (balls/skeins)',
+                          hintText: isKorean ? '예: 3' : 'e.g. 3',
+                          fillColor: C.gx,
+                        ),
+                        onChanged: (v) => notifier.updateQuantity(int.tryParse(v) ?? 0),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _lengthController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: isKorean ? '길이 (m)' : 'Length (m)',
+                          hintText: isKorean ? '예: 200' : 'e.g. 200',
+                          fillColor: C.gx,
+                        ),
+                        onChanged: (v) => notifier.updateLengthMeters(int.tryParse(v) ?? 0),
+                      ),
+                      const SizedBox(height: 12),
                       TextField(
                         controller: _amountController,
                         keyboardType: TextInputType.number,

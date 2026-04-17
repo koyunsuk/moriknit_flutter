@@ -36,6 +36,8 @@ class YarnInputNotifier extends StateNotifier<YarnModel> {
   void updateLotNumber(String v) => state = state.copyWith(lotNumber: v);
   void updatePrice(int v) => state = state.copyWith(price: v);
   void updatePurchasePlace(String v) => state = state.copyWith(purchasePlace: v);
+  void updateQuantity(int v) => state = state.copyWith(quantity: v);
+  void updateLengthMeters(int v) => state = state.copyWith(lengthMeters: v);
   void loadYarn(YarnModel yarn) => state = yarn;
   void reset(String uid) => state = YarnModel.empty(uid: uid);
 }

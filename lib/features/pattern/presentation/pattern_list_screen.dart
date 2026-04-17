@@ -230,6 +230,8 @@ class PatternListScreen extends ConsumerWidget {
   }
 
   Future<void> _saveImageFile(BuildContext context, WidgetRef ref, File file, bool isKorean) async {
+    // async gap 이전에 repo 캡처 → ref가 disposed된 이후 접근 방지
+    final repo = ref.read(patternRepositoryProvider);
     final title = await _askPatternTitle(context, isKorean);
     if (title == null || !context.mounted) return;
     try {
@@ -237,10 +239,7 @@ class PatternListScreen extends ConsumerWidget {
         context,
         message: isKorean ? '저장하는 중입니다.' : 'Saving...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
-        task: () => ref.read(patternRepositoryProvider).saveImagePattern(
-          title: title,
-          imageFile: file,
-        ),
+        task: () => repo.saveImagePattern(title: title, imageFile: file),
       );
       if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '저장됐어요.' : 'Saved.');
     } catch (e) {
@@ -249,6 +248,8 @@ class PatternListScreen extends ConsumerWidget {
   }
 
   Future<void> _savePdfFile(BuildContext context, WidgetRef ref, File file, bool isKorean) async {
+    // async gap 이전에 repo 캡처 → ref가 disposed된 이후 접근 방지
+    final repo = ref.read(patternRepositoryProvider);
     final title = await _askPatternTitle(context, isKorean);
     if (title == null || !context.mounted) return;
     try {
@@ -256,10 +257,7 @@ class PatternListScreen extends ConsumerWidget {
         context,
         message: isKorean ? '저장하는 중입니다.' : 'Saving...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
-        task: () => ref.read(patternRepositoryProvider).savePdfPattern(
-          title: title,
-          pdfFile: file,
-        ),
+        task: () => repo.savePdfPattern(title: title, pdfFile: file),
       );
       if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '저장됐어요.' : 'Saved.');
     } catch (e) {
@@ -491,6 +489,12 @@ class _PatternRow extends StatelessWidget {
     }
   }
 
+  bool get _isNew {
+    final created = chart.createdAt;
+    if (created == null) return false;
+    return DateTime.now().difference(created).inHours < 24;
+  }
+
   @override
   Widget build(BuildContext context) {
     return MoriLibraryCard(
@@ -501,7 +505,30 @@ class _PatternRow extends StatelessWidget {
       fallbackIconBg: _iconBgColor.withValues(alpha: 0.12),
       fallbackIconColor: _iconBgColor,
       onTap: onTap,
-      trailing: Icon(Icons.chevron_right_rounded, color: C.mu),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_isNew)
+            Container(
+              margin: const EdgeInsets.only(right: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: C.lv,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'NEW',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          Icon(Icons.chevron_right_rounded, color: C.mu),
+        ],
+      ),
     );
   }
 }

@@ -6,6 +6,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/book_provider.dart';
 import '../domain/book_model.dart';
+import 'book_detail_screen.dart';
 import 'book_input_screen.dart';
 
 class BookListScreen extends ConsumerWidget {
@@ -88,12 +89,9 @@ class BookListScreen extends ConsumerWidget {
                               onTap: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) =>
-                                      BookInputScreen(initialBook: book),
+                                  builder: (_) => BookDetailScreen(book: book),
                                 ),
                               ),
-                              onDelete: () =>
-                                  _confirmDelete(context, ref, book, isKorean),
                             ),
                           ),
                         ],
@@ -109,67 +107,17 @@ class BookListScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref,
-      BookModel book, bool isKorean) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(isKorean ? '도서 삭제' : 'Delete Book', style: T.h3),
-        content: Text(
-          isKorean
-              ? '"${book.title}" 을 삭제할까요?'
-              : 'Delete "${book.title}"?',
-          style: T.body,
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(isKorean ? '취소' : 'Cancel')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style:
-                ElevatedButton.styleFrom(backgroundColor: C.og),
-            child: Text(isKorean ? '삭제' : 'Delete',
-                style: const TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-    if (confirm != true) return;
-    if (!context.mounted) return;
-    try {
-      await runWithMoriLoadingDialog<void>(
-        context,
-        message: isKorean ? '삭제하는 중입니다.' : 'Deleting...',
-        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
-        task: () => ref.read(bookRepositoryProvider).deleteBook(book.id),
-      );
-      if (context.mounted) {
-        showSavedSnackBar(ScaffoldMessenger.of(context),
-            message: isKorean ? '삭제됐어요.' : 'Deleted.');
-      }
-    } catch (e) {
-      if (context.mounted) {
-        showSaveErrorSnackBar(ScaffoldMessenger.of(context),
-            message: '$e');
-      }
-    }
-  }
 }
 
 class _BookCard extends StatelessWidget {
   final BookModel book;
   final bool isKorean;
   final VoidCallback onTap;
-  final VoidCallback onDelete;
 
   const _BookCard({
     required this.book,
     required this.isKorean,
     required this.onTap,
-    required this.onDelete,
   });
 
   @override
@@ -240,26 +188,7 @@ class _BookCard extends StatelessWidget {
                 ],
               ),
             ),
-            PopupMenuButton<String>(
-              icon: Icon(Icons.more_vert, color: C.mu, size: 20),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-              onSelected: (value) {
-                if (value == 'edit') onTap();
-                if (value == 'delete') onDelete();
-              },
-              itemBuilder: (_) => [
-                PopupMenuItem(
-                  value: 'edit',
-                  child: Text(isKorean ? '수정' : 'Edit'),
-                ),
-                PopupMenuItem(
-                  value: 'delete',
-                  child: Text(isKorean ? '삭제' : 'Delete',
-                      style: TextStyle(color: C.og)),
-                ),
-              ],
-            ),
+            Icon(Icons.chevron_right, color: C.mu, size: 20),
           ],
         ),
       ),

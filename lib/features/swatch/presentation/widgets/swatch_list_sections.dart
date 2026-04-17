@@ -73,98 +73,65 @@ class SwatchCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isKorean = Localizations.localeOf(context).languageCode == 'ko';
+    final thumbUrl = swatch.afterPhotoUrl.isNotEmpty
+        ? swatch.afterPhotoUrl
+        : (swatch.beforePhotoUrl.isNotEmpty ? swatch.beforePhotoUrl : null);
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
+        margin: const EdgeInsets.only(bottom: 0),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(color: C.gx, borderRadius: BorderRadius.circular(16), border: Border.all(color: C.bd), boxShadow: C.glowShadow(C.lv)),
-        child: Row(children: [
-          Container(width: 56, height: 56, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(12)), child: swatch.beforePhotoUrl.isNotEmpty ? ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(swatch.beforePhotoUrl, fit: BoxFit.cover)) : Icon(Icons.texture, color: C.lv, size: 28)),
-          const SizedBox(width: 14),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [if (swatch.yarnName.isNotEmpty) ...[Text(swatch.yarnName, style: T.h3.copyWith(fontSize: 15, fontWeight: FontWeight.w700)), const SizedBox(height: 2)], Text(swatch.gaugeDisplay, style: T.h3.copyWith(fontSize: 16)), const SizedBox(height: 4), if (swatch.needleSize > 0) Text(swatch.needleSizeDisplay, style: T.sm.copyWith(color: C.lvD)), if (swatch.yarnBrandName.isNotEmpty) Text(swatch.yarnBrandName, style: T.caption.copyWith(color: C.mu)), if (projectName != null && projectName!.isNotEmpty) ...[const SizedBox(height: 6), _SwatchProjectBadge(name: projectName!)]])),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (swatch.myNeedlePhotoUrl.isNotEmpty) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: Image.network(
-                    swatch.myNeedlePhotoUrl,
-                    width: 28, height: 28, fit: BoxFit.cover,
-                    errorBuilder: (e1, e2, e3) => const SizedBox.shrink(),
+        child: Row(
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(12)),
+              child: thumbUrl != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(
+                        thumbUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Icon(Icons.texture, color: C.lv, size: 28),
+                      ),
+                    )
+                  : Icon(Icons.texture, color: C.lv, size: 28),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (swatch.swatchName.isNotEmpty) ...[
+                    Text(swatch.swatchName, style: T.bodyBold.copyWith(fontSize: 14, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                  ],
+                  Text(
+                    '${swatch.beforeStitchCount} x ${swatch.beforeRowCount}',
+                    style: T.bodyBold.copyWith(fontSize: 16),
                   ),
-                ),
-                const SizedBox(width: 4),
-              ],
-              if (swatch.myYarnPhotoUrl.isNotEmpty) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: Image.network(
-                    swatch.myYarnPhotoUrl,
-                    width: 28, height: 28, fit: BoxFit.cover,
-                    errorBuilder: (e1, e2, e3) => const SizedBox.shrink(),
-                  ),
-                ),
-                const SizedBox(width: 4),
-              ],
-              if (swatch.needleSize > 0) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: C.lv.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.circle_outlined, color: C.lvD, size: 10),
-                    const SizedBox(width: 3),
-                    Text(swatch.needleSizeDisplay, style: T.caption.copyWith(fontSize: 10, color: C.lvD)),
-                  ]),
-                ),
-                const SizedBox(width: 4),
-              ],
-              if (swatch.hasAfterWash) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: C.lmG, borderRadius: BorderRadius.circular(20)),
-                  child: Text(
-                    isKorean ? '세탁후 ${swatch.shrinkageRate.toStringAsFixed(1)}%' : 'After ${swatch.shrinkageRate.toStringAsFixed(1)}%',
-                    style: T.caption.copyWith(color: C.lmD, fontWeight: FontWeight.w600, fontSize: 10),
-                  ),
-                ),
-                const SizedBox(width: 4),
-              ],
-              Icon(Icons.chevron_right_rounded, color: C.mu),
-            ],
-          ),
-        ]),
+                  if (swatch.needleSize > 0) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.circle_outlined, color: C.lvD, size: 10),
+                        const SizedBox(width: 3),
+                        Text(swatch.needleSizeDisplay, style: T.caption.copyWith(color: C.lvD)),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: C.mu),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _SwatchProjectBadge extends StatelessWidget {
-  final String name;
-  const _SwatchProjectBadge({required this.name});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: C.lmD.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: C.lmD.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.folder_outlined, color: C.lmD, size: 12),
-          const SizedBox(width: 4),
-          Text(name, style: T.caption.copyWith(color: C.lmD, fontWeight: FontWeight.w600)),
-        ],
-      ),
-    );
-  }
-}

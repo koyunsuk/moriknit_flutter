@@ -1,8 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
@@ -27,11 +31,17 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
   late final TextEditingController _authorCtrl;
   late final TextEditingController _publisherCtrl;
   late final TextEditingController _publishYearCtrl;
+  late final TextEditingController _descriptionCtrl;
+  late final TextEditingController _tocCtrl;
   late final TextEditingController _memoCtrl;
 
   String _coverUrl = '';
   bool _isFetching = false;
   bool _fetchFailed = false;
+
+  // 메모 사진 (기존 URL + 새 로컬 파일)
+  late List<String> _existingPhotoUrls;
+  final List<File> _newPhotoFiles = [];
 
   @override
   void initState() {
@@ -42,8 +52,11 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
     _authorCtrl = TextEditingController(text: book?.author ?? '');
     _publisherCtrl = TextEditingController(text: book?.publisher ?? '');
     _publishYearCtrl = TextEditingController(text: book?.publishYear ?? '');
+    _descriptionCtrl = TextEditingController(text: book?.description ?? '');
+    _tocCtrl = TextEditingController(text: book?.tableOfContents ?? '');
     _memoCtrl = TextEditingController(text: book?.memo ?? '');
     _coverUrl = book?.coverUrl ?? '';
+    _existingPhotoUrls = List<String>.from(book?.photoUrls ?? []);
   }
 
   @override
@@ -53,8 +66,42 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
     _authorCtrl.dispose();
     _publisherCtrl.dispose();
     _publishYearCtrl.dispose();
+    _descriptionCtrl.dispose();
+    _tocCtrl.dispose();
     _memoCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickMemoPhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_rounded),
+              title: const Text('즉시 촬영'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded),
+              title: const Text('갤러리에서 선택'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+    final picked = await ImagePicker().pickImage(source: source, imageQuality: 85);
+    if (picked == null) return;
+    setState(() => _newPhotoFiles.add(File(picked.path)));
   }
 
   Future<void> _fetchBookInfo() async {
@@ -67,44 +114,37 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
     });
 
     try {
-      final url =
-          'https://openlibrary.org/api/books?bibkeys=ISBN:$isbn&format=json&jscmd=data';
-      final response = await http
-          .get(Uri.parse(url))
-          .timeout(const Duration(seconds: 10));
+      final uri = Uri.https(
+        'dapi.kakao.com',
+        '/v3/search/book',
+        {'target': 'isbn', 'query': isbn},
+      );
+      final response = await http.get(
+        uri,
+        headers: {'Authorization': 'KakaoAK d4cbe1245d9164d1c948fda1b8eedbc3'},
+      ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body) as Map<String, dynamic>;
-        final key = 'ISBN:$isbn';
-        if (data.containsKey(key)) {
-          final bookData = data[key] as Map<String, dynamic>;
+        final documents = data['documents'] as List<dynamic>?;
+        if (documents != null && documents.isNotEmpty) {
+          final book = documents.first as Map<String, dynamic>;
 
-          final title = bookData['title'] as String? ?? '';
+          final title = book['title'] as String? ?? '';
 
-          // 저자
-          final authorsList = bookData['authors'] as List<dynamic>?;
+          final authorsList = book['authors'] as List<dynamic>?;
           final author = authorsList != null && authorsList.isNotEmpty
-              ? (authorsList.first as Map<String, dynamic>)['name'] as String? ?? ''
+              ? authorsList.map((a) => a.toString()).join(', ')
               : '';
 
-          // 출판사
-          final publishersList = bookData['publishers'] as List<dynamic>?;
-          final publisher = publishersList != null && publishersList.isNotEmpty
-              ? (publishersList.first as Map<String, dynamic>)['name'] as String? ?? ''
-              : '';
+          final publisher = book['publisher'] as String? ?? '';
 
-          // 출판연도
-          final publishDate = bookData['publish_date'] as String? ?? '';
-          // 연도만 추출 (예: "2020" or "March 2020" -> "2020")
-          final yearMatch = RegExp(r'\d{4}').firstMatch(publishDate);
-          final publishYear = yearMatch?.group(0) ?? publishDate;
+          final datetime = book['datetime'] as String? ?? '';
+          final yearMatch = RegExp(r'\d{4}').firstMatch(datetime);
+          final publishYear = yearMatch?.group(0) ?? '';
 
-          // 표지
-          final covers = bookData['cover'] as Map<String, dynamic>?;
-          final coverUrl = covers?['large'] as String? ??
-              covers?['medium'] as String? ??
-              covers?['small'] as String? ??
-              '';
+          final coverUrl = book['thumbnail'] as String? ?? '';
+          final kakaoDescription = book['contents'] as String? ?? '';
 
           setState(() {
             _titleCtrl.text = title;
@@ -112,8 +152,12 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
             _publisherCtrl.text = publisher;
             _publishYearCtrl.text = publishYear;
             _coverUrl = coverUrl;
+            _descriptionCtrl.text = kakaoDescription;
             _fetchFailed = false;
           });
+
+          // Google Books API로 전체 소개 + 목차 가져오기
+          await _fetchGoogleBooks(isbn);
         } else {
           setState(() => _fetchFailed = true);
         }
@@ -127,39 +171,72 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
     }
   }
 
+  Future<void> _fetchGoogleBooks(String isbn) async {
+    try {
+      final uri = Uri.https(
+        'www.googleapis.com',
+        '/books/v1/volumes',
+        {'q': 'isbn:$isbn'},
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+      if (response.statusCode != 200) return;
+
+      final data = json.decode(response.body) as Map<String, dynamic>;
+      final items = data['items'] as List<dynamic>?;
+      if (items == null || items.isEmpty) return;
+
+      final volumeInfo = (items.first as Map<String, dynamic>)['volumeInfo']
+          as Map<String, dynamic>?;
+      if (volumeInfo == null) return;
+
+      final fullDescription = volumeInfo['description'] as String? ?? '';
+      final toc = volumeInfo['tableOfContents'] as String? ?? '';
+
+      setState(() {
+        if (fullDescription.isNotEmpty) {
+          _descriptionCtrl.text = fullDescription;
+        }
+        if (toc.isNotEmpty && _tocCtrl.text.isEmpty) {
+          _tocCtrl.text = toc;
+        }
+      });
+    } catch (_) {
+      // Google Books 실패 시 Kakao 정보 유지
+    }
+  }
+
   Future<void> _save(BuildContext context) async {
     final isKorean = ref.read(appLanguageProvider).isKorean;
+    final messenger = ScaffoldMessenger.of(context);
     final isbn = _isbnCtrl.text.trim();
     if (isbn.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(isKorean ? 'ISBN을 입력해주세요.' : 'Please enter ISBN.')),
+        SnackBar(content: Text(isKorean ? 'ISBN을 입력해주세요.' : 'Please enter ISBN.')),
       );
       return;
     }
     final title = _titleCtrl.text.trim();
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(
-                isKorean ? '도서 제목을 입력해주세요.' : 'Please enter book title.')),
+        SnackBar(content: Text(isKorean ? '도서 제목을 입력해주세요.' : 'Please enter book title.')),
       );
       return;
     }
 
     final uid = ref.read(authStateProvider).valueOrNull?.uid ?? '';
     final isEdit = widget.initialBook != null;
-    final book = (isEdit ? widget.initialBook! : BookModel.empty(uid: uid))
-        .copyWith(
+    final baseBook = (isEdit ? widget.initialBook! : BookModel.empty(uid: uid)).copyWith(
       isbn: isbn,
       title: title,
       author: _authorCtrl.text.trim(),
       publisher: _publisherCtrl.text.trim(),
       publishYear: _publishYearCtrl.text.trim(),
-      coverUrl: _coverUrl,
+      description: _descriptionCtrl.text.trim(),
+      tableOfContents: _tocCtrl.text.trim(),
       memo: _memoCtrl.text.trim(),
     );
 
+    late BookModel savedBook;
     try {
       await runWithMoriLoadingDialog<void>(
         context,
@@ -167,21 +244,37 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
         task: () async {
           final repo = ref.read(bookRepositoryProvider);
+          final bookId = baseBook.id.isNotEmpty
+              ? baseBook.id
+              : FirebaseFirestore.instance.collection('books').doc().id;
+
+          // 새 메모 사진 업로드
+          final uploadedUrls = <String>[];
+          for (int i = 0; i < _newPhotoFiles.length; i++) {
+            final storageRef = FirebaseStorage.instance
+                .ref('books/$uid/$bookId/memo_$i\_${DateTime.now().millisecondsSinceEpoch}.jpg');
+            await storageRef.putFile(_newPhotoFiles[i]);
+            uploadedUrls.add(await storageRef.getDownloadURL());
+          }
+
+          final allPhotoUrls = [..._existingPhotoUrls, ...uploadedUrls];
+          savedBook = baseBook.copyWith(
+            coverUrl: _coverUrl,
+            photoUrls: allPhotoUrls,
+          );
           if (isEdit) {
-            await repo.updateBook(book);
+            await repo.updateBook(savedBook);
           } else {
-            await repo.createBook(book);
+            await repo.createBook(savedBook);
           }
         },
       );
       if (!mounted) return;
-      showSavedSnackBar(ScaffoldMessenger.of(context),
-          message: isKorean ? '저장됐어요.' : 'Saved.');
-      Navigator.pop(context);
+      showSavedSnackBar(messenger, message: isKorean ? '저장됐어요.' : 'Saved.');
+      Navigator.pop(context, savedBook);
     } catch (e) {
       if (!mounted) return;
-      showSaveErrorSnackBar(ScaffoldMessenger.of(context),
-          message: '$e');
+      showSaveErrorSnackBar(messenger, message: '$e');
     }
   }
 
@@ -228,8 +321,7 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // ISBN 입력 + 검색
-                SectionTitle(
-                    title: isKorean ? 'ISBN *' : 'ISBN *'),
+                SectionTitle(title: isKorean ? 'ISBN *' : 'ISBN *'),
                 const SizedBox(height: 8),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -239,12 +331,8 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
                         controller: _isbnCtrl,
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
-                          labelText: isKorean
-                              ? '예: 9788991987012'
-                              : 'e.g. 9788991987012',
-                          hintText: isKorean
-                              ? 'ISBN-10 또는 ISBN-13'
-                              : 'ISBN-10 or ISBN-13',
+                          labelText: isKorean ? '예: 9788991987012' : 'e.g. 9788991987012',
+                          hintText: isKorean ? 'ISBN-10 또는 ISBN-13' : 'ISBN-10 or ISBN-13',
                           fillColor: C.gx,
                           filled: true,
                         ),
@@ -285,10 +373,9 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
                 ],
                 const SizedBox(height: 20),
 
-                // 표지 미리보기
+                // 표지 미리보기 (Kakao에서 불러온 경우만)
                 if (_coverUrl.isNotEmpty) ...[
-                  SectionTitle(
-                      title: isKorean ? '표지 미리보기' : 'Cover Preview'),
+                  SectionTitle(title: isKorean ? '표지' : 'Cover'),
                   const SizedBox(height: 8),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10),
@@ -331,8 +418,7 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
                 const SizedBox(height: 20),
 
                 // 출판사
-                SectionTitle(
-                    title: isKorean ? '출판사 (선택)' : 'Publisher (optional)'),
+                SectionTitle(title: isKorean ? '출판사 (선택)' : 'Publisher (optional)'),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _publisherCtrl,
@@ -345,8 +431,7 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
                 const SizedBox(height: 20),
 
                 // 출판연도
-                SectionTitle(
-                    title: isKorean ? '출판연도 (선택)' : 'Publish Year (optional)'),
+                SectionTitle(title: isKorean ? '출판연도 (선택)' : 'Publish Year (optional)'),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _publishYearCtrl,
@@ -359,25 +444,183 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // 메모
-                SectionTitle(
-                    title: isKorean ? '메모 (선택)' : 'Memo (optional)'),
+                // 책 소개
+                SectionTitle(title: isKorean ? '책 소개 (선택)' : 'Description (optional)'),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _descriptionCtrl,
+                  maxLines: 5,
+                  decoration: InputDecoration(
+                    labelText: isKorean ? '책 소개, 서평...' : 'Book description...',
+                    fillColor: C.gx,
+                    filled: true,
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // 목차
+                SectionTitle(title: isKorean ? '목차 (선택)' : 'Table of Contents (optional)'),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _tocCtrl,
+                  maxLines: 5,
+                  decoration: InputDecoration(
+                    labelText: isKorean ? '목차 내용...' : 'Table of contents...',
+                    fillColor: C.gx,
+                    filled: true,
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // 메모 + 사진
+                SectionTitle(title: isKorean ? '메모 (선택)' : 'Memo (optional)'),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _memoCtrl,
                   maxLines: 3,
                   decoration: InputDecoration(
-                    labelText:
-                        isKorean ? '참고 페이지, 활용 방법...' : 'Reference pages, usage notes...',
+                    labelText: isKorean ? '참고 페이지, 활용 방법...' : 'Reference pages, usage notes...',
                     fillColor: C.gx,
                     filled: true,
                   ),
                 ),
+                const SizedBox(height: 12),
+                // 메모 사진 그리드
+                _MemoPhotoGrid(
+                  existingUrls: _existingPhotoUrls,
+                  newFiles: _newPhotoFiles,
+                  isKorean: isKorean,
+                  onAdd: _pickMemoPhoto,
+                  onRemoveExisting: (i) =>
+                      setState(() => _existingPhotoUrls.removeAt(i)),
+                  onRemoveNew: (i) =>
+                      setState(() => _newPhotoFiles.removeAt(i)),
+                ),
+                const SizedBox(height: 8),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _MemoPhotoGrid extends StatelessWidget {
+  final List<String> existingUrls;
+  final List<File> newFiles;
+  final bool isKorean;
+  final VoidCallback onAdd;
+  final ValueChanged<int> onRemoveExisting;
+  final ValueChanged<int> onRemoveNew;
+
+  const _MemoPhotoGrid({
+    required this.existingUrls,
+    required this.newFiles,
+    required this.isKorean,
+    required this.onAdd,
+    required this.onRemoveExisting,
+    required this.onRemoveNew,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final total = existingUrls.length + newFiles.length;
+    final items = <Widget>[
+      // 기존 URL 사진
+      for (int i = 0; i < existingUrls.length; i++)
+        _PhotoThumb(
+          child: Image.network(existingUrls[i], fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => const Icon(Icons.broken_image_rounded)),
+          onRemove: () => onRemoveExisting(i),
+        ),
+      // 새 로컬 사진
+      for (int i = 0; i < newFiles.length; i++)
+        _PhotoThumb(
+          child: Image.file(newFiles[i], fit: BoxFit.cover),
+          onRemove: () => onRemoveNew(i),
+        ),
+      // 추가 버튼
+      GestureDetector(
+        onTap: onAdd,
+        child: Container(
+          decoration: BoxDecoration(
+            color: C.lvL,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: C.lv.withValues(alpha: 0.3)),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.add_photo_alternate_rounded, color: C.lv, size: 28),
+              const SizedBox(height: 4),
+              Text(isKorean ? '사진 추가' : 'Add Photo',
+                  style: TextStyle(fontSize: 11, color: C.lvD)),
+            ],
+          ),
+        ),
+      ),
+    ];
+
+    if (total == 0 && items.length == 1) {
+      // 추가 버튼만 있을 때 한 행에 표시
+      return SizedBox(
+        height: 90,
+        child: Row(
+          children: [
+            SizedBox(
+              width: 80,
+              height: 80,
+              child: items.first,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GridView.count(
+      crossAxisCount: 3,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 8,
+      crossAxisSpacing: 8,
+      children: items,
+    );
+  }
+}
+
+class _PhotoThumb extends StatelessWidget {
+  final Widget child;
+  final VoidCallback onRemove;
+
+  const _PhotoThumb({required this.child, required this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: child,
+        ),
+        Positioned(
+          top: 2,
+          right: 2,
+          child: GestureDetector(
+            onTap: onRemove,
+            child: Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.6),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.close_rounded, color: Colors.white, size: 14),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

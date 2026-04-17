@@ -411,6 +411,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           );
         },
       );
+      if (!mounted) return;
+      if (!widget.isAdmin) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) GoRouter.of(context).go('/');
+        });
+      }
     } on LoginException catch (e) {
       if (!mounted) return;
       // 어드민 로그인: invalid-credential은 "이메일/비밀번호 오류"로만 처리 (회원가입 팝업 금지)
@@ -462,6 +468,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           await ref.read(authRepositoryProvider).signInWithGoogle();
         },
       );
+      if (!mounted) return;
+      if (!widget.isAdmin) {
+        context.go('/');
+      }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     }
@@ -479,6 +489,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           await ref.read(authRepositoryProvider).signInWithKakao();
         },
       );
+      if (!mounted) return;
+      if (!widget.isAdmin) {
+        context.go('/');
+      }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     }

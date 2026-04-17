@@ -1075,13 +1075,8 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
                             textAlign: TextAlign.center,
                           ),
                         ),
-                        const SizedBox(height: 10),
-                        _CardEditActions(
-                          isKorean: isKorean,
-                          onLinkFromWork: () => _linkExistingYarn(context, ref),
-                          onCreateNew: () => context.push('/yarn-list'),
-                        ),
-                      ] else if (isCardEditMode) ...[
+                      ],
+                      if (isCardEditMode) ...[
                         const SizedBox(height: 10),
                         _CardEditActions(
                           isKorean: isKorean,
@@ -1172,13 +1167,8 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
                             textAlign: TextAlign.center,
                           ),
                         ),
-                        const SizedBox(height: 10),
-                        _CardEditActions(
-                          isKorean: isKorean,
-                          onLinkFromWork: () => _linkExistingNeedle(context, ref),
-                          onCreateNew: () => context.push(Routes.needles),
-                        ),
-                      ] else if (isCardEditMode) ...[
+                      ],
+                      if (isCardEditMode) ...[
                         const SizedBox(height: 10),
                         _CardEditActions(
                           isKorean: isKorean,
@@ -1218,12 +1208,6 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
                         style: T.body.copyWith(color: C.mu),
                         textAlign: TextAlign.center,
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    _CardEditActions(
-                      isKorean: isKorean,
-                      onLinkFromWork: () => _linkExistingSwatch(context, ref),
-                      onCreateNew: () => _addSwatch(context, ref, isKorean),
                     ),
                   ] else
                     ...linkedSwatches.map(
@@ -1321,22 +1305,12 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
                         : null;
 
                     if (linked == null) {
-                      return Column(
-                        children: [
-                          Center(
-                            child: Text(
-                              isKorean ? '연결된 도안 없어요.' : 'No linked pattern.',
-                              style: T.body.copyWith(color: C.mu),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          _CardEditActions(
-                            isKorean: isKorean,
-                            onLinkFromWork: () => _linkPattern(context, ref),
-                            onCreateNew: null,
-                          ),
-                        ],
+                      return Center(
+                        child: Text(
+                          isKorean ? '연결된 도안 없어요.' : 'No linked pattern.',
+                          style: T.body.copyWith(color: C.mu),
+                          textAlign: TextAlign.center,
+                        ),
                       );
                     }
                     return InkWell(
@@ -1526,22 +1500,12 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
                   countersAsync.when(
                     data: (counters) {
                       if (counters.isEmpty) {
-                        return Column(
-                          children: [
-                            Center(
-                              child: Text(
-                                isKorean ? '연결된 카운터 없어요.' : 'No linked counters.',
-                                style: T.body.copyWith(color: C.mu),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            _CardEditActions(
-                              isKorean: isKorean,
-                              onLinkFromWork: () => _linkExistingCounter(context, ref),
-                              onCreateNew: () => _addCounter(context, ref),
-                            ),
-                          ],
+                        return Center(
+                          child: Text(
+                            isKorean ? '연결된 카운터 없어요.' : 'No linked counters.',
+                            style: T.body.copyWith(color: C.mu),
+                            textAlign: TextAlign.center,
+                          ),
                         );
                       }
                       return Column(

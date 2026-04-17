@@ -357,6 +357,76 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
     _fitToScreenNotifier.value = Size(availW, availH.clamp(100.0, double.infinity));
   }
 
+  /// 이슈 #347: 기호 그리드 → 서술형 도안 변환 (RLE)
+  Future<void> _generateNarrativeFromGrid() async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    // 기호 데이터가 있는지 확인
+    final hasSymbols = _chart.grid.any(
+      (row) => row.any((cell) => cell.symbolId != null),
+    );
+    if (!hasSymbols) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isKorean
+              ? '기호 모드에서 먼저 기호를 그려주세요.'
+              : 'Draw symbols in symbol mode first.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    // 기존 내용이 있으면 확인 다이얼로그
+    if (_narrativeController.text.trim().isNotEmpty) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(isKorean ? '서술형 도안 생성' : 'Generate Narrative'),
+          content: Text(isKorean
+              ? '기존 서술형 도안이 그리드 기반으로 덮어쓰여집니다. 계속할까요?'
+              : 'Existing narrative will be replaced with grid-based content. Continue?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(isKorean ? '취소' : 'Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: C.lv,
+                foregroundColor: Colors.white,
+              ),
+              child: Text(isKorean ? '생성' : 'Generate'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+    final narrative = _chart.toNarrative(korean: isKorean);
+    _pushUndo(_chart);
+    setState(() {
+      _narrativeController.text = narrative;
+      _chart = PatternChart(
+        id: _chart.id,
+        title: _chart.title,
+        rows: _chart.rows,
+        cols: _chart.cols,
+        mode: _chart.mode,
+        grid: _chart.grid,
+        narrativeText: narrative,
+        type: _chart.type,
+        imageUrl: _chart.imageUrl,
+        pdfUrl: _chart.pdfUrl,
+        forkCount: _chart.forkCount,
+        sourcePatternId: _chart.sourcePatternId,
+        sourceOwnerName: _chart.sourceOwnerName,
+        sourceType: _chart.sourceType,
+        aiSections: _chart.aiSections,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
@@ -427,107 +497,176 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
       body: Stack(
         children: [
           const BgOrbs(),
-          Column(
-            children: [
-              // 참조 이미지 패널
-              if (_showReference && _referenceImageFile != null)
-                Stack(
-                  children: [
-                    SizedBox(
-                      height: 220,
-                      width: double.infinity,
-                      child: Image.file(_referenceImageFile!, fit: BoxFit.contain),
-                    ),
-                    Positioned(
-                      right: 8,
-                      bottom: 8,
-                      child: GestureDetector(
-                        onTap: _changeReferenceImage,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: C.lv.withValues(alpha: 0.85),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.edit_rounded, size: 18, color: Colors.white),
+          Positioned.fill(
+            child: Column(
+              children: [
+                // 참조 이미지 패널 (최대 200px로 제한)
+                if (_showReference && _referenceImageFile != null)
+                  Stack(
+                    children: [
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 200),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: Image.file(_referenceImageFile!, fit: BoxFit.contain),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              if (_showReference && widget.referencePdfPath != null && !kIsWeb)
-                SizedBox(
-                  height: 220,
-                  child: PDFView(filePath: widget.referencePdfPath!),
-                ),
-              // 이슈 #97: ChartCanvas — _hitCell이 TransformationController 역행렬로
-              // 좌표를 정확히 변환하므로 삭제 후 재클릭 시 좌표 어긋남 없음.
-              // CellData.== 구현으로 동일 셀 중복 칠하기도 안전하게 처리됨.
-              Expanded(
-                child: ClipRect(
-                  child: RepaintBoundary(
-                    key: _chartKey,
-                    child: _chart.mode == ChartMode.narrative
-                      ? _NarrativeEditor(
-                          controller: _narrativeController,
-                          onChanged: (text) {
-                            _pushUndo(_chart);
-                            setState(() {
-                              _chart = PatternChart(
-                                id: _chart.id,
-                                title: _chart.title,
-                                rows: _chart.rows,
-                                cols: _chart.cols,
-                                mode: _chart.mode,
-                                grid: _chart.grid,
-                                narrativeText: text,
-                              );
-                            });
-                          },
-                        )
-                      : ChartCanvas(
-                          chart: _chart,
-                          tool: _activeTool,
-                          activeColor: _activeColor,
-                          activeSymbolId: _activeSymbolId,
-                          onChartChanged: _onChartChanged,
-                          // 이슈 #98: fitToScreenNotifier — 전체 조망 트리거
-                          fitToScreenNotifier: _fitToScreenNotifier,
+                      Positioned(
+                        right: 8,
+                        bottom: 8,
+                        child: GestureDetector(
+                          onTap: _changeReferenceImage,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: C.lv.withValues(alpha: 0.85),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.edit_rounded, size: 18, color: Colors.white),
+                          ),
                         ),
+                      ),
+                    ],
+                  ),
+                if (_showReference && widget.referencePdfPath != null && !kIsWeb)
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 200),
+                    child: PDFView(filePath: widget.referencePdfPath!),
+                  ),
+                Expanded(
+                  child: ClipRect(
+                    child: RepaintBoundary(
+                      key: _chartKey,
+                      child: _chart.mode == ChartMode.narrative
+                        ? Column(
+                            children: [
+                              _GenerateFromGridBar(
+                                chart: _chart,
+                                isKorean: isKorean,
+                                onGenerate: _generateNarrativeFromGrid,
+                              ),
+                              Expanded(
+                                child: _NarrativeEditor(
+                                  controller: _narrativeController,
+                                  onChanged: (text) {
+                                    _pushUndo(_chart);
+                                    setState(() {
+                                      _chart = PatternChart(
+                                        id: _chart.id,
+                                        title: _chart.title,
+                                        rows: _chart.rows,
+                                        cols: _chart.cols,
+                                        mode: _chart.mode,
+                                        grid: _chart.grid,
+                                        narrativeText: text,
+                                      );
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
+                          )
+                        : ChartCanvas(
+                            chart: _chart,
+                            tool: _activeTool,
+                            activeColor: _activeColor,
+                            activeSymbolId: _activeSymbolId,
+                            onChartChanged: _onChartChanged,
+                            fitToScreenNotifier: _fitToScreenNotifier,
+                          ),
+                    ),
                   ),
                 ),
-              ),
-              // 이슈 #98: ChartToolbar.onFitScreen → _triggerFitToScreen
-              ChartToolbar(
-                mode: _chart.mode,
-                activeTool: _activeTool,
-                activeColor: _activeColor,
-                activeSymbolId: _activeSymbolId,
-                canUndo: _undoStack.isNotEmpty,
-                canRedo: _redoStack.isNotEmpty,
-                onModeChanged: (mode) {
-                  setState(() {
-                    _chart = PatternChart(
-                      id: _chart.id,
-                      title: _chart.title,
-                      rows: _chart.rows,
-                      cols: _chart.cols,
-                      mode: mode,
-                      grid: _chart.grid,
-                      narrativeText: _chart.narrativeText,
-                    );
-                  });
-                },
-                onToolChanged: (tool) => setState(() => _activeTool = tool),
-                onColorChanged: (color) => setState(() => _activeColor = color),
-                onSymbolChanged: (id) => setState(() => _activeSymbolId = id),
-                onUndo: _undo,
-                onRedo: _redo,
-                onClear: _clearChart,
-                onExport: _showPdfDialog,
-                onFitScreen: _triggerFitToScreen,
-              ),
-            ],
+              ],
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: ChartToolbar(
+        mode: _chart.mode,
+        activeTool: _activeTool,
+        activeColor: _activeColor,
+        activeSymbolId: _activeSymbolId,
+        canUndo: _undoStack.isNotEmpty,
+        canRedo: _redoStack.isNotEmpty,
+        onModeChanged: (mode) {
+          setState(() {
+            _chart = PatternChart(
+              id: _chart.id,
+              title: _chart.title,
+              rows: _chart.rows,
+              cols: _chart.cols,
+              mode: mode,
+              grid: _chart.grid,
+              narrativeText: _chart.narrativeText,
+            );
+          });
+        },
+        onToolChanged: (tool) => setState(() => _activeTool = tool),
+        onColorChanged: (color) => setState(() => _activeColor = color),
+        onSymbolChanged: (id) => setState(() => _activeSymbolId = id),
+        onUndo: _undo,
+        onRedo: _redo,
+        onClear: _clearChart,
+        onExport: _showPdfDialog,
+        onFitScreen: _triggerFitToScreen,
+      ),
+    );
+  }
+}
+
+/// 이슈 #347: 그리드 → 서술형 변환 버튼 바
+class _GenerateFromGridBar extends StatelessWidget {
+  final PatternChart chart;
+  final bool isKorean;
+  final VoidCallback onGenerate;
+
+  const _GenerateFromGridBar({
+    required this.chart,
+    required this.isKorean,
+    required this.onGenerate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasSymbols = chart.grid.any(
+      (row) => row.any((cell) => cell.symbolId != null),
+    );
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: C.lvL,
+        border: Border(bottom: BorderSide(color: C.bd, width: 1)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.auto_awesome_rounded, size: 16, color: C.lvD),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              isKorean
+                  ? '기호 그리드를 서술형 도안으로 변환합니다.'
+                  : 'Convert symbol grid to narrative pattern.',
+              style: TextStyle(fontSize: 12, color: C.tx2),
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton.icon(
+            onPressed: hasSymbols ? onGenerate : null,
+            icon: const Icon(Icons.text_snippet_rounded, size: 15),
+            label: Text(
+              isKorean ? '그리드에서 생성' : 'Generate',
+              style: const TextStyle(fontSize: 12),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: C.lv,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: C.bd,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              minimumSize: const Size(0, 32),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
           ),
         ],
       ),

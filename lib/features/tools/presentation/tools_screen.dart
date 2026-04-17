@@ -25,6 +25,7 @@ import '../../etsy/data/etsy_auth_provider.dart';
 import '../../../providers/yarn_provider.dart';
 import '../../../providers/needle_provider.dart';
 import '../../../providers/accessory_provider.dart';
+import '../../../providers/book_provider.dart';
 
 String _youtubeThumbnail(String videoUrl) {
   final uri = Uri.tryParse(videoUrl);
@@ -274,6 +275,14 @@ class ToolsScreen extends ConsumerWidget {
                       title: isKorean ? '나의 악세사리 라이브러리' : 'My Accessory Library',
                       description: isKorean ? '니팅 도구 및 악세사리를 관리해요' : 'Manage your knitting tools & accessories',
                       onTap: () => context.push(Routes.accessories),
+                    ),
+                    const SizedBox(height: 10),
+                    _ToolCard(
+                      icon: Icons.menu_book_rounded,
+                      color: C.lmD,
+                      title: isKorean ? '나의 도서 라이브러리' : 'My Book Library',
+                      description: isKorean ? '참고 도서 목록을 관리해요' : 'Manage your reference books',
+                      onTap: () => context.push(Routes.books),
                     ),
                     const SizedBox(height: 8),
                     Divider(color: C.bd, thickness: 1, height: 20),
@@ -630,6 +639,8 @@ class _AssetSummaryCard extends ConsumerWidget {
     final needleCount = needleAsync.maybeWhen(data: (n) => n.length, orElse: () => 0);
     final accessoryAsync = ref.watch(accessoryListProvider);
     final accessoryCount = accessoryAsync.maybeWhen(data: (a) => a.length, orElse: () => 0);
+    final bookAsync = ref.watch(bookListProvider);
+    final bookCount = bookAsync.maybeWhen(data: (b) => b.length, orElse: () => 0);
 
     return Container(
       decoration: BoxDecoration(
@@ -694,7 +705,13 @@ class _AssetSummaryCard extends ConsumerWidget {
                 onTap: () => context.push(Routes.accessories),
               )),
               const SizedBox(width: 10),
-              Expanded(child: SizedBox()),
+              Expanded(child: _AssetCell(
+                icon: Icons.menu_book_rounded,
+                color: C.lmD,
+                label: isKorean ? '도서' : 'Books',
+                value: '$bookCount',
+                onTap: () => context.push(Routes.books),
+              )),
             ],
           ),
         ],

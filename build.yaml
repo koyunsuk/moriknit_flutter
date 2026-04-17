@@ -10,6 +10,7 @@ targets:
             - lib/features/counter/domain/counter_model.dart
             - lib/features/my/domain/needle_model.dart
             - lib/features/my/domain/accessory_model.dart
+            - lib/features/my/domain/book_model.dart
             - lib/features/yarn/domain/yarn_model.dart
       json_serializable:
         generate_for:
@@ -20,6 +21,7 @@ targets:
             - lib/features/counter/domain/counter_model.dart
             - lib/features/my/domain/needle_model.dart
             - lib/features/my/domain/accessory_model.dart
+            - lib/features/my/domain/book_model.dart
             - lib/features/yarn/domain/yarn_model.dart
       riverpod_generator:
         generate_for:

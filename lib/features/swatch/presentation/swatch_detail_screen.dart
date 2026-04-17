@@ -54,7 +54,6 @@ class _SwatchDetailScreenState extends ConsumerState<SwatchDetailScreen> {
   }
 
   void _enterEditMode(SwatchModel swatch) {
-    ref.read(swatchInputProvider.notifier).loadSwatch(swatch);
     _nameCtrl.text = swatch.swatchName;
     _memoCtrl.text = swatch.memo;
     _beforePhotoUrl = swatch.beforePhotoUrl.isNotEmpty ? swatch.beforePhotoUrl : null;
@@ -63,6 +62,10 @@ class _SwatchDetailScreenState extends ConsumerState<SwatchDetailScreen> {
       _isEditing = true;
       _localBeforePhotoPath = null;
       _localAfterPhotoPath = null;
+    });
+    // autoDispose 방지: setState 후 loadSwatch 호출
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(swatchInputProvider.notifier).loadSwatch(swatch);
     });
   }
 
@@ -318,6 +321,8 @@ class _SwatchDetailScreenState extends ConsumerState<SwatchDetailScreen> {
     final t = ref.watch(appStringsProvider);
     final isKorean = ref.watch(appLanguageProvider).isKorean;
     final swatchAsync = ref.watch(swatchByIdProvider(widget.swatchId));
+    // autoDispose 방지: 수정 모드 진입 시 provider 살아있도록 항상 watch
+    ref.watch(swatchInputProvider);
 
     return Scaffold(
       backgroundColor: C.bg,
@@ -839,6 +844,32 @@ class _SwatchDetailBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = ref.watch(appStringsProvider);
+    final isKorean = ref.watch(appLanguageProvider).isKorean;
+    final needleAsync = ref.watch(needleListProvider);
+    final yarnAsync = ref.watch(yarnListProvider);
+
+    // 연동된 바늘 찾기
+    NeedleModel? myNeedle;
+    if (swatch.myNeedleId.isNotEmpty) {
+      final needles = needleAsync.valueOrNull ?? [];
+      for (final n in needles) {
+        if (n.id == swatch.myNeedleId) { myNeedle = n; break; }
+      }
+    }
+
+    // 연동된 실 찾기
+    final yarnList = yarnAsync.valueOrNull ?? [];
+    dynamic myYarn;
+    if (swatch.myYarnId.isNotEmpty) {
+      for (final y in yarnList) {
+        if (y.id == swatch.myYarnId) { myYarn = y; break; }
+      }
+    }
+
+    // 바늘 카드 표시 여부
+    final showNeedle = myNeedle != null || swatch.needleSize > 0 || swatch.needleBrandName.isNotEmpty;
+    // 실 카드 표시 여부
+    final showYarn = myYarn != null || swatch.yarnBrandName.isNotEmpty || swatch.yarnWeight.isNotEmpty || swatch.yarnColor.isNotEmpty;
 
     return Stack(
       children: [
@@ -846,7 +877,7 @@ class _SwatchDetailBody extends ConsumerWidget {
         ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
           children: [
-            _PhotoHeader(photoUrl: swatch.beforePhotoUrl, swatchId: swatch.id),
+            _PhotoHeader(beforePhotoUrl: swatch.beforePhotoUrl, afterPhotoUrl: swatch.afterPhotoUrl, swatchId: swatch.id),
             const SizedBox(height: 12),
             GlassCard(
               padding: const EdgeInsets.all(16),
@@ -880,25 +911,38 @@ class _SwatchDetailBody extends ConsumerWidget {
             const SizedBox(height: 12),
             _GaugeCard(swatch: swatch),
             const SizedBox(height: 12),
-            if (swatch.needleSize > 0 || swatch.needleBrandName.isNotEmpty) ...[
+            if (showNeedle) ...[
               _InfoCard(
                 icon: Icons.circle_outlined,
                 title: t.needleInfo,
                 rows: [
-                  if (swatch.needleSize > 0) _InfoRowData(t.size, swatch.needleSizeDisplay),
-                  if (swatch.needleBrandName.isNotEmpty) _InfoRowData(t.brand, swatch.needleBrandName),
+                  if (myNeedle != null) ...[
+                    if (myNeedle.name.isNotEmpty) _InfoRowData(isKorean ? '이름' : 'Name', myNeedle.name),
+                    _InfoRowData(t.size, myNeedle.sizeDisplay),
+                    if (myNeedle.brandName.isNotEmpty) _InfoRowData(t.brand, myNeedle.brandName),
+                  ] else ...[
+                    if (swatch.needleSize > 0) _InfoRowData(t.size, swatch.needleSizeDisplay),
+                    if (swatch.needleBrandName.isNotEmpty) _InfoRowData(t.brand, swatch.needleBrandName),
+                  ],
                 ],
               ),
               const SizedBox(height: 12),
             ],
-            if (swatch.yarnBrandName.isNotEmpty || swatch.yarnWeight.isNotEmpty || swatch.yarnColor.isNotEmpty) ...[
+            if (showYarn) ...[
               _InfoCard(
                 icon: Icons.texture,
                 title: t.yarnInfo,
                 rows: [
-                  if (swatch.yarnBrandName.isNotEmpty) _InfoRowData(t.brand, swatch.yarnBrandName),
-                  if (swatch.yarnWeight.isNotEmpty) _InfoRowData(t.weight, swatch.yarnWeight),
-                  if (swatch.yarnColor.isNotEmpty) _InfoRowData(t.color, swatch.yarnColor),
+                  if (myYarn != null) ...[
+                    if ((myYarn.name as String).isNotEmpty) _InfoRowData(isKorean ? '이름' : 'Name', myYarn.name as String),
+                    if ((myYarn.brandName as String).isNotEmpty) _InfoRowData(t.brand, myYarn.brandName as String),
+                    if ((myYarn.color as String).isNotEmpty) _InfoRowData(t.color, myYarn.color as String),
+                    if ((myYarn.weight as String).isNotEmpty) _InfoRowData(t.weight, myYarn.weight as String),
+                  ] else ...[
+                    if (swatch.yarnBrandName.isNotEmpty) _InfoRowData(t.brand, swatch.yarnBrandName),
+                    if (swatch.yarnWeight.isNotEmpty) _InfoRowData(t.weight, swatch.yarnWeight),
+                    if (swatch.yarnColor.isNotEmpty) _InfoRowData(t.color, swatch.yarnColor),
+                  ],
                 ],
               ),
               const SizedBox(height: 12),
@@ -922,14 +966,22 @@ class _SwatchDetailBody extends ConsumerWidget {
 }
 
 class _PhotoHeader extends StatelessWidget {
-  final String photoUrl;
+  final String beforePhotoUrl;
+  final String afterPhotoUrl;
   final String swatchId;
 
-  const _PhotoHeader({required this.photoUrl, required this.swatchId});
+  const _PhotoHeader({
+    required this.beforePhotoUrl,
+    required this.afterPhotoUrl,
+    required this.swatchId,
+  });
 
   @override
   Widget build(BuildContext context) {
-    if (photoUrl.isEmpty) {
+    final hasBefore = beforePhotoUrl.isNotEmpty;
+    final hasAfter = afterPhotoUrl.isNotEmpty;
+
+    if (!hasBefore && !hasAfter) {
       return Container(
         height: 180,
         width: double.infinity,
@@ -938,31 +990,56 @@ class _PhotoHeader extends StatelessWidget {
       );
     }
 
-    final heroTag = 'swatch_photo_$swatchId';
+    // 두 사진 모두 있으면 좌우 나란히 표시
+    if (hasBefore && hasAfter) {
+      return Row(
+        children: [
+          Expanded(child: _PhotoThumb(photoUrl: beforePhotoUrl, heroTag: 'swatch_before_$swatchId', label: '세탁전')),
+          const SizedBox(width: 8),
+          Expanded(child: _PhotoThumb(photoUrl: afterPhotoUrl, heroTag: 'swatch_after_$swatchId', label: '세탁후')),
+        ],
+      );
+    }
 
+    // 하나만 있으면 큰 사진으로 표시
+    final url = hasBefore ? beforePhotoUrl : afterPhotoUrl;
+    final heroTag = hasBefore ? 'swatch_before_$swatchId' : 'swatch_after_$swatchId';
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            fullscreenDialog: true,
-            builder: (_) => _FullScreenImageViewer(
-              imageUrl: photoUrl,
-              heroTag: heroTag,
-            ),
-          ),
-        );
-      },
+      onTap: () => Navigator.push(context, MaterialPageRoute(fullscreenDialog: true, builder: (_) => _FullScreenImageViewer(imageUrl: url, heroTag: heroTag))),
       child: Hero(
         tag: heroTag,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(18),
-          child: SizedBox(
-            height: 220,
-            width: double.infinity,
-            child: Image.network(photoUrl, fit: BoxFit.contain),
-          ),
+          child: SizedBox(height: 220, width: double.infinity, child: Image.network(url, fit: BoxFit.contain)),
         ),
+      ),
+    );
+  }
+}
+
+class _PhotoThumb extends StatelessWidget {
+  final String photoUrl;
+  final String heroTag;
+  final String label;
+
+  const _PhotoThumb({required this.photoUrl, required this.heroTag, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.push(context, MaterialPageRoute(fullscreenDialog: true, builder: (_) => _FullScreenImageViewer(imageUrl: photoUrl, heroTag: heroTag))),
+      child: Column(
+        children: [
+          Hero(
+            tag: heroTag,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: SizedBox(height: 160, width: double.infinity, child: Image.network(photoUrl, fit: BoxFit.cover)),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(label, style: T.caption.copyWith(color: C.mu, fontWeight: FontWeight.w600)),
+        ],
       ),
     );
   }

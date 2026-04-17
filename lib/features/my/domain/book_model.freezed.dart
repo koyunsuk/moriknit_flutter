@@ -28,7 +28,10 @@ mixin _$BookModel {
   String get publisher => throw _privateConstructorUsedError;
   String get publishYear => throw _privateConstructorUsedError;
   String get coverUrl => throw _privateConstructorUsedError;
+  String get description => throw _privateConstructorUsedError;
+  String get tableOfContents => throw _privateConstructorUsedError;
   String get memo => throw _privateConstructorUsedError;
+  List<String> get photoUrls => throw _privateConstructorUsedError;
   DateTime? get createdAt => throw _privateConstructorUsedError;
   DateTime? get updatedAt => throw _privateConstructorUsedError;
   bool get isDirty => throw _privateConstructorUsedError;
@@ -53,7 +56,10 @@ abstract class $BookModelCopyWith<$Res> {
       String publisher,
       String publishYear,
       String coverUrl,
+      String description,
+      String tableOfContents,
       String memo,
+      List<String> photoUrls,
       DateTime? createdAt,
       DateTime? updatedAt,
       bool isDirty});
@@ -80,7 +86,10 @@ class _$BookModelCopyWithImpl<$Res, $Val extends BookModel>
     Object? publisher = null,
     Object? publishYear = null,
     Object? coverUrl = null,
+    Object? description = null,
+    Object? tableOfContents = null,
     Object? memo = null,
+    Object? photoUrls = null,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
     Object? isDirty = null,
@@ -118,10 +127,22 @@ class _$BookModelCopyWithImpl<$Res, $Val extends BookModel>
           ? _value.coverUrl
           : coverUrl // ignore: cast_nullable_to_non_nullable
               as String,
+      description: null == description
+          ? _value.description
+          : description // ignore: cast_nullable_to_non_nullable
+              as String,
+      tableOfContents: null == tableOfContents
+          ? _value.tableOfContents
+          : tableOfContents // ignore: cast_nullable_to_non_nullable
+              as String,
       memo: null == memo
           ? _value.memo
           : memo // ignore: cast_nullable_to_non_nullable
               as String,
+      photoUrls: null == photoUrls
+          ? _value.photoUrls
+          : photoUrls // ignore: cast_nullable_to_non_nullable
+              as List<String>,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -155,7 +176,10 @@ abstract class _$$BookModelImplCopyWith<$Res>
       String publisher,
       String publishYear,
       String coverUrl,
+      String description,
+      String tableOfContents,
       String memo,
+      List<String> photoUrls,
       DateTime? createdAt,
       DateTime? updatedAt,
       bool isDirty});
@@ -180,7 +204,10 @@ class __$$BookModelImplCopyWithImpl<$Res>
     Object? publisher = null,
     Object? publishYear = null,
     Object? coverUrl = null,
+    Object? description = null,
+    Object? tableOfContents = null,
     Object? memo = null,
+    Object? photoUrls = null,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
     Object? isDirty = null,
@@ -218,10 +245,22 @@ class __$$BookModelImplCopyWithImpl<$Res>
           ? _value.coverUrl
           : coverUrl // ignore: cast_nullable_to_non_nullable
               as String,
+      description: null == description
+          ? _value.description
+          : description // ignore: cast_nullable_to_non_nullable
+              as String,
+      tableOfContents: null == tableOfContents
+          ? _value.tableOfContents
+          : tableOfContents // ignore: cast_nullable_to_non_nullable
+              as String,
       memo: null == memo
           ? _value.memo
           : memo // ignore: cast_nullable_to_non_nullable
               as String,
+      photoUrls: null == photoUrls
+          ? _value._photoUrls
+          : photoUrls // ignore: cast_nullable_to_non_nullable
+              as List<String>,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -250,10 +289,14 @@ class _$BookModelImpl implements _BookModel {
       this.publisher = '',
       this.publishYear = '',
       this.coverUrl = '',
+      this.description = '',
+      this.tableOfContents = '',
       this.memo = '',
+      final List<String> photoUrls = const <String>[],
       this.createdAt,
       this.updatedAt,
-      this.isDirty = false});
+      this.isDirty = false})
+      : _photoUrls = photoUrls;
 
   factory _$BookModelImpl.fromJson(Map<String, dynamic> json) =>
       _$$BookModelImplFromJson(json);
@@ -281,7 +324,22 @@ class _$BookModelImpl implements _BookModel {
   final String coverUrl;
   @override
   @JsonKey()
+  final String description;
+  @override
+  @JsonKey()
+  final String tableOfContents;
+  @override
+  @JsonKey()
   final String memo;
+  final List<String> _photoUrls;
+  @override
+  @JsonKey()
+  List<String> get photoUrls {
+    if (_photoUrls is EqualUnmodifiableListView) return _photoUrls;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_photoUrls);
+  }
+
   @override
   final DateTime? createdAt;
   @override
@@ -292,7 +350,7 @@ class _$BookModelImpl implements _BookModel {
 
   @override
   String toString() {
-    return 'BookModel(id: $id, uid: $uid, isbn: $isbn, title: $title, author: $author, publisher: $publisher, publishYear: $publishYear, coverUrl: $coverUrl, memo: $memo, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty)';
+    return 'BookModel(id: $id, uid: $uid, isbn: $isbn, title: $title, author: $author, publisher: $publisher, publishYear: $publishYear, coverUrl: $coverUrl, description: $description, tableOfContents: $tableOfContents, memo: $memo, photoUrls: $photoUrls, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty)';
   }
 
   @override
@@ -311,7 +369,13 @@ class _$BookModelImpl implements _BookModel {
                 other.publishYear == publishYear) &&
             (identical(other.coverUrl, coverUrl) ||
                 other.coverUrl == coverUrl) &&
+            (identical(other.description, description) ||
+                other.description == description) &&
+            (identical(other.tableOfContents, tableOfContents) ||
+                other.tableOfContents == tableOfContents) &&
             (identical(other.memo, memo) || other.memo == memo) &&
+            const DeepCollectionEquality()
+                .equals(other._photoUrls, _photoUrls) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
@@ -321,8 +385,23 @@ class _$BookModelImpl implements _BookModel {
 
   @JsonKey(ignore: true)
   @override
-  int get hashCode => Object.hash(runtimeType, id, uid, isbn, title, author,
-      publisher, publishYear, coverUrl, memo, createdAt, updatedAt, isDirty);
+  int get hashCode => Object.hash(
+      runtimeType,
+      id,
+      uid,
+      isbn,
+      title,
+      author,
+      publisher,
+      publishYear,
+      coverUrl,
+      description,
+      tableOfContents,
+      memo,
+      const DeepCollectionEquality().hash(_photoUrls),
+      createdAt,
+      updatedAt,
+      isDirty);
 
   @JsonKey(ignore: true)
   @override
@@ -348,7 +427,10 @@ abstract class _BookModel implements BookModel {
       final String publisher,
       final String publishYear,
       final String coverUrl,
+      final String description,
+      final String tableOfContents,
       final String memo,
+      final List<String> photoUrls,
       final DateTime? createdAt,
       final DateTime? updatedAt,
       final bool isDirty}) = _$BookModelImpl;
@@ -373,7 +455,13 @@ abstract class _BookModel implements BookModel {
   @override
   String get coverUrl;
   @override
+  String get description;
+  @override
+  String get tableOfContents;
+  @override
   String get memo;
+  @override
+  List<String> get photoUrls;
   @override
   DateTime? get createdAt;
   @override

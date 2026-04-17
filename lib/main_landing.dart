@@ -22,10 +22,13 @@ import 'features/landing/presentation/landing_signup_screen.dart';
 import 'firebase_options.dart';
 import 'providers/theme_provider.dart';
 
+late final _AuthRefresh _authRefresh;
+
 void main() async {
   usePathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  _authRefresh = _AuthRefresh(FirebaseAuth.instance.authStateChanges());
   runApp(const ProviderScope(child: MoriKnitLandingApp()));
 }
 
@@ -39,14 +42,13 @@ class _AuthRefresh extends ChangeNotifier {
   void dispose() { _sub.cancel(); super.dispose(); }
 }
 
-final _authRefresh = _AuthRefresh(FirebaseAuth.instance.authStateChanges());
-
 final _landingRouter = GoRouter(
   initialLocation: '/',
   refreshListenable: _authRefresh,
   redirect: (context, state) {
     final isLoggedIn = FirebaseAuth.instance.currentUser != null;
-    if (isLoggedIn && state.matchedLocation == '/login') return '/';
+    final loc = state.matchedLocation;
+    if (isLoggedIn && loc == '/login') return '/';
     return null;
   },
   routes: [

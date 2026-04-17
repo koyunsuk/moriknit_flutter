@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../providers/encyclopedia_provider.dart';
 import '../../encyclopedia/domain/encyclopedia_entry.dart';
@@ -917,6 +918,28 @@ class _EncyclopediaListTile extends StatelessWidget {
                     style: TextStyle(fontSize: 11, color: Colors.grey.shade400, height: 1.3),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                if (entry.videoUrl.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  GestureDetector(
+                    onTap: () => launchUrl(Uri.parse(entry.videoUrl), mode: LaunchMode.externalApplication),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF0000).withValues(alpha: 0.07),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFFFF0000).withValues(alpha: 0.25)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.play_circle_filled_rounded, color: Color(0xFFFF0000), size: 14),
+                          const SizedBox(width: 4),
+                          const Text('YouTube 영상', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFFCC0000))),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ],

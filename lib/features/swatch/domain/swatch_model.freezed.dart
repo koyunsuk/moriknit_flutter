@@ -57,6 +57,19 @@ mixin _$SwatchModel {
   String get projectId => throw _privateConstructorUsedError;
   bool get isDirty => throw _privateConstructorUsedError;
 
+  /// 최종 완성 콧수 (10×10 게이지 콧수와 별개)
+  int get finalStitchCount => throw _privateConstructorUsedError;
+
+  /// 최종 완성 단수 (10×10 게이지 단수와 별개)
+  int get finalRowCount => throw _privateConstructorUsedError;
+
+  /// 스와치 시작 날짜 (시작 시점 기록용)
+  DateTime? get startedAt => throw _privateConstructorUsedError;
+
+  /// 나의 악세사리 연결
+  String get myAccessoryId => throw _privateConstructorUsedError;
+  String get myAccessoryName => throw _privateConstructorUsedError;
+
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
   $SwatchModelCopyWith<SwatchModel> get copyWith =>
@@ -105,7 +118,12 @@ abstract class $SwatchModelCopyWith<$Res> {
       DateTime? createdAt,
       DateTime? updatedAt,
       String projectId,
-      bool isDirty});
+      bool isDirty,
+      int finalStitchCount,
+      int finalRowCount,
+      DateTime? startedAt,
+      String myAccessoryId,
+      String myAccessoryName});
 }
 
 /// @nodoc
@@ -157,6 +175,11 @@ class _$SwatchModelCopyWithImpl<$Res, $Val extends SwatchModel>
     Object? updatedAt = freezed,
     Object? projectId = null,
     Object? isDirty = null,
+    Object? finalStitchCount = null,
+    Object? finalRowCount = null,
+    Object? startedAt = freezed,
+    Object? myAccessoryId = null,
+    Object? myAccessoryName = null,
   }) {
     return _then(_value.copyWith(
       id: null == id
@@ -303,6 +326,26 @@ class _$SwatchModelCopyWithImpl<$Res, $Val extends SwatchModel>
           ? _value.isDirty
           : isDirty // ignore: cast_nullable_to_non_nullable
               as bool,
+      finalStitchCount: null == finalStitchCount
+          ? _value.finalStitchCount
+          : finalStitchCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      finalRowCount: null == finalRowCount
+          ? _value.finalRowCount
+          : finalRowCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      startedAt: freezed == startedAt
+          ? _value.startedAt
+          : startedAt // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+      myAccessoryId: null == myAccessoryId
+          ? _value.myAccessoryId
+          : myAccessoryId // ignore: cast_nullable_to_non_nullable
+              as String,
+      myAccessoryName: null == myAccessoryName
+          ? _value.myAccessoryName
+          : myAccessoryName // ignore: cast_nullable_to_non_nullable
+              as String,
     ) as $Val);
   }
 }
@@ -351,7 +394,12 @@ abstract class _$$SwatchModelImplCopyWith<$Res>
       DateTime? createdAt,
       DateTime? updatedAt,
       String projectId,
-      bool isDirty});
+      bool isDirty,
+      int finalStitchCount,
+      int finalRowCount,
+      DateTime? startedAt,
+      String myAccessoryId,
+      String myAccessoryName});
 }
 
 /// @nodoc
@@ -401,6 +449,11 @@ class __$$SwatchModelImplCopyWithImpl<$Res>
     Object? updatedAt = freezed,
     Object? projectId = null,
     Object? isDirty = null,
+    Object? finalStitchCount = null,
+    Object? finalRowCount = null,
+    Object? startedAt = freezed,
+    Object? myAccessoryId = null,
+    Object? myAccessoryName = null,
   }) {
     return _then(_$SwatchModelImpl(
       id: null == id
@@ -547,6 +600,26 @@ class __$$SwatchModelImplCopyWithImpl<$Res>
           ? _value.isDirty
           : isDirty // ignore: cast_nullable_to_non_nullable
               as bool,
+      finalStitchCount: null == finalStitchCount
+          ? _value.finalStitchCount
+          : finalStitchCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      finalRowCount: null == finalRowCount
+          ? _value.finalRowCount
+          : finalRowCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      startedAt: freezed == startedAt
+          ? _value.startedAt
+          : startedAt // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+      myAccessoryId: null == myAccessoryId
+          ? _value.myAccessoryId
+          : myAccessoryId // ignore: cast_nullable_to_non_nullable
+              as String,
+      myAccessoryName: null == myAccessoryName
+          ? _value.myAccessoryName
+          : myAccessoryName // ignore: cast_nullable_to_non_nullable
+              as String,
     ));
   }
 }
@@ -590,7 +663,12 @@ class _$SwatchModelImpl implements _SwatchModel {
       this.createdAt,
       this.updatedAt,
       this.projectId = '',
-      this.isDirty = false});
+      this.isDirty = false,
+      this.finalStitchCount = 0,
+      this.finalRowCount = 0,
+      this.startedAt,
+      this.myAccessoryId = '',
+      this.myAccessoryName = ''});
 
   factory _$SwatchModelImpl.fromJson(Map<String, dynamic> json) =>
       _$$SwatchModelImplFromJson(json);
@@ -699,9 +777,31 @@ class _$SwatchModelImpl implements _SwatchModel {
   @JsonKey()
   final bool isDirty;
 
+  /// 최종 완성 콧수 (10×10 게이지 콧수와 별개)
+  @override
+  @JsonKey()
+  final int finalStitchCount;
+
+  /// 최종 완성 단수 (10×10 게이지 단수와 별개)
+  @override
+  @JsonKey()
+  final int finalRowCount;
+
+  /// 스와치 시작 날짜 (시작 시점 기록용)
+  @override
+  final DateTime? startedAt;
+
+  /// 나의 악세사리 연결
+  @override
+  @JsonKey()
+  final String myAccessoryId;
+  @override
+  @JsonKey()
+  final String myAccessoryName;
+
   @override
   String toString() {
-    return 'SwatchModel(id: $id, uid: $uid, swatchName: $swatchName, yarnBrandId: $yarnBrandId, yarnBrandName: $yarnBrandName, yarnName: $yarnName, yarnColor: $yarnColor, yarnWeight: $yarnWeight, needleBrandId: $needleBrandId, needleBrandName: $needleBrandName, needleMaterial: $needleMaterial, needleSize: $needleSize, myNeedleId: $myNeedleId, myYarnId: $myYarnId, myNeedlePhotoUrl: $myNeedlePhotoUrl, myYarnPhotoUrl: $myYarnPhotoUrl, beforeStitchCount: $beforeStitchCount, beforeRowCount: $beforeRowCount, beforeWidthCm: $beforeWidthCm, beforeHeightCm: $beforeHeightCm, beforePhotoUrl: $beforePhotoUrl, hasAfterWash: $hasAfterWash, afterStitchCount: $afterStitchCount, afterRowCount: $afterRowCount, afterWidthCm: $afterWidthCm, afterHeightCm: $afterHeightCm, afterPhotoUrl: $afterPhotoUrl, shrinkageRate: $shrinkageRate, memo: $memo, isPublic: $isPublic, isArchived: $isArchived, archivedDate: $archivedDate, createdAt: $createdAt, updatedAt: $updatedAt, projectId: $projectId, isDirty: $isDirty)';
+    return 'SwatchModel(id: $id, uid: $uid, swatchName: $swatchName, yarnBrandId: $yarnBrandId, yarnBrandName: $yarnBrandName, yarnName: $yarnName, yarnColor: $yarnColor, yarnWeight: $yarnWeight, needleBrandId: $needleBrandId, needleBrandName: $needleBrandName, needleMaterial: $needleMaterial, needleSize: $needleSize, myNeedleId: $myNeedleId, myYarnId: $myYarnId, myNeedlePhotoUrl: $myNeedlePhotoUrl, myYarnPhotoUrl: $myYarnPhotoUrl, beforeStitchCount: $beforeStitchCount, beforeRowCount: $beforeRowCount, beforeWidthCm: $beforeWidthCm, beforeHeightCm: $beforeHeightCm, beforePhotoUrl: $beforePhotoUrl, hasAfterWash: $hasAfterWash, afterStitchCount: $afterStitchCount, afterRowCount: $afterRowCount, afterWidthCm: $afterWidthCm, afterHeightCm: $afterHeightCm, afterPhotoUrl: $afterPhotoUrl, shrinkageRate: $shrinkageRate, memo: $memo, isPublic: $isPublic, isArchived: $isArchived, archivedDate: $archivedDate, createdAt: $createdAt, updatedAt: $updatedAt, projectId: $projectId, isDirty: $isDirty, finalStitchCount: $finalStitchCount, finalRowCount: $finalRowCount, startedAt: $startedAt, myAccessoryId: $myAccessoryId, myAccessoryName: $myAccessoryName)';
   }
 
   @override
@@ -776,7 +876,17 @@ class _$SwatchModelImpl implements _SwatchModel {
                 other.updatedAt == updatedAt) &&
             (identical(other.projectId, projectId) ||
                 other.projectId == projectId) &&
-            (identical(other.isDirty, isDirty) || other.isDirty == isDirty));
+            (identical(other.isDirty, isDirty) || other.isDirty == isDirty) &&
+            (identical(other.finalStitchCount, finalStitchCount) ||
+                other.finalStitchCount == finalStitchCount) &&
+            (identical(other.finalRowCount, finalRowCount) ||
+                other.finalRowCount == finalRowCount) &&
+            (identical(other.startedAt, startedAt) ||
+                other.startedAt == startedAt) &&
+            (identical(other.myAccessoryId, myAccessoryId) ||
+                other.myAccessoryId == myAccessoryId) &&
+            (identical(other.myAccessoryName, myAccessoryName) ||
+                other.myAccessoryName == myAccessoryName));
   }
 
   @JsonKey(ignore: true)
@@ -818,7 +928,12 @@ class _$SwatchModelImpl implements _SwatchModel {
         createdAt,
         updatedAt,
         projectId,
-        isDirty
+        isDirty,
+        finalStitchCount,
+        finalRowCount,
+        startedAt,
+        myAccessoryId,
+        myAccessoryName
       ]);
 
   @JsonKey(ignore: true)
@@ -872,7 +987,12 @@ abstract class _SwatchModel implements SwatchModel {
       final DateTime? createdAt,
       final DateTime? updatedAt,
       final String projectId,
-      final bool isDirty}) = _$SwatchModelImpl;
+      final bool isDirty,
+      final int finalStitchCount,
+      final int finalRowCount,
+      final DateTime? startedAt,
+      final String myAccessoryId,
+      final String myAccessoryName}) = _$SwatchModelImpl;
 
   factory _SwatchModel.fromJson(Map<String, dynamic> json) =
       _$SwatchModelImpl.fromJson;
@@ -949,6 +1069,24 @@ abstract class _SwatchModel implements SwatchModel {
   String get projectId;
   @override
   bool get isDirty;
+  @override
+
+  /// 최종 완성 콧수 (10×10 게이지 콧수와 별개)
+  int get finalStitchCount;
+  @override
+
+  /// 최종 완성 단수 (10×10 게이지 단수와 별개)
+  int get finalRowCount;
+  @override
+
+  /// 스와치 시작 날짜 (시작 시점 기록용)
+  DateTime? get startedAt;
+  @override
+
+  /// 나의 악세사리 연결
+  String get myAccessoryId;
+  @override
+  String get myAccessoryName;
   @override
   @JsonKey(ignore: true)
   _$$SwatchModelImplCopyWith<_$SwatchModelImpl> get copyWith =>

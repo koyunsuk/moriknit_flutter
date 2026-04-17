@@ -40,6 +40,10 @@ mixin _$YarnModel {
   String get purchasePlace => throw _privateConstructorUsedError;
   String get colorCode => throw _privateConstructorUsedError;
   String get labelPhotoUrl => throw _privateConstructorUsedError;
+  int get quantity => throw _privateConstructorUsedError;
+  String get composition => throw _privateConstructorUsedError;
+  int get lengthMeters => throw _privateConstructorUsedError;
+  int get lengthYards => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -72,7 +76,11 @@ abstract class $YarnModelCopyWith<$Res> {
       int price,
       String purchasePlace,
       String colorCode,
-      String labelPhotoUrl});
+      String labelPhotoUrl,
+      int quantity,
+      String composition,
+      int lengthMeters,
+      int lengthYards});
 }
 
 /// @nodoc
@@ -108,6 +116,10 @@ class _$YarnModelCopyWithImpl<$Res, $Val extends YarnModel>
     Object? purchasePlace = null,
     Object? colorCode = null,
     Object? labelPhotoUrl = null,
+    Object? quantity = null,
+    Object? composition = null,
+    Object? lengthMeters = null,
+    Object? lengthYards = null,
   }) {
     return _then(_value.copyWith(
       id: null == id
@@ -190,6 +202,22 @@ class _$YarnModelCopyWithImpl<$Res, $Val extends YarnModel>
           ? _value.labelPhotoUrl
           : labelPhotoUrl // ignore: cast_nullable_to_non_nullable
               as String,
+      quantity: null == quantity
+          ? _value.quantity
+          : quantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      composition: null == composition
+          ? _value.composition
+          : composition // ignore: cast_nullable_to_non_nullable
+              as String,
+      lengthMeters: null == lengthMeters
+          ? _value.lengthMeters
+          : lengthMeters // ignore: cast_nullable_to_non_nullable
+              as int,
+      lengthYards: null == lengthYards
+          ? _value.lengthYards
+          : lengthYards // ignore: cast_nullable_to_non_nullable
+              as int,
     ) as $Val);
   }
 }
@@ -222,7 +250,11 @@ abstract class _$$YarnModelImplCopyWith<$Res>
       int price,
       String purchasePlace,
       String colorCode,
-      String labelPhotoUrl});
+      String labelPhotoUrl,
+      int quantity,
+      String composition,
+      int lengthMeters,
+      int lengthYards});
 }
 
 /// @nodoc
@@ -256,6 +288,10 @@ class __$$YarnModelImplCopyWithImpl<$Res>
     Object? purchasePlace = null,
     Object? colorCode = null,
     Object? labelPhotoUrl = null,
+    Object? quantity = null,
+    Object? composition = null,
+    Object? lengthMeters = null,
+    Object? lengthYards = null,
   }) {
     return _then(_$YarnModelImpl(
       id: null == id
@@ -338,6 +374,22 @@ class __$$YarnModelImplCopyWithImpl<$Res>
           ? _value.labelPhotoUrl
           : labelPhotoUrl // ignore: cast_nullable_to_non_nullable
               as String,
+      quantity: null == quantity
+          ? _value.quantity
+          : quantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      composition: null == composition
+          ? _value.composition
+          : composition // ignore: cast_nullable_to_non_nullable
+              as String,
+      lengthMeters: null == lengthMeters
+          ? _value.lengthMeters
+          : lengthMeters // ignore: cast_nullable_to_non_nullable
+              as int,
+      lengthYards: null == lengthYards
+          ? _value.lengthYards
+          : lengthYards // ignore: cast_nullable_to_non_nullable
+              as int,
     ));
   }
 }
@@ -365,7 +417,11 @@ class _$YarnModelImpl implements _YarnModel {
       this.price = 0,
       this.purchasePlace = '',
       this.colorCode = '',
-      this.labelPhotoUrl = ''});
+      this.labelPhotoUrl = '',
+      this.quantity = 0,
+      this.composition = '',
+      this.lengthMeters = 0,
+      this.lengthYards = 0});
 
   factory _$YarnModelImpl.fromJson(Map<String, dynamic> json) =>
       _$$YarnModelImplFromJson(json);
@@ -425,10 +481,22 @@ class _$YarnModelImpl implements _YarnModel {
   @override
   @JsonKey()
   final String labelPhotoUrl;
+  @override
+  @JsonKey()
+  final int quantity;
+  @override
+  @JsonKey()
+  final String composition;
+  @override
+  @JsonKey()
+  final int lengthMeters;
+  @override
+  @JsonKey()
+  final int lengthYards;
 
   @override
   String toString() {
-    return 'YarnModel(id: $id, uid: $uid, brandName: $brandName, name: $name, color: $color, weight: $weight, amountGrams: $amountGrams, memo: $memo, photoUrl: $photoUrl, purchaseDate: $purchaseDate, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty, material: $material, yarnLength: $yarnLength, lotNumber: $lotNumber, price: $price, purchasePlace: $purchasePlace, colorCode: $colorCode, labelPhotoUrl: $labelPhotoUrl)';
+    return 'YarnModel(id: $id, uid: $uid, brandName: $brandName, name: $name, color: $color, weight: $weight, amountGrams: $amountGrams, memo: $memo, photoUrl: $photoUrl, purchaseDate: $purchaseDate, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty, material: $material, yarnLength: $yarnLength, lotNumber: $lotNumber, price: $price, purchasePlace: $purchasePlace, colorCode: $colorCode, labelPhotoUrl: $labelPhotoUrl, quantity: $quantity, composition: $composition, lengthMeters: $lengthMeters, lengthYards: $lengthYards)';
   }
 
   @override
@@ -467,7 +535,15 @@ class _$YarnModelImpl implements _YarnModel {
             (identical(other.colorCode, colorCode) ||
                 other.colorCode == colorCode) &&
             (identical(other.labelPhotoUrl, labelPhotoUrl) ||
-                other.labelPhotoUrl == labelPhotoUrl));
+                other.labelPhotoUrl == labelPhotoUrl) &&
+            (identical(other.quantity, quantity) ||
+                other.quantity == quantity) &&
+            (identical(other.composition, composition) ||
+                other.composition == composition) &&
+            (identical(other.lengthMeters, lengthMeters) ||
+                other.lengthMeters == lengthMeters) &&
+            (identical(other.lengthYards, lengthYards) ||
+                other.lengthYards == lengthYards));
   }
 
   @JsonKey(ignore: true)
@@ -493,7 +569,11 @@ class _$YarnModelImpl implements _YarnModel {
         price,
         purchasePlace,
         colorCode,
-        labelPhotoUrl
+        labelPhotoUrl,
+        quantity,
+        composition,
+        lengthMeters,
+        lengthYards
       ]);
 
   @JsonKey(ignore: true)
@@ -531,7 +611,11 @@ abstract class _YarnModel implements YarnModel {
       final int price,
       final String purchasePlace,
       final String colorCode,
-      final String labelPhotoUrl}) = _$YarnModelImpl;
+      final String labelPhotoUrl,
+      final int quantity,
+      final String composition,
+      final int lengthMeters,
+      final int lengthYards}) = _$YarnModelImpl;
 
   factory _YarnModel.fromJson(Map<String, dynamic> json) =
       _$YarnModelImpl.fromJson;
@@ -576,6 +660,14 @@ abstract class _YarnModel implements YarnModel {
   String get colorCode;
   @override
   String get labelPhotoUrl;
+  @override
+  int get quantity;
+  @override
+  String get composition;
+  @override
+  int get lengthMeters;
+  @override
+  int get lengthYards;
   @override
   @JsonKey(ignore: true)
   _$$YarnModelImplCopyWith<_$YarnModelImpl> get copyWith =>

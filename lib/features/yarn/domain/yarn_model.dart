@@ -28,6 +28,10 @@ class YarnModel with _$YarnModel {
     @Default('') String purchasePlace,
     @Default('') String colorCode,
     @Default('') String labelPhotoUrl,
+    @Default(0) int quantity,
+    @Default('') String composition,
+    @Default(0) int lengthMeters,
+    @Default(0) int lengthYards,
   }) = _YarnModel;
 
   factory YarnModel.fromJson(Map<String, dynamic> json) =>

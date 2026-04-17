@@ -80,14 +80,26 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
   }
 
   Future<void> _loadMemo() async {
-    final user = ref.read(authStateProvider).valueOrNull;
-    if (user == null || widget.chart.id.isEmpty) {
+    if (widget.chart.id.isEmpty) {
       if (mounted) setState(() => _memoLoading = false);
       return;
     }
-    _uid = user.uid;
     if (mounted) setState(() => _memoLoading = true);
     try {
+      // authState가 아직 로딩 중이면 future로 대기
+      final authAsync = ref.read(authStateProvider);
+      final user = authAsync.valueOrNull ??
+          await ref
+              .read(authStateProvider.future)
+              .timeout(const Duration(seconds: 5), onTimeout: () => null);
+
+      if (user == null || !mounted) {
+        if (mounted) setState(() => _memoLoading = false);
+        return;
+      }
+      _uid = user.uid;
+      if (mounted) setState(() {}); // _uid 업데이트 반영 (메모 저장 버튼 표시)
+
       final snap = await FirebaseFirestore.instance
           .collection('pattern_memos')
           .doc('${user.uid}_${widget.chart.id}')
@@ -147,33 +159,56 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
   void _cancelEdit() => setState(() => _isEditing = false);
 
   Future<void> _saveEdit(bool isKorean) async {
-    final newTitle = _editTitleCtrl.text.trim();
+    var newTitle = _editTitleCtrl.text.trim();
     if (newTitle.isEmpty) return;
 
-    // AI 변환 후 최초 저장 시: 확인 다이얼로그 표시
+    // AI 변환 최초 저장 시: 중복 이름 체크
     if (widget.onSaveComplete != null) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text(isKorean ? '도안 저장' : 'Save Pattern', style: T.h3),
-          content: Text(
-            isKorean ? '도안 라이브러리에 저장할까요?' : 'Save to pattern library?',
-            style: T.body,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(isKorean ? '취소' : 'Cancel', style: TextStyle(color: C.mu)),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(isKorean ? '확인' : 'Confirm'),
-            ),
-          ],
-        ),
+      final existingPatterns = ref.read(patternListProvider).valueOrNull ?? [];
+      final duplicate = existingPatterns.any(
+        (p) => p.title.toLowerCase() == newTitle.toLowerCase() && p.id != widget.chart.id,
       );
-      if (confirmed != true || !mounted) return;
+      if (duplicate) {
+        final renamed = await showDialog<String>(
+          context: context,
+          builder: (ctx) {
+            final ctrl = TextEditingController(text: '$newTitle (2)');
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Text(isKorean ? '같은 이름의 도안이 있어요' : 'Duplicate name', style: T.h3),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isKorean ? '"$newTitle" 이름의 도안이 이미 있어요. 다른 이름으로 저장하시겠어요?' : 'A pattern named "$newTitle" already exists.',
+                    style: T.body.copyWith(color: C.mu),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: ctrl,
+                    autofocus: true,
+                    decoration: InputDecoration(labelText: isKorean ? '새 도안 이름' : 'New name'),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, null),
+                  child: Text(isKorean ? '취소' : 'Cancel', style: TextStyle(color: C.mu)),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+                  child: Text(isKorean ? '이 이름으로 저장' : 'Save with this name'),
+                ),
+              ],
+            );
+          },
+        );
+        if (renamed == null || !mounted) return;
+        _editTitleCtrl.text = renamed;
+        newTitle = renamed;
+      }
     }
 
     final newNarrative = _editNarrativeCtrl.text.trim();
@@ -206,6 +241,42 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
       );
       if (!mounted) return;
       if (widget.onSaveComplete != null) {
+        // AI 변환 저장 완료 팝업
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                Icon(Icons.check_circle_rounded, color: C.lv, size: 52),
+                const SizedBox(height: 14),
+                Text(
+                  isKorean ? '저장 완료!' : 'Saved!',
+                  style: T.h3,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  isKorean ? '나의 도안 라이브러리에 저장됐어요.' : 'Saved to your pattern library.',
+                  style: T.body.copyWith(color: C.mu),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: Text(isKorean ? '나의 도안으로 이동' : 'Go to My Patterns'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+        if (!mounted) return;
         widget.onSaveComplete!();
       } else {
         showSavedSnackBar(messenger, message: isKorean ? '수정됐어요.' : 'Updated.');

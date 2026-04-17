@@ -61,3 +61,8 @@ package-lock.json
 tmp/
 tools/
 .vscode/
+nul
+functions/nul
+.landing_web.err
+.landing_web.out
+*.landing_web.*

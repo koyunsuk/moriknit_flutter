@@ -42,6 +42,8 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
   final _lotNumberController = TextEditingController();
   final _priceController = TextEditingController();
   final _purchasePlaceController = TextEditingController();
+  final _quantityController = TextEditingController();
+  final _lengthController = TextEditingController();
 
   static const List<String> _weightOptions = [
     'Lace', 'Fingering', 'Sport', 'DK', 'Worsted', 'Bulky', 'Super Bulky',
@@ -57,6 +59,8 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
     _lotNumberController.dispose();
     _priceController.dispose();
     _purchasePlaceController.dispose();
+    _quantityController.dispose();
+    _lengthController.dispose();
     super.dispose();
   }
 
@@ -70,6 +74,8 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
     _lotNumberController.text = yarn.lotNumber;
     _priceController.text = yarn.price > 0 ? '${yarn.price}' : '';
     _purchasePlaceController.text = yarn.purchasePlace;
+    _quantityController.text = yarn.quantity > 0 ? '${yarn.quantity}' : '';
+    _lengthController.text = yarn.lengthMeters > 0 ? '${yarn.lengthMeters}' : '';
     setState(() {
       _isEditing = true;
       _localPhotoPath = null;
@@ -312,6 +318,8 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
+    // autoDispose 방지: 편집 모드 진입 전에도 provider를 살려둠
+    ref.watch(yarnInputProvider);
     final yarnAsync = ref.watch(yarnListProvider).whenData(
       (list) => list.cast<YarnModel?>().firstWhere((y) => y?.id == widget.yarnId, orElse: () => null),
     );
@@ -519,6 +527,10 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
                   _InfoRow(label: isKorean ? '굵기' : 'Weight', value: yarn.weight, isKorean: isKorean),
                   const SizedBox(height: 8),
                   _InfoRow(label: isKorean ? '보유량' : 'Amount', value: yarn.amountGrams > 0 ? '${yarn.amountGrams}g' : '', isKorean: isKorean),
+                  const SizedBox(height: 8),
+                  _InfoRow(label: isKorean ? '보유 타래' : 'Skeins', value: yarn.quantity > 0 ? '${yarn.quantity}${isKorean ? '타래' : ''}' : '', isKorean: isKorean),
+                  const SizedBox(height: 8),
+                  _InfoRow(label: isKorean ? '총 길이' : 'Total length', value: yarn.lengthMeters > 0 ? '${yarn.lengthMeters}m' : '', isKorean: isKorean),
                   const SizedBox(height: 8),
                   _InfoRow(label: isKorean ? '실길이' : 'Length', value: yarn.yarnLength, isKorean: isKorean),
                   const SizedBox(height: 8),
@@ -793,6 +805,35 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
                       hintText: isKorean ? '예: 뜨개나라' : 'e.g. Yarn store',
                     ),
                     onChanged: notifier.updatePurchasePlace,
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 14),
+              // 보유 현황
+              GlassCard(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  SectionTitle(title: isKorean ? '📦 보유 현황' : '📦 Stock'),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _quantityController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: isKorean ? '보유 타래 수' : 'Skeins owned',
+                      hintText: isKorean ? '예: 3' : 'e.g. 3',
+                      suffixText: isKorean ? '타래' : 'skeins',
+                    ),
+                    onChanged: (v) => notifier.updateQuantity(int.tryParse(v) ?? 0),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _lengthController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: isKorean ? '총 길이 (m)' : 'Total length (m)',
+                      hintText: isKorean ? '예: 600' : 'e.g. 600',
+                      suffixText: 'm',
+                    ),
+                    onChanged: (v) => notifier.updateLengthMeters(int.tryParse(v) ?? 0),
                   ),
                 ]),
               ),
