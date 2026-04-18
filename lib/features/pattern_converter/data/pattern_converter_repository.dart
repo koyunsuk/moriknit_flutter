@@ -5,7 +5,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
-import '../../pattern/data/pattern_repository.dart';
+import '../../pattern/domain/ai_pattern_section.dart';
 import '../../pattern/domain/pattern_chart.dart';
 import '../domain/parsed_pattern.dart';
 
@@ -63,11 +63,10 @@ class PatternConverterRepository {
     // 3. AI 섹션 데이터 변환
     final rawSections = (data['sections'] as List?) ?? [];
     final aiSections = rawSections
-        .map((s) => Map<String, dynamic>.from(s as Map))
+        .map((s) => AiSection.fromMap(Map<String, dynamic>.from(s as Map)))
         .toList();
 
-    // 4. PatternChart로 pattern_charts 컬렉션에 저장
-    // 이미지 파일은 PatternType.image, PDF는 PatternType.pdf
+    // 4. PatternChart 생성 (저장 없이 반환 — 저장은 AiPatternEditScreen에서 수행)
     final patternType = mimeType.startsWith('image/') ? PatternType.image : PatternType.pdf;
     String patternImageUrl = '';
     String patternPdfUrl = '';
@@ -92,9 +91,8 @@ class PatternConverterRepository {
       aiSections: aiSections,
     );
 
-    final saved = await PatternRepository().save(chart);
     onProgress?.call(1.0);
-    return saved;
+    return chart;
   }
 
   /// AI 변환 도안 목록 스트림 (pattern_charts 컬렉션에서 aiConverted 타입만)
@@ -136,18 +134,25 @@ class PatternConverterRepository {
 
     final sections = chart.aiSections ?? [];
     final updatedSections = sections.map((sec) {
-      if (sec['id'] != sectionId) return sec;
-      final steps = (sec['steps'] as List? ?? [])
-          .map((s) => Map<String, dynamic>.from(s as Map))
-          .toList();
-      final updatedSteps = steps.map((step) {
-        if (step['id'] != stepId) return step;
-        return {...step, 'isCompleted': isCompleted};
+      if (sec.id != sectionId) return sec;
+      final updatedSteps = sec.steps.map((step) {
+        if (step.id != stepId) return step;
+        return step.copyWith(isCompleted: isCompleted);
       }).toList();
-      return {...sec, 'steps': updatedSteps};
+      return sec.copyWith(steps: updatedSteps);
     }).toList();
 
-    await _chartsCol.doc(patternId).update({'aiSections': updatedSections});
+    await _chartsCol.doc(patternId).update({
+      'aiSections': updatedSections.map((s) => s.toMap()).toList(),
+    });
+  }
+
+  /// AI 변환 도안 섹션 업데이트
+  Future<void> updateSections(String patternId, List<AiSection> sections) async {
+    await _chartsCol.doc(patternId).update({
+      'aiSections': sections.map((s) => s.toMap()).toList(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   /// AI 변환 도안 삭제 (pattern_charts 기반)
@@ -191,3 +196,4 @@ class PatternConverterRepository {
     await _parsedCol.doc(patternId).delete();
   }
 }
+

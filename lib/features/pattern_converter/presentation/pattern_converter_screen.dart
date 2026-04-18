@@ -10,8 +10,8 @@ import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
-import '../../pattern/presentation/pattern_detail_screen.dart';
 import '../data/pattern_converter_repository.dart';
+import 'ai_pattern_edit_screen.dart';
 
 class PatternConverterScreen extends ConsumerStatefulWidget {
   const PatternConverterScreen({super.key});
@@ -102,17 +102,11 @@ class _PatternConverterScreenState
       );
 
       if (!mounted) return;
-      // 파싱 완료 → 수정 모드로 열기 (제목·설명 수정 후 저장하면 라이브러리로 이동)
+      // 파싱 완료 → AI 편집 화면으로 이동 (섹션/단계/제목 수정 후 저장)
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => PatternDetailScreen(
-            chart: savedChart,
-            initialIsEditing: true,
-            onSaveComplete: () {
-              if (mounted) context.go(Routes.toolsPatterns);
-            },
-          ),
+          builder: (_) => AiPatternEditScreen(unsavedChart: savedChart),
         ),
       );
     } catch (e) {

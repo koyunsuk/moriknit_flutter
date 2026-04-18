@@ -6,6 +6,7 @@ import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../features/pattern/domain/ai_pattern_section.dart';
 import '../../../features/pattern/domain/pattern_chart.dart';
 import '../../../providers/parsed_pattern_provider.dart';
 
@@ -58,21 +59,14 @@ class _PatternReaderView extends StatelessWidget {
   const _PatternReaderView(
       {required this.pattern, required this.ref, required this.isKorean});
 
-  List<Map<String, dynamic>> get _sections => pattern.aiSections ?? [];
+  List<AiSection> get _sections => pattern.aiSections ?? [];
 
-  int get _totalSteps => _sections.fold<int>(
-        0,
-        (acc, sec) => acc + ((sec['steps'] as List?)?.length ?? 0),
-      );
+  int get _totalSteps =>
+      _sections.fold<int>(0, (acc, sec) => acc + sec.steps.length);
 
   int get _completedSteps => _sections.fold<int>(
         0,
-        (acc, sec) =>
-            acc +
-            ((sec['steps'] as List?)
-                    ?.where((s) => (s as Map)['isCompleted'] == true)
-                    .length ??
-                0),
+        (acc, sec) => acc + sec.steps.where((s) => s.isCompleted).length,
       );
 
   double get _progress =>
@@ -146,7 +140,7 @@ class _PatternReaderView extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
                     child: Text(
-                      section['title'] as String? ?? '',
+                      section.title,
                       style: T.h3.copyWith(color: C.lv),
                     ),
                   ),
@@ -154,32 +148,23 @@ class _PatternReaderView extends StatelessWidget {
                 SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (ctx, i) {
-                      final steps = (section['steps'] as List?) ?? [];
-                      final step =
-                          Map<String, dynamic>.from(steps[i] as Map);
-                      final stepId = step['id'] as String? ?? '';
-                      final sectionId = section['id'] as String? ?? '';
-                      final isCompleted =
-                          step['isCompleted'] as bool? ?? false;
-                      final instruction =
-                          step['instruction'] as String? ?? '';
+                      final step = section.steps[i];
                       return _StepTile(
-                        stepId: stepId,
+                        stepId: step.id,
                         index: i + 1,
-                        instruction: instruction,
-                        isCompleted: isCompleted,
+                        instruction: step.instruction,
+                        isCompleted: step.isCompleted,
                         onToggle: (val) => ref
                             .read(patternConverterRepositoryProvider)
                             .toggleStep(
                               patternId: pattern.id,
-                              sectionId: sectionId,
-                              stepId: stepId,
+                              sectionId: section.id,
+                              stepId: step.id,
                               isCompleted: val,
                             ),
                       );
                     },
-                    childCount:
-                        (section['steps'] as List?)?.length ?? 0,
+                    childCount: section.steps.length,
                   ),
                 ),
               ],

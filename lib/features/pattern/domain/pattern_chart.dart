@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'ai_pattern_section.dart';
 import 'knit_symbols.dart';
 
 enum ChartMode { color, symbol, narrative }
@@ -101,7 +102,7 @@ class PatternChart {
   final PatternSourceType sourceType;
 
   /// AI 변환 도안 섹션 데이터 (aiConverted 타입에서 사용)
-  final List<Map<String, dynamic>>? aiSections;
+  final List<AiSection>? aiSections;
 
   /// 최초 생성 시각 (NEW 뱃지용, 24시간 내 생성 도안 표시)
   final DateTime? createdAt;
@@ -300,7 +301,7 @@ class PatternChart {
     String? sourcePatternId,
     String? sourceOwnerName,
     PatternSourceType? sourceType,
-    List<Map<String, dynamic>>? aiSections,
+    List<AiSection>? aiSections,
     DateTime? createdAt,
   }) => _copyWith(
     id: id, title: title, rows: rows, cols: cols, mode: mode, grid: grid,
@@ -325,7 +326,7 @@ class PatternChart {
     String? sourcePatternId,
     String? sourceOwnerName,
     PatternSourceType? sourceType,
-    List<Map<String, dynamic>>? aiSections,
+    List<AiSection>? aiSections,
     DateTime? createdAt,
   }) {
     return PatternChart(
@@ -365,7 +366,7 @@ class PatternChart {
         if (sourcePatternId != null) 'sourcePatternId': sourcePatternId,
         if (sourceOwnerName != null) 'sourceOwnerName': sourceOwnerName,
         'sourceType': sourceType.name,
-        if (aiSections != null) 'aiSections': aiSections,
+        if (aiSections != null) 'aiSections': aiSections!.map((s) => s.toMap()).toList(),
       };
 
   factory PatternChart.fromJson(Map<String, dynamic> json) {
@@ -402,7 +403,7 @@ class PatternChart {
       sourceType: PatternSourceType.values.byName(
           json['sourceType'] as String? ?? 'editor'),
       aiSections: (json['aiSections'] as List?)
-          ?.map((s) => Map<String, dynamic>.from(s as Map))
+          ?.map((s) => AiSection.fromMap(Map<String, dynamic>.from(s as Map)))
           .toList(),
       createdAt: (json['createdAt'] as dynamic)?.toDate() as DateTime?,
     );

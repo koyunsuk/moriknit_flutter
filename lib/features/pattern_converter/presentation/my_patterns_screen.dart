@@ -125,17 +125,10 @@ class _PatternCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sections = pattern.aiSections ?? [];
-    final totalSteps = sections.fold<int>(
-      0,
-      (acc, sec) => acc + ((sec['steps'] as List?)?.length ?? 0),
-    );
+    final totalSteps = sections.fold<int>(0, (acc, sec) => acc + sec.steps.length);
     final completedSteps = sections.fold<int>(
       0,
-      (acc, sec) => acc +
-          ((sec['steps'] as List?)
-                  ?.where((s) => (s as Map)['isCompleted'] == true)
-                  .length ??
-              0),
+      (acc, sec) => acc + sec.steps.where((s) => s.isCompleted).length,
     );
     final progress =
         totalSteps == 0 ? 0.0 : completedSteps / totalSteps;

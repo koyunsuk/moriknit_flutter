@@ -1186,16 +1186,9 @@ class _AiSectionsSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sections = chart.aiSections ?? [];
-    final totalSteps = sections.fold<int>(
-        0, (acc, s) => acc + ((s['steps'] as List?)?.length ?? 0));
+    final totalSteps = sections.fold<int>(0, (acc, s) => acc + s.steps.length);
     final completedSteps = sections.fold<int>(
-        0,
-        (acc, s) =>
-            acc +
-            ((s['steps'] as List?)
-                    ?.where((st) => (st as Map)['isCompleted'] == true)
-                    .length ??
-                0));
+        0, (acc, s) => acc + s.steps.where((st) => st.isCompleted).length);
     final progress =
         totalSteps == 0 ? 0.0 : completedSteps / totalSteps;
 
@@ -1231,7 +1224,6 @@ class _AiSectionsSummary extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           ...sections.take(3).map((sec) {
-            final steps = (sec['steps'] as List?) ?? [];
             return Padding(
               padding: const EdgeInsets.only(bottom: 4),
               child: Row(
@@ -1241,7 +1233,7 @@ class _AiSectionsSummary extends StatelessWidget {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      sec['title'] as String? ?? '',
+                      sec.title,
                       style: T.sm.copyWith(color: C.tx),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -1249,8 +1241,8 @@ class _AiSectionsSummary extends StatelessWidget {
                   ),
                   Text(
                     isKorean
-                        ? '${steps.length}단계'
-                        : '${steps.length} steps',
+                        ? '${sec.steps.length}단계'
+                        : '${sec.steps.length} steps',
                     style: T.caption.copyWith(color: C.tx2),
                   ),
                 ],
