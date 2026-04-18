@@ -168,7 +168,27 @@ class ProjectListScreen extends ConsumerWidget {
                             );
                           },
                           loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
-                          error: (e, _) => Center(child: Text('Error: $e', style: T.body)),
+                          error: (e, _) {
+                            final isKorean = ref.watch(appLanguageProvider).isKorean;
+                            return Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.error_outline_rounded, color: C.mu, size: 40),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    isKorean ? '프로젝트를 불러오지 못했어요.' : 'Failed to load projects.',
+                                    style: T.body.copyWith(color: C.mu),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextButton(
+                                    onPressed: () => ref.invalidate(projectListProvider),
+                                    child: Text(isKorean ? '다시 시도' : 'Retry', style: T.body.copyWith(color: C.lv)),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                         ),
                 ),
               ),
@@ -838,7 +858,27 @@ class ProjectAllListScreen extends ConsumerWidget {
             Expanded(
               child: projectsAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(child: Text('$e')),
+                error: (e, _) {
+                  final isKorean = ref.watch(appLanguageProvider).isKorean;
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.error_outline_rounded, color: C.mu, size: 40),
+                        const SizedBox(height: 12),
+                        Text(
+                          isKorean ? '프로젝트를 불러오지 못했어요.' : 'Failed to load projects.',
+                          style: T.body.copyWith(color: C.mu),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: () => ref.invalidate(projectListProvider),
+                          child: Text(isKorean ? '다시 시도' : 'Retry', style: T.body.copyWith(color: C.lv)),
+                        ),
+                      ],
+                    ),
+                  );
+                },
                 data: (_) => ListView(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
                   children: [

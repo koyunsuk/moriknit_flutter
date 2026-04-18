@@ -2024,7 +2024,6 @@ class _StepsSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = ref.watch(appStringsProvider);
     final stepsAsync = ref.watch(projectStepsProvider(project.id));
 
     final currentSteps = stepsAsync.valueOrNull ?? [];
@@ -2193,10 +2192,26 @@ class _StepsSection extends ConsumerWidget {
               );
             },
             loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
-            error: (e, _) => Text(
-              t.failedToLoadSteps(e.toString()),
-              style: T.body.copyWith(color: C.og),
-            ),
+            error: (e, _) {
+              final isKorean = ref.read(appLanguageProvider).isKorean;
+              return Column(
+                children: [
+                  Center(
+                    child: Text(
+                      isKorean ? '단계를 불러오지 못했어요.' : 'Failed to load steps.',
+                      style: T.body.copyWith(color: C.mu),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _CardEditActions(
+                    isKorean: isKorean,
+                    onLinkFromWork: () => _showTemplateSheet(context, ref),
+                    onCreateNew: () => _addStep(context, ref),
+                  ),
+                ],
+              );
+            },
           ),
           if (isCardEditMode) ...[
             const SizedBox(height: 10),
