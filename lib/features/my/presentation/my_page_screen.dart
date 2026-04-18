@@ -23,6 +23,7 @@ import '../../../providers/fab_settings_provider.dart';
 import '../../../providers/theme_provider.dart';
 import '../../auth/domain/user_model.dart';
 import 'bug_report_sheet.dart';
+import 'photo_album_screen.dart';
 
 class MyPageScreen extends ConsumerWidget {
   const MyPageScreen({super.key});
@@ -457,7 +458,25 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
               ),
               const SizedBox(height: 20),
 
-              // ── 3. 개인설정 ───────────────────────────────────────
+              // ── 3. 나의 작업실 ─────────────────────────────────────
+              SectionTitle(title: isKorean ? '🖼️ 나의 작업실' : '🖼️ My Studio'),
+              const SizedBox(height: 10),
+              GlassCard(
+                child: Column(
+                  children: [
+                    ListTile(
+                      leading: Icon(Icons.photo_library_outlined, color: C.lv),
+                      title: Text(isKorean ? '나의 사진 앨범' : 'My Photo Album'),
+                      subtitle: Text(isKorean ? '프로젝트·스와치 사진을 한눈에 모아봐요' : 'All your project & swatch photos'),
+                      trailing: Icon(Icons.chevron_right, color: C.mu),
+                      onTap: () => context.push('/my/photo-album'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // ── 4. 개인설정 ───────────────────────────────────────
               SectionTitle(title: isKorean ? '⚙️ 개인설정' : '⚙️ Personal settings'),
               const SizedBox(height: 10),
               GlassCard(
@@ -599,9 +618,9 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
               ),
               const SizedBox(height: 20),
 
-              // ── 4. 퀵다이얼 설정 ─────────────────────────────────
+              // ── 4. 테마꾸미기 ─────────────────────────────────
               if (!kIsWeb) ...[
-                SectionTitle(title: isKorean ? '⚡ 퀵다이얼 설정' : '⚡ Quick Dial Settings'),
+                SectionTitle(title: isKorean ? '🎨 테마꾸미기' : '🎨 Customize Theme'),
                 const SizedBox(height: 10),
                 _FabSettingsCard(isKorean: isKorean),
                 const SizedBox(height: 20),
@@ -909,19 +928,6 @@ class _FabSettingsCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(fabSettingsProvider);
 
-    final presets = [
-      ('bottom', isKorean ? '하단' : 'Bottom'),
-      ('middle', isKorean ? '중간' : 'Middle'),
-      ('top', isKorean ? '상단' : 'Top'),
-    ];
-
-    String currentPreset = 'bottom';
-    if (settings.bottomOffset > 350) {
-      currentPreset = 'top';
-    } else if (settings.bottomOffset > 100) {
-      currentPreset = 'middle';
-    }
-
     return GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -934,7 +940,7 @@ class _FabSettingsCard extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(isKorean ? '반투명 모드' : 'Transparent Mode', style: T.bodyBold),
-                    Text(isKorean ? '퀵다이얼 버튼을 반투명하게 표시' : 'Show quick dial buttons as semi-transparent',
+                    Text(isKorean ? '퀵다이얼 패널을 반투명하게 표시' : 'Show quick dial panel as semi-transparent',
                         style: T.caption.copyWith(color: C.tx2)),
                   ],
                 ),
@@ -1020,42 +1026,6 @@ class _FabSettingsCard extends ConsumerWidget {
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          // 위치 프리셋
-          Text(isKorean ? '기본 위치' : 'Default Position', style: T.bodyBold),
-          const SizedBox(height: 8),
-          Text(isKorean ? '버튼을 길게 드래그해서 자유롭게 이동할 수 있어요' : 'Long drag the buttons to move them freely',
-              style: T.caption.copyWith(color: C.tx2)),
-          const SizedBox(height: 10),
-          Row(
-            children: presets.map((e) {
-              final (key, label) = e;
-              final selected = currentPreset == key;
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: GestureDetector(
-                  onTap: () => ref.read(fabSettingsProvider.notifier).setPreset(key),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: selected ? C.lv : C.lvL,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: selected ? C.lv : C.lv.withValues(alpha: 0.20)),
-                    ),
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        color: selected ? Colors.white : C.lvD,
-                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
           ),
         ],
       ),
