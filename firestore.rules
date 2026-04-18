@@ -1,0 +1,220 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── 공통 함수 ──────────────────────────────────────────────────────────────
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return isLoggedIn() && request.auth.uid == uid;
+    }
+    function isAdmin() {
+      return isLoggedIn() && request.auth.token.email == 'koyunsuk@gmail.com';
+    }
+
+    // ── 사용자 프로필 ───────────────────────────────────────────────────────────
+    match /users/{uid} {
+      allow read: if isLoggedIn();
+      allow write: if isOwner(uid);
+
+      // 프로젝트
+      match /projects/{projectId} {
+        allow read, write: if isOwner(uid);
+        // 프로젝트 단계로그
+        match /steps/{stepId} {
+          allow read, write: if isOwner(uid);
+        }
+        // 프로젝트 카운터
+        match /counters/{counterId} {
+          allow read, write: if isOwner(uid);
+        }
+      }
+      // 스와치
+      match /swatches/{swatchId} {
+        allow read, write: if isOwner(uid);
+      }
+      // 카운터
+      match /counters/{counterId} {
+        allow read, write: if isOwner(uid);
+      }
+      // 템플릿
+      match /templates/{templateId} {
+        allow read, write: if isOwner(uid);
+      }
+      // 바늘
+      match /myNeedles/{needleId} {
+        allow read, write: if isOwner(uid);
+      }
+      // 악세서리
+      match /myAccessories/{itemId} {
+        allow read, write: if isOwner(uid);
+      }
+      // 실
+      match /myYarns/{yarnId} {
+        allow read, write: if isOwner(uid);
+      }
+      // 도서
+      match /books/{bookId} {
+        allow read, write: if isOwner(uid);
+      }
+      // 메모
+      match /memos/{memoId} {
+        allow read, write: if isOwner(uid);
+      }
+      // 도안 차트
+      match /pattern_charts/{chartId} {
+        allow read, write: if isOwner(uid);
+      }
+      // AI 파싱 결과
+      match /parsed_patterns/{docId} {
+        allow read, write: if isOwner(uid);
+      }
+      // 개인 백과사전
+      match /personal_encyclopedia/{entryId} {
+        allow read, write: if isOwner(uid);
+      }
+      // 단계로그
+      match /steps/{stepId} {
+        allow read, write: if isOwner(uid);
+      }
+      // 마켓 구매/판매 내역
+      match /market_purchases/{docId} {
+        allow read, write: if isOwner(uid);
+      }
+      match /market_sales/{docId} {
+        allow read, write: if isOwner(uid);
+      }
+      // DM 룸
+      match /dm_rooms/{roomId} {
+        allow read, write: if isOwner(uid);
+      }
+      // 패턴 파일 (Dropbox 임포트)
+      match /pattern_files/{fileId} {
+        allow read, write: if isOwner(uid);
+      }
+      // AI 도안 변환 작업
+      match /ai_jobs/{jobId} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+
+    // ── 마켓 아이템 (공개 읽기, 로그인 후 생성/수정) ────────────────────────────
+    match /market_items/{itemId} {
+      allow read: if true;
+      allow create: if isLoggedIn();
+      allow update, delete: if isLoggedIn()
+        && resource.data.sellerUid == request.auth.uid;
+    }
+
+    // ── 커뮤니티 게시글 ────────────────────────────────────────────────────────
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if isLoggedIn();
+      allow update, delete: if isLoggedIn()
+        && resource.data.uid == request.auth.uid;
+
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isLoggedIn();
+        allow update, delete: if isLoggedIn()
+          && resource.data.uid == request.auth.uid;
+      }
+    }
+
+    // ── 공개 프로젝트 ──────────────────────────────────────────────────────────
+    match /public_projects/{projectId} {
+      allow read: if true;
+      allow create: if isLoggedIn();
+      allow update, delete: if isLoggedIn()
+        && resource.data.uid == request.auth.uid;
+
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isLoggedIn();
+        allow update, delete: if isLoggedIn()
+          && resource.data.uid == request.auth.uid;
+      }
+    }
+
+    // ── 방명록 ─────────────────────────────────────────────────────────────────
+    match /guestbook/{docId} {
+      allow read: if true;
+      allow create: if isLoggedIn();
+      allow update, delete: if isLoggedIn()
+        && resource.data.uid == request.auth.uid;
+    }
+
+    // ── 기본 템플릿 (공개 읽기, 관리자만 쓰기) ────────────────────────────────
+    match /builtin_templates/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── 뜨개백과 (공개 읽기, 관리자만 쓰기) ────────────────────────────────────
+    match /encyclopedia/{entryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── 클라스 / 코스 (공개 읽기, 관리자만 쓰기) ─────────────────────────────────
+    match /courses/{courseId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── 랜딩 게시판 (공개 읽기, 로그인 후 쓰기) ─────────────────────────────────
+    match /landing_boards/{boardType}/posts/{postId} {
+      allow read: if true;
+      allow create: if isLoggedIn();
+      allow update, delete: if isLoggedIn()
+        && resource.data.uid == request.auth.uid;
+
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isLoggedIn();
+        allow update, delete: if isLoggedIn()
+          && resource.data.uid == request.auth.uid;
+      }
+    }
+
+    // ── 공지사항 (공개 읽기, 관리자만 쓰기) ──────────────────────────────────────
+    match /landing_notices/{noticeId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── 뉴스레터 구독 (비로그인 쓰기 허용) ──────────────────────────────────────
+    match /landing_subscriptions/{docId} {
+      allow create: if true;
+      allow read, update, delete: if false;
+    }
+
+    // ── 버그 신고 (로그인 후 쓰기) ────────────────────────────────────────────
+    match /bug_reports/{docId} {
+      allow create: if isLoggedIn();
+      allow read, update, delete: if false;
+    }
+
+    // ── DM 채팅 (참여자만) ────────────────────────────────────────────────────
+    match /dm_rooms/{roomId} {
+      allow read, write: if isLoggedIn()
+        && (resource == null || request.auth.uid in resource.data.participantIds);
+
+      match /messages/{messageId} {
+        allow read, write: if isLoggedIn();
+      }
+    }
+
+    // ── 앱 설정 / UI 카피 (공개 읽기, 관리자만 쓰기) ──────────────────────────────
+    match /app_config/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /ui_copy/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+  }
+}
