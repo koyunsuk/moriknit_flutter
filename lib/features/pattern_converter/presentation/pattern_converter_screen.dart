@@ -6,10 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/localization/app_language.dart';
-import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../features/pattern/domain/pattern_chart.dart';
+import '../../../providers/parsed_pattern_provider.dart';
 import '../data/pattern_converter_repository.dart';
 import 'ai_pattern_edit_screen.dart';
 
@@ -70,8 +71,7 @@ class _PatternConverterScreenState
       _isUploading = true;
       _progress = 0;
       _stage = 1;
-      _statusMessage =
-          isKorean ? '파일을 업로드하는 중...' : 'Uploading file...';
+      _statusMessage = isKorean ? 'AI 서버 접속 중...' : 'Connecting to AI server...';
     });
 
     try {
@@ -86,23 +86,39 @@ class _PatternConverterScreenState
             _progress = p;
             if (p < 0.5) {
               _stage = 1;
-              _statusMessage =
-                  isKorean ? '파일을 업로드하는 중...' : 'Uploading...';
-            } else if (p < 1.0) {
+              _statusMessage = isKorean ? 'AI 서버 접속 중...' : 'Connecting to AI server...';
+            } else if (p < 0.9) {
               _stage = 2;
-              _statusMessage = isKorean
-                  ? 'AI가 도안을 분석하는 중...'
-                  : 'AI is analyzing...';
-            } else {
+              _statusMessage = isKorean ? 'AI가 도안을 분석하는 중...' : 'AI is analyzing...';
+            } else if (p < 1.0) {
               _stage = 3;
-              _statusMessage = isKorean ? '저장하는 중...' : 'Saving...';
+              _statusMessage = isKorean ? 'AI 분석이 완료됐어요!' : 'AI analysis complete!';
+            } else {
+              _stage = 4;
+              _statusMessage = isKorean ? '한글로 변환 중...' : 'Converting...';
             }
           });
         },
       );
 
+      // 분석 완료 단계 잠깐 표시
+      if (mounted) {
+        setState(() {
+          _stage = 3;
+          _progress = 0.95;
+          _statusMessage = isKorean ? 'AI 분석이 완료됐어요!' : 'AI analysis complete!';
+        });
+        await Future.delayed(const Duration(milliseconds: 700));
+        if (!mounted) return;
+        setState(() {
+          _stage = 4;
+          _progress = 1.0;
+          _statusMessage = isKorean ? '한글로 변환 중...' : 'Converting...';
+        });
+        await Future.delayed(const Duration(milliseconds: 400));
+      }
+
       if (!mounted) return;
-      // 파싱 완료 → AI 편집 화면으로 이동 (섹션/단계/제목 수정 후 저장)
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -217,18 +233,8 @@ class _PatternConverterScreenState
 
                 const SizedBox(height: 32),
 
-                Center(
-                  child: TextButton.icon(
-                    onPressed: () =>
-                        context.push(Routes.toolsMyParsedPatterns),
-                    icon: Icon(Icons.folder_open_rounded,
-                        color: C.lv, size: 18),
-                    label: Text(
-                      isKorean ? '변환된 도안 보기' : 'View Converted Patterns',
-                      style: T.sm.copyWith(color: C.lv),
-                    ),
-                  ),
-                ),
+                // 변환된 도안 리스트 인라인 표시
+                _InlinePatternList(isKorean: isKorean),
               ],
             ),
           ),
@@ -308,7 +314,7 @@ class _UploadButton extends StatelessWidget {
 class _UploadProgress extends StatelessWidget {
   final double progress;
   final String message;
-  final int stage; // 1=업로드, 2=AI분석, 3=저장
+  final int stage; // 1=업로드, 2=AI분석, 3=분석완료, 4=변환중
 
   const _UploadProgress({
     required this.progress,
@@ -321,7 +327,8 @@ class _UploadProgress extends StatelessWidget {
     final stages = [
       ('1', '업로드'),
       ('2', 'AI 분석'),
-      ('3', '저장'),
+      ('3', '분석 완료'),
+      ('4', '변환'),
     ];
 
     return Container(
@@ -340,12 +347,11 @@ class _UploadProgress extends StatelessWidget {
             children: [
               for (int i = 0; i < stages.length; i++) ...[
                 if (i > 0)
-                  Container(
-                    width: 24,
-                    height: 1,
-                    color: i + 1 <= stage
-                        ? C.lv
-                        : C.lv.withValues(alpha: 0.2),
+                  Expanded(
+                    child: Container(
+                      height: 1,
+                      color: i + 1 <= stage ? C.lv : C.lv.withValues(alpha: 0.2),
+                    ),
                   ),
                 Column(
                   children: [
@@ -354,28 +360,19 @@ class _UploadProgress extends StatelessWidget {
                       height: 28,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: i + 1 < stage
-                            ? C.lv
-                            : i + 1 == stage
-                                ? C.lv
-                                : C.lv.withValues(alpha: 0.15),
+                        color: i + 1 <= stage ? C.lv : C.lv.withValues(alpha: 0.15),
                         border: Border.all(
-                          color: i + 1 <= stage
-                              ? C.lv
-                              : C.lv.withValues(alpha: 0.3),
+                          color: i + 1 <= stage ? C.lv : C.lv.withValues(alpha: 0.3),
                           width: 1.5,
                         ),
                       ),
                       child: Center(
                         child: i + 1 < stage
-                            ? const Icon(Icons.check,
-                                size: 14, color: Colors.white)
+                            ? const Icon(Icons.check, size: 14, color: Colors.white)
                             : Text(
                                 stages[i].$1,
                                 style: T.caption.copyWith(
-                                  color: i + 1 == stage
-                                      ? Colors.white
-                                      : C.lv.withValues(alpha: 0.5),
+                                  color: i + 1 == stage ? Colors.white : C.lv.withValues(alpha: 0.5),
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -386,9 +383,7 @@ class _UploadProgress extends StatelessWidget {
                       stages[i].$2,
                       style: T.caption.copyWith(
                         color: i + 1 <= stage ? C.lv : C.tx2,
-                        fontWeight: i + 1 == stage
-                            ? FontWeight.w700
-                            : FontWeight.w400,
+                        fontWeight: i + 1 == stage ? FontWeight.w700 : FontWeight.w400,
                         fontSize: 10,
                       ),
                     ),
@@ -397,58 +392,174 @@ class _UploadProgress extends StatelessWidget {
               ],
             ],
           ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: 64,
-            height: 64,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                CircularProgressIndicator(
-                  value: progress,
-                  strokeWidth: 5,
-                  backgroundColor: C.lv.withValues(alpha: 0.15),
-                  color: C.lv,
-                ),
-                Text(
-                  '${(progress * 100).toInt()}%',
-                  style: T.caption.copyWith(
-                      color: C.lv, fontWeight: FontWeight.w700),
-                ),
-              ],
+          const SizedBox(height: 24),
+
+          // 단계별 아이콘/인디케이터
+          if (stage == 3)
+            Icon(Icons.check_circle_rounded, color: C.lv, size: 52)
+          else
+            SizedBox(
+              width: 64,
+              height: 64,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    value: stage == 1 ? progress * 2 : null,
+                    strokeWidth: 5,
+                    backgroundColor: C.lv.withValues(alpha: 0.15),
+                    color: C.lv,
+                  ),
+                  if (stage == 1)
+                    Text(
+                      '${(progress * 100).toInt()}%',
+                      style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w700),
+                    ),
+                ],
+              ),
             ),
-          ),
           const SizedBox(height: 16),
-          Text(message,
-              style: T.sm.copyWith(color: C.tx2),
-              textAlign: TextAlign.center),
+
+          Text(message, style: T.sm.copyWith(color: C.tx2), textAlign: TextAlign.center),
+
+          // AI 분석 중 → 선형 프로그레스 바
           if (stage == 2) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                backgroundColor: C.lv.withValues(alpha: 0.15),
+                valueColor: AlwaysStoppedAnimation<Color>(C.lv),
+              ),
+            ),
+            const SizedBox(height: 12),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 color: C.og.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(8),
-                border:
-                    Border.all(color: C.og.withValues(alpha: 0.25)),
+                border: Border.all(color: C.og.withValues(alpha: 0.25)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.schedule_rounded,
-                      size: 13, color: C.og),
+                  Icon(Icons.schedule_rounded, size: 13, color: C.og),
                   const SizedBox(width: 5),
-                  Text(
-                    '도안 크기에 따라 최대 3분이 소요될 수 있어요.',
-                    style: T.caption.copyWith(color: C.og),
-                  ),
+                  Text('도안 크기에 따라 최대 3분이 소요될 수 있어요.', style: T.caption.copyWith(color: C.og)),
                 ],
               ),
             ),
           ],
           const SizedBox(height: 8),
         ],
+      ),
+    );
+  }
+}
+
+class _InlinePatternList extends ConsumerWidget {
+  final bool isKorean;
+  const _InlinePatternList({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final patternsAsync = ref.watch(aiPatternsProvider);
+
+    return patternsAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (patterns) {
+        if (patterns.isEmpty) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  isKorean ? '변환된 도안' : 'Converted Patterns',
+                  style: T.captionBold.copyWith(color: C.mu),
+                ),
+                Text(
+                  '${patterns.length}개',
+                  style: T.caption.copyWith(color: C.mu),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ...patterns.map((p) => _PatternRow(
+                  pattern: p,
+                  isKorean: isKorean,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AiPatternEditScreen(patternId: p.id),
+                    ),
+                  ),
+                )),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PatternRow extends StatelessWidget {
+  final PatternChart pattern;
+  final bool isKorean;
+  final VoidCallback onTap;
+
+  const _PatternRow({required this.pattern, required this.isKorean, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final sections = pattern.aiSections ?? [];
+    final totalSteps = sections.fold<int>(0, (a, s) => a + s.steps.length);
+    final done = sections.fold<int>(0, (a, s) => a + s.steps.where((st) => st.isCompleted).length);
+    final pct = totalSteps == 0 ? 0 : (done / totalSteps * 100).toInt();
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: C.gx,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: C.bd),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: C.lv.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.description_rounded, color: C.lv, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(pattern.title,
+                      style: T.body.copyWith(fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${sections.length}섹션 · $totalSteps단계 · $pct% 완료',
+                    style: T.caption.copyWith(color: C.tx2),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: C.tx2, size: 18),
+          ],
+        ),
       ),
     );
   }

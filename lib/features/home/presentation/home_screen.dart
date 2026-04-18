@@ -1736,7 +1736,12 @@ class _HomeNoticesSectionState extends ConsumerState<_HomeNoticesSection> {
   void _showNoticeDetailPost(BuildContext context, LandingPost notice) {
     final title = notice.title;
     final content = notice.content;
-    final imageUrl = notice.imageUrl;
+    final allImages = <String>[
+      if (notice.imageUrl.isNotEmpty) notice.imageUrl,
+      ...notice.imageUrls.where((u) => u != notice.imageUrl && u.isNotEmpty),
+    ];
+    final fileUrls = notice.fileUrls;
+    final fileNames = notice.fileNames;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1780,22 +1785,50 @@ class _HomeNoticesSectionState extends ConsumerState<_HomeNoticesSection> {
                   controller: controller,
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
                   children: [
-                    if (imageUrl.isNotEmpty) ...[
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Image.network(
-                          imageUrl,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                    if (allImages.isNotEmpty) ...[
+                      ...allImages.map((url) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.network(
+                            url,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 14),
+                      )),
+                      const SizedBox(height: 4),
                     ],
                     Text(
                       content,
                       style: T.body.copyWith(color: C.tx2, height: 1.7),
                     ),
+                    if (fileUrls.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Divider(color: C.bd, thickness: 0.5),
+                      const SizedBox(height: 8),
+                      ...List.generate(fileUrls.length, (i) {
+                        final name = i < fileNames.length ? fileNames[i] : '첨부파일 ${i + 1}';
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(
+                            children: [
+                              Icon(Icons.attach_file, size: 16, color: C.lv),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  name,
+                                  style: T.caption.copyWith(color: C.lv),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
                   ],
                 ),
               ),

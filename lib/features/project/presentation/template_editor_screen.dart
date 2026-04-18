@@ -1,5 +1,9 @@
+import 'dart:io';
+
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
@@ -33,6 +37,9 @@ class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
   final _descController = TextEditingController();
   final List<TextEditingController> _titleCtrls = [];
   final List<TextEditingController> _descCtrls = [];
+
+  String? _localPhotoPath;
+  String? _photoUrl;
 
   bool get _isNew => widget.templateId == null;
 
@@ -76,6 +83,62 @@ class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
     });
   }
 
+  Future<void> _pickCover(ImageSource source) async {
+    final picked = await ImagePicker().pickImage(source: source, imageQuality: 80);
+    if (picked == null) return;
+    setState(() => _localPhotoPath = picked.path);
+  }
+
+  void _showImageSourceDialog(bool isKorean) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_rounded),
+              title: Text(isKorean ? '즉시촬영' : 'Camera'),
+              onTap: () { Navigator.pop(ctx); _pickCover(ImageSource.camera); },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded),
+              title: Text(isKorean ? '갤러리에서 선택' : 'Choose from gallery'),
+              onTap: () { Navigator.pop(ctx); _pickCover(ImageSource.gallery); },
+            ),
+            if (_localPhotoPath != null || _photoUrl != null)
+              ListTile(
+                leading: Icon(Icons.delete_outline, color: C.og),
+                title: Text(isKorean ? '이미지 삭제' : 'Remove image', style: TextStyle(color: C.og)),
+                onTap: () { Navigator.pop(ctx); setState(() { _localPhotoPath = null; _photoUrl = null; }); },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _coverPlaceholder(bool isKorean) {
+    return Container(
+      width: double.infinity,
+      height: 180,
+      decoration: BoxDecoration(
+        color: C.lv.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: C.lv.withValues(alpha: 0.25), style: BorderStyle.solid),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.add_photo_alternate_rounded, color: C.lv, size: 36),
+          const SizedBox(height: 8),
+          Text(isKorean ? '커버 이미지 추가' : 'Add cover image',
+              style: T.caption.copyWith(color: C.lvD)),
+        ],
+      ),
+    );
+  }
+
   void _removeStep(int index) {
     if (_titleCtrls.length <= 1) return;
     _titleCtrls[index].dispose();
@@ -107,6 +170,14 @@ class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
           final repo = ref.read(templateRepositoryProvider);
           final titles = _titleCtrls.map((c) => c.text.trim()).toList();
           final descs = _descCtrls.map((c) => c.text.trim()).toList();
+          String uploadedUrl = _photoUrl ?? '';
+          if (_localPhotoPath != null) {
+            final ref = FirebaseStorage.instance
+                .ref()
+                .child('templates/${DateTime.now().millisecondsSinceEpoch}.jpg');
+            await ref.putFile(File(_localPhotoPath!));
+            uploadedUrl = await ref.getDownloadURL();
+          }
           if (widget.templateId != null) {
             await repo.update(
               id: widget.templateId!,
@@ -114,6 +185,7 @@ class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
               description: _descController.text.trim(),
               stepTitles: titles,
               stepDescs: descs,
+              photoUrl: uploadedUrl,
             );
           } else {
             await repo.create(
@@ -121,6 +193,7 @@ class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
               description: _descController.text.trim(),
               stepTitles: titles,
               stepDescs: descs,
+              photoUrl: uploadedUrl,
             );
           }
         },
@@ -176,6 +249,20 @@ class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // ── 커버 이미지 ──
+                GestureDetector(
+                  onTap: () => _showImageSourceDialog(isKorean),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: _localPhotoPath != null
+                      ? Image.file(File(_localPhotoPath!), width: double.infinity, height: 180, fit: BoxFit.cover)
+                      : (_photoUrl != null && _photoUrl!.isNotEmpty)
+                        ? Image.network(_photoUrl!, width: double.infinity, height: 180, fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _coverPlaceholder(isKorean))
+                        : _coverPlaceholder(isKorean),
+                  ),
+                ),
+                const SizedBox(height: 14),
                 // ── 기본 정보 ──
                 GlassCard(
                   child: Column(

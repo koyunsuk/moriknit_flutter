@@ -320,6 +320,67 @@ class _NavTextButtonState extends State<_NavTextButton> {
   }
 }
 
+
+// 무료 배지 포함 네비게이션 버튼
+class _FreeNavButton extends StatefulWidget {
+  const _FreeNavButton({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  State<_FreeNavButton> createState() => _FreeNavButtonState();
+}
+
+class _FreeNavButtonState extends State<_FreeNavButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: _hovered ? C.lv.withValues(alpha: 0.09) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                widget.label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.1,
+                  color: _hovered ? C.lv : _kNavTextColor,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: C.lv.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '무료',
+                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: C.lv),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ?? 紐⑤컮???ㅻ쾭?덉씠 ?쒕줈???????????????????????????????????????????????????????
 
 class _MobileDrawerOverlay extends StatefulWidget {
@@ -401,7 +462,7 @@ class _MobileDrawerOverlayState extends State<_MobileDrawerOverlay>
                 child: ListView(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   children: [
-                    _mobileTile('서비스 소개', onTap: () => widget.onNavigate('/')),
+                    _mobileTile('서비스 소개', onTap: () => widget.onNavigate('/service')),
                     _mobileExpansion(
                       label: '기능',
                       expanded: _featuresExpanded,
@@ -417,6 +478,8 @@ class _MobileDrawerOverlayState extends State<_MobileDrawerOverlay>
                           )
                           .toList(),
                     ),
+                    _mobileFreeInfoTile('뜨개백과', Icons.menu_book_rounded, () => widget.onNavigate('/encyclopedia')),
+                    _mobileFreeInfoTile('클라스', Icons.school_rounded, () => widget.onNavigate('/classes')),
                     _mobileExpansion(
                       label: '게시판',
                       expanded: _boardExpanded,
@@ -473,6 +536,25 @@ class _MobileDrawerOverlayState extends State<_MobileDrawerOverlay>
           fontWeight: highlight ? FontWeight.w700 : FontWeight.w500,
           color: highlight ? C.lv : _kNavTextColor,
         ),
+      ),
+      onTap: onTap,
+    );
+  }
+
+  Widget _mobileFreeInfoTile(String label, IconData icon, VoidCallback onTap) {
+    return ListTile(
+      leading: Icon(icon, size: 20, color: C.lv),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+      title: Row(
+        children: [
+          Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: _kNavTextColor)),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+            decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(6)),
+            child: Text('무료', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: C.lv)),
+          ),
+        ],
       ),
       onTap: onTap,
     );
@@ -658,22 +740,27 @@ class _LandingTopBarState extends ConsumerState<LandingTopBar> with TickerProvid
                 child: Row(
                   children: [
                     // ?? 濡쒓퀬 ????????????????????????????????????????????????
-                    GestureDetector(
-                      onTap: () => context.go('/'),
-                      child: const Row(
-                        children: [
-                          MoriLogo(size: 32),
-                          SizedBox(width: 10),
-                          MoriKnitTitle(fontSize: 19),
-                        ],
+                    MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: () => context.go('/'),
+                        child: const Row(
+                          children: [
+                            MoriLogo(size: 32),
+                            SizedBox(width: 10),
+                            MoriKnitTitle(fontSize: 19),
+                          ],
+                        ),
                       ),
                     ),
 
                     if (isDesktop) ...[
                       const SizedBox(width: 32),
                       // ?? ?곗뒪?ы깙 ?ㅻ퉬寃뚯씠?????????????????????????????????
-                      _NavTextButton(label: '서비스 소개', onTap: () => context.go('/')),
+                      _NavTextButton(label: '서비스 소개', onTap: () => context.go('/service')),
                       _featureDropdown(context),
+                      _FreeNavButton(label: '뜨개백과', onTap: () => context.go('/encyclopedia')),
+                      _FreeNavButton(label: '클라스', onTap: () => context.go('/classes')),
                       _boardDropdown(context),
                       _NavTextButton(label: '요금제', onTap: () => context.go('/pricing')),
 

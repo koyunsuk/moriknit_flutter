@@ -23,7 +23,6 @@ import '../../../providers/fab_settings_provider.dart';
 import '../../../providers/theme_provider.dart';
 import '../../auth/domain/user_model.dart';
 import 'bug_report_sheet.dart';
-import 'photo_album_screen.dart';
 
 class MyPageScreen extends ConsumerWidget {
   const MyPageScreen({super.key});
@@ -452,24 +451,6 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                           ],
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // ── 3. 나의 작업실 ─────────────────────────────────────
-              SectionTitle(title: isKorean ? '🖼️ 나의 작업실' : '🖼️ My Studio'),
-              const SizedBox(height: 10),
-              GlassCard(
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: Icon(Icons.photo_library_outlined, color: C.lv),
-                      title: Text(isKorean ? '나의 사진 앨범' : 'My Photo Album'),
-                      subtitle: Text(isKorean ? '프로젝트·스와치 사진을 한눈에 모아봐요' : 'All your project & swatch photos'),
-                      trailing: Icon(Icons.chevron_right, color: C.mu),
-                      onTap: () => context.push('/my/photo-album'),
                     ),
                   ],
                 ),

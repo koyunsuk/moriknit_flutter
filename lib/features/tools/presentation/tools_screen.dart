@@ -22,6 +22,7 @@ import '../../ravelry/presentation/ravelry_screen.dart';
 import '../../pattern/data/pattern_repository.dart';
 import '../../project/presentation/widgets/project_start_sheet.dart';
 import '../../etsy/data/etsy_auth_provider.dart';
+import '../../dropbox/data/dropbox_auth_provider.dart';
 import '../../../providers/yarn_provider.dart';
 import '../../../providers/needle_provider.dart';
 import '../../../providers/accessory_provider.dart';
@@ -247,6 +248,14 @@ class ToolsScreen extends ConsumerWidget {
                       description: isKorean ? '프로젝트 시작 단계를 템플릿으로 관리해요' : 'Manage project steps as templates',
                       onTap: () => context.push(Routes.templateList),
                     ),
+                    const SizedBox(height: 10),
+                    _ToolCard(
+                      icon: Icons.photo_library_rounded,
+                      color: C.pk,
+                      title: isKorean ? '나의 작업 앨범' : 'My Work Album',
+                      description: isKorean ? '프로젝트·스와치 사진을 날짜별로 모아봐요' : 'Browse project & swatch photos by date',
+                      onTap: () => context.push(Routes.photoAlbum),
+                    ),
                     const SizedBox(height: 8),
                     Divider(color: C.bd, thickness: 1, height: 20),
 
@@ -369,6 +378,8 @@ class ToolsScreen extends ConsumerWidget {
                     _RavelryCard(isKorean: isKorean),
                     const SizedBox(height: 10),
                     _EtsyCard(isKorean: isKorean),
+                    const SizedBox(height: 10),
+                    _DropboxCard(isKorean: isKorean),
                   ],
                 ),
               ),
@@ -572,6 +583,53 @@ class _EtsyCard extends ConsumerWidget {
           ),
           if (auth.isLoggedIn)
             const Icon(Icons.check_circle_rounded, color: Color(0xFFF16521), size: 18)
+          else
+            Icon(Icons.chevron_right_rounded, color: C.mu),
+        ],
+      ),
+    );
+  }
+}
+
+class _DropboxCard extends ConsumerWidget {
+  const _DropboxCard({required this.isKorean});
+  final bool isKorean;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(dropboxAuthProvider);
+    return GlassCard(
+      onTap: () => context.push(Routes.dropbox),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: const Color(0xFF0061FF).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.cloud_rounded, color: Color(0xFF0061FF)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Dropbox', style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                Text(
+                  auth.isLoggedIn
+                      ? (isKorean ? '${auth.email ?? ''} 연결됨' : 'Connected as ${auth.email ?? ''}')
+                      : (isKorean ? '드롭박스 도안 파일을 앱에서 탐색해요' : 'Browse your Dropbox pattern files'),
+                  style: T.caption.copyWith(
+                      color: auth.isLoggedIn ? const Color(0xFF0061FF) : C.mu),
+                ),
+              ],
+            ),
+          ),
+          if (auth.isLoggedIn)
+            const Icon(Icons.check_circle_rounded, color: Color(0xFF0061FF), size: 18)
           else
             Icon(Icons.chevron_right_rounded, color: C.mu),
         ],

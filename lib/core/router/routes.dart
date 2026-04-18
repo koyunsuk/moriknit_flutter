@@ -37,6 +37,7 @@ class Routes {
   static const needleDetail = '/needle-detail/:id';
   static const ravelry = '/tools/ravelry';
   static const etsy = '/tools/etsy';
+  static const dropbox = '/tools/dropbox';
   static const toolsNeedleSize = '/tools/needle-size';
   static const toolsPatternConverter = '/tools/pattern-converter';
   static const toolsMyParsedPatterns = '/tools/my-parsed-patterns';

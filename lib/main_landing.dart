@@ -17,7 +17,9 @@ import 'features/landing/presentation/landing_board_screen.dart';
 import 'features/landing/presentation/landing_notice_screen.dart';
 import 'features/landing/presentation/landing_pricing_screen.dart';
 import 'features/landing/presentation/landing_screen.dart';
+import 'features/landing/presentation/landing_class_screen.dart';
 import 'features/landing/presentation/landing_encyclopedia_screen.dart';
+import 'features/landing/presentation/landing_service_screen.dart';
 import 'features/landing/presentation/landing_signup_screen.dart';
 import 'firebase_options.dart';
 import 'providers/theme_provider.dart';
@@ -66,6 +68,8 @@ final _landingRouter = GoRouter(
       },
     ),
     GoRoute(path: '/encyclopedia', builder: (_, _) => const LandingEncyclopediaScreen()),
+    GoRoute(path: '/service', builder: (_, _) => const LandingServiceScreen()),
+    GoRoute(path: '/classes', builder: (_, _) => const LandingClassListScreen()),
     GoRoute(path: '/notices', builder: (_, _) => const LandingNoticeListScreen()),
     GoRoute(path: '/notices/:id', builder: (_, s) => LandingNoticeDetailScreen(noticeId: s.pathParameters['id']!)),
     GoRoute(path: '/reviews', builder: (_, _) => const LandingBoardListScreen(boardType: 'review')),

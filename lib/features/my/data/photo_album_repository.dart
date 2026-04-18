@@ -11,12 +11,12 @@ class PhotoAlbumRepository {
   PhotoAlbumRepository({required FirebaseFirestore db, required this.uid})
       : _db = db;
 
-  /// projects/{uid}/items 의 coverPhotoUrl(또는 photoUrls[0]) 수집
+  /// users/{uid}/projects 의 coverPhotoUrl(또는 photoUrls[0]) 수집
   Future<List<PhotoAlbumItem>> fetchProjectPhotos() async {
     final snap = await _db
-        .collection('projects')
+        .collection('users')
         .doc(uid)
-        .collection('items')
+        .collection('projects')
         .get();
 
     final result = <PhotoAlbumItem>[];
@@ -49,12 +49,12 @@ class PhotoAlbumRepository {
     return result;
   }
 
-  /// swatches/{uid}/items 의 beforePhotoUrl / afterPhotoUrl 수집
+  /// users/{uid}/swatches 의 beforePhotoUrl / afterPhotoUrl 수집
   Future<List<PhotoAlbumItem>> fetchSwatchPhotos() async {
     final snap = await _db
-        .collection('swatches')
+        .collection('users')
         .doc(uid)
-        .collection('items')
+        .collection('swatches')
         .get();
 
     final result = <PhotoAlbumItem>[];

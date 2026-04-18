@@ -1,6 +1,10 @@
+import 'dart:io';
+
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/localization/app_language.dart';
@@ -39,6 +43,10 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
   List<AiSection> _sections = [];
   bool _loading = true;
 
+  // 커버 이미지
+  String? _coverImageUrl;   // 기존 네트워크 URL
+  String? _coverLocalPath;  // 새로 선택한 로컬 경로
+
   // 각 섹션 제목 컨트롤러 map
   final Map<String, TextEditingController> _sectionTitleCtrls = {};
   // 각 단계 instruction 컨트롤러 map
@@ -50,21 +58,50 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
     _init();
   }
 
+  Future<void> _pickCoverImage() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.photo_library_outlined, color: C.lv),
+              title: Text('갤러리에서 선택', style: T.body),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: Icon(Icons.camera_alt_outlined, color: C.lv),
+              title: Text('사진 촬영', style: T.body),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+    final picked = await ImagePicker().pickImage(source: source, imageQuality: 88);
+    if (picked == null) return;
+    setState(() => _coverLocalPath = picked.path);
+  }
+
   Future<void> _init() async {
     if (widget.unsavedChart != null) {
       final chart = widget.unsavedChart!;
       _titleCtrl.text = chart.title;
       _sections = chart.aiSections ?? [];
+      _coverImageUrl = chart.imageUrl.isNotEmpty ? chart.imageUrl : null;
       _buildControllers();
       if (mounted) setState(() => _loading = false);
     } else {
-      // patternId로 Firestore에서 로드
       final repo = PatternConverterRepository();
-      final stream = repo.watchAiPattern(widget.patternId!);
-      final chart = await stream.first;
+      final chart = await repo.watchAiPattern(widget.patternId!).first;
       if (chart != null) {
         _titleCtrl.text = chart.title;
         _sections = chart.aiSections ?? [];
+        _coverImageUrl = chart.imageUrl.isNotEmpty ? chart.imageUrl : null;
         _buildControllers();
       }
       if (mounted) setState(() => _loading = false);
@@ -154,45 +191,71 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
     try {
       await runWithMoriLoadingDialog<void>(
         context,
-        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        message: isKorean ? '한글로 변환 중입니다.' : 'Saving...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
         task: () async {
           final patternRepo = ref.read(patternRepositoryProvider);
           final converterRepo = PatternConverterRepository();
 
+          // 커버 이미지 업로드
+          String finalImageUrl = _coverImageUrl ?? '';
+          if (_coverLocalPath != null) {
+            final file = File(_coverLocalPath!);
+            final ref = FirebaseStorage.instance
+                .ref()
+                .child('users/patterns/cover_${DateTime.now().millisecondsSinceEpoch}.jpg');
+            await ref.putFile(file);
+            finalImageUrl = await ref.getDownloadURL();
+          }
+
           if (widget.unsavedChart != null) {
-            // 새 도안 저장
             final chart = widget.unsavedChart!.copyWith(
               title: title,
               aiSections: syncedSections,
+              imageUrl: finalImageUrl,
             );
             await patternRepo.save(chart);
-            // 저장 후 편집 화면을 종료하고 도안 목록으로 이동
-            if (mounted) {
-              context.go(Routes.toolsMyParsedPatterns);
-            }
           } else {
-            // 기존 도안 업데이트
             final patternId = widget.patternId!;
-            // 제목 업데이트 + 섹션 업데이트
             final existingChart = await patternRepo.get(patternId);
             if (existingChart != null) {
               await patternRepo.save(existingChart.copyWith(
                 title: title,
                 aiSections: syncedSections,
+                imageUrl: finalImageUrl,
               ));
             } else {
               await converterRepo.updateSections(patternId, syncedSections);
-            }
-            if (mounted) {
-              context.go(Routes.toolsMyParsedPatterns);
             }
           }
         },
       );
       if (!mounted) return;
-      showSavedSnackBar(messenger,
-          message: isKorean ? '저장됐어요.' : 'Saved.');
+      // 저장 완료 → 도안 라이브러리 이동 확인 다이얼로그
+      final goToLibrary = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(isKorean ? '저장 완료' : 'Saved', style: T.h3),
+          content: Text(
+            isKorean ? '도안 라이브러리로 이동합니다.' : 'Go to pattern library?',
+            style: T.body,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(isKorean ? '계속 편집' : 'Keep editing'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(isKorean ? '확인' : 'Confirm'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      if (goToLibrary == true) {
+        context.go(Routes.toolsMyParsedPatterns);
+      }
     } catch (e) {
       if (!mounted) return;
       showSaveErrorSnackBar(messenger, message: '$e');
@@ -240,6 +303,20 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // 커버 이미지
+                      SectionTitle(title: isKorean ? '커버 이미지' : 'Cover Image'),
+                      const SizedBox(height: 8),
+                      _CoverImagePicker(
+                        localPath: _coverLocalPath,
+                        networkUrl: _coverImageUrl,
+                        onTap: _pickCoverImage,
+                        onRemove: () => setState(() {
+                          _coverLocalPath = null;
+                          _coverImageUrl = null;
+                        }),
+                      ),
+                      const SizedBox(height: 20),
+
                       // 도안 제목
                       SectionTitle(
                           title: isKorean ? '도안 제목' : 'Pattern Title'),
@@ -461,6 +538,83 @@ class _EmptyPlaceholder extends StatelessWidget {
           ),
           const SizedBox(height: 16),
         ],
+      ),
+    );
+  }
+}
+
+class _CoverImagePicker extends StatelessWidget {
+  final String? localPath;
+  final String? networkUrl;
+  final VoidCallback onTap;
+  final VoidCallback onRemove;
+
+  const _CoverImagePicker({
+    required this.onTap,
+    required this.onRemove,
+    this.localPath,
+    this.networkUrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = localPath != null || networkUrl != null;
+    if (hasImage) {
+      return Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: localPath != null
+                ? Image.file(File(localPath!),
+                    height: 160, width: double.infinity, fit: BoxFit.cover)
+                : Image.network(networkUrl!,
+                    height: 160, width: double.infinity, fit: BoxFit.cover),
+          ),
+          Positioned(
+            top: 8, right: 8,
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: onTap,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                    child: const Icon(Icons.edit_rounded, color: Colors.white, size: 16),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: onRemove,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                    child: const Icon(Icons.close, color: Colors.white, size: 16),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 100,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: C.gx,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: C.lv.withValues(alpha: 0.4), width: 1.5),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.add_photo_alternate_outlined, color: C.lv, size: 32),
+            const SizedBox(height: 6),
+            Text('커버 이미지 추가', style: T.caption.copyWith(color: C.lv)),
+          ],
+        ),
       ),
     );
   }

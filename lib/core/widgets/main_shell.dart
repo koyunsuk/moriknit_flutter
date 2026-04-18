@@ -212,7 +212,11 @@ class _MainShellState extends ConsumerState<MainShell> with TickerProviderStateM
                 onPanEnd: (_) => ref.read(fabSettingsProvider.notifier).setBottomOffset(_fabBottom),
                 child: FloatingActionButton(
                   heroTag: 'global_back_fab',
-                  onPressed: () => Navigator.maybePop(context),
+                  onPressed: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    }
+                  },
                   backgroundColor: C.lm.withValues(alpha: backAlpha),
                   foregroundColor: const Color(0xFF1a3000),
                   elevation: 4,

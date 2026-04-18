@@ -235,3 +235,26 @@ flutter analyze lib/ 2>&1 | grep -E "^  error" | wc -l
 2. APK 빌드 전
 3. 웹 배포 전
 4. Firebase Functions 배포 전
+
+---
+
+## ⛔ 회귀 방지 — 확정된 구현 결정 (절대 되돌리지 말 것)
+
+> 이 목록의 결정은 **이미 구현 완료됨**. 새 세션·에이전트라도 아래 항목을 다시 추가하거나 원래대로 되돌리는 것 **절대 금지**.
+
+### 도안에디터 툴바 구조 (chart_toolbar.dart)
+- ⛔ 색상/기호 구분 탭(LayerTab 행) **삭제 완료** → 다시 추가 금지
+- ⛔ 툴바 2행 구조 → **1행 통합 완료** → 다시 2행으로 나누지 말 것
+- ✅ 색상 팔레트: 항상 고정 표시 (기호 모드와 동시 표시)
+- ✅ 기호 패널: 기본 표시 (DrawLayer.symbol 기본값)
+- ✅ 구조: [기능툴바 1행] → [색상팔레트] → [기호패널]
+
+### Firestore rules (firestore.rules)
+- ✅ **git 추적 시작됨** (2026-04-18) — 반드시 변경 후 커밋
+- ✅ `isAdmin()` 함수: `request.auth.token.email == 'koyunsuk@gmail.com'`
+- ✅ 어드민 쓰기 허용 컬렉션: `landing_notices`, `builtin_templates`, `encyclopedia`, `courses`, `app_config`, `ui_copy`
+- ⛔ `allow write: if false` 로 되돌리지 말 것 — 어드민 앱이 클라이언트 SDK 사용함
+
+### 퀵버튼 뒤로가기 (main_shell.dart)
+- ✅ `Navigator.maybePop` → `context.canPop() ? context.pop() : 없음` 으로 변경 완료
+- ⛔ `Navigator.maybePop(context)` 로 되돌리지 말 것

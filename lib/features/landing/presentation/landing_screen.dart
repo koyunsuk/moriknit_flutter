@@ -37,15 +37,22 @@ final _landingRecentUsersProvider = StreamProvider<List<String>>((ref) {
 // ── 통계 ──────────────────────────────────────────────────────────────────────
 final _landingStatsProvider = FutureProvider<Map<String, int>>((ref) async {
   final db = FirebaseFirestore.instance;
+  Future<int> safeCount(String col) async {
+    try {
+      return (await db.collection(col).limit(500).get()).size;
+    } catch (_) {
+      return 0;
+    }
+  }
   final results = await Future.wait([
-    db.collection('users').limit(500).get(),
-    db.collection('projects').limit(500).get(),
-    db.collection('market_items').limit(500).get(),
+    safeCount('users'),
+    safeCount('public_projects'),
+    safeCount('market_items'),
   ]);
   return {
-    'users': results[0].size,
-    'projects': results[1].size,
-    'market': results[2].size,
+    'users': results[0],
+    'projects': results[1],
+    'market': results[2],
   };
 });
 

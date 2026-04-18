@@ -31,6 +31,7 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="com.moriknit.app" android:host="oauth-callback" android:path="/ravelry"/>
             </intent-filter>
+            <!-- Dropbox OAuth: flutter_appauth가 RedirectUriReceiverActivity로 자동 처리 — 여기 추가 불필요 -->
         </activity>
         <meta-data
             android:name="flutterEmbedding"

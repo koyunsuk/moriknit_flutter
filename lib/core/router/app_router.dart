@@ -43,6 +43,7 @@ import 'package:moriknit_flutter/features/tools/presentation/tools_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/tool_memo_screen.dart';
 import 'package:moriknit_flutter/features/ravelry/presentation/ravelry_screen.dart';
 import 'package:moriknit_flutter/features/etsy/presentation/etsy_screen.dart';
+import 'package:moriknit_flutter/features/dropbox/presentation/dropbox_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/needle_size_converter_screen.dart';
 import 'package:moriknit_flutter/features/yarn/domain/yarn_model.dart';
 import 'package:moriknit_flutter/features/yarn/presentation/yarn_input_screen.dart';
@@ -151,6 +152,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(path: 'memo', pageBuilder: (_, _) => _fadePage(const ToolMemoScreen())),
               GoRoute(path: 'ravelry', pageBuilder: (_, _) => _fadePage(const RavelryScreen())),
               GoRoute(path: 'etsy', pageBuilder: (_, _) => _fadePage(const EtsyScreen())),
+              GoRoute(path: 'dropbox', pageBuilder: (_, _) => _fadePage(const DropboxScreen())),
               GoRoute(path: 'needle-size', pageBuilder: (_, _) => _fadePage(const NeedleSizeConverterScreen())),
               GoRoute(path: 'pattern-converter', pageBuilder: (_, _) => _fadePage(const PatternConverterScreen())),
               GoRoute(

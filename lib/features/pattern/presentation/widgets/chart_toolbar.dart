@@ -131,45 +131,32 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // 1행: 서술형 버튼 + 액션 버튼 (undo/redo/export/clear)
-        Padding(
-          padding: const EdgeInsets.fromLTRB(8, 6, 4, 2),
-          child: Row(
-            children: [
-              const Spacer(),
-              _IconBtn(
-                icon: Icons.article_outlined,
-                enabled: true,
-                onTap: onNarrative,
-                tooltip: '서술형 도안',
-              ),
-              if (onFitScreen != null)
-                _IconBtn(icon: Icons.fit_screen_rounded, enabled: true, onTap: onFitScreen!),
-              _IconBtn(icon: Icons.undo_rounded, enabled: canUndo, onTap: onUndo),
-              _IconBtn(icon: Icons.redo_rounded, enabled: canRedo, onTap: onRedo),
-              _IconBtn(icon: Icons.ios_share_rounded, enabled: true, onTap: onExport),
-              _IconBtn(icon: Icons.delete_outline_rounded, enabled: true, onTap: onClear, color: Colors.red.shade300),
-            ],
+    // 1단: 그리기 도구 + 액션 버튼 통합
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(6, 6, 4, 4),
+      child: Row(
+        children: [
+          for (final t in _tools)
+            _ToolBtn(
+              icon: t.icon,
+              active: activeTool == t.tool,
+              onTap: () => onToolChanged(t.tool),
+            ),
+          const VerticalDivider(width: 14, thickness: 1, indent: 6, endIndent: 6),
+          _IconBtn(
+            icon: Icons.article_outlined,
+            enabled: true,
+            onTap: onNarrative,
+            tooltip: '서술형 도안',
           ),
-        ),
-        // 2행: 그리기 도구
-        Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
-          child: Row(
-            children: [
-              for (final t in _tools)
-                _ToolBtn(
-                  icon: t.icon,
-                  active: activeTool == t.tool,
-                  onTap: () => onToolChanged(t.tool),
-                ),
-            ],
-          ),
-        ),
-      ],
+          if (onFitScreen != null)
+            _IconBtn(icon: Icons.fit_screen_rounded, enabled: true, onTap: onFitScreen!),
+          _IconBtn(icon: Icons.undo_rounded, enabled: canUndo, onTap: onUndo),
+          _IconBtn(icon: Icons.redo_rounded, enabled: canRedo, onTap: onRedo),
+          _IconBtn(icon: Icons.ios_share_rounded, enabled: true, onTap: onExport),
+          _IconBtn(icon: Icons.delete_outline_rounded, enabled: true, onTap: onClear, color: Colors.red.shade300),
+        ],
+      ),
     );
   }
 }
@@ -735,85 +722,19 @@ class _UnifiedPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 색상/기호 탭 삭제 — 색상 팔레트 항상 고정 표시 + 기호 패널 항상 표시
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
-          child: Row(
-            children: [
-              _LayerTab(
-                icon: Icons.palette_rounded,
-                label: '색상',
-                active: activeLayer == DrawLayer.color,
-                onTap: () => onLayerChanged(DrawLayer.color),
-              ),
-              const SizedBox(width: 6),
-              _LayerTab(
-                icon: Icons.grid_on_rounded,
-                label: '기호',
-                active: activeLayer == DrawLayer.symbol,
-                onTap: () => onLayerChanged(DrawLayer.symbol),
-              ),
-            ],
-          ),
-        ),
+        _ColorPanel(activeColor: activeColor, onColorChanged: onColorChanged),
         const Divider(height: 1),
-        if (activeLayer == DrawLayer.color)
-          _ColorPanel(activeColor: activeColor, onColorChanged: onColorChanged)
-        else
-          _SymbolPanel(
-            selectedCategory: selectedCategory,
-            activeSymbolId: activeSymbolId,
-            onCategoryChanged: onCategoryChanged,
-            onSymbolChanged: onSymbolChanged,
-          ),
+        _SymbolPanel(
+          selectedCategory: selectedCategory,
+          activeSymbolId: activeSymbolId,
+          onCategoryChanged: onCategoryChanged,
+          onSymbolChanged: onSymbolChanged,
+        ),
       ],
-    );
-  }
-}
-
-class _LayerTab extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  const _LayerTab({
-    required this.icon,
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: active ? C.lv : C.lvL,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: active ? C.lv : C.lv.withValues(alpha: 0.2)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: active ? Colors.white : C.tx2),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: active ? Colors.white : C.tx2,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

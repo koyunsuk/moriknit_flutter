@@ -9,11 +9,14 @@ import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../providers/auth_provider.dart';
 import '../../../providers/needle_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/swatch_provider.dart';
 import '../../../providers/yarn_provider.dart';
 import '../../my/domain/needle_model.dart';
+import '../../project/domain/project_model.dart';
+import '../../project/presentation/project_input_screen.dart';
 import '../domain/swatch_model.dart';
 import 'brand_search_sheet.dart';
 
@@ -393,7 +396,7 @@ class _SwatchDetailScreenState extends ConsumerState<SwatchDetailScreen> {
                                         children: [
                                           Icon(Icons.folder_outlined, size: 18, color: C.lv),
                                           const SizedBox(width: 8),
-                                          Text(isKorean ? '프로젝트 연결' : 'Link to project'),
+                                          Text(isKorean ? '기존 프로젝트에 연결' : 'Link to existing project'),
                                         ],
                                       ),
                                     ),
@@ -431,6 +434,27 @@ class _SwatchDetailScreenState extends ConsumerState<SwatchDetailScreen> {
           child: Text(t.failedToLoadSwatch(error.toString()), style: T.body.copyWith(color: C.og)),
         ),
       ),
+      bottomNavigationBar: _isEditing
+          ? null
+          : swatchAsync.whenOrNull(
+              data: (swatch) => swatch == null
+                  ? null
+                  : SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                        child: ElevatedButton.icon(
+                          onPressed: () => _startProjectWithSwatch(context, ref, swatch),
+                          icon: const Icon(Icons.play_circle_outline_rounded, size: 20),
+                          label: Text(isKorean ? '이 스와치로 프로젝트 시작하기' : 'Start Project with This Swatch'),
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 54),
+                            backgroundColor: C.lv,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
     );
   }
 
@@ -701,6 +725,16 @@ class _SwatchDetailScreenState extends ConsumerState<SwatchDetailScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  void _startProjectWithSwatch(BuildContext context, WidgetRef ref, SwatchModel swatch) {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
+    final initialProject = ProjectModel.empty(uid: user.uid).copyWith(swatchId: swatch.id);
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ProjectInputScreen(initialProject: initialProject)),
     );
   }
 
