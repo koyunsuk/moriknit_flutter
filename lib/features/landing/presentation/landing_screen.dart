@@ -16,7 +16,6 @@ import '../../community/domain/post_model.dart';
 import '../../encyclopedia/domain/encyclopedia_entry.dart';
 import '../../market/domain/market_item.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'landing_footer.dart';
 import 'landing_scaffold.dart';
 
 const double _landingMaxWidth = 1160;

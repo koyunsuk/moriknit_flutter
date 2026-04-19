@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../data/landing_board_repository.dart';
 import '../data/support_inquiry_repository.dart';
 import 'landing_scaffold.dart';
 

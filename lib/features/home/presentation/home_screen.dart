@@ -26,7 +26,6 @@ import '../../../providers/ui_copy_provider.dart';
 import '../../community/presentation/gallery_detail_page.dart';
 import '../../landing/data/landing_board_repository.dart';
 import '../../project/data/public_project_service.dart';
-import '../../project/presentation/project_input_screen.dart';
 import '../../project/presentation/widgets/project_start_sheet.dart';
 import '../../../providers/template_provider.dart';
 import '../domain/editorial_post.dart';
@@ -1682,43 +1681,6 @@ class _SubSectionLabel extends StatelessWidget {
 }
 
 // ── 공지사항 섹션 ──────────────────────────────────────────────
-class _NoticesPlaceholder extends StatelessWidget {
-  final bool isKorean;
-  const _NoticesPlaceholder({required this.isKorean});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 80,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: C.gx,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: C.bd, width: 0.5),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Icon(Icons.campaign_outlined, size: 14, color: C.mu),
-            const SizedBox(width: 8),
-            Text(
-              isKorean ? '등록된 공지사항이 없어요' : 'No notices yet',
-              style: T.caption.copyWith(color: C.mu),
-            ),
-          ]),
-          const SizedBox(height: 4),
-          Text(
-            isKorean ? '새로운 소식이 생기면 여기에 표시됩니다.' : 'New announcements will appear here.',
-            style: T.caption.copyWith(color: C.mu, fontSize: 11),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _HomeNoticesSection extends ConsumerStatefulWidget {
   final bool isKorean;
   const _HomeNoticesSection({required this.isKorean});
@@ -1993,13 +1955,3 @@ class _HomeNoticesSectionState extends ConsumerState<_HomeNoticesSection> {
 }
 
 
-class _HomeProjectIconPlaceholder extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 48, height: 48,
-      decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(10)),
-      child: Icon(Icons.folder_rounded, color: C.lv, size: 24),
-    );
-  }
-}

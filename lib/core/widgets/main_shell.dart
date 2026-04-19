@@ -201,6 +201,7 @@ class _MainShellState extends ConsumerState<MainShell> with TickerProviderStateM
                 ),
               ),
             // ── 오른쪽 퀵 사이드바 (드래그로 수직 위치 조정) ─────────────
+            if (!fabSettings.hideQuickButton)
             Positioned(
               right: 0,
               top: MediaQuery.of(context).padding.top + _sidebarTop,
@@ -271,7 +272,6 @@ class _QuickSidebar extends StatelessWidget {
   final double speedAlpha;
 
   static const double _panelW = 52.0;
-  static const double _peekW = 10.0;
   static const double _btnH = 50.0;
 
   @override
