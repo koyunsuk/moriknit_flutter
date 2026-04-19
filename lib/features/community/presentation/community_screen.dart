@@ -78,13 +78,6 @@ class CommunityScreen extends ConsumerWidget {
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 8)),
             SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _PublicProjectsSection(isKorean: isKorean),
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 8)),
-            SliverToBoxAdapter(
               child: SizedBox(
                 height: 36,
                 child: ListView.separated(

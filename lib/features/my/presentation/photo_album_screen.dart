@@ -35,7 +35,7 @@ class _PhotoAlbumScreenState extends ConsumerState<PhotoAlbumScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -64,6 +64,7 @@ class _PhotoAlbumScreenState extends ConsumerState<PhotoAlbumScreen>
           controller: _tabController,
           tabs: [
             Tab(text: isKorean ? '전체' : 'All'),
+            Tab(text: isKorean ? '프로젝트별' : 'By Project'),
             Tab(text: isKorean ? '날짜별' : 'By Date'),
           ],
           labelColor: C.lv,
@@ -79,6 +80,7 @@ class _PhotoAlbumScreenState extends ConsumerState<PhotoAlbumScreen>
               controller: _tabController,
               children: [
                 _AllView(items: items, isKorean: isKorean),
+                _ProjectGroupView(items: items, isKorean: isKorean),
                 _DateGroupView(items: items, isKorean: isKorean),
               ],
             ),
@@ -133,6 +135,232 @@ class _AllView extends StatelessWidget {
   }
 }
 
+// ── 프로젝트별 뷰 ────────────────────────────────────────────────────────────
+class _ProjectGroupView extends StatelessWidget {
+  final List<PhotoAlbumItem> items;
+  final bool isKorean;
+
+  const _ProjectGroupView({required this.items, required this.isKorean});
+
+  /// sourceType == 'project' 인 항목을 sourceId로 그룹화
+  List<_ProjectAlbum> _buildAlbums() {
+    final map = <String, _ProjectAlbum>{};
+    for (final item in items) {
+      if (item.sourceType != 'project') continue;
+      final key = item.sourceId;
+      if (!map.containsKey(key)) {
+        map[key] = _ProjectAlbum(
+          projectId: key,
+          projectName: item.sourceName,
+          photos: [],
+        );
+      }
+      map[key]!.photos.add(item);
+    }
+    // 각 앨범은 최신순 정렬 유지 (fetchAll에서 이미 정렬됨)
+    return map.values.toList()
+      ..sort((a, b) {
+        final aDate = a.photos.first.createdAt;
+        final bDate = b.photos.first.createdAt;
+        return bDate.compareTo(aDate);
+      });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final albums = _buildAlbums();
+
+    if (albums.isEmpty) {
+      return _EmptyPlaceholder(isKorean: isKorean);
+    }
+
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(12, 16, 12, 80),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 0.85,
+      ),
+      itemCount: albums.length,
+      itemBuilder: (context, index) {
+        final album = albums[index];
+        return _ProjectAlbumCard(
+          album: album,
+          isKorean: isKorean,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => _ProjectAlbumDetailScreen(
+                  album: album,
+                  isKorean: isKorean,
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _ProjectAlbum {
+  final String projectId;
+  final String projectName;
+  final List<PhotoAlbumItem> photos;
+
+  _ProjectAlbum({
+    required this.projectId,
+    required this.projectName,
+    required this.photos,
+  });
+}
+
+class _ProjectAlbumCard extends StatelessWidget {
+  final _ProjectAlbum album;
+  final bool isKorean;
+  final VoidCallback onTap;
+
+  const _ProjectAlbumCard({
+    required this.album,
+    required this.isKorean,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final thumb = album.photos.first;
+    final count = album.photos.length;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  CachedNetworkImage(
+                    imageUrl: thumb.imageUrl,
+                    fit: BoxFit.cover,
+                    errorWidget: (_, _, _) => Container(
+                      color: C.bd,
+                      child: Icon(Icons.folder_outlined, color: C.mu, size: 40),
+                    ),
+                  ),
+                  // 우하단 사진 수
+                  Positioned(
+                    right: 8,
+                    bottom: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '$count',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Icon(Icons.folder_outlined, size: 14, color: C.lv),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  album.projectName.isEmpty
+                      ? (isKorean ? '무제' : 'Untitled')
+                      : album.projectName,
+                  style: T.bodyBold.copyWith(fontSize: 13),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          Text(
+            isKorean ? '사진 $count장' : '$count photos',
+            style: T.caption.copyWith(color: C.tx2, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── 프로젝트 앨범 상세 화면 ───────────────────────────────────────────────────
+class _ProjectAlbumDetailScreen extends StatelessWidget {
+  final _ProjectAlbum album;
+  final bool isKorean;
+
+  const _ProjectAlbumDetailScreen({
+    required this.album,
+    required this.isKorean,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          album.projectName.isEmpty
+              ? (isKorean ? '무제' : 'Untitled')
+              : album.projectName,
+          style: T.h3,
+        ),
+        centerTitle: true,
+      ),
+      body: GridView.builder(
+        padding: const EdgeInsets.fromLTRB(2, 2, 2, 80),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          mainAxisSpacing: 2,
+          crossAxisSpacing: 2,
+        ),
+        itemCount: album.photos.length,
+        itemBuilder: (context, index) {
+          final item = album.photos[index];
+          return _AlbumCell(
+            item: item,
+            index: index,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => _PhotoViewerScreen(
+                    items: album.photos,
+                    initialIndex: index,
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
 // ── 날짜별 뷰 ────────────────────────────────────────────────────────────────
 class _DateGroupView extends StatelessWidget {
   final List<PhotoAlbumItem> items;
@@ -177,7 +405,6 @@ class _DateGroupView extends StatelessWidget {
             delegate: SliverChildBuilderDelegate(
               (context, index) {
                 final groupItems = grouped[date]!;
-                // 전체 items에서 해당 아이템의 인덱스 찾기 (뷰어에서 전체 목록 사용)
                 final item = groupItems[index];
                 final globalIndex = items.indexOf(item);
                 return _AlbumCell(
@@ -218,8 +445,39 @@ class _AlbumCell extends StatelessWidget {
 
   const _AlbumCell({required this.item, required this.index, required this.onTap});
 
+  IconData get _sourceIcon {
+    switch (item.sourceType) {
+      case 'project':
+        return Icons.folder_outlined;
+      case 'accessory':
+        return Icons.diamond_outlined;
+      default:
+        return Icons.grid_3x3_rounded;
+    }
+  }
+
+  String _displayLabel(bool isKorean) {
+    if (item.sourceType == 'project') return item.sourceName;
+    if (isKorean) {
+      switch (item.sourceType) {
+        case 'accessory': return '나의 악세사리';
+        case 'swatch': return '나의 스와치';
+        default: return item.sourceName;
+      }
+    } else {
+      switch (item.sourceType) {
+        case 'accessory': return 'My Accessories';
+        case 'swatch': return 'My Swatches';
+        default: return item.sourceName;
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final locale = Localizations.localeOf(context);
+    final isKorean = locale.languageCode == 'ko';
+
     return GestureDetector(
       onTap: onTap,
       child: Stack(
@@ -237,7 +495,7 @@ class _AlbumCell extends StatelessWidget {
               ),
             ),
           ),
-          // 하단 프로젝트명 오버레이
+          // 하단 출처명 오버레이
           Positioned(
             left: 0,
             right: 0,
@@ -257,16 +515,14 @@ class _AlbumCell extends StatelessWidget {
               child: Row(
                 children: [
                   Icon(
-                    item.sourceType == 'project'
-                        ? Icons.folder_outlined
-                        : Icons.grid_3x3_rounded,
+                    _sourceIcon,
                     size: 10,
                     color: Colors.white70,
                   ),
                   const SizedBox(width: 3),
                   Expanded(
                     child: Text(
-                      item.sourceName,
+                      _displayLabel(isKorean),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 9,
@@ -406,6 +662,28 @@ class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
     }
   }
 
+  String _sourceTypeLabel(PhotoAlbumItem item, bool isKorean) {
+    switch (item.sourceType) {
+      case 'project':
+        return isKorean ? '프로젝트' : 'Project';
+      case 'accessory':
+        return isKorean ? '악세사리' : 'Accessory';
+      default:
+        return isKorean ? '스와치' : 'Swatch';
+    }
+  }
+
+  IconData _sourceIcon(PhotoAlbumItem item) {
+    switch (item.sourceType) {
+      case 'project':
+        return Icons.folder_outlined;
+      case 'accessory':
+        return Icons.diamond_outlined;
+      default:
+        return Icons.grid_3x3_rounded;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isKorean = _isKorean;
@@ -481,17 +759,13 @@ class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
           child: Row(
             children: [
               Icon(
-                item.sourceType == 'project'
-                    ? Icons.folder_outlined
-                    : Icons.grid_3x3_rounded,
+                _sourceIcon(item),
                 size: 16,
                 color: Colors.white.withValues(alpha: 0.7),
               ),
               const SizedBox(width: 6),
               Text(
-                item.sourceType == 'project'
-                    ? (isKorean ? '프로젝트' : 'Project')
-                    : (isKorean ? '스와치' : 'Swatch'),
+                _sourceTypeLabel(item, isKorean),
                 style: T.caption.copyWith(
                     color: Colors.white.withValues(alpha: 0.7)),
               ),

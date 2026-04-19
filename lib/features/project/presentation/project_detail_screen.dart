@@ -999,11 +999,18 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
             // 실(Yarn) 카드
             Builder(builder: (context) {
               final yarns = ref.watch(yarnListProvider).valueOrNull ?? [];
+              // yarnIds(ID 참조)로 먼저 매칭, 없으면 brandName으로 fallback
               final matchedYarn = yarns.cast<YarnModel?>().firstWhere(
-                (y) => y != null && project.yarnBrandName.isNotEmpty && y.brandName == project.yarnBrandName,
-                orElse: () => null,
+                (y) => y != null && project.yarnIds.isNotEmpty && project.yarnIds.contains(y.id),
+                orElse: () => yarns.cast<YarnModel?>().firstWhere(
+                  (y) => y != null && project.yarnBrandName.isNotEmpty && y.brandName == project.yarnBrandName,
+                  orElse: () => null,
+                ),
               );
-              final hasYarn = project.yarnBrandName.isNotEmpty || project.yarnName.isNotEmpty;
+              // ID로 매칭된 실이 있으면 최신 데이터로 표시 이름 결정
+              final displayBrandName = matchedYarn?.brandName ?? project.yarnBrandName;
+              final displayYarnName = matchedYarn?.name ?? project.yarnName;
+              final hasYarn = displayBrandName.isNotEmpty || displayYarnName.isNotEmpty;
               return InkWell(
                 borderRadius: BorderRadius.circular(16),
                 onTap: isCardEditMode ? null : () {
@@ -1059,8 +1066,8 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _InfoRow(label: t.yarnBrand, value: project.yarnBrandName.isEmpty ? t.brandNotSet : project.yarnBrandName),
-                                _InfoRow(label: t.yarnName, value: project.yarnName.isEmpty ? t.notAvailable : project.yarnName),
+                                _InfoRow(label: t.yarnBrand, value: displayBrandName.isEmpty ? t.brandNotSet : displayBrandName),
+                                _InfoRow(label: t.yarnName, value: displayYarnName.isEmpty ? t.notAvailable : displayYarnName),
                               ],
                             ),
                           ),
@@ -1601,7 +1608,12 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
                     message: isKorean ? '연결하는 중입니다.' : 'Linking...',
                     subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
                     task: () => ref.read(projectRepositoryProvider).updateProject(
-                      widget.project.copyWith(yarnBrandName: yarn.brandName, yarnName: yarn.name, yarnColor: yarn.color),
+                      widget.project.copyWith(
+                        yarnBrandName: yarn.brandName,
+                        yarnName: yarn.name,
+                        yarnColor: yarn.color,
+                        yarnIds: yarn.id.isNotEmpty ? [yarn.id] : widget.project.yarnIds,
+                      ),
                     ),
                   );
                   if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '연결됐어요.' : 'Linked.');

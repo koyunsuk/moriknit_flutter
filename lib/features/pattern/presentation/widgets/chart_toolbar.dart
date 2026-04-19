@@ -132,9 +132,11 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 1단: 그리기 도구 + 액션 버튼 통합
-    return Padding(
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.fromLTRB(6, 6, 4, 4),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           for (final t in _tools)
             _ToolBtn(
@@ -243,10 +245,10 @@ class _ColorPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 72,
+      height: 56,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         children: [
           for (final color in _defaultColors)
             _ColorSwatch(
@@ -274,9 +276,9 @@ class _ColorSwatch extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 40,
-        height: 40,
-        margin: const EdgeInsets.symmetric(horizontal: 3),
+        width: 32,
+        height: 32,
+        margin: const EdgeInsets.symmetric(horizontal: 2),
         decoration: BoxDecoration(
           color: color,
           shape: BoxShape.circle,
@@ -303,9 +305,9 @@ class _CustomColorBtn extends StatelessWidget {
     return GestureDetector(
       onTap: () => _showColorPicker(context),
       child: Container(
-        width: 40,
-        height: 40,
-        margin: const EdgeInsets.symmetric(horizontal: 3),
+        width: 32,
+        height: 32,
+        margin: const EdgeInsets.symmetric(horizontal: 2),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: const SweepGradient(
@@ -526,7 +528,7 @@ class _SymbolPanel extends ConsumerWidget {
         const Divider(height: 1),
         // ── 기호 가로 스크롤 ────────────────────────────────
         SizedBox(
-          height: 84,
+          height: 68,
           child: symbols.isEmpty
               ? Center(
                   child: Text('더 많은 심볼이 계속 추가됩니다.', style: TextStyle(fontSize: 11, color: C.tx2)),
@@ -761,9 +763,9 @@ class _SymbolCell extends StatelessWidget {
         message: '${entry.name} ($label)',
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
-          width: 56,
-          height: 72,
-          margin: const EdgeInsets.symmetric(horizontal: 3),
+          width: 44,
+          height: 56,
+          margin: const EdgeInsets.symmetric(horizontal: 2),
           decoration: BoxDecoration(
             color: active ? C.lvL : Colors.white,
             borderRadius: BorderRadius.circular(8),
@@ -777,8 +779,8 @@ class _SymbolCell extends StatelessWidget {
             children: [
               SvgPicture.network(
                 entry.svgUrl,
-                width: 30,
-                height: 30,
+                width: 22,
+                height: 22,
                 fit: BoxFit.contain,
                 placeholderBuilder: (_) => Text(
                   label.length > 4 ? label.substring(0, 4) : label,

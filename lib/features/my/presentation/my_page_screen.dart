@@ -159,7 +159,7 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
     final isKorean = language.isKorean;
     final social = ref.watch(socialIntegrationsProvider).valueOrNull;
     final youtubeUrl = social?.youtubeUrl ?? 'https://www.youtube.com/@moriknit';
-    final instagramUrl = social?.instagramUrl ?? 'https://instagram.com/moriknit';
+    final instagramUrl = social?.instagramUrl ?? 'https://instagram.com/moriknit_official';
     final currentTheme = ref.watch(appThemeProvider);
     final swatchCount = ref.watch(swatchCountProvider);
     final projectCount = ref.watch(projectCountProvider);
@@ -623,7 +623,7 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                     ListTile(
                       leading: Icon(Icons.camera_alt_outlined, color: C.pkD),
                       title: const Text('Instagram'),
-                      subtitle: const Text('@moriknit'),
+                      subtitle: const Text('@moriknit_official'),
                       onTap: () => launchUrl(Uri.parse(instagramUrl), mode: LaunchMode.externalApplication),
                     ),
                     Divider(height: 1, color: Colors.grey.shade100),
@@ -650,6 +650,16 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                       leading: Icon(Icons.info_outline, color: C.mu),
                       title: Text(isKorean ? '버전 정보' : 'Version info'),
                       subtitle: const Text('1.0.0+1'),
+                      trailing: Icon(Icons.chevron_right, color: C.mu, size: 18),
+                      onTap: () => launchUrl(Uri.parse('https://www.moriknit.com'), mode: LaunchMode.externalApplication),
+                    ),
+                    Divider(height: 1, color: Colors.grey.shade100),
+                    ListTile(
+                      leading: Icon(Icons.help_outline_rounded, color: C.lv),
+                      title: Text(isKorean ? 'QnA / 자주 묻는 질문' : 'QnA / FAQ'),
+                      subtitle: Text(isKorean ? '궁금한 점을 확인해보세요' : 'Find answers to common questions'),
+                      trailing: Icon(Icons.chevron_right, color: C.mu, size: 18),
+                      onTap: () => showBugReportSheet(context, ref, user),
                     ),
                     Divider(height: 1, color: Colors.grey.shade100),
                     ListTile(

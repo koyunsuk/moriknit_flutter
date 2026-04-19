@@ -8,7 +8,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/localization/app_language.dart';
-import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -24,10 +23,14 @@ class AiPatternEditScreen extends ConsumerStatefulWidget {
   /// 이미 저장된 도안 ID (편집 재진입)
   final String? patternId;
 
+  /// 저장 완료 후 도안 라이브러리 이동 시 부모에서 처리할 콜백
+  final VoidCallback? onGoToLibrary;
+
   const AiPatternEditScreen({
     super.key,
     this.unsavedChart,
     this.patternId,
+    this.onGoToLibrary,
   }) : assert(
           unsavedChart != null || patternId != null,
           'unsavedChart or patternId must be provided',
@@ -254,7 +257,8 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
       );
       if (!mounted) return;
       if (goToLibrary == true) {
-        context.go(Routes.toolsMyParsedPatterns);
+        Navigator.of(context).pop();
+        widget.onGoToLibrary?.call();
       }
     } catch (e) {
       if (!mounted) return;

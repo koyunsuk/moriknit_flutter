@@ -1,11 +1,11 @@
-import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/localization/app_language.dart';
+import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -36,15 +36,14 @@ class _PatternConverterScreenState
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
-      withData: false,
-      withReadStream: false,
+      withData: true,
     );
     if (result == null || result.files.isEmpty) return;
 
     final picked = result.files.first;
-    if (picked.path == null) return;
+    final bytes = picked.bytes;
+    if (bytes == null) return;
 
-    final file = File(picked.path!);
     final fileName = picked.name;
     final ext = fileName.split('.').last.toLowerCase();
     final mimeType = ext == 'pdf'
@@ -54,9 +53,8 @@ class _PatternConverterScreenState
             : 'image/jpeg';
 
     // 파일 크기 제한 (10MB)
-    final fileSize = await file.length();
     const maxBytes = 10 * 1024 * 1024;
-    if (fileSize > maxBytes) {
+    if (bytes.length > maxBytes) {
       if (!mounted) return;
       showSaveErrorSnackBar(
         messenger,
@@ -77,7 +75,7 @@ class _PatternConverterScreenState
     try {
       final repo = PatternConverterRepository();
       final savedChart = await repo.uploadAndParse(
-        file: file,
+        bytes: bytes,
         fileName: fileName,
         mimeType: mimeType,
         onProgress: (p) {
@@ -122,7 +120,10 @@ class _PatternConverterScreenState
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => AiPatternEditScreen(unsavedChart: savedChart),
+          builder: (_) => AiPatternEditScreen(
+            unsavedChart: savedChart,
+            onGoToLibrary: () => context.push(Routes.toolsMyParsedPatterns),
+          ),
         ),
       );
     } catch (e) {

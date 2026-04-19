@@ -3757,6 +3757,7 @@ class _GitHubSettingsTabState extends State<_GitHubSettingsTab> {
   }
 }
 
+
 class _SocialSettingsTab extends ConsumerStatefulWidget {
   final bool isKorean;
   const _SocialSettingsTab({required this.isKorean});

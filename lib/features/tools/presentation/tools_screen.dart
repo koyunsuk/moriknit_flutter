@@ -15,7 +15,6 @@ import '../../../providers/swatch_provider.dart';
 import '../../../providers/ui_copy_provider.dart';
 import '../../course/domain/course_item.dart';
 import '../../project/domain/project_model.dart';
-import '../../yarn/presentation/yarn_list_screen.dart';
 import '../../ravelry/data/ravelry_auth_provider.dart';
 import '../../ravelry/data/ravelry_repository.dart';
 import '../../ravelry/presentation/ravelry_screen.dart';
@@ -275,7 +274,7 @@ class ToolsScreen extends ConsumerWidget {
                       color: C.pk,
                       title: isKorean ? '나의 실 라이브러리' : 'My Yarn Library',
                       description: isKorean ? '실 보유 현황과 실 정보를 관리해요' : 'Manage your yarn stash and info',
-                      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const YarnListScreen())),
+                      onTap: () => context.push('/yarn-list'),
                     ),
                     const SizedBox(height: 10),
                     _ToolCard(
@@ -323,9 +322,27 @@ class ToolsScreen extends ConsumerWidget {
                     _ToolCard(
                       icon: Icons.calculate_rounded,
                       color: C.pk,
-                      title: t.gaugeCalculator,
+                      title: isKorean ? 'AI 게이지 계산기' : 'AI Gauge Calculator',
                       description: t.gaugeHeaderSubtitle,
                       onTap: () => context.push(Routes.toolsGauge),
+                    ),
+                    const SizedBox(height: 10),
+                    _ToolCard(
+                      icon: Icons.auto_awesome_rounded,
+                      color: C.lv,
+                      title: isKorean ? 'AI 도안 변환기' : 'AI Pattern Converter',
+                      description: isKorean
+                          ? 'PDF·이미지 도안을 나의 도안 라이브러리로 변환'
+                          : 'Convert PDF/image patterns to your library',
+                      onTap: () => context.push(Routes.toolsPatternConverter),
+                    ),
+                    const SizedBox(height: 10),
+                    _ToolCard(
+                      icon: Icons.grid_on_rounded,
+                      color: C.lvD,
+                      title: isKorean ? 'AI 도안 에디터' : 'AI Pattern Editor',
+                      description: isKorean ? '새 도안을 바로 그려요' : 'Open editor directly',
+                      onTap: () => context.push(Routes.toolsPattern),
                     ),
                     const SizedBox(height: 10),
                     _ToolCard(
@@ -334,14 +351,6 @@ class ToolsScreen extends ConsumerWidget {
                       title: isKorean ? '바늘 크기 변환기' : 'Needle Size Converter',
                       description: isKorean ? '대바늘/코바늘 Metric ↔ US ↔ JP 변환' : 'Knitting & Crochet: Metric ↔ US ↔ JP',
                       onTap: () => context.push(Routes.toolsNeedleSize),
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.grid_on_rounded,
-                      color: C.lvD,
-                      title: isKorean ? '도안 에디터' : 'Pattern Editor',
-                      description: isKorean ? '새 도안을 바로 그려요' : 'Open editor directly',
-                      onTap: () => context.push(Routes.toolsPattern),
                     ),
                     const SizedBox(height: 10),
                     _ToolCard(
@@ -358,16 +367,6 @@ class ToolsScreen extends ConsumerWidget {
                       title: isKorean ? '스와치' : 'Swatch',
                       description: isKorean ? '게이지와 실 정보를 기록해요' : 'Record gauge and yarn info',
                       onTap: () => context.push(Routes.swatchList),
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.auto_awesome_rounded,
-                      color: C.lv,
-                      title: isKorean ? 'AI 도안 변환기' : 'AI Pattern Converter',
-                      description: isKorean
-                          ? 'PDF·이미지 도안을 나의 도안 라이브러리로 변환'
-                          : 'Convert PDF/image patterns to your library',
-                      onTap: () => context.push(Routes.toolsPatternConverter),
                     ),
                     const SizedBox(height: 8),
                     Divider(color: C.bd, thickness: 1, height: 20),
@@ -740,7 +739,7 @@ class _AssetSummaryCard extends ConsumerWidget {
                 color: C.pk,
                 label: isKorean ? '실' : 'Yarn',
                 value: '$yarnCount',
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const YarnListScreen())),
+                onTap: () => context.push('/yarn-list'),
               )),
               const SizedBox(width: 10),
               Expanded(child: _AssetCell(
@@ -940,7 +939,7 @@ class _MoriRavelryCapsuleCard extends ConsumerWidget {
                 ),
                 Container(width: 1, height: 28, color: C.bd, margin: const EdgeInsets.symmetric(horizontal: 10)),
                 Expanded(child: GestureDetector(
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const YarnListScreen())),
+                  onTap: () => context.push('/yarn-list'),
                   child: _CapsuleStat(label: isKorean ? '실' : 'Yarn', value: '$yarnCount'),
                 )),
                 Container(width: 1, height: 28, color: C.bd, margin: const EdgeInsets.symmetric(horizontal: 10)),

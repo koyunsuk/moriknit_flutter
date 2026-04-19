@@ -14,20 +14,10 @@ import '../../../core/utils/web_utils_stub.dart'
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 
-const String _mainAppUrl = 'https://moriknit-ceea9.web.app';
+const String _mainAppUrl = 'https://app.moriknit.com';
 
 const _kNavTextColor = Color(0xFF1A1A2E);
 const _kDesktopBreakpoint = 900.0;
-
-// ?? ?≫떚鍮꾪떚 硫붿떆吏 ???????????????????????????????????????????????????????????
-const _kActMessages = [
-  '누군가가 방금 모리니트를 시작했어요.',
-  '새 프로젝트 기록이 추가됐어요.',
-  '뜨개 기록이 업데이트됐어요.',
-  '새 도안이 공유됐어요.',
-  '지금 많은 메이커들이 함께하고 있어요.',
-  '오늘도 즐거운 뜨개 시간 보내세요.',
-];
 
 // ?? 硫붾돱 ?곗씠?????????????????????????????????????????????????????????????????
 
@@ -615,20 +605,12 @@ class _LandingTopBarState extends ConsumerState<LandingTopBar> with TickerProvid
   final _particles = <SparkleParticle>[];
   Timer? _sparkleTimer;
 
-  int _actIndex = 0;
-  Timer? _actTimer;
-
   OverlayEntry? _mobileOverlay;
 
   @override
   void initState() {
     super.initState();
     _sparkleTimer = Timer.periodic(const Duration(milliseconds: 700), (_) => _spawnParticle());
-    _actTimer = Timer.periodic(const Duration(seconds: 4), (_) {
-      if (mounted) {
-        setState(() => _actIndex = (_actIndex + 1) % _kActMessages.length);
-      }
-    });
   }
 
   void _spawnParticle() {
@@ -651,7 +633,6 @@ class _LandingTopBarState extends ConsumerState<LandingTopBar> with TickerProvid
   @override
   void dispose() {
     _sparkleTimer?.cancel();
-    _actTimer?.cancel();
     for (final p in _particles) {
       p.controller.dispose();
     }
@@ -764,28 +745,8 @@ class _LandingTopBarState extends ConsumerState<LandingTopBar> with TickerProvid
                       _boardDropdown(context),
                       _NavTextButton(label: '요금제', onTap: () => context.go('/pricing')),
 
-                      // ?? ?≫떚鍮꾪떚 ?띿뒪??(?몃씪?? 以묒븰) ???????????????????
-                      Expanded(
-                        child: Center(
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 400),
-                            transitionBuilder: (child, animation) => FadeTransition(
-                              opacity: animation,
-                              child: child,
-                            ),
-                            child: Text(
-                              _kActMessages[_actIndex],
-                              key: ValueKey(_actIndex),
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: C.lv.withValues(alpha: 0.75),
-                                letterSpacing: 0.1,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                      const Spacer(),
+
 
                       // ?? ?곗뒪?ы깙 ?곗륫 踰꾪듉 ??????????????????????????????
                       if (isLoggedIn) ...[

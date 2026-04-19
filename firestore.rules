@@ -163,6 +163,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── 도안 기호 (공개 읽기, 관리자만 쓰기) ──────────────────────────────────────
+    match /knit_symbols/{symbolId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // ── 랜딩 게시판 (공개 읽기, 로그인 후 쓰기) ─────────────────────────────────
     match /landing_boards/{boardType}/posts/{postId} {
       allow read: if true;
@@ -184,6 +190,29 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── 어드민 사용자 데이터 CollectionGroup 읽기 ────────────────────────────────
+    match /{path=**}/swatches/{docId} {
+      allow read: if isAdmin();
+    }
+    match /{path=**}/pattern_charts/{docId} {
+      allow read: if isAdmin();
+    }
+    match /{path=**}/templates/{docId} {
+      allow read: if isAdmin();
+    }
+    match /{path=**}/projects/{docId} {
+      allow read: if isAdmin();
+    }
+    match /{path=**}/counters/{docId} {
+      allow read: if isAdmin();
+    }
+    match /{path=**}/steps/{docId} {
+      allow read: if isAdmin();
+    }
+    match /{path=**}/market_purchases/{docId} {
+      allow read: if isAdmin();
+    }
+
     // ── 뉴스레터 구독 (비로그인 쓰기 허용) ──────────────────────────────────────
     match /landing_subscriptions/{docId} {
       allow create: if true;
@@ -199,7 +228,7 @@ service cloud.firestore {
     // ── DM 채팅 (참여자만) ────────────────────────────────────────────────────
     match /dm_rooms/{roomId} {
       allow read, write: if isLoggedIn()
-        && (resource == null || request.auth.uid in resource.data.participantIds);
+        && (resource == null || request.auth.uid in resource.data.participants);
 
       match /messages/{messageId} {
         allow read, write: if isLoggedIn();

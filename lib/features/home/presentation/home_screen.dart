@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/localization/app_language.dart';
@@ -1740,8 +1741,14 @@ class _HomeNoticesSectionState extends ConsumerState<_HomeNoticesSection> {
       if (notice.imageUrl.isNotEmpty) notice.imageUrl,
       ...notice.imageUrls.where((u) => u != notice.imageUrl && u.isNotEmpty),
     ];
-    final fileUrls = notice.fileUrls;
-    final fileNames = notice.fileNames;
+    // 단건 fileUrl + 복수 fileUrls 통합
+    final fileUrls = <String>[
+      if (notice.fileUrl.isNotEmpty) notice.fileUrl,
+      ...notice.fileUrls.where((u) => u != notice.fileUrl && u.isNotEmpty),
+    ];
+    final fileNames = notice.fileNames.isNotEmpty
+        ? notice.fileNames
+        : (notice.fileName.isNotEmpty ? [notice.fileName] : <String>[]);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1790,11 +1797,32 @@ class _HomeNoticesSectionState extends ConsumerState<_HomeNoticesSection> {
                         padding: const EdgeInsets.only(bottom: 10),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(10),
-                          child: Image.network(
-                            url,
+                          child: CachedNetworkImage(
+                            imageUrl: url,
                             width: double.infinity,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                            placeholder: (_, __) => Container(
+                              width: double.infinity,
+                              height: 180,
+                              color: C.bd.withValues(alpha: 0.3),
+                              child: Center(child: CircularProgressIndicator(color: C.lv, strokeWidth: 2)),
+                            ),
+                            errorWidget: (_, _, _) => Container(
+                              width: double.infinity,
+                              height: 100,
+                              decoration: BoxDecoration(
+                                color: C.bd.withValues(alpha: 0.3),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.broken_image_outlined, color: C.mu, size: 28),
+                                  const SizedBox(height: 4),
+                                  Text('이미지를 불러올 수 없어요', style: T.caption.copyWith(color: C.mu)),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       )),
@@ -1809,22 +1837,40 @@ class _HomeNoticesSectionState extends ConsumerState<_HomeNoticesSection> {
                       Divider(color: C.bd, thickness: 0.5),
                       const SizedBox(height: 8),
                       ...List.generate(fileUrls.length, (i) {
-                        final name = i < fileNames.length ? fileNames[i] : '첨부파일 ${i + 1}';
+                        final name = i < fileNames.length && fileNames[i].isNotEmpty
+                            ? fileNames[i]
+                            : '첨부파일 ${i + 1}';
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 6),
-                          child: Row(
-                            children: [
-                              Icon(Icons.attach_file, size: 16, color: C.lv),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  name,
-                                  style: T.caption.copyWith(color: C.lv),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                          child: InkWell(
+                            onTap: () => launchUrl(
+                              Uri.parse(fileUrls[i]),
+                              mode: LaunchMode.externalApplication,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: C.lv.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: C.lv.withValues(alpha: 0.2)),
                               ),
-                            ],
+                              child: Row(
+                                children: [
+                                  Icon(Icons.insert_drive_file_rounded, size: 16, color: C.lv),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      name,
+                                      style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w600),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  Icon(Icons.download_rounded, size: 14, color: C.lv),
+                                ],
+                              ),
+                            ),
                           ),
                         );
                       }),
@@ -1853,10 +1899,34 @@ class _HomeNoticesSectionState extends ConsumerState<_HomeNoticesSection> {
           error: (e, _) => const SizedBox.shrink(),
           data: (rawNotices) {
             final notices = rawNotices.where((n) => n.title.isNotEmpty).toList();
-            if (notices.isEmpty) return const SizedBox.shrink();
+            if (notices.isEmpty) {
+              return Column(
+                children: [
+                  for (int i = 0; i < 2; i++)
+                    Container(
+                      height: 52,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: C.bd.withValues(alpha: 0.25),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: C.bd.withValues(alpha: 0.4)),
+                      ),
+                    ),
+                  const SizedBox(height: 4),
+                  Text(
+                    isKorean ? '등록된 공지사항이 없어요' : 'No notices yet',
+                    style: T.caption.copyWith(color: C.mu),
+                  ),
+                ],
+              );
+            }
             return Column(
               children: [
                 ...notices.map((notice) {
+                  final hasFile = notice.fileUrl.isNotEmpty || notice.fileUrls.isNotEmpty;
+                  final fileName = notice.fileName.isNotEmpty
+                      ? notice.fileName
+                      : (notice.fileNames.isNotEmpty ? notice.fileNames.first : '첨부파일');
                   return Card(
                     margin: const EdgeInsets.only(bottom: 8),
                     elevation: 1,
@@ -1866,27 +1936,47 @@ class _HomeNoticesSectionState extends ConsumerState<_HomeNoticesSection> {
                       onTap: () => _showNoticeDetailPost(context, notice),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        child: Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (notice.isPinned) ...[
-                              Icon(Icons.push_pin_rounded, size: 14, color: C.lv),
-                              const SizedBox(width: 6),
-                            ],
-                            Expanded(
-                              child: Text(
-                                notice.title,
-                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                            Row(
+                              children: [
+                                if (notice.isPinned) ...[
+                                  Icon(Icons.push_pin_rounded, size: 14, color: C.lv),
+                                  const SizedBox(width: 6),
+                                ],
+                                Expanded(
+                                  child: Text(
+                                    notice.title,
+                                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _formatDateDt(notice.createdAt),
+                                  style: TextStyle(fontSize: 12, color: C.mu),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(Icons.chevron_right_rounded, size: 16, color: C.mu),
+                              ],
+                            ),
+                            if (hasFile) ...[
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Icon(Icons.attach_file_rounded, size: 12, color: C.lv),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '첨부파일: $fileName',
+                                    style: T.caption.copyWith(color: C.lv, fontSize: 11),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              _formatDateDt(notice.createdAt),
-                              style: TextStyle(fontSize: 12, color: C.mu),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(Icons.chevron_right_rounded, size: 16, color: C.mu),
+                            ],
                           ],
                         ),
                       ),

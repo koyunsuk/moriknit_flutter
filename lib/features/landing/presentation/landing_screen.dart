@@ -35,24 +35,34 @@ final _landingRecentUsersProvider = StreamProvider<List<String>>((ref) {
 });
 
 // ── 통계 ──────────────────────────────────────────────────────────────────────
+// - statsUsers: Cloud Function(updateLandingStats)이 매일 KST 자정 집계 → app_config/landing_stats
+// - statsProjects / statsMarket: public 컬렉션 실시간 AggregateQuery
 final _landingStatsProvider = FutureProvider<Map<String, int>>((ref) async {
   final db = FirebaseFirestore.instance;
+
   Future<int> safeCount(String col) async {
     try {
-      return (await db.collection(col).limit(500).get()).size;
+      final snap = await db.collection(col).count().get();
+      return snap.count ?? 0;
     } catch (_) {
       return 0;
     }
   }
+
+  // public 컬렉션은 직접 집계, 회원수는 Cloud Function이 저장한 캐시 사용
   final results = await Future.wait([
-    safeCount('users'),
     safeCount('public_projects'),
     safeCount('market_items'),
+    db.collection('app_config').doc('landing_stats').get().then((doc) {
+      if (doc.exists) return (doc.data()?['statsUsers'] as num?)?.toInt() ?? 0;
+      return 0;
+    }).catchError((_) => 0),
   ]);
+
   return {
-    'users': results[0],
-    'projects': results[1],
-    'market': results[2],
+    'users': results[2],
+    'projects': results[0],
+    'market': results[1],
   };
 });
 

@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -25,7 +25,7 @@ class PatternConverterRepository {
 
   /// 파일을 Storage에 업로드 후 Cloud Function으로 파싱, pattern_charts에 저장
   Future<PatternChart> uploadAndParse({
-    required File file,
+    required Uint8List bytes,
     required String fileName,
     required String mimeType,
     void Function(double)? onProgress,
@@ -33,8 +33,8 @@ class PatternConverterRepository {
     // 1. Firebase Storage 업로드
     final storagePath = 'users/$_uid/pattern_sources/${DateTime.now().millisecondsSinceEpoch}_$fileName';
     final ref = _storage.ref(storagePath);
-    final uploadTask = ref.putFile(
-      file,
+    final uploadTask = ref.putData(
+      bytes,
       SettableMetadata(contentType: mimeType),
     );
 

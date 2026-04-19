@@ -11,7 +11,7 @@ class PhotoAlbumRepository {
   PhotoAlbumRepository({required FirebaseFirestore db, required this.uid})
       : _db = db;
 
-  /// users/{uid}/projects 의 coverPhotoUrl(또는 photoUrls[0]) 수집
+  /// users/{uid}/projects 의 coverPhotoUrl + photoUrls 전부 수집
   Future<List<PhotoAlbumItem>> fetchProjectPhotos() async {
     final snap = await _db
         .collection('users')
@@ -22,28 +22,28 @@ class PhotoAlbumRepository {
     final result = <PhotoAlbumItem>[];
     for (final doc in snap.docs) {
       final data = doc.data();
+      final projectName = (data['title'] as String?) ?? '';
+      final createdAt = _parseDate(data['createdAt']);
       final cover = (data['coverPhotoUrl'] as String?) ?? '';
       final photoUrls = (data['photoUrls'] as List?)?.cast<String>() ?? [];
 
-      // coverPhotoUrl 우선, 없으면 photoUrls 전부 추가
-      if (cover.isNotEmpty) {
-        result.add(PhotoAlbumItem(
-          imageUrl: cover,
-          sourceType: 'project',
-          sourceName: (data['title'] as String?) ?? '',
-          createdAt: _parseDate(data['createdAt']),
-        ));
-      } else {
-        for (final url in photoUrls) {
-          if (url.isNotEmpty) {
-            result.add(PhotoAlbumItem(
-              imageUrl: url,
-              sourceType: 'project',
-              sourceName: (data['title'] as String?) ?? '',
-              createdAt: _parseDate(data['createdAt']),
-            ));
-          }
+      final seen = <String>{};
+
+      void add(String url) {
+        if (url.isNotEmpty && seen.add(url)) {
+          result.add(PhotoAlbumItem(
+            imageUrl: url,
+            sourceType: 'project',
+            sourceName: projectName,
+            sourceId: doc.id,
+            createdAt: createdAt,
+          ));
         }
+      }
+
+      if (cover.isNotEmpty) add(cover);
+      for (final url in photoUrls) {
+        add(url);
       }
     }
     return result;
@@ -70,9 +70,35 @@ class PhotoAlbumRepository {
             imageUrl: url,
             sourceType: 'swatch',
             sourceName: name,
+            sourceId: doc.id,
             createdAt: createdAt,
           ));
         }
+      }
+    }
+    return result;
+  }
+
+  /// users/{uid}/accessories 의 photoUrl 수집
+  Future<List<PhotoAlbumItem>> fetchAccessoryPhotos() async {
+    final snap = await _db
+        .collection('users')
+        .doc(uid)
+        .collection('myAccessories')
+        .get();
+
+    final result = <PhotoAlbumItem>[];
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      final url = (data['photoUrl'] as String?) ?? '';
+      if (url.isNotEmpty) {
+        result.add(PhotoAlbumItem(
+          imageUrl: url,
+          sourceType: 'accessory',
+          sourceName: (data['name'] as String?) ?? '',
+          sourceId: doc.id,
+          createdAt: _parseDate(data['createdAt']),
+        ));
       }
     }
     return result;
@@ -83,8 +109,9 @@ class PhotoAlbumRepository {
     final results = await Future.wait([
       fetchProjectPhotos(),
       fetchSwatchPhotos(),
+      fetchAccessoryPhotos(),
     ]);
-    final all = [...results[0], ...results[1]];
+    final all = [...results[0], ...results[1], ...results[2]];
     all.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return all;
   }

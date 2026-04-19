@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const admin = require('firebase-admin');
 const { onRequest, onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onDocumentCreated, onDocumentDeleted } = require('firebase-functions/v2/firestore');
+const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { defineSecret } = require('firebase-functions/params');
 const Anthropic = require('@anthropic-ai/sdk');
 
@@ -656,5 +657,32 @@ Important rules:
     }
 
     return { result: parsed };
+  },
+);
+
+
+// ──────────────────────────────────────────────────────────────────────────────
+// updateLandingStats — 랜딩 통계 자동 집계 (매일 자정 KST)
+// users / public_projects / market_items 컬렉션 카운트 → app_config/landing_stats
+// ──────────────────────────────────────────────────────────────────────────────
+exports.updateLandingStats = onSchedule(
+  {
+    schedule: '0 15 * * *', // UTC 15:00 = KST 자정
+    region: REGION,
+    timeZone: 'Asia/Seoul',
+  },
+  async () => {
+    const [usersSnap, projectsSnap, marketSnap] = await Promise.all([
+      db.collection('users').count().get(),
+      db.collection('public_projects').count().get(),
+      db.collection('market_items').count().get(),
+    ]);
+    await db.collection('app_config').doc('landing_stats').set({
+      statsUsers: usersSnap.data().count,
+      statsProjects: projectsSnap.data().count,
+      statsMarket: marketSnap.data().count,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    console.log(`Landing stats updated: users=${usersSnap.data().count}, projects=${projectsSnap.data().count}, market=${marketSnap.data().count}`);
   },
 );

@@ -13,7 +13,7 @@ import '../../../core/utils/web_utils_stub.dart'
 import '../../../providers/auth_provider.dart';
 import 'landing_scaffold.dart';
 
-const String _mainAppUrl = 'https://moriknit-ceea9.web.app';
+const String _mainAppUrl = 'https://app.moriknit.com';
 
 class LandingSignupScreen extends ConsumerStatefulWidget {
   const LandingSignupScreen({super.key, this.source});

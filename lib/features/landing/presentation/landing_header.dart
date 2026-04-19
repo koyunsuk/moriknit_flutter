@@ -146,8 +146,8 @@ class LandingHeader extends StatelessWidget {
     return const Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        LandingTopBar(),
         LandingActivityStrip(),
+        LandingTopBar(),
         LandingPromoBanner(),
       ],
     );

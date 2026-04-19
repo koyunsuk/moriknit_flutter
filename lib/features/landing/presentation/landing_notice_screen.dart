@@ -121,6 +121,11 @@ class _NoticeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dateStr = DateFormat('yyyy.MM.dd').format(notice.createdAt);
+    final hasFile = notice.fileUrl.isNotEmpty || notice.fileUrls.isNotEmpty;
+    final fileName = notice.fileName.isNotEmpty
+        ? notice.fileName
+        : (notice.fileNames.isNotEmpty ? notice.fileNames.first : '첨부파일');
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -155,56 +160,78 @@ class _NoticeCard extends StatelessWidget {
                   width: double.infinity,
                   height: 180,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                  errorBuilder: (_, _, _) => Container(
+                    height: 60,
+                    color: const Color(0xFFF5F0FF),
+                    child: const Center(
+                      child: Icon(Icons.broken_image_outlined, color: Color(0xFF8B5CF6), size: 24),
+                    ),
+                  ),
                 ),
               ),
             Padding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: Row(
-            children: [
-              if (notice.isPinned) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF8B5CF6).withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(6),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      if (notice.isPinned) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF8B5CF6).withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            '📌 공지',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF8B5CF6)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                      ],
+                      Expanded(
+                        child: Text(
+                          notice.title,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: notice.isPinned ? FontWeight.w700 : FontWeight.w500,
+                            color: const Color(0xFF1E1B4B),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        dateStr,
+                        style: const TextStyle(fontSize: 13, color: Color(0xFF7C5CBF)),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.chevron_right_rounded, size: 20, color: Color(0xFF8B5CF6)),
+                    ],
                   ),
-                  child: const Text(
-                    '📌 공지',
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF8B5CF6)),
-                  ),
-                ),
-                const SizedBox(width: 12),
-              ],
-              Expanded(
-                child: Text(
-                  notice.title,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: notice.isPinned
-                        ? FontWeight.w700
-                        : FontWeight.w500,
-                    color: const Color(0xFF1E1B4B),
-                  ),
-                ),
+                  if (hasFile) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.attach_file_rounded, size: 13, color: Color(0xFF8B5CF6)),
+                        const SizedBox(width: 4),
+                        Text(
+                          '첨부파일: $fileName',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF8B5CF6),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
               ),
-              const SizedBox(width: 12),
-              Text(
-                dateStr,
-                style: const TextStyle(
-                    fontSize: 13, color: Color(0xFF7C5CBF)),
-              ),
-              const SizedBox(width: 8),
-              const Icon(Icons.chevron_right_rounded,
-                  size: 20, color: Color(0xFF8B5CF6)),
-            ],
-          ),
-        ),
+            ),
           ],
         ),
       ),
@@ -644,7 +671,23 @@ class _NoticeImages extends StatelessWidget {
                   ),
                 );
               },
-              errorBuilder: (context, error, stack) => const SizedBox.shrink(),
+              errorBuilder: (context, error, stack) => Container(
+                width: double.infinity,
+                height: 120,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F0FF),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFDDD6FE)),
+                ),
+                child: const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.broken_image_outlined, color: Color(0xFF8B5CF6), size: 32),
+                    SizedBox(height: 8),
+                    Text('이미지를 불러올 수 없어요', style: TextStyle(color: Color(0xFF7C5CBF), fontSize: 13)),
+                  ],
+                ),
+              ),
             ),
           ),
         );

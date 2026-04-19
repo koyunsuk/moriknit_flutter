@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 const String _kYoutubeFallback = 'https://www.youtube.com/@moriknit';
-const String _kInstagramFallback = 'https://instagram.com/moriknit';
+const String _kInstagramFallback = 'https://instagram.com/moriknit_official';
 const String _kBlogFallback = 'https://blog.naver.com/moriknit';
 
 class SocialIntegrations {

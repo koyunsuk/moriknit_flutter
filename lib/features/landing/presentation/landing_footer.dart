@@ -15,7 +15,7 @@ class LandingFooter extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final social = ref.watch(socialIntegrationsProvider).valueOrNull;
     final youtubeUrl = social?.youtubeUrl ?? 'https://www.youtube.com/@moriknit';
-    final instagramUrl = social?.instagramUrl ?? 'https://instagram.com/moriknit';
+    final instagramUrl = social?.instagramUrl ?? 'https://instagram.com/moriknit_official';
     final blogUrl = social?.blogUrl ?? 'https://blog.naver.com/moriknit';
     return Container(
       color: const Color(0xFF1A1A2E),
