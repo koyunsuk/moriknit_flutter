@@ -406,24 +406,24 @@ class C {
     bd2: Color(0x301E3A8A),
   );
 
-  // 모리모노 — 순백 배경 + 그레이 헤더 (모노크롬)
+  // 모리모노 — 순백 배경 + 검정 포인트 (극명한 흑백 대비)
   static const _Palette _moriMono = _Palette(
-    pk: Color(0xFF374151),   // gray-700
-    pkD: Color(0xFF1F2937),
-    pkL: Color(0x20374151),
-    lv: Color(0xFF6B7280),   // gray-500
-    lvD: Color(0xFF4B5563),
-    lvL: Color(0x206B7280),
-    lm: Color(0xFFD1D5DB),   // gray-300
+    pk: Color(0xFF111111),   // 거의 검정 (포인트)
+    pkD: Color(0xFF000000),  // 순검정 (강조)
+    pkL: Color(0x20111111),
+    lv: Color(0xFF333333),   // 다크 그레이
+    lvD: Color(0xFF111111),
+    lvL: Color(0x20333333),
+    lm: Color(0xFFE5E7EB),   // 라이트 그레이 (배경 구분)
     lmD: Color(0xFF9CA3AF),
-    lmG: Color(0x57D1D5DB),
-    og: Color(0xFF4B5563),   // gray-600
-    tx: Color(0xFF111827),   // gray-900
+    lmG: Color(0x57E5E7EB),
+    og: Color(0xFF374151),   // gray-700
+    tx: Color(0xFF000000),   // 순검정 텍스트
     tx2: Color(0xFF374151),
-    mu: Color(0xFF9CA3AF),
-    bg: Color(0xFFFFFFFF),   // 순백
-    gx: Color(0xFFFFFFFF),
-    bd: Color(0xFFE5E7EB),   // gray-200 — 헤더 색으로 사용
+    mu: Color(0xFF6B7280),
+    bg: Color(0xFFFFFFFF),   // 순백 배경 (오버레이 없음)
+    gx: Color(0xFFFFFFFF),   // 순백
+    bd: Color(0xFFE5E7EB),   // gray-200
     bd2: Color(0xFFD1D5DB),
   );
 

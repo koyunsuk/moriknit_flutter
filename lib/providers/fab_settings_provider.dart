@@ -5,20 +5,20 @@ import 'package:hive/hive.dart';
 import '../core/constants/subscription_constants.dart';
 
 class FabSettings {
-  final bool transparent;
+  final bool hideQuickButton;
   final double bottomOffset; // body Stack 하단 기준 px
   final bool particleEnabled; // 헤더 파티클 효과 on/off
   final String particleType; // 파티클 종류: 'mori', 'heart', 'cat', 'star', 'rainbow'
 
   const FabSettings({
-    this.transparent = true,
+    this.hideQuickButton = false,
     this.bottomOffset = 24.0,
     this.particleEnabled = true,
     this.particleType = 'mori',
   });
 
-  FabSettings copyWith({bool? transparent, double? bottomOffset, bool? particleEnabled, String? particleType}) => FabSettings(
-        transparent: transparent ?? this.transparent,
+  FabSettings copyWith({bool? hideQuickButton, double? bottomOffset, bool? particleEnabled, String? particleType}) => FabSettings(
+        hideQuickButton: hideQuickButton ?? this.hideQuickButton,
         bottomOffset: bottomOffset ?? this.bottomOffset,
         particleEnabled: particleEnabled ?? this.particleEnabled,
         particleType: particleType ?? this.particleType,
@@ -35,7 +35,7 @@ class FabSettingsNotifier extends StateNotifier<FabSettings> {
       final raw = box.get('fab_settings');
       if (raw == null) return const FabSettings();
       return FabSettings(
-        transparent: raw['transparent'] as bool? ?? true,
+        hideQuickButton: raw['hide_quick_button'] as bool? ?? false,
         bottomOffset: (raw['bottom_offset'] as num?)?.toDouble() ?? 24.0,
         particleEnabled: raw['particle_enabled'] as bool? ?? true,
         particleType: raw['particle_type'] as String? ?? 'mori',
@@ -49,15 +49,15 @@ class FabSettingsNotifier extends StateNotifier<FabSettings> {
     if (kIsWeb) return;
     final box = Hive.box<Map>(SubscriptionConstants.boxUser);
     await box.put('fab_settings', {
-      'transparent': state.transparent,
+      'hide_quick_button': state.hideQuickButton,
       'bottom_offset': state.bottomOffset,
       'particle_enabled': state.particleEnabled,
       'particle_type': state.particleType,
     });
   }
 
-  Future<void> setTransparent(bool value) async {
-    state = state.copyWith(transparent: value);
+  Future<void> setHideQuickButton(bool value) async {
+    state = state.copyWith(hideQuickButton: value);
     await _save();
   }
 

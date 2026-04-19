@@ -109,18 +109,56 @@ class SwatchCard extends StatelessWidget {
                     Text(swatch.swatchName, style: T.bodyBold.copyWith(fontSize: 14, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 2),
                   ],
-                  Text(
-                    '${swatch.beforeStitchCount} x ${swatch.beforeRowCount}',
-                    style: T.bodyBold.copyWith(fontSize: 16),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(
+                        swatch.hasAfterWash && swatch.afterStitchCount > 0
+                            ? '${swatch.afterStitchCount} x ${swatch.afterRowCount}'
+                            : '${swatch.beforeStitchCount} x ${swatch.beforeRowCount}',
+                        style: T.bodyBold.copyWith(fontSize: 16),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        swatch.hasAfterWash && swatch.afterStitchCount > 0
+                            ? '세탁후'
+                            : '세탁전',
+                        style: T.caption.copyWith(
+                          fontSize: 10,
+                          color: swatch.hasAfterWash && swatch.afterStitchCount > 0
+                              ? C.lv
+                              : C.mu,
+                        ),
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 3),
+                  // 실 브랜드 + 이름
+                  if (swatch.yarnBrandName.isNotEmpty || swatch.yarnName.isNotEmpty) ...[
+                    Text(
+                      [swatch.yarnBrandName, swatch.yarnName]
+                          .where((s) => s.isNotEmpty)
+                          .join(' · '),
+                      style: T.caption.copyWith(color: C.tx2, fontSize: 12),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                   if (swatch.needleSize > 0) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.circle_outlined, color: C.lvD, size: 10),
                         const SizedBox(width: 3),
-                        Text(swatch.needleSizeDisplay, style: T.caption.copyWith(color: C.lvD)),
+                        Text(
+                          [
+                            if (swatch.needleBrandName.isNotEmpty) swatch.needleBrandName,
+                            swatch.needleSizeDisplay,
+                          ].join(' '),
+                          style: T.caption.copyWith(color: C.lvD),
+                        ),
                       ],
                     ),
                   ],

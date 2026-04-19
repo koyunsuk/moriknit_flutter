@@ -163,7 +163,8 @@ class RavelryLibraryPattern {
   });
 
   factory RavelryLibraryPattern.fromJson(Map<String, dynamic> json) {
-    final pattern = _readMap(json, ['pattern', 'first_pattern']) ?? json;
+    final nestedPattern = _readMap(json, ['pattern', 'first_pattern']);
+    final pattern = nestedPattern ?? json;
     final author = _readMap(pattern, ['pattern_author', 'designer', 'author']);
     final craft = _readMap(pattern, ['craft']);
     final categoryItems = _readList(pattern, ['pattern_categories', 'categories']) ?? const [];
@@ -175,8 +176,13 @@ class RavelryLibraryPattern {
 
     final permalink = _readString(pattern, ['permalink']);
 
+    // 실제 Ravelry 패턴 ID: 중첩 pattern.id 우선, 없으면 root의 pattern_id, 최후 fallback은 id(volume id일 수 있음)
+    final resolvedId = nestedPattern != null
+        ? _readInt(nestedPattern, ['id', 'pattern_id'])
+        : (json['pattern_id'] as int?) ?? (json['queued_pattern_id'] as int?) ?? _readInt(json, ['id']);
+
     return RavelryLibraryPattern(
-      id: _readInt(pattern, ['id', 'pattern_id', 'queued_pattern_id']),
+      id: resolvedId,
       name: _readString(pattern, ['name', 'pattern_name', 'title']) ??
           _readString(json, ['name', 'pattern_name', 'title']) ??
           'Untitled pattern',
@@ -248,6 +254,176 @@ class RavelryProject {
       _ => status ?? '상태 없음',
     };
   }
+}
+
+// ── 도안 파일 ─────────────────────────────────────────────────────────────────
+class RavelryPatternFile {
+  final int id;
+  final String fileName;
+  final String? url;
+
+  const RavelryPatternFile({required this.id, required this.fileName, this.url});
+
+  factory RavelryPatternFile.fromJson(Map<String, dynamic> json) {
+    return RavelryPatternFile(
+      id: _readInt(json, ['id']),
+      fileName: _readString(json, ['asset_file_name', 'name', 'filename']) ?? 'file',
+      url: _readString(json, ['url', 'download_url', 'asset_url']),
+    );
+  }
+}
+
+// ── 도안 상세 ─────────────────────────────────────────────────────────────────
+class RavelryPatternDetail {
+  final int id;
+  final String name;
+  final String? authorName;
+  final String? notesHtml;
+  final List<String> photoUrls;
+  final String? craft;
+  final bool isFree;
+  final double? price;
+  final double? difficultyAverage;
+  final List<String> categories;
+  final String? ravelryUrl;
+  final String? pdfUrl;
+  final List<RavelryPatternFile> files;
+
+  const RavelryPatternDetail({
+    required this.id,
+    required this.name,
+    this.authorName,
+    this.notesHtml,
+    this.photoUrls = const [],
+    this.craft,
+    this.isFree = false,
+    this.price,
+    this.difficultyAverage,
+    this.categories = const [],
+    this.ravelryUrl,
+    this.pdfUrl,
+    this.files = const [],
+  });
+
+  factory RavelryPatternDetail.fromJson(Map<String, dynamic> json) {
+    final author = _readMap(json, ['pattern_author', 'designer', 'author']);
+    final craftMap = _readMap(json, ['craft']);
+    final categoryItems = _readList(json, ['pattern_categories', 'categories']) ?? [];
+    final categories = categoryItems
+        .whereType<Map<String, dynamic>>()
+        .map((e) => _readString(e, ['name', 'label']) ?? '')
+        .where((s) => s.isNotEmpty)
+        .toList();
+
+    final photos = _readList(json, ['photos', 'pattern_photos']) ?? [];
+    final photoUrls = photos
+        .whereType<Map<String, dynamic>>()
+        .map((p) => _readString(p, ['medium_url', 'small_url', 'square_url']) ?? '')
+        .where((s) => s.isNotEmpty)
+        .toList();
+
+    final filesList = _readList(json, ['pattern_files', 'files']) ?? [];
+    final files = filesList
+        .whereType<Map<String, dynamic>>()
+        .map((f) => RavelryPatternFile.fromJson(f))
+        .toList();
+
+    final permalink = _readString(json, ['permalink']);
+
+    return RavelryPatternDetail(
+      id: _readInt(json, ['id', 'pattern_id']),
+      name: _readString(json, ['name', 'pattern_name', 'title']) ?? 'Untitled',
+      authorName: _readString(author ?? const {}, ['name']) ??
+          _readString(json, ['designer_name', 'author_name']),
+      notesHtml: _readString(json, ['notes_html', 'notes']),
+      photoUrls: photoUrls,
+      craft: _readString(craftMap ?? const {}, ['name']) ??
+          _readString(json, ['craft_name']),
+      isFree: json['free'] == true,
+      price: _readDouble(json, ['price']),
+      difficultyAverage: _readDouble(json, ['difficulty_average']),
+      categories: categories,
+      ravelryUrl: permalink != null
+          ? 'https://www.ravelry.com/patterns/library/$permalink'
+          : _readString(json, ['pattern_url', 'url']),
+      pdfUrl: _readString(json, ['pdf_url', 'download_url']) ??
+          _readString(_readMap(json, ['printing']) ?? const {}, ['pdf_url', 'url', 'download_url']) ??
+          _readString(_readMap(_readMap(json, ['printing']) ?? const {}, ['pdf']) ?? const {}, ['url', 'download_url']),
+      files: files,
+    );
+  }
+}
+
+// ── 프로젝트 상세 ─────────────────────────────────────────────────────────────
+class RavelryProjectDetail {
+  final int id;
+  final String name;
+  final int? patternId;
+  final String? patternName;
+  final String? status;
+  final int? statusTypeId;
+  final String? notes;
+  final DateTime? startedAt;
+  final DateTime? completedAt;
+  final List<String> photoUrls;
+
+  const RavelryProjectDetail({
+    required this.id,
+    required this.name,
+    this.patternId,
+    this.patternName,
+    this.status,
+    this.statusTypeId,
+    this.notes,
+    this.startedAt,
+    this.completedAt,
+    this.photoUrls = const [],
+  });
+
+  factory RavelryProjectDetail.fromJson(Map<String, dynamic> json) {
+    final pattern = _readMap(json, ['pattern']);
+    final statusType = _readMap(json, ['status_type', 'status']);
+
+    final photos = _readList(json, ['project_photos', 'photos']) ?? [];
+    final photoUrls = photos
+        .whereType<Map<String, dynamic>>()
+        .map((p) => _readString(p, ['medium_url', 'small_url', 'square_url']) ?? '')
+        .where((s) => s.isNotEmpty)
+        .toList();
+
+    return RavelryProjectDetail(
+      id: _readInt(json, ['id', 'project_id']),
+      name: _readString(json, ['name', 'project_name', 'title']) ?? 'Untitled project',
+      patternId: pattern != null ? _readInt(pattern, ['id'], -1).let((v) => v == -1 ? null : v) : null,
+      patternName: _readString(pattern ?? const {}, ['name', 'title']) ??
+          _readString(json, ['pattern_name']),
+      status: _readString(statusType ?? const {}, ['name']) ??
+          _readString(json, ['status_name', 'status']),
+      statusTypeId: statusType != null ? _readInt(statusType, ['id'], -1).let((v) => v == -1 ? null : v) : null,
+      notes: _readString(json, ['notes', 'note']),
+      startedAt: DateTime.tryParse(
+        _readString(json, ['started', 'started_at', 'start_date']) ?? '',
+      ),
+      completedAt: DateTime.tryParse(
+        _readString(json, ['completed', 'completed_at', 'finish_date']) ?? '',
+      ),
+      photoUrls: photoUrls,
+    );
+  }
+
+  String get statusKo {
+    return switch (status?.toLowerCase()) {
+      'finished' => '완성',
+      'in-progress' || 'inprogress' => '진행 중',
+      'hibernating' => '일시정지',
+      'frog' => '해체함',
+      _ => status ?? '상태 없음',
+    };
+  }
+}
+
+extension _IntLet on int {
+  T let<T>(T Function(int) fn) => fn(this);
 }
 
 class RavelryYarnResult {

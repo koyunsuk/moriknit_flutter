@@ -40,5 +40,6 @@ class Routes {
   static const dropbox = '/tools/dropbox';
   static const toolsNeedleSize = '/tools/needle-size';
   static const toolsPatternConverter = '/tools/pattern-converter';
+  static const toolsPatternTranslator = '/tools/pattern-translator';
   static const toolsMyParsedPatterns = '/tools/my-parsed-patterns';
 }

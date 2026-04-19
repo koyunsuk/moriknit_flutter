@@ -338,6 +338,16 @@ class ToolsScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 10),
                     _ToolCard(
+                      icon: Icons.translate_rounded,
+                      color: C.lv,
+                      title: isKorean ? 'AI 영문도안 번역기' : 'Pattern Translator',
+                      description: isKorean
+                          ? 'Ravelry/Etsy 등 영문 도안을 한국어로 변환합니다'
+                          : 'Translate English patterns to Korean',
+                      onTap: () => context.push(Routes.toolsPatternTranslator),
+                    ),
+                    const SizedBox(height: 10),
+                    _ToolCard(
                       icon: Icons.grid_on_rounded,
                       color: C.lvD,
                       title: isKorean ? 'AI 도안 에디터' : 'AI Pattern Editor',

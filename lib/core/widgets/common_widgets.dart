@@ -460,7 +460,6 @@ class BgOrbs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (C.isMono) return const SizedBox.shrink();
     return Positioned.fill(
       child: IgnorePointer(
         child: CustomPaint(painter: _BgPatternPainter()),

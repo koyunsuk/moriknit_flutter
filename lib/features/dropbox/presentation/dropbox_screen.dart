@@ -1,11 +1,18 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/dropbox_provider.dart';
+import '../../../providers/pattern_library_provider.dart';
+import '../../pattern_library/domain/pattern_file.dart';
 import '../data/dropbox_auth_provider.dart';
 import '../domain/dropbox_file_entry.dart';
 
@@ -43,6 +50,115 @@ class _DropboxScreenState extends ConsumerState<DropboxScreen> {
   String _displayPath() {
     if (_pathStack.length == 1) return '/';
     return _pathStack.last;
+  }
+
+  static String _mimeTypeFromName(String name) {
+    final lower = name.toLowerCase();
+    if (lower.endsWith('.pdf')) return 'application/pdf';
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+    if (lower.endsWith('.gif')) return 'image/gif';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    return '';
+  }
+
+  Future<void> _importFile(DropboxFileEntry entry) async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final mimeType = _mimeTypeFromName(entry.name);
+    if (mimeType.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isKorean
+              ? '지원하지 않는 파일 형식이에요. (PDF, JPG, PNG, GIF, WEBP)'
+              : 'Unsupported file type. (PDF, JPG, PNG, GIF, WEBP)'),
+        ),
+      );
+      return;
+    }
+
+    // 1단계: 다운로드만
+    Uint8List bytes;
+    try {
+      bytes = await runWithMoriLoadingDialog<Uint8List>(
+        context,
+        message: isKorean ? '파일을 불러오는 중입니다.' : 'Loading file...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () => ref.read(dropboxApiClientProvider).downloadFile(entry.path),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final msg = '$e';
+      if (msg.contains('DROPBOX_SCOPE_ERROR')) {
+        await showDialog<void>(
+          context: context,
+          builder: (dialogCtx) => AlertDialog(
+            title: Text(
+              isKorean ? 'Dropbox 파일 접근 권한 없음' : 'Dropbox File Access Denied',
+              style: T.h3,
+            ),
+            content: Text(
+              isKorean
+                  ? 'Dropbox 앱의 파일 다운로드 권한이 비활성화되어 있습니다.\n\n'
+                      '해결 방법:\n'
+                      '1. Dropbox 연결을 해제하세요\n'
+                      '2. 다시 연결하여 재인증하세요\n\n'
+                      '문제가 계속되면 개발자에게 문의하세요.'
+                  : 'Dropbox file download permission is disabled.\n\n'
+                      'How to fix:\n'
+                      '1. Disconnect Dropbox\n'
+                      '2. Reconnect to re-authenticate\n\n'
+                      'Contact the developer if the issue persists.',
+              style: T.body,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: Text(isKorean ? '닫기' : 'Close'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(dialogCtx);
+                  await ref.read(dropboxAuthProvider.notifier).logout();
+                  if (mounted) setState(() => _pathStack..clear()..add(''));
+                },
+                child: Text(
+                  isKorean ? '연결 해제' : 'Disconnect',
+                  style: T.body.copyWith(color: C.og, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+      final short = msg.length > 120 ? '${msg.substring(0, 120)}…' : msg;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: short);
+      return;
+    }
+
+    // 2단계: 뷰어 열기
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _DropboxFileViewer(
+          bytes: bytes,
+          fileName: entry.name,
+          mimeType: mimeType,
+          dropboxPath: entry.path,
+          isKorean: isKorean,
+          onSave: (bytes) async {
+            await ref.read(patternFileRepositoryProvider).uploadFile(
+              bytes: bytes,
+              fileName: entry.name,
+              mimeType: mimeType,
+              source: PatternFileSource.dropbox,
+              sourceMeta: {'dropboxPath': entry.path},
+            );
+          },
+        ),
+      ),
+    );
   }
 
   @override
@@ -87,6 +203,7 @@ class _DropboxScreenState extends ConsumerState<DropboxScreen> {
                           canGoUp: _pathStack.length > 1,
                           onEnterFolder: _enterFolder,
                           onGoUp: _goUp,
+                          onFileSelected: _importFile,
                           isKorean: isKorean,
                         )
                       : _ConnectPrompt(isKorean: isKorean),
@@ -172,6 +289,7 @@ class _FileBrowser extends ConsumerWidget {
     required this.canGoUp,
     required this.onEnterFolder,
     required this.onGoUp,
+    required this.onFileSelected,
     required this.isKorean,
   });
 
@@ -180,6 +298,7 @@ class _FileBrowser extends ConsumerWidget {
   final bool canGoUp;
   final void Function(String path) onEnterFolder;
   final VoidCallback onGoUp;
+  final void Function(DropboxFileEntry) onFileSelected;
   final bool isKorean;
 
   @override
@@ -238,7 +357,9 @@ class _FileBrowser extends ConsumerWidget {
                     itemBuilder: (_, i) => _FileRow(
                       entry: entries[i],
                       isKorean: isKorean,
-                      onTap: entries[i].isFolder ? () => onEnterFolder(entries[i].path) : null,
+                      onTap: entries[i].isFolder
+                          ? () => onEnterFolder(entries[i].path)
+                          : () => onFileSelected(entries[i]),
                     ),
                   ),
             loading: () => Center(child: CircularProgressIndicator(color: _kDropboxBlue)),
@@ -250,7 +371,7 @@ class _FileBrowser extends ConsumerWidget {
                   children: [
                     Icon(Icons.error_outline_rounded, color: C.og, size: 40),
                     const SizedBox(height: 12),
-                    Text(e.toString(), style: T.caption.copyWith(color: C.og), textAlign: TextAlign.center),
+                    Text(e.toString(), style: T.caption.copyWith(color: C.og), textAlign: TextAlign.center, maxLines: 4, overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 16),
                     TextButton(
                       onPressed: () => ref.invalidate(_dropboxFolderProvider(path)),
@@ -298,7 +419,7 @@ class _FileRow extends StatelessWidget {
   }
 
   Color _iconColor() {
-    if (entry.isFolder) return const Color(0xFF4A90E2);
+    if (entry.isFolder) return C.pk;
     final name = entry.name.toLowerCase();
     if (name.endsWith('.pdf')) return const Color(0xFFE53935);
     if (name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg')) {
@@ -326,6 +447,114 @@ class _FileRow extends StatelessWidget {
       trailing: entry.isFolder
           ? Icon(Icons.chevron_right_rounded, color: C.mu)
           : null,
+    );
+  }
+}
+
+// ── Dropbox 파일 뷰어 ─────────────────────────────────────────────────────────
+class _DropboxFileViewer extends ConsumerStatefulWidget {
+  const _DropboxFileViewer({
+    required this.bytes,
+    required this.fileName,
+    required this.mimeType,
+    required this.dropboxPath,
+    required this.isKorean,
+    required this.onSave,
+  });
+
+  final Uint8List bytes;
+  final String fileName;
+  final String mimeType;
+  final String dropboxPath;
+  final bool isKorean;
+  final Future<void> Function(Uint8List bytes) onSave;
+
+  @override
+  ConsumerState<_DropboxFileViewer> createState() => _DropboxFileViewerState();
+}
+
+class _DropboxFileViewerState extends ConsumerState<_DropboxFileViewer> {
+  String? _pdfPath;
+  bool _saved = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.mimeType == 'application/pdf') {
+      _writeTempPdf();
+    }
+  }
+
+  Future<void> _writeTempPdf() async {
+    final tmpDir = await getTemporaryDirectory();
+    final safe = widget.fileName.replaceAll(RegExp(r'[^\w가-힣.\-]'), '_');
+    final file = File('${tmpDir.path}/$safe');
+    await file.writeAsBytes(widget.bytes);
+    if (mounted) setState(() => _pdfPath = file.path);
+  }
+
+  Future<void> _saveToLibrary() async {
+    if (_saved) return;
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: widget.isKorean ? '저장하는 중입니다.' : 'Saving...',
+        subtitle: widget.isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () => widget.onSave(widget.bytes),
+      );
+      if (!mounted) return;
+      setState(() => _saved = true);
+      showSavedSnackBar(
+        ScaffoldMessenger.of(context),
+        message: widget.isKorean ? '도안 라이브러리에 저장됐어요.' : 'Saved to pattern library.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isPdf = widget.mimeType == 'application/pdf';
+
+    return Scaffold(
+      backgroundColor: C.bg,
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, size: 20),
+          color: C.tx,
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(widget.fileName, style: T.h3.copyWith(fontSize: 14)),
+        backgroundColor: C.bg,
+        elevation: 0,
+        actions: [
+          if (!_saved)
+            TextButton.icon(
+              onPressed: _saveToLibrary,
+              icon: Icon(Icons.save_alt_rounded, size: 18, color: C.lv),
+              label: Text(
+                widget.isKorean ? '라이브러리 저장' : 'Save',
+                style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w600),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Icon(Icons.check_circle_rounded, color: C.lv, size: 22),
+            ),
+        ],
+      ),
+      body: isPdf
+          ? _pdfPath == null
+              ? const Center(child: CircularProgressIndicator())
+              : PDFView(filePath: _pdfPath!)
+          : InteractiveViewer(
+              child: Center(
+                child: Image.memory(widget.bytes, fit: BoxFit.contain),
+              ),
+            ),
     );
   }
 }

@@ -4,7 +4,7 @@ import 'knit_symbols.dart';
 
 enum ChartMode { color, symbol, narrative }
 
-enum ChartTool { draw, erase, fill, select, move }
+enum ChartTool { draw, brush, erase, fill, select, move }
 
 enum PatternType { chart, image, pdf }
 

@@ -50,6 +50,7 @@ import 'package:moriknit_flutter/features/yarn/presentation/yarn_input_screen.da
 import 'package:moriknit_flutter/features/yarn/presentation/yarn_detail_screen.dart';
 import 'package:moriknit_flutter/features/yarn/presentation/yarn_list_screen.dart';
 import 'package:moriknit_flutter/features/pattern_converter/presentation/pattern_converter_screen.dart';
+import 'package:moriknit_flutter/features/pattern_converter/presentation/pattern_translator_screen.dart';
 import 'package:moriknit_flutter/features/pattern_converter/presentation/my_patterns_screen.dart';
 import 'package:moriknit_flutter/features/pattern_converter/presentation/pattern_reader_screen.dart';
 import 'package:moriknit_flutter/providers/auth_provider.dart';
@@ -155,6 +156,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(path: 'dropbox', pageBuilder: (_, _) => _fadePage(const DropboxScreen())),
               GoRoute(path: 'needle-size', pageBuilder: (_, _) => _fadePage(const NeedleSizeConverterScreen())),
               GoRoute(path: 'pattern-converter', pageBuilder: (_, _) => _fadePage(const PatternConverterScreen())),
+              GoRoute(path: 'pattern-translator', pageBuilder: (_, _) => _fadePage(const PatternTranslatorScreen())),
               GoRoute(
                 path: 'my-parsed-patterns',
                 pageBuilder: (_, _) => _fadePage(const MyParsedPatternsScreen()),

@@ -82,49 +82,70 @@ class DropboxApiClient {
 
   // ── 파일 다운로드 ─────────────────────────────────────────────────────────────
 
-  /// POST content.dropboxapi.com/2/files/download
-  /// header: Dropbox-API-Arg: {"path": "..."}
+  /// POST /2/files/download?arg={percent-encoded-json}
+  /// URL 쿼리 파라미터 방식: Dart Uri가 한글 포함 모든 문자를 percent-encoding으로 안전하게 처리
   Future<Uint8List> downloadFile(String dropboxPath) async {
     final token = await _auth.getValidAccessToken();
     if (token == null) throw Exception('Dropbox 로그인이 필요합니다.');
 
-    final apiArg = jsonEncode({'path': dropboxPath});
-    final headers = {
-      'Authorization': 'Bearer $token',
-      'Dropbox-API-Arg': apiArg,
-    };
-
-    var response = await http.post(
-      Uri.parse('https://content.dropboxapi.com/2/files/download'),
-      headers: headers,
-    );
+    var response = await _doDownload(token, dropboxPath);
 
     if (response.statusCode == 401) {
-      // refresh 후 1회 재시도
       await _auth.login();
-      final refreshedToken = await _auth.getValidAccessToken();
-      if (refreshedToken == null) throw Exception('Dropbox 인증 갱신 실패');
-      final refreshedHeaders = {
-        'Authorization': 'Bearer $refreshedToken',
-        'Dropbox-API-Arg': apiArg,
-      };
-      response = await http.post(
-        Uri.parse('https://content.dropboxapi.com/2/files/download'),
-        headers: refreshedHeaders,
-      );
+      final newToken = await _auth.getValidAccessToken();
+      if (newToken == null) throw Exception('Dropbox 인증 갱신 실패');
+      response = await _doDownload(newToken, dropboxPath);
     }
 
     _assertOk(response);
     return response.bodyBytes;
   }
 
+  Future<http.Response> _doDownload(String token, String path) {
+    final uri = Uri.https('content.dropboxapi.com', '/2/files/download');
+    final argJson = _asciiJson({'path': path});
+    return http.get(uri, headers: {
+      'Authorization': 'Bearer $token',
+      'Dropbox-API-Arg': argJson,
+    });
+  }
+
+  /// HTTP 헤더에 안전하게 전달할 수 있는 ASCII-only JSON 문자열 생성
+  static String _asciiJson(Map<String, dynamic> obj) {
+    final raw = jsonEncode(obj);
+    final buf = StringBuffer();
+    for (final rune in raw.runes) {
+      if (rune > 0x7F) {
+        buf.write('\\u${rune.toRadixString(16).padLeft(4, '0')}');
+      } else {
+        buf.writeCharCode(rune);
+      }
+    }
+    return buf.toString();
+  }
+
   // ── 공통 ─────────────────────────────────────────────────────────────────────
 
   void _assertOk(http.Response response) {
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
-        'Dropbox API 오류 (${response.statusCode}): ${response.body}',
-      );
+      String reason;
+      try {
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+        reason = (decoded['error_summary'] as String?) ??
+            (decoded['error'] as String?) ??
+            response.body;
+      } catch (_) {
+        reason = response.body;
+      }
+      final detail = reason.isNotEmpty ? reason : '(empty body)';
+      // Dropbox 앱에 files.content.read 권한이 없는 경우 (API 권한 설정 문제)
+      if (detail.contains('files/download') ||
+          detail.contains('not allowed to call') ||
+          detail.contains('access_denied')) {
+        throw Exception('DROPBOX_SCOPE_ERROR');
+      }
+      final short = detail.length > 160 ? '${detail.substring(0, 160)}…' : detail;
+      throw Exception('Dropbox 오류 (${response.statusCode}): $short');
     }
   }
 }

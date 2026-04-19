@@ -111,8 +111,9 @@ class _TopBar extends StatelessWidget {
 
   static const List<({ChartTool tool, IconData icon})> _tools = [
     (tool: ChartTool.draw,  icon: Icons.edit_rounded),
-    (tool: ChartTool.erase, icon: Icons.cleaning_services_rounded),
+    (tool: ChartTool.brush, icon: Icons.brush_rounded),
     (tool: ChartTool.fill,  icon: Icons.format_color_fill_rounded),
+    (tool: ChartTool.erase, icon: Icons.cleaning_services_rounded),
     (tool: ChartTool.move,  icon: Icons.pan_tool_rounded),
   ];
 

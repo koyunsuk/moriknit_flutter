@@ -108,13 +108,16 @@ void showSaveErrorSnackBar(Object contextOrMessenger, {String? message}) {
       width: 260,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       content: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(Icons.error_outline, color: Colors.white, size: 18),
           const SizedBox(width: 10),
-          Text(
-            message ?? '저장에 실패했습니다.',
-            style: T.sm.copyWith(color: Colors.white),
+          Expanded(
+            child: Text(
+              message ?? '저장에 실패했습니다.',
+              style: T.sm.copyWith(color: Colors.white),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),

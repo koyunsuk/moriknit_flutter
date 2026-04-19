@@ -9,6 +9,8 @@ import '../../../core/widgets/common_widgets.dart';
 import '../data/ravelry_auth_provider.dart';
 import '../data/ravelry_repository.dart';
 import '../domain/ravelry_models.dart';
+import 'ravelry_pattern_detail_screen.dart';
+import 'ravelry_project_detail_screen.dart';
 
 class RavelryScreen extends ConsumerStatefulWidget {
   final int initialTab;
@@ -307,7 +309,19 @@ class _LibraryTab extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
           itemCount: items.length,
           separatorBuilder: (_, _) => const SizedBox(height: 10),
-          itemBuilder: (_, i) => _PatternCard(item: items[i], isKorean: isKorean),
+          itemBuilder: (_, i) => _PatternCard(
+            item: items[i],
+            isKorean: isKorean,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => RavelryPatternDetailScreen(
+                  patternId: items[i].id,
+                  patternName: items[i].name,
+                ),
+              ),
+            ),
+          ),
         );
       },
     );
@@ -315,13 +329,15 @@ class _LibraryTab extends ConsumerWidget {
 }
 
 class _PatternCard extends StatelessWidget {
-  const _PatternCard({required this.item, required this.isKorean});
+  const _PatternCard({required this.item, required this.isKorean, this.onTap});
   final RavelryLibraryPattern item;
   final bool isKorean;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return GlassCard(
+      onTap: onTap,
       child: Row(
         children: [
           ClipRRect(
@@ -389,7 +405,19 @@ class _ProjectsTab extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
           itemCount: items.length,
           separatorBuilder: (_, _) => const SizedBox(height: 10),
-          itemBuilder: (_, i) => _RavelryProjectCard(item: items[i], isKorean: isKorean),
+          itemBuilder: (_, i) => _RavelryProjectCard(
+            item: items[i],
+            isKorean: isKorean,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => RavelryProjectDetailScreen(
+                  projectId: items[i].id,
+                  projectName: items[i].name,
+                ),
+              ),
+            ),
+          ),
         );
       },
     );
@@ -397,13 +425,15 @@ class _ProjectsTab extends ConsumerWidget {
 }
 
 class _RavelryProjectCard extends StatelessWidget {
-  const _RavelryProjectCard({required this.item, required this.isKorean});
+  const _RavelryProjectCard({required this.item, required this.isKorean, this.onTap});
   final RavelryProject item;
   final bool isKorean;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return GlassCard(
+      onTap: onTap,
       child: Row(
         children: [
           ClipRRect(

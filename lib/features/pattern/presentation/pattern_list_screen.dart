@@ -15,6 +15,7 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../ravelry/data/ravelry_auth_provider.dart';
 import '../../ravelry/data/ravelry_repository.dart';
 import '../../ravelry/domain/ravelry_models.dart';
+import '../../ravelry/presentation/ravelry_pattern_detail_screen.dart';
 import '../data/pattern_repository.dart';
 import '../domain/pattern_chart.dart';
 import 'pattern_detail_screen.dart';
@@ -632,88 +633,13 @@ class _RavelryPatternCard extends StatelessWidget {
   }
 
   void _showDetail(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 56, height: 56,
-                    decoration: BoxDecoration(
-                      color: C.lvL,
-                      borderRadius: BorderRadius.circular(12),
-                      image: pattern.thumbnailUrl != null
-                          ? DecorationImage(image: NetworkImage(pattern.thumbnailUrl!), fit: BoxFit.cover)
-                          : null,
-                    ),
-                    child: pattern.thumbnailUrl == null ? Icon(Icons.menu_book_rounded, color: C.lvD, size: 28) : null,
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(pattern.name, style: T.h3),
-                        if (pattern.authorName != null)
-                          Text(pattern.authorName!, style: T.caption.copyWith(color: C.mu)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              if (pattern.categories.isNotEmpty) ...[
-                Wrap(
-                  spacing: 6, runSpacing: 6,
-                  children: pattern.categories.map((cat) => Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
-                    child: Text(cat, style: T.caption.copyWith(color: C.lv)),
-                  )).toList(),
-                ),
-                const SizedBox(height: 12),
-              ],
-              if (pattern.craft != null)
-                _DetailRow(label: isKorean ? '공예' : 'Craft', value: pattern.craft!),
-              if (pattern.difficultyAverage != null)
-                _DetailRow(
-                  label: isKorean ? '난이도' : 'Difficulty',
-                  value: pattern.difficultyAverage!.toStringAsFixed(1),
-                ),
-              _DetailRow(
-                label: isKorean ? '가격' : 'Price',
-                value: pattern.isFree ? (isKorean ? '무료' : 'Free') : '\$${pattern.price?.toStringAsFixed(2) ?? '-'}',
-              ),
-            ],
-          ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RavelryPatternDetailScreen(
+          patternId: pattern.id,
+          patternName: pattern.name,
         ),
-      ),
-    );
-  }
-}
-
-class _DetailRow extends StatelessWidget {
-  final String label;
-  final String value;
-  const _DetailRow({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          Text(label, style: T.caption.copyWith(color: C.mu)),
-          const Spacer(),
-          Text(value, style: T.caption.copyWith(fontWeight: FontWeight.w600)),
-        ],
       ),
     );
   }

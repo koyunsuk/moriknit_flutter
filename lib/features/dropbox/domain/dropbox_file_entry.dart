@@ -20,7 +20,7 @@ class DropboxFileEntry {
     final isFolder = tag == 'folder';
     return DropboxFileEntry(
       name: json['name'] as String? ?? '',
-      path: json['path_lower'] as String? ?? json['path_display'] as String? ?? '',
+      path: json['path_display'] as String? ?? json['path_lower'] as String? ?? '',
       isFolder: isFolder,
       size: isFolder ? null : json['size'] as int?,
       rev: isFolder ? null : json['rev'] as String?,

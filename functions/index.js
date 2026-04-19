@@ -92,14 +92,18 @@ async function tokenRequest(params) {
 }
 
 async function fetchRavelryJson(path, accessToken, query) {
-  const url = new URL(`${RAVELRY_API_BASE}${path}`);
+  // URLSearchParams encodes commas as %2C which Ravelry API rejects.
+  // Build query string manually to preserve commas in values like include=a,b,c.
+  let urlStr = `${RAVELRY_API_BASE}${path}`;
   if (query) {
-    Object.entries(query).forEach(([key, value]) => {
-      if (value != null) url.searchParams.set(key, String(value));
-    });
+    const qs = Object.entries(query)
+      .filter(([, v]) => v != null)
+      .map(([k, v]) => `${encodeURIComponent(k)}=${String(v)}`)
+      .join('&');
+    if (qs) urlStr += '?' + qs;
   }
 
-  const response = await fetch(url, {
+  const response = await fetch(urlStr, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: 'application/json',
@@ -108,8 +112,9 @@ async function fetchRavelryJson(path, accessToken, query) {
 
   const text = await response.text();
   if (!response.ok) {
+    const urlObj = new URL(urlStr);
     throw new Error(
-      `Ravelry API failed (${response.status}) for ${url.pathname}${url.search}: ${text}`,
+      `Ravelry API failed (${response.status}) for ${urlObj.pathname}${urlObj.search}: ${text}`,
     );
   }
 
@@ -434,9 +439,9 @@ exports.ravelryLibrary = onRequest(
       req,
       res,
       (username) => [
-        { path: `/people/${username}/library.json`, query: { page_size: 50 } },
-        { path: `/people/${username}/library/search.json`, query: { page_size: 50 } },
-        { path: `/people/${username}/library/volumes.json`, query: { page_size: 50 } },
+        { path: `/people/${username}/library.json`, query: { page_size: 50, include: 'pattern' } },
+        { path: `/people/${username}/library/search.json`, query: { page_size: 50, include: 'pattern' } },
+        { path: `/people/${username}/library/volumes.json`, query: { page_size: 50, include: 'pattern' } },
       ],
       'library',
     );
@@ -456,6 +461,129 @@ exports.ravelryProjects = onRequest(
       ],
       'projects',
     );
+  },
+);
+
+// ── Ravelry 상세 & CRUD ───────────────────────────────────────────────────────
+
+exports.ravelryPatternDetail = onRequest(
+  { region: REGION, secrets: [ravelryClientSecret] },
+  async (req, res) => {
+    await withUser(req, res, async (decoded) => {
+      const connection = await getValidConnection(decoded.uid);
+      const patternId = req.query.id;
+      if (!patternId) { res.status(400).json({ error: 'Pattern ID is required.' }); return; }
+      const data = await fetchRavelryJson(
+        `/patterns/${patternId}.json`,
+        connection.accessToken,
+        { include: 'pattern_author,craft,pattern_categories,photos,printing' },
+      );
+      res.json(data);
+    });
+  },
+);
+
+exports.ravelryProjectDetail = onRequest(
+  { region: REGION, secrets: [ravelryClientSecret] },
+  async (req, res) => {
+    await withUser(req, res, async (decoded) => {
+      const connection = await getValidConnection(decoded.uid);
+      const username = connection.username;
+      const projectId = req.query.id;
+      if (!projectId) { res.status(400).json({ error: 'Project ID is required.' }); return; }
+      const data = await fetchRavelryJson(
+        `/projects/${username}/${projectId}.json`,
+        connection.accessToken,
+      );
+      res.json(data);
+    });
+  },
+);
+
+exports.ravelryPatternFiles = onRequest(
+  { region: REGION, secrets: [ravelryClientSecret] },
+  async (req, res) => {
+    await withUser(req, res, async (decoded) => {
+      const connection = await getValidConnection(decoded.uid);
+      const patternId = req.query.id;
+      if (!patternId) { res.status(400).json({ error: 'Pattern ID is required.' }); return; }
+      const data = await fetchRavelryJson(
+        `/patterns/${patternId}/files.json`,
+        connection.accessToken,
+      );
+      res.json(data);
+    });
+  },
+);
+
+exports.ravelryPatternDownload = onRequest(
+  { region: REGION, secrets: [ravelryClientSecret], timeoutSeconds: 120, memory: '512MiB' },
+  async (req, res) => {
+    await withUser(req, res, async (decoded) => {
+      const connection = await getValidConnection(decoded.uid);
+      const encodedUrl = req.query.url;
+      if (!encodedUrl) { res.status(400).json({ error: 'File URL is required.' }); return; }
+      const fileUrl = decodeURIComponent(encodedUrl);
+      const response = await fetch(fileUrl, {
+        headers: { Authorization: `Bearer ${connection.accessToken}` },
+      });
+      if (!response.ok) {
+        res.status(response.status).json({ error: `Download failed: ${response.status}` });
+        return;
+      }
+      const contentType = response.headers.get('content-type') || 'application/octet-stream';
+      const buffer = await response.arrayBuffer();
+      res.set('Content-Type', contentType);
+      res.send(Buffer.from(buffer));
+    });
+  },
+);
+
+exports.ravelryCreateProject = onRequest(
+  { region: REGION, secrets: [ravelryClientSecret] },
+  async (req, res) => {
+    await withUser(req, res, async (decoded) => {
+      if (req.method !== 'POST') { res.status(405).json({ error: 'Method Not Allowed' }); return; }
+      const connection = await getValidConnection(decoded.uid);
+      const username = connection.username;
+      const response = await fetch(`${RAVELRY_API_BASE}/projects/${username}/create.json`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${connection.accessToken}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(req.body),
+      });
+      const text = await response.text();
+      if (!response.ok) { res.status(response.status).json({ error: `Ravelry API error: ${text.slice(0, 200)}` }); return; }
+      res.json(JSON.parse(text));
+    });
+  },
+);
+
+exports.ravelryUpdateProject = onRequest(
+  { region: REGION, secrets: [ravelryClientSecret] },
+  async (req, res) => {
+    await withUser(req, res, async (decoded) => {
+      if (req.method !== 'POST') { res.status(405).json({ error: 'Method Not Allowed' }); return; }
+      const connection = await getValidConnection(decoded.uid);
+      const username = connection.username;
+      const projectId = req.query.id;
+      if (!projectId) { res.status(400).json({ error: 'Project ID is required.' }); return; }
+      const response = await fetch(`${RAVELRY_API_BASE}/projects/${username}/${projectId}.json`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${connection.accessToken}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(req.body),
+      });
+      const text = await response.text();
+      if (!response.ok) { res.status(response.status).json({ error: `Ravelry API error: ${text.slice(0, 200)}` }); return; }
+      res.json(JSON.parse(text));
+    });
   },
 );
 

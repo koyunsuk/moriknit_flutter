@@ -38,6 +38,7 @@ class _MobileParticle {
 
 class _MainShellState extends ConsumerState<MainShell> with TickerProviderStateMixin {
   bool _fabOpen = false;
+  double _sidebarTop = 80.0; // 드래그 수직 위치
 
   // ── 스파클 ───────────────────────────────────────────────────────────────
   static const _sparkleEmojis = ['❤️', '🩷', '♪', '♫', '✨', '💜', '🎵', '🧶'];
@@ -52,15 +53,11 @@ class _MainShellState extends ConsumerState<MainShell> with TickerProviderStateM
   final _particles = <_MobileParticle>[];
   Timer? _sparkleTimer;
 
-  // ── FAB 드래그 ────────────────────────────────────────────────────────────
-  double _fabBottom = 24.0;
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _fabBottom = ref.read(fabSettingsProvider).bottomOffset;
       _startSparkle();
     });
   }
@@ -113,7 +110,7 @@ class _MainShellState extends ConsumerState<MainShell> with TickerProviderStateM
     return 0;
   }
 
-  void _closeFab() => setState(() => _fabOpen = false);
+  void _closeFab() => setState(() { _fabOpen = false; });
 
   @override
   Widget build(BuildContext context) {
@@ -156,8 +153,8 @@ class _MainShellState extends ConsumerState<MainShell> with TickerProviderStateM
     ];
 
     final fabSettings = ref.watch(fabSettingsProvider);
-    final backAlpha = fabSettings.transparent ? 0.40 : 1.0;
-    final speedAlpha = fabSettings.transparent ? 0.40 : 1.0;
+    const backAlpha = 1.0;
+    const speedAlpha = 1.0;
 
     return PopScope(
       canPop: false,
@@ -195,7 +192,7 @@ class _MainShellState extends ConsumerState<MainShell> with TickerProviderStateM
                     );
                   },
                 )),
-            // ── FAB 다크 오버레이 ──────────────────────────────────────────
+            // ── 사이드바 오버레이 (스피드 아이템 열릴 때만 딤처리·닫기) ────
             if (_fabOpen)
               Positioned.fill(
                 child: GestureDetector(
@@ -203,38 +200,26 @@ class _MainShellState extends ConsumerState<MainShell> with TickerProviderStateM
                   child: Container(color: Colors.black.withValues(alpha: 0.2)),
                 ),
               ),
-            // ── 뒤로가기 FAB (왼쪽 — 드래그 가능) ───────────────────────
+            // ── 오른쪽 퀵 사이드바 (드래그로 수직 위치 조정) ─────────────
             Positioned(
-              left: 16,
-              bottom: _fabBottom,
+              right: 0,
+              top: MediaQuery.of(context).padding.top + _sidebarTop,
               child: GestureDetector(
-                onPanUpdate: (d) => setState(() => _fabBottom = (_fabBottom - d.delta.dy).clamp(8.0, 550.0)),
-                onPanEnd: (_) => ref.read(fabSettingsProvider.notifier).setBottomOffset(_fabBottom),
-                child: FloatingActionButton(
-                  heroTag: 'global_back_fab',
-                  onPressed: () {
-                    if (context.canPop()) {
-                      context.pop();
-                    }
-                  },
-                  backgroundColor: C.lm.withValues(alpha: backAlpha),
-                  foregroundColor: const Color(0xFF1a3000),
-                  elevation: 4,
-                  child: const Icon(Icons.arrow_back_ios_rounded, size: 24),
-                ),
-              ),
-            ),
-            // ── 스피드다이얼 (오른쪽 — 드래그 가능) ─────────────────────
-            Positioned(
-              right: 16,
-              bottom: _fabBottom,
-              child: GestureDetector(
-                onPanUpdate: (d) => setState(() => _fabBottom = (_fabBottom - d.delta.dy).clamp(8.0, 550.0)),
-                onPanEnd: (_) => ref.read(fabSettingsProvider.notifier).setBottomOffset(_fabBottom),
-                child: _SpeedDial(
-                  open: _fabOpen,
-                  onToggle: () => setState(() => _fabOpen = !_fabOpen),
+                onVerticalDragUpdate: (d) {
+                  setState(() {
+                    final maxTop = MediaQuery.of(context).size.height
+                        - MediaQuery.of(context).padding.top
+                        - MediaQuery.of(context).padding.bottom
+                        - 120;
+                    _sidebarTop = (_sidebarTop + d.delta.dy).clamp(0.0, maxTop);
+                  });
+                },
+                child: _QuickSidebar(
+                  fabOpen: _fabOpen,
+                  onBack: () { if (context.canPop()) context.pop(); },
+                  onToggleFab: () => setState(() => _fabOpen = !_fabOpen),
                   items: speedItems,
+                  backAlpha: backAlpha,
                   speedAlpha: speedAlpha,
                 ),
               ),
@@ -267,76 +252,158 @@ class _SpeedItem {
   const _SpeedItem({required this.icon, required this.label, required this.color, required this.onTap});
 }
 
-class _SpeedDial extends StatelessWidget {
-  final bool open;
-  final VoidCallback onToggle;
+// ── 오른쪽 퀵 사이드바 ─────────────────────────────────────────────────────────
+class _QuickSidebar extends StatelessWidget {
+  const _QuickSidebar({
+    required this.fabOpen,
+    required this.onBack,
+    required this.onToggleFab,
+    required this.items,
+    required this.backAlpha,
+    required this.speedAlpha,
+  });
+
+  final bool fabOpen;
+  final VoidCallback onBack;
+  final VoidCallback onToggleFab;
   final List<_SpeedItem> items;
+  final double backAlpha;
   final double speedAlpha;
-  const _SpeedDial({required this.open, required this.onToggle, required this.items, this.speedAlpha = 1.0});
+
+  static const double _panelW = 52.0;
+  static const double _peekW = 10.0;
+  static const double _btnH = 50.0;
 
   @override
   Widget build(BuildContext context) {
+    // 스피드 아이템 최대 높이: 화면 여유 공간의 절반
+    final screenH = MediaQuery.of(context).size.height;
+    final maxItemsH = (screenH * 0.45).clamp(0.0, items.length * 62.0 + 8.0);
+
     return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        ...items.asMap().entries.map((e) {
-          final item = e.value;
-          return IgnorePointer(
-            ignoring: !open,
-            child: AnimatedSlide(
-              offset: open ? Offset.zero : const Offset(0, 0.3),
-              duration: Duration(milliseconds: 150 + e.key * 30),
-              curve: Curves.easeOut,
-              child: AnimatedOpacity(
-                opacity: open ? 1 : 0,
-                duration: Duration(milliseconds: 150 + e.key * 30),
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 160),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.10), blurRadius: 8)],
-                          ),
-                          child: Text(item.label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                        ),
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          // 스피드 아이템 (추가 버튼 위로 펼쳐짐)
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeInOut,
+            child: fabOpen
+                ? ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: maxItemsH),
+                    child: SingleChildScrollView(
+                      reverse: true,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          ...items.map((item) => _SpeedSideItem(item: item)),
+                          const SizedBox(height: 6),
+                        ],
                       ),
-                      const SizedBox(width: 10),
-                      FloatingActionButton.small(
-                        heroTag: 'fab_${item.label}',
-                        onPressed: item.onTap,
-                        backgroundColor: item.color.withValues(alpha: 0.75),
-                        foregroundColor: Colors.white,
-                        child: Icon(item.icon, size: 18),
+                    ),
+                  )
+                : const SizedBox(width: _panelW),
+          ),
+          // 버튼 패널
+          Container(
+            width: _panelW,
+            decoration: BoxDecoration(
+              color: C.pkD,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(14),
+                bottomLeft: Radius.circular(14),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: C.pkD.withValues(alpha: 0.40),
+                  blurRadius: 12,
+                  offset: const Offset(-2, 3),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 뒤로가기 버튼
+                GestureDetector(
+                  onTap: onBack,
+                  child: SizedBox(
+                    height: _btnH,
+                    child: Center(
+                      child: Icon(
+                        Icons.arrow_back_ios_rounded,
+                        size: 20,
+                        color: Colors.white.withValues(alpha: backAlpha),
                       ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
+                Container(height: 1, color: Colors.white.withValues(alpha: 0.25)),
+                // 추가 버튼
+                GestureDetector(
+                  onTap: onToggleFab,
+                  child: SizedBox(
+                    height: _btnH,
+                    child: Center(
+                      child: AnimatedRotation(
+                        turns: fabOpen ? 0.125 : 0,
+                        duration: const Duration(milliseconds: 200),
+                        child: Icon(
+                          Icons.add,
+                          size: 26,
+                          color: Colors.white.withValues(alpha: speedAlpha),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          );
-        }),
-        const SizedBox(height: 8),
-        FloatingActionButton(
-          heroTag: 'main_speed_fab',
-          onPressed: onToggle,
-          backgroundColor: C.lm.withValues(alpha: speedAlpha),
-          foregroundColor: const Color(0xFF1a3000),
-          elevation: open ? 6 : 4,
-          child: AnimatedRotation(
-            turns: open ? 0.125 : 0,
-            duration: const Duration(milliseconds: 200),
-            child: const Icon(Icons.add, size: 26),
           ),
-        ),
-      ],
+        ],
+      );
+  }
+}
+
+class _SpeedSideItem extends StatelessWidget {
+  const _SpeedSideItem({required this.item});
+  final _SpeedItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.09), blurRadius: 6)],
+            ),
+            child: Text(item.label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          ),
+          const SizedBox(width: 6),
+          GestureDetector(
+            onTap: item.onTap,
+            child: Container(
+              width: 52,
+              height: 40,
+              decoration: BoxDecoration(
+                color: item.color.withValues(alpha: 0.82),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(10),
+                  bottomLeft: Radius.circular(10),
+                ),
+              ),
+              child: Icon(item.icon, size: 18, color: Colors.white),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -665,7 +732,7 @@ class _WebContentAreaState extends ConsumerState<_WebContentArea> {
         Positioned(
           right: 24,
           bottom: 24,
-          child: _SpeedDial(
+          child: _WebSpeedDial(
             open: _fabOpen,
             onToggle: () => setState(() => _fabOpen = !_fabOpen),
             items: speedItems,
@@ -684,6 +751,77 @@ class _WebNavItem {
   const _WebNavItem(this.icon, this.label, this.color, this.route);
 }
 
+
+// ── 웹용 스피드다이얼 (기존 FAB 방식 유지) ────────────────────────────────────
+class _WebSpeedDial extends StatelessWidget {
+  final bool open;
+  final VoidCallback onToggle;
+  final List<_SpeedItem> items;
+  const _WebSpeedDial({required this.open, required this.onToggle, required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        ...items.asMap().entries.map((e) {
+          final item = e.value;
+          return IgnorePointer(
+            ignoring: !open,
+            child: AnimatedSlide(
+              offset: open ? Offset.zero : const Offset(0, 0.3),
+              duration: Duration(milliseconds: 150 + e.key * 30),
+              curve: Curves.easeOut,
+              child: AnimatedOpacity(
+                opacity: open ? 1 : 0,
+                duration: Duration(milliseconds: 150 + e.key * 30),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.10), blurRadius: 8)],
+                        ),
+                        child: Text(item.label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      ),
+                      const SizedBox(width: 10),
+                      FloatingActionButton.small(
+                        heroTag: 'web_fab_${item.label}',
+                        onPressed: item.onTap,
+                        backgroundColor: item.color.withValues(alpha: 0.75),
+                        foregroundColor: Colors.white,
+                        child: Icon(item.icon, size: 18),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+        const SizedBox(height: 8),
+        FloatingActionButton(
+          heroTag: 'web_main_speed_fab',
+          onPressed: onToggle,
+          backgroundColor: C.lm,
+          foregroundColor: const Color(0xFF1a3000),
+          elevation: open ? 6 : 4,
+          child: AnimatedRotation(
+            turns: open ? 0.125 : 0,
+            duration: const Duration(milliseconds: 200),
+            child: const Icon(Icons.add, size: 26),
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _CreateChip extends StatelessWidget {
   final IconData icon;

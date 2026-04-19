@@ -12,8 +12,8 @@ import '../../domain/pattern_chart.dart';
 /// 도안 모드에서 현재 작업 중인 레이어 (색상 / 기호)
 enum DrawLayer { color, symbol }
 
-const double _cellW = 36.0;
-const double _cellH = 24.0;
+const double _cellW = 24.0; // 코 가로
+const double _cellH = 24.0; // 코 세로 (정사각형)
 const double _headerW = 20.0;
 const double _headerH = 20.0;
 
@@ -98,10 +98,14 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
 
 
   CellData get _activeCell {
-    if (widget.activeLayer == DrawLayer.symbol) {
-      return CellData(symbolId: widget.activeSymbolId);
+    switch (widget.tool) {
+      case ChartTool.draw:
+        return CellData(color: widget.activeColor, symbolId: widget.activeSymbolId);
+      case ChartTool.brush:
+        return CellData(color: widget.activeColor);
+      default:
+        return CellData(color: widget.activeColor);
     }
-    return CellData(color: widget.activeColor);
   }
 
   void _handleTap(Offset localPos) {
@@ -111,28 +115,23 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
     final byId = ref.read(knitSymbolByIdProvider);
     switch (widget.tool) {
       case ChartTool.draw:
-        if (widget.activeLayer == DrawLayer.symbol) {
-          // 기호 레이어 — 기존 span 로직 유지
-          final sym = widget.activeSymbolId != null ? byId[widget.activeSymbolId] : null;
-          final sw = sym?.spanWidth ?? 1;
-          final sh = sym?.spanHeight ?? 1;
-          if (sw == 1 && sh == 1) {
-            widget.onChartChanged(widget.chart.setCellSymbol(row, col, widget.activeSymbolId));
-          } else {
-            widget.onChartChanged(widget.chart.setSpanCell(row, col, _activeCell, sw, sh));
-          }
+        // 펜: 심볼만 그리기 (배경색 보존)
+        final sym = widget.activeSymbolId != null ? byId[widget.activeSymbolId] : null;
+        final sw = sym?.spanWidth ?? 1;
+        final sh = sym?.spanHeight ?? 1;
+        if (sw == 1 && sh == 1) {
+          widget.onChartChanged(widget.chart.setCellSymbol(row, col, widget.activeSymbolId));
         } else {
-          // 색상 레이어 — 기호 보존
-          widget.onChartChanged(widget.chart.setCellColor(row, col, widget.activeColor));
+          widget.onChartChanged(widget.chart.setSpanCell(row, col, _activeCell, sw, sh));
         }
+      case ChartTool.brush:
+        // 브러쉬: 셀 배경색만 칠하기 (기호 보존)
+        widget.onChartChanged(widget.chart.setCellColor(row, col, widget.activeColor));
       case ChartTool.erase:
         widget.onChartChanged(widget.chart.eraseSpanCell(row, col));
       case ChartTool.fill:
-        // fill은 span 심볼 배치 시 무시
-        final sym = widget.activeSymbolId != null ? byId[widget.activeSymbolId] : null;
-        if (widget.activeLayer == DrawLayer.symbol &&
-            ((sym?.spanWidth ?? 1) > 1 || (sym?.spanHeight ?? 1) > 1)) break;
-        final filled = _floodFill(widget.chart, row, col, _activeCell, widget.activeLayer);
+        // 페인터: 같은 색상 연결 셀 일괄 색상 변경
+        final filled = _floodFill(widget.chart, row, col, CellData(color: widget.activeColor), DrawLayer.color);
         widget.onChartChanged(filled);
       case ChartTool.select:
         break;
@@ -145,10 +144,11 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
     if (widget.tool == ChartTool.fill || widget.tool == ChartTool.move) return;
     final hit = _hitCell(localPos);
     if (hit == null) return;
-    final (row, col) = hit;
     final byId = ref.read(knitSymbolByIdProvider);
-    if (widget.tool == ChartTool.draw) {
-      if (widget.activeLayer == DrawLayer.symbol) {
+    final (row, col) = hit;
+    switch (widget.tool) {
+      case ChartTool.draw:
+        // 펜: 심볼만 그리기 (배경색 보존)
         final sym = widget.activeSymbolId != null ? byId[widget.activeSymbolId] : null;
         final sw = sym?.spanWidth ?? 1;
         final sh = sym?.spanHeight ?? 1;
@@ -157,11 +157,12 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
         } else {
           widget.onChartChanged(widget.chart.setSpanCell(row, col, _activeCell, sw, sh));
         }
-      } else {
+      case ChartTool.brush:
         widget.onChartChanged(widget.chart.setCellColor(row, col, widget.activeColor));
-      }
-    } else if (widget.tool == ChartTool.erase) {
-      widget.onChartChanged(widget.chart.eraseSpanCell(row, col));
+      case ChartTool.erase:
+        widget.onChartChanged(widget.chart.eraseSpanCell(row, col));
+      default:
+        break;
     }
   }
 

@@ -29,6 +29,7 @@ class PatternConverterRepository {
     required String fileName,
     required String mimeType,
     void Function(double)? onProgress,
+    bool translateToKorean = false,
   }) async {
     // 1. Firebase Storage 업로드
     final storagePath = 'users/$_uid/pattern_sources/${DateTime.now().millisecondsSinceEpoch}_$fileName';
@@ -51,11 +52,13 @@ class PatternConverterRepository {
       'parseKnittingPattern',
       options: HttpsCallableOptions(timeout: const Duration(seconds: 180)),
     );
-    final result = await callable.call({
+    final payload = {
       'storagePath': storagePath,
       'mimeType': mimeType,
       'fileName': fileName,
-    });
+      if (translateToKorean) 'translateLanguage': 'ko',
+    };
+    final result = await callable.call(payload);
     onProgress?.call(0.9);
 
     final data = Map<String, dynamic>.from(result.data['result'] as Map);

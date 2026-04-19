@@ -1,4 +1,4 @@
-enum PatternFileSource { dropbox, upload, gallery, camera }
+enum PatternFileSource { dropbox, upload, gallery, camera, ravelry }
 
 enum PatternParseStatus { pending, parsing, done, failed }
 

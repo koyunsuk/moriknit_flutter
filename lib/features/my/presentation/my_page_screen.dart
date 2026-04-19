@@ -923,22 +923,22 @@ class _FabSettingsCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 투명도 토글
+          // 퀵버튼 숨기기 토글
           Row(
             children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(isKorean ? '반투명 모드' : 'Transparent Mode', style: T.bodyBold),
-                    Text(isKorean ? '퀵다이얼 패널을 반투명하게 표시' : 'Show quick dial panel as semi-transparent',
+                    Text(isKorean ? '퀵버튼 숨기기' : 'Hide Quick Button', style: T.bodyBold),
+                    Text(isKorean ? '우측 퀵버튼을 화면에서 숨깁니다' : 'Hide the quick button from the screen',
                         style: T.caption.copyWith(color: C.tx2)),
                   ],
                 ),
               ),
               Switch(
-                value: settings.transparent,
-                onChanged: (v) => ref.read(fabSettingsProvider.notifier).setTransparent(v),
+                value: settings.hideQuickButton,
+                onChanged: (v) => ref.read(fabSettingsProvider.notifier).setHideQuickButton(v),
                 activeThumbColor: C.lv,
                 activeTrackColor: C.lvL,
               ),

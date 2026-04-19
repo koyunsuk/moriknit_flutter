@@ -21,6 +21,7 @@ import '../domain/pattern_chart.dart';
 import '../../../providers/auth_provider.dart';
 import 'widgets/chart_canvas.dart';
 import 'widgets/chart_toolbar.dart';
+import 'widgets/grid_size_dialog.dart';
 
 class PatternEditorScreen extends ConsumerStatefulWidget {
   final String? patternId;
@@ -38,9 +39,25 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
   final List<PatternChart> _redoStack = [];
 
   ChartTool _activeTool = ChartTool.draw;
-  Color _activeColor = Colors.black;
+  // 도구별 색상 — 각 도구 독립 색상 관리
+  Color _penColor = Colors.black;
+  Color _brushColor = Colors.red;
+  Color _painterColor = Colors.blue;
   String? _activeSymbolId;
-  DrawLayer _activeLayer = DrawLayer.color;
+  DrawLayer _activeLayer = DrawLayer.symbol;
+
+  Color get _activeColor {
+    switch (_activeTool) {
+      case ChartTool.draw:
+        return _penColor;
+      case ChartTool.brush:
+        return _brushColor;
+      case ChartTool.fill:
+        return _painterColor;
+      default:
+        return _penColor;
+    }
+  }
   bool _isSaving = false;
   bool _showReference = false;
   late TextEditingController _narrativeController;
@@ -62,6 +79,9 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
     _referenceImageFile = widget.referenceImageFile;
     if (widget.patternId != null && widget.patternId!.isNotEmpty) {
       _loadChart(widget.patternId!);
+    } else {
+      // 새 도안: 첫 프레임 후 그리드 크기 설정 다이얼로그 표시
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showGridSizeDialogForNew());
     }
     if (widget.referenceImageFile != null || widget.referencePdfPath != null) {
       _showReference = true;
@@ -76,6 +96,41 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
     _narrativeController.dispose();
     _fitToScreenNotifier.dispose();
     super.dispose();
+  }
+
+  Future<void> _showGridSizeDialogForNew() async {
+    if (!mounted) return;
+    final result = await showGridSizeDialog(
+      context,
+      initialRows: 30,
+      initialCols: 20,
+    );
+    if (!mounted) return;
+    if (result != null) {
+      setState(() {
+        _chart = PatternChart.empty(
+          id: _chart.id,
+          title: _chart.title,
+          rows: result.rows,
+          cols: result.cols,
+        );
+      });
+    }
+  }
+
+  Future<void> _showGridSizeDialogForEdit() async {
+    if (!mounted) return;
+    final result = await showGridSizeDialog(
+      context,
+      initialRows: _chart.rows,
+      initialCols: _chart.cols,
+      isEdit: true,
+    );
+    if (!mounted) return;
+    if (result != null) {
+      _pushUndo(_chart);
+      setState(() => _chart = _chart.resize(result.rows, result.cols));
+    }
   }
 
   Future<void> _loadChart(String id) async {
@@ -533,6 +588,12 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
               tooltip: isKorean ? '참조 이미지' : 'Reference',
               onPressed: () => setState(() => _showReference = !_showReference),
             ),
+          // 그리드 크기 변경
+          IconButton(
+            icon: const Icon(Icons.grid_4x4_rounded),
+            tooltip: isKorean ? '그리드 크기 변경' : 'Resize grid',
+            onPressed: _showGridSizeDialogForEdit,
+          ),
           // 이슈 #96: PDF 내보내기 버튼
           IconButton(
             icon: const Icon(Icons.picture_as_pdf_rounded),
@@ -630,7 +691,14 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
         onLayerChanged: (layer) => setState(() => _activeLayer = layer),
         onNarrative: _openNarrativeSheet,
         onToolChanged: (tool) => setState(() => _activeTool = tool),
-        onColorChanged: (color) => setState(() => _activeColor = color),
+        onColorChanged: (color) => setState(() {
+          switch (_activeTool) {
+            case ChartTool.draw: _penColor = color;
+            case ChartTool.brush: _brushColor = color;
+            case ChartTool.fill: _painterColor = color;
+            default: _penColor = color;
+          }
+        }),
         onSymbolChanged: (id) => setState(() => _activeSymbolId = id),
         onUndo: _undo,
         onRedo: _redo,
