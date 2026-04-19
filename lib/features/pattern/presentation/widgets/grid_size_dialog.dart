@@ -82,7 +82,9 @@ class _GridSizeDialogState extends State<_GridSizeDialog> {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       backgroundColor: C.bg,
-      child: Padding(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -156,6 +158,7 @@ class _GridSizeDialogState extends State<_GridSizeDialog> {
               _ConfirmButton(onTap: _confirm, label: '시작하기'),
           ],
         ),
+      ),
       ),
     );
   }

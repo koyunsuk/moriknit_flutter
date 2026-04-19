@@ -12,6 +12,8 @@ import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../providers/pattern_library_provider.dart';
+import '../../pattern_library/domain/pattern_file.dart';
 import '../../ravelry/data/ravelry_auth_provider.dart';
 import '../../ravelry/data/ravelry_repository.dart';
 import '../../ravelry/domain/ravelry_models.dart';
@@ -161,6 +163,9 @@ class PatternListScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  // 저장된 도안 파일 섹션 (Dropbox/Ravelry 다운로드)
+                  _DownloadedFilesSection(isKorean: isKorean),
                   const SizedBox(height: 16),
                   // Ravelry 도안 라이브러리 섹션
                   _RavelryLibrarySection(isKorean: isKorean),
@@ -528,6 +533,85 @@ class _PatternRow extends StatelessWidget {
               ),
             ),
           Icon(Icons.chevron_right_rounded, color: C.mu),
+        ],
+      ),
+    );
+  }
+}
+
+// ── 저장된 도안 파일 섹션 (Dropbox/Ravelry 다운로드) ──────────────────────────
+class _DownloadedFilesSection extends ConsumerWidget {
+  final bool isKorean;
+  const _DownloadedFilesSection({required this.isKorean});
+
+  IconData _iconFor(PatternFile f) {
+    if (f.mimeType == 'application/pdf') return Icons.picture_as_pdf_rounded;
+    if (f.mimeType.startsWith('image/')) return Icons.image_rounded;
+    return Icons.insert_drive_file_rounded;
+  }
+
+  Color _iconColorFor(PatternFile f) {
+    if (f.mimeType == 'application/pdf') return const Color(0xFFE53935);
+    if (f.mimeType.startsWith('image/')) return const Color(0xFF43A047);
+    return C.mu;
+  }
+
+  String _sourceLabel(PatternFile f) {
+    switch (f.source) {
+      case PatternFileSource.dropbox: return 'Dropbox';
+      case PatternFileSource.ravelry: return 'Ravelry';
+      case PatternFileSource.upload: return isKorean ? '업로드' : 'Upload';
+      case PatternFileSource.gallery: return isKorean ? '갤러리' : 'Gallery';
+      case PatternFileSource.camera: return isKorean ? '카메라' : 'Camera';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final filesAsync = ref.watch(patternFilesProvider);
+
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+                child: Text(isKorean ? '저장됨' : 'Saved', style: T.caption.copyWith(color: C.lvD, fontWeight: FontWeight.w700)),
+              ),
+              const SizedBox(width: 8),
+              Text(isKorean ? '📥 저장된 도안 파일' : '📥 Downloaded Files', style: T.bodyBold),
+            ],
+          ),
+          const SizedBox(height: 12),
+          filesAsync.when(
+            loading: () => const Center(child: Padding(padding: EdgeInsets.symmetric(vertical: 16), child: CircularProgressIndicator())),
+            error: (e, _) => Text('$e', style: T.caption.copyWith(color: C.og)),
+            data: (files) {
+              if (files.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    isKorean ? 'Dropbox·Ravelry에서 저장한 파일이 여기에 표시돼요.' : 'Files saved from Dropbox or Ravelry appear here.',
+                    style: T.caption.copyWith(color: C.mu),
+                  ),
+                );
+              }
+              return Column(
+                children: files.map((f) => MoriLibraryCard(
+                  title: f.fileName,
+                  subtitle1: _sourceLabel(f),
+                  fallbackIcon: _iconFor(f),
+                  fallbackIconBg: _iconColorFor(f).withValues(alpha: 0.12),
+                  fallbackIconColor: _iconColorFor(f),
+                  onTap: () {},
+                  trailing: Icon(Icons.chevron_right_rounded, color: C.mu),
+                )).toList(),
+              );
+            },
+          ),
         ],
       ),
     );

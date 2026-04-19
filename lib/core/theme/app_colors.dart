@@ -367,7 +367,7 @@ class C {
   // 모리옐로우 — 레몬옐로우 (골드와 명확히 구분)
   static const _Palette _moriYellow = _Palette(
     pk: Color(0xFFFACC15),   // yellow-400 (선명한 레몬옐로우)
-    pkD: Color(0xFFCA8A04),  // yellow-600
+    pkD: Color(0xFFD97706),  // amber-600 (채도 높은 딥 앰버)
     pkL: Color(0x20FACC15),
     lv: Color(0xFFFDE047),   // yellow-300 (밝은 옐로우)
     lvD: Color(0xFFFACC15),
@@ -375,7 +375,7 @@ class C {
     lm: Color(0xFFFDE047),   // yellow-300 — FAB 선명한 옐로우
     lmD: Color(0xFFFACC15),
     lmG: Color(0x57FDE047),
-    og: Color(0xFFCA8A04),   // yellow-600
+    og: Color(0xFFD97706),   // amber-600 (채도 높은 딥 앰버)
     tx: Color(0xFF1C1917),   // 거의 블랙 (옐로우와 대비)
     tx2: Color(0xFF44403C),
     mu: Color(0xFF78716C),
