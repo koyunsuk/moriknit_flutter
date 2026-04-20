@@ -71,7 +71,7 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
     final size = widget.fitToScreenNotifier?.value;
     if (size == null) return;
     final chart = widget.chart;
-    final availableW = size.width - _headerW;
+    final availableW = size.width - _headerW * 2; // 좌우 단수 헤더
     final availableH = size.height - _headerH;
     final cellW = availableW / chart.cols;
     final cellH = availableH / chart.rows;
@@ -103,7 +103,8 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
   CellData get _activeCell {
     switch (widget.tool) {
       case ChartTool.draw:
-        return CellData(color: widget.activeColor, symbolId: widget.activeSymbolId);
+        // 펜: 심볼 색상만 지정, 배경색은 setSpanCell에서 기존값 보존
+        return CellData(symbolColor: widget.activeColor, symbolId: widget.activeSymbolId);
       case ChartTool.brush:
         return CellData(color: widget.activeColor);
       default:
@@ -118,15 +119,11 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
     final byId = ref.read(knitSymbolByIdProvider);
     switch (widget.tool) {
       case ChartTool.draw:
-        // 펜: 심볼만 그리기 (배경색 보존)
+        // 펜: 심볼 + 활성 배경색 함께 적용
         final sym = widget.activeSymbolId != null ? byId[widget.activeSymbolId] : null;
         final sw = sym?.spanWidth ?? 1;
         final sh = sym?.spanHeight ?? 1;
-        if (sw == 1 && sh == 1) {
-          widget.onChartChanged(widget.chart.setCellSymbol(row, col, widget.activeSymbolId));
-        } else {
-          widget.onChartChanged(widget.chart.setSpanCell(row, col, _activeCell, sw, sh));
-        }
+        widget.onChartChanged(widget.chart.setSpanCell(row, col, _activeCell, sw, sh));
       case ChartTool.brush:
         // 브러쉬: 셀 배경색만 칠하기 (기호 보존)
         widget.onChartChanged(widget.chart.setCellColor(row, col, widget.activeColor));
@@ -151,15 +148,11 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
     final (row, col) = hit;
     switch (widget.tool) {
       case ChartTool.draw:
-        // 펜: 심볼만 그리기 (배경색 보존)
+        // 펜: 심볼 + 활성 배경색 함께 적용
         final sym = widget.activeSymbolId != null ? byId[widget.activeSymbolId] : null;
         final sw = sym?.spanWidth ?? 1;
         final sh = sym?.spanHeight ?? 1;
-        if (sw == 1 && sh == 1) {
-          widget.onChartChanged(widget.chart.setCellSymbol(row, col, widget.activeSymbolId));
-        } else {
-          widget.onChartChanged(widget.chart.setSpanCell(row, col, _activeCell, sw, sh));
-        }
+        widget.onChartChanged(widget.chart.setSpanCell(row, col, _activeCell, sw, sh));
       case ChartTool.brush:
         widget.onChartChanged(widget.chart.setCellColor(row, col, widget.activeColor));
       case ChartTool.erase:
@@ -249,7 +242,7 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
   @override
   Widget build(BuildContext context) {
     final svgUrls = ref.watch(knitSymbolSvgUrlProvider);
-    final canvasWidth = _headerW + widget.chart.cols * _cellW;
+    final canvasWidth = _headerW + widget.chart.cols * _cellW + _headerW; // 좌우 단수 헤더
     final canvasHeight = _headerH + widget.chart.rows * _cellH;
 
     // narrative 제외 항상 SVG 오버레이 표시 — 앵커 셀만 렌더링, span 크기 적용
@@ -263,13 +256,18 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
           final url = _svgUrl(cell.symbolId!, svgUrls);
           final sw = cell.spanW ?? 1;
           final sh = cell.spanH ?? 1;
+          final symColor = cell.symbolColor ?? Colors.black87;
           if (url != null) {
             overlays.add(Positioned(
               left: _headerW + c * _cellW + 2,
               top: _headerH + r * _cellH + 2,
               width: _cellW * sw - 4,
               height: _cellH * sh - 4,
-              child: SvgPicture.network(url, fit: BoxFit.contain),
+              child: SvgPicture.network(
+                url,
+                fit: BoxFit.contain,
+                colorFilter: ColorFilter.mode(symColor, BlendMode.srcIn),
+              ),
             ));
           } else {
             // SVG 없으면 정적 라이브러리 유니코드 폴백
@@ -283,7 +281,7 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
                 child: Center(
                   child: Text(
                     sym.unicode,
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.black87),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: symColor),
                   ),
                 ),
               ));
@@ -400,11 +398,13 @@ class _ChartPainter extends CustomPainter {
     );
 
     for (int c = 0; c < chart.cols; c++) {
+      // 뜨개 방식: 오른쪽이 코1, 왼쪽으로 갈수록 증가
+      final colLabel = chart.cols - c;
       final pb = ui.ParagraphBuilder(
         ui.ParagraphStyle(textAlign: TextAlign.center, fontSize: 9),
       )
         ..pushStyle(style)
-        ..addText('${c + 1}');
+        ..addText('$colLabel');
       final p = pb.build()..layout(const ui.ParagraphConstraints(width: _cellW));
       final x = _headerW + c * _cellW;
       final dy = (_headerH - p.height) / 2;
@@ -412,14 +412,28 @@ class _ChartPainter extends CustomPainter {
     }
 
     for (int r = 0; r < chart.rows; r++) {
-      final pb = ui.ParagraphBuilder(
+      // 뜨개 방식: 아랫줄이 1단 (수학 그래프와 동일)
+      final rowLabel = chart.rows - r;
+      final y = _headerH + r * _cellH + (_cellH - 9) / 2;
+      final gridRight = _headerW + chart.cols * _cellW;
+
+      // 왼쪽 단수 (홀수단 = 겉면 = 오른쪽→왼쪽 읽기)
+      final pbL = ui.ParagraphBuilder(
         ui.ParagraphStyle(textAlign: TextAlign.right, fontSize: 9),
       )
         ..pushStyle(style)
-        ..addText('${r + 1}');
-      final p = pb.build()..layout(const ui.ParagraphConstraints(width: _headerW - 2));
-      final y = _headerH + r * _cellH + (_cellH - p.height) / 2;
-      canvas.drawParagraph(p, Offset(0, y));
+        ..addText('$rowLabel');
+      final pL = pbL.build()..layout(const ui.ParagraphConstraints(width: _headerW - 2));
+      canvas.drawParagraph(pL, Offset(0, y));
+
+      // 오른쪽 단수 (짝수단 = 안면 = 왼쪽→오른쪽 읽기)
+      final pbR = ui.ParagraphBuilder(
+        ui.ParagraphStyle(textAlign: TextAlign.left, fontSize: 9),
+      )
+        ..pushStyle(style)
+        ..addText('$rowLabel');
+      final pR = pbR.build()..layout(const ui.ParagraphConstraints(width: _headerW));
+      canvas.drawParagraph(pR, Offset(gridRight + 2, y));
     }
   }
 

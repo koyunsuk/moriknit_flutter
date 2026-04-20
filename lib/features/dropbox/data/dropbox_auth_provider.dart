@@ -84,7 +84,6 @@ class DropboxAuthProvider extends StateNotifier<DropboxAuthState> {
   }
 
   Future<void> _restoreSession() async {
-    if (kIsWeb) return;
     final accessToken = await _storage.read(key: _kKeyAccessToken);
     final accountId = await _storage.read(key: _kKeyAccountId);
     final email = await _storage.read(key: _kKeyEmail);
@@ -109,10 +108,7 @@ class DropboxAuthProvider extends StateNotifier<DropboxAuthState> {
   }
 
   Future<void> login() async {
-    if (kIsWeb) {
-      state = state.copyWith(error: '웹에서는 Dropbox 연결을 지원하지 않아요. 모바일 앱을 이용해 주세요.');
-      return;
-    }
+    if (kIsWeb) return; // 웹 신규 로그인은 flutter_appauth 미지원 — 세션 복원은 _restoreSession에서 처리
     state = state.copyWith(isLoading: true, error: null);
     try {
       final result = await _appAuth.authorizeAndExchangeCode(

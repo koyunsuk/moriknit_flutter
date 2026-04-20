@@ -45,6 +45,8 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
   final _titleCtrl = TextEditingController();
   List<AiSection> _sections = [];
   bool _loading = true;
+  bool _showKorean = true;
+  bool _showEnglish = false;
 
   // 커버 이미지
   String? _coverImageUrl;   // 기존 네트워크 URL
@@ -175,12 +177,21 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
   // ── 최신 컨트롤러 값으로 섹션 동기화 ─────────────────────────
   List<AiSection> _syncedSections() {
     return _sections.map((sec) {
-      final title = _sectionTitleCtrls[sec.id]?.text ?? sec.title;
+      final ctrlTitle = _sectionTitleCtrls[sec.id]?.text ?? (sec.titleKo ?? sec.title);
       final steps = sec.steps.map((step) {
-        final instruction = _stepCtrls[step.id]?.text ?? step.instruction;
-        return step.copyWith(instruction: instruction);
+        final ctrlText = _stepCtrls[step.id]?.text ?? (step.instructionKo ?? step.instruction);
+        // 번역 모드: instructionKo에 편집값 저장 → 영문 원본(instruction) 보존
+        if (step.instructionKo != null) {
+          return step.copyWith(instructionKo: ctrlText);
+        } else {
+          return step.copyWith(instruction: ctrlText);
+        }
       }).toList();
-      return sec.copyWith(title: title, steps: steps);
+      if (sec.titleKo != null) {
+        return sec.copyWith(titleKo: ctrlTitle, steps: steps);
+      } else {
+        return sec.copyWith(title: ctrlTitle, steps: steps);
+      }
     }).toList();
   }
 
@@ -194,7 +205,7 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
     try {
       await runWithMoriLoadingDialog<void>(
         context,
-        message: isKorean ? '한글로 변환 중입니다.' : 'Saving...',
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
         task: () async {
           final patternRepo = ref.read(patternRepositoryProvider);
@@ -204,20 +215,19 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
           String finalImageUrl = _coverImageUrl ?? '';
           if (_coverLocalPath != null) {
             final file = File(_coverLocalPath!);
-            final ref = FirebaseStorage.instance
+            final storageRef = FirebaseStorage.instance
                 .ref()
                 .child('users/patterns/cover_${DateTime.now().millisecondsSinceEpoch}.jpg');
-            await ref.putFile(file);
-            finalImageUrl = await ref.getDownloadURL();
+            await storageRef.putFile(file);
+            finalImageUrl = await storageRef.getDownloadURL();
           }
 
           if (widget.unsavedChart != null) {
-            final chart = widget.unsavedChart!.copyWith(
+            await patternRepo.save(widget.unsavedChart!.copyWith(
               title: title,
               aiSections: syncedSections,
               imageUrl: finalImageUrl,
-            );
-            await patternRepo.save(chart);
+            ));
           } else {
             final patternId = widget.patternId!;
             final existingChart = await patternRepo.get(patternId);
@@ -234,32 +244,9 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
         },
       );
       if (!mounted) return;
-      // 저장 완료 → 도안 라이브러리 이동 확인 다이얼로그
-      final goToLibrary = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(isKorean ? '저장 완료' : 'Saved', style: T.h3),
-          content: Text(
-            isKorean ? '도안 라이브러리로 이동합니다.' : 'Go to pattern library?',
-            style: T.body,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(isKorean ? '계속 편집' : 'Keep editing'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(isKorean ? '확인' : 'Confirm'),
-            ),
-          ],
-        ),
-      );
-      if (!mounted) return;
-      if (goToLibrary == true) {
-        Navigator.of(context).pop();
-        widget.onGoToLibrary?.call();
-      }
+      showSavedSnackBar(messenger, message: isKorean ? '저장되었습니다. 도안라이브러리로 이동합니다.' : 'Saved. Going to library.');
+      Navigator.of(context).pop();
+      widget.onGoToLibrary?.call();
     } catch (e) {
       if (!mounted) return;
       showSaveErrorSnackBar(messenger, message: '$e');
@@ -351,6 +338,8 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
                               titleCtrl: _sectionTitleCtrls[sec.id]!,
                               stepCtrls: _stepCtrls,
                               isKorean: isKorean,
+                              showKorean: _showKorean,
+                              showEnglish: _showEnglish,
                               onDeleteSection: () => _deleteSection(sec.id),
                               onAddStep: () => _addStep(sec.id),
                               onDeleteStep: (stepId) =>
@@ -366,6 +355,44 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
                           isKorean ? '+ 섹션 추가' : '+ Add Section',
                           style: T.sm.copyWith(color: C.lv),
                         ),
+                      ),
+                      const SizedBox(height: 8),
+
+                      // 언어 보기 토글 (저장에 영향 없음, 화면 표시 전환용)
+                      Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () => setState(() => _showKorean = !_showKorean),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Checkbox(
+                                  value: _showKorean,
+                                  activeColor: C.lv,
+                                  visualDensity: VisualDensity.compact,
+                                  onChanged: (v) => setState(() => _showKorean = v ?? true),
+                                ),
+                                Text('한국어', style: T.sm.copyWith(color: C.tx)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () => setState(() => _showEnglish = !_showEnglish),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Checkbox(
+                                  value: _showEnglish,
+                                  activeColor: C.lv,
+                                  visualDensity: VisualDensity.compact,
+                                  onChanged: (v) => setState(() => _showEnglish = v ?? false),
+                                ),
+                                Text('English', style: T.sm.copyWith(color: C.tx)),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -395,6 +422,8 @@ class _SectionCard extends StatelessWidget {
   final TextEditingController titleCtrl;
   final Map<String, TextEditingController> stepCtrls;
   final bool isKorean;
+  final bool showKorean;
+  final bool showEnglish;
   final VoidCallback onDeleteSection;
   final VoidCallback onAddStep;
   final void Function(String stepId) onDeleteStep;
@@ -405,6 +434,8 @@ class _SectionCard extends StatelessWidget {
     required this.titleCtrl,
     required this.stepCtrls,
     required this.isKorean,
+    this.showKorean = true,
+    this.showEnglish = false,
     required this.onDeleteSection,
     required this.onAddStep,
     required this.onDeleteStep,
@@ -425,25 +456,29 @@ class _SectionCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TextField(
-                      controller: titleCtrl,
-                      style: T.body.copyWith(fontWeight: FontWeight.w700),
-                      decoration: InputDecoration(
-                        hintText: isKorean ? '섹션 제목' : 'Section title',
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
-                        fillColor: Colors.transparent,
-                        filled: true,
+                    if (showKorean)
+                      TextField(
+                        controller: titleCtrl,
+                        style: T.body.copyWith(fontWeight: FontWeight.w700),
+                        decoration: InputDecoration(
+                          hintText: isKorean ? '섹션 제목' : 'Section title',
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                          fillColor: Colors.transparent,
+                          filled: true,
+                        ),
                       ),
-                    ),
-                    // titleKo가 있을 때 영어 원문을 아래에 작게 표시
-                    if (section.titleKo != null && section.title.isNotEmpty)
+                    if (showEnglish && section.title.isNotEmpty && section.title != (section.titleKo ?? ''))
                       Padding(
-                        padding: const EdgeInsets.only(top: 2),
+                        padding: EdgeInsets.only(top: showKorean ? 2 : 0),
                         child: Text(
                           section.title,
-                          style: T.caption.copyWith(color: C.mu, fontSize: 12),
+                          style: T.body.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: showKorean ? C.mu : C.tx,
+                            fontSize: showKorean ? 12 : null,
+                          ),
                         ),
                       ),
                   ],
@@ -488,26 +523,40 @@ class _SectionCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          TextField(
-                            controller: ctrl,
-                            maxLines: null,
-                            style: T.sm,
-                            decoration: InputDecoration(
-                              hintText: isKorean ? '단계 내용' : 'Step instruction',
-                              fillColor: C.gx,
-                              filled: true,
-                              isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
+                          if (showKorean)
+                            TextField(
+                              controller: ctrl,
+                              maxLines: null,
+                              style: T.sm,
+                              decoration: InputDecoration(
+                                hintText: isKorean ? '단계 내용' : 'Step instruction',
+                                fillColor: C.gx,
+                                filled: true,
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                              ),
                             ),
-                          ),
-                          // instructionKo가 있을 때 영어 원문을 아래에 작게 표시
-                          if (step.instructionKo != null && step.instruction.isNotEmpty)
+                          if (showEnglish && step.instruction.isNotEmpty && step.instruction != (step.instructionKo ?? ''))
                             Padding(
-                              padding: const EdgeInsets.only(top: 3, left: 12),
-                              child: Text(
-                                step.instruction,
-                                style: T.caption.copyWith(color: C.mu, fontSize: 12),
+                              padding: EdgeInsets.only(
+                                top: showKorean ? 3 : 0,
+                                left: showKorean ? 12 : 0,
+                              ),
+                              child: Container(
+                                width: double.infinity,
+                                padding: showKorean
+                                    ? EdgeInsets.zero
+                                    : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: showKorean
+                                    ? null
+                                    : BoxDecoration(color: C.gx, borderRadius: BorderRadius.circular(8)),
+                                child: Text(
+                                  step.instruction,
+                                  style: showKorean
+                                      ? T.caption.copyWith(color: C.mu, fontSize: 12)
+                                      : T.sm,
+                                ),
                               ),
                             ),
                         ],

@@ -859,7 +859,10 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
             ],
           ),
         );
-        if (confirmed == true && mounted) _navigateAfterAction();
+        if (confirmed == true && mounted) {
+          setState(() => _isDirty = false);
+          _navigateAfterAction();
+        }
       },
       child: Scaffold(
       backgroundColor: C.bg,
@@ -1009,7 +1012,7 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
                     PopupMenuItem(value: 'link_project', child: Row(children: [Icon(Icons.folder_outlined, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '프로젝트에 연결' : 'Link to project')])),
                     PopupMenuItem(value: 'pdf', child: Row(children: [Icon(Icons.picture_as_pdf_rounded, size: 18, color: C.og), const SizedBox(width: 8), Text(isKorean ? 'PDF로 내보내기' : 'Export as PDF')])),
                     PopupMenuItem(value: 'image', child: Row(children: [Icon(Icons.image_rounded, size: 18, color: C.lmD), const SizedBox(width: 8), Text(isKorean ? '이미지로 내보내기' : 'Export as image')])),
-                    PopupMenuItem(value: 'mori', child: Row(children: [Icon(Icons.file_download_rounded, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '.mori 파일로 내보내기' : 'Export as .mori')])),
+                    PopupMenuItem(value: 'mori', child: Row(children: [Icon(Icons.download_rounded, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '.mori 파일로 내보내기' : 'Export as .mori')])),
                     PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_rounded, size: 18, color: C.og), const SizedBox(width: 8), Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og))])),
                   ],
           ),

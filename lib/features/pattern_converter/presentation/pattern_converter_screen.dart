@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,8 +13,10 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../features/pattern/domain/pattern_chart.dart';
 import '../../../providers/parsed_pattern_provider.dart';
+import '../../dropbox/data/dropbox_auth_provider.dart';
 import '../data/pattern_converter_repository.dart';
 import 'ai_pattern_edit_screen.dart';
+import 'pattern_translator_screen.dart' show DropboxPickerScreen, DropboxPickResult;
 
 class PatternConverterScreen extends ConsumerStatefulWidget {
   final Uint8List? preloadedBytes;
@@ -53,27 +56,105 @@ class _PatternConverterScreenState
     }
   }
 
-  Future<void> _pickAndParse() async {
+  Future<void> _showSourceSheet() async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: C.bd, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Text(isKorean ? '파일 불러오기' : 'Import File', style: T.h3),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(12)),
+                child: Icon(kIsWeb ? Icons.computer_rounded : Icons.smartphone_rounded, color: C.lvD, size: 22),
+              ),
+              title: Text(kIsWeb ? (isKorean ? '내 컴퓨터' : 'My Computer') : (isKorean ? '내 핸드폰' : 'My Device'), style: T.bodyBold),
+              subtitle: Text('PDF, JPG, PNG', style: T.caption.copyWith(color: C.mu)),
+              trailing: Icon(Icons.chevron_right_rounded, color: C.mu),
+              onTap: () { Navigator.pop(context); _pickFromPhone(); },
+            ),
+            ListTile(
+              leading: Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(color: const Color(0xFF0061FF).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.cloud_rounded, color: Color(0xFF0061FF), size: 22),
+              ),
+              title: Text('Dropbox', style: T.bodyBold),
+              subtitle: Text(isKorean ? '드롭박스에서 파일 선택' : 'Pick from Dropbox', style: T.caption.copyWith(color: C.mu)),
+              trailing: Icon(Icons.chevron_right_rounded, color: C.mu),
+              onTap: () { Navigator.pop(context); _pickFromDropbox(); },
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickFromPhone() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
       withData: true,
     );
     if (result == null || result.files.isEmpty) return;
-
     final picked = result.files.first;
     final bytes = picked.bytes;
     if (bytes == null) return;
-
     final fileName = picked.name;
     final ext = fileName.split('.').last.toLowerCase();
-    final mimeType = ext == 'pdf'
-        ? 'application/pdf'
-        : ext == 'png'
-            ? 'image/png'
-            : 'image/jpeg';
-
+    final mimeType = ext == 'pdf' ? 'application/pdf' : ext == 'png' ? 'image/png' : 'image/jpeg';
     await _runParsing(bytes: bytes, fileName: fileName, mimeType: mimeType);
+  }
+
+  Future<void> _pickFromDropbox() async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final auth = ref.read(dropboxAuthProvider);
+    if (!auth.isLoggedIn) {
+      if (!mounted) return;
+      showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(isKorean ? 'Dropbox 연결 필요' : 'Dropbox Required', style: T.h3),
+          content: Text(
+            isKorean ? 'Dropbox 연결 후 이용할 수 있어요.' : 'Please connect Dropbox first.',
+            style: T.body.copyWith(color: C.tx2),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(isKorean ? '닫기' : 'Close', style: TextStyle(color: C.mu)),
+            ),
+            TextButton(
+              onPressed: () { Navigator.pop(dialogContext); context.push(Routes.dropbox); },
+              child: Text(isKorean ? '연결하기' : 'Connect', style: TextStyle(color: C.lv, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    final selected = await Navigator.push<DropboxPickResult>(
+      context,
+      MaterialPageRoute(builder: (_) => DropboxPickerScreen(isKorean: isKorean)),
+    );
+    if (selected == null || !mounted) return;
+    final ext = selected.fileName.split('.').last.toLowerCase();
+    final mimeType = ext == 'pdf' ? 'application/pdf' : ext == 'png' ? 'image/png' : 'image/jpeg';
+    await _runParsing(bytes: selected.bytes, fileName: selected.fileName, mimeType: mimeType);
   }
 
   Future<void> _runParsing({
@@ -262,7 +343,7 @@ class _PatternConverterScreenState
                       message: _statusMessage,
                       stage: _stage)
                 else
-                  _UploadButton(onTap: _pickAndParse),
+                  _UploadButton(onTap: _showSourceSheet),
 
                 const SizedBox(height: 32),
 

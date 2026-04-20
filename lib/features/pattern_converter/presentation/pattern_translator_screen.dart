@@ -14,6 +14,8 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../dropbox/data/dropbox_auth_provider.dart';
 import '../../dropbox/domain/dropbox_file_entry.dart';
 import '../../../providers/dropbox_provider.dart';
+import '../../../features/pattern/domain/pattern_chart.dart';
+import '../../../providers/parsed_pattern_provider.dart';
 import '../data/pattern_converter_repository.dart';
 import 'ai_pattern_edit_screen.dart';
 
@@ -151,9 +153,9 @@ class _PatternTranslatorScreenState
       return;
     }
 
-    final selected = await Navigator.push<_DropboxPickResult>(
+    final selected = await Navigator.push<DropboxPickResult>(
       context,
-      MaterialPageRoute(builder: (_) => _DropboxPickerScreen(isKorean: isKorean)),
+      MaterialPageRoute(builder: (_) => DropboxPickerScreen(isKorean: isKorean)),
     );
     if (selected == null || !mounted) return;
 
@@ -356,6 +358,8 @@ class _PatternTranslatorScreenState
                       isKorean: isKorean)
                 else
                   _UploadButton(onTap: _showSourceSheet, isKorean: isKorean),
+                const SizedBox(height: 32),
+                _InlineTranslatedList(isKorean: isKorean),
               ],
             ),
           ),
@@ -613,11 +617,75 @@ class _TranslateProgress extends StatelessWidget {
   }
 }
 
+// ── 번역된 도안 목록 ────────────────────────────────────────────────────────────
+class _InlineTranslatedList extends ConsumerWidget {
+  final bool isKorean;
+  const _InlineTranslatedList({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final patternsAsync = ref.watch(aiPatternsProvider);
+    return patternsAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (patterns) {
+        if (patterns.isEmpty) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(isKorean ? '번역된 도안' : 'Translated Patterns', style: T.captionBold.copyWith(color: C.mu)),
+                Text('${patterns.length}개', style: T.caption.copyWith(color: C.mu)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ...patterns.map((p) {
+              final sections = p.aiSections ?? [];
+              final totalSteps = sections.fold<int>(0, (a, s) => a + s.steps.length);
+              return GlassCard(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: InkWell(
+                  onTap: () => Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => AiPatternEditScreen(patternId: p.id),
+                  )),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40, height: 40,
+                        decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(10)),
+                        child: Icon(Icons.translate_rounded, color: C.lvD, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(p.title, style: T.sm.copyWith(fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            Text(isKorean ? '$totalSteps 단계' : '$totalSteps steps', style: T.caption.copyWith(color: C.mu)),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right_rounded, color: C.mu, size: 18),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ],
+        );
+      },
+    );
+  }
+}
+
 // ── Dropbox 파일 선택 결과 ────────────────────────────────────────────────────
-class _DropboxPickResult {
+class DropboxPickResult {
   final Uint8List bytes;
   final String fileName;
-  const _DropboxPickResult({required this.bytes, required this.fileName});
+  const DropboxPickResult({required this.bytes, required this.fileName});
 }
 
 // ── Dropbox 파일 피커 화면 ────────────────────────────────────────────────────
@@ -625,15 +693,15 @@ final _dropboxPickerFolderProvider = FutureProvider.family<List<DropboxFileEntry
   (ref, path) => ref.watch(dropboxApiClientProvider).listFolder(path),
 );
 
-class _DropboxPickerScreen extends ConsumerStatefulWidget {
+class DropboxPickerScreen extends ConsumerStatefulWidget {
   final bool isKorean;
-  const _DropboxPickerScreen({required this.isKorean});
+  const DropboxPickerScreen({required this.isKorean});
 
   @override
-  ConsumerState<_DropboxPickerScreen> createState() => _DropboxPickerScreenState();
+  ConsumerState<DropboxPickerScreen> createState() => DropboxPickerScreenState();
 }
 
-class _DropboxPickerScreenState extends ConsumerState<_DropboxPickerScreen> {
+class DropboxPickerScreenState extends ConsumerState<DropboxPickerScreen> {
   final List<String> _pathStack = [''];
   String get _currentPath => _pathStack.last;
 
@@ -653,7 +721,7 @@ class _DropboxPickerScreenState extends ConsumerState<_DropboxPickerScreen> {
         task: () => ref.read(dropboxApiClientProvider).downloadFile(entry.path),
       );
       if (!mounted) return;
-      Navigator.pop(context, _DropboxPickResult(bytes: bytes, fileName: entry.name));
+      Navigator.pop(context, DropboxPickResult(bytes: bytes, fileName: entry.name));
     } catch (e) {
       if (!mounted) return;
       showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');

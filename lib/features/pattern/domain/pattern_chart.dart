@@ -11,7 +11,8 @@ enum PatternType { chart, image, pdf }
 enum PatternSourceType { editor, image, external, aiConverted }
 
 class CellData {
-  final Color? color;
+  final Color? color;       // 배경색
+  final Color? symbolColor; // 심볼(SVG) 색상
   final String? symbolId;
 
   /// 앵커 셀 전용: span 가로 코 수 (1 = 기본, null = 비span)
@@ -25,6 +26,7 @@ class CellData {
 
   const CellData({
     this.color,
+    this.symbolColor,
     this.symbolId,
     this.spanW,
     this.spanH,
@@ -37,9 +39,10 @@ class CellData {
   /// 점유 셀 여부 (앵커 셀에 의해 덮인 셀)
   bool get isOccupied => anchorRow != null;
 
-  CellData copyWith({Color? color, String? symbolId}) {
+  CellData copyWith({Color? color, Color? symbolColor, String? symbolId}) {
     return CellData(
       color: color ?? this.color,
+      symbolColor: symbolColor ?? this.symbolColor,
       symbolId: symbolId ?? this.symbolId,
       spanW: spanW,
       spanH: spanH,
@@ -50,6 +53,7 @@ class CellData {
 
   Map<String, dynamic> toJson() => {
         if (color != null) 'color': color!.toARGB32(),
+        if (symbolColor != null) 'symbolColor': symbolColor!.toARGB32(),
         if (symbolId != null) 'symbolId': symbolId,
         if (spanW != null && spanW! > 1) 'spanW': spanW,
         if (spanH != null && spanH! > 1) 'spanH': spanH,
@@ -59,6 +63,7 @@ class CellData {
 
   factory CellData.fromJson(Map<String, dynamic> json) => CellData(
         color: json['color'] != null ? Color(json['color'] as int) : null,
+        symbolColor: json['symbolColor'] != null ? Color(json['symbolColor'] as int) : null,
         symbolId: json['symbolId'] as String?,
         spanW: json['spanW'] as int?,
         spanH: json['spanH'] as int?,
@@ -73,6 +78,7 @@ class CellData {
   bool operator ==(Object other) =>
       other is CellData &&
       other.color?.toARGB32() == color?.toARGB32() &&
+      other.symbolColor?.toARGB32() == symbolColor?.toARGB32() &&
       other.symbolId == symbolId &&
       other.spanW == spanW &&
       other.spanH == spanH &&
@@ -80,7 +86,7 @@ class CellData {
       other.anchorCol == anchorCol;
 
   @override
-  int get hashCode => Object.hash(color?.toARGB32(), symbolId, spanW, spanH, anchorRow, anchorCol);
+  int get hashCode => Object.hash(color?.toARGB32(), symbolColor?.toARGB32(), symbolId, spanW, spanH, anchorRow, anchorCol);
 }
 
 class PatternChart {
@@ -191,9 +197,10 @@ class PatternChart {
       }
     }
 
-    // 앵커 셀 배치 — 기존 색상 보존
+    // 앵커 셀 배치 — 기존 배경색 보존, 심볼색은 anchorCell에서 가져옴
     final anchor = CellData(
-      color: newGrid[row][col].color,
+      color: anchorCell.color ?? newGrid[row][col].color,
+      symbolColor: anchorCell.symbolColor,
       symbolId: anchorCell.symbolId,
       spanW: spanW > 1 ? spanW : null,
       spanH: spanH > 1 ? spanH : null,

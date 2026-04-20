@@ -57,6 +57,13 @@ class ChartToolbar extends StatefulWidget {
 
 class _ChartToolbarState extends State<ChartToolbar> {
   SymbolCategory _selectedCategory = SymbolCategory.basic;
+  final _topBarScrollCtrl = ScrollController();
+
+  @override
+  void dispose() {
+    _topBarScrollCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,6 +89,7 @@ class _ChartToolbarState extends State<ChartToolbar> {
               onExport: widget.onExport,
               onFitScreen: widget.onFitScreen,
               onGridResize: widget.onGridResize,
+              scrollController: _topBarScrollCtrl,
             ),
             const Divider(height: 1),
             _UnifiedPanel(
@@ -113,6 +121,7 @@ class _TopBar extends StatelessWidget {
   final VoidCallback onExport;
   final VoidCallback? onFitScreen;
   final VoidCallback? onGridResize;
+  final ScrollController? scrollController;
 
   const _TopBar({
     required this.activeTool,
@@ -126,19 +135,24 @@ class _TopBar extends StatelessWidget {
     required this.onExport,
     this.onFitScreen,
     this.onGridResize,
+    this.scrollController,
   });
 
   @override
   Widget build(BuildContext context) {
     // 1단: 그리기 도구 + 액션 버튼 통합
-    return SingleChildScrollView(
+    return Scrollbar(
+      controller: scrollController,
+      thumbVisibility: true,
+      child: SingleChildScrollView(
+      controller: scrollController,
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(6, 6, 4, 4),
+      padding: const EdgeInsets.fromLTRB(6, 6, 4, 14),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           _ToolBtn(icon: Icons.edit_rounded, active: activeTool == ChartTool.draw, onTap: () => onToolChanged(ChartTool.draw)),
-          _ToolBtn(icon: Icons.brush, active: activeTool == ChartTool.brush, onTap: () => onToolChanged(ChartTool.brush)),
+          _ToolBtn(icon: Icons.brush_rounded, active: activeTool == ChartTool.brush, onTap: () => onToolChanged(ChartTool.brush)),
           _ToolBtn(icon: Icons.format_color_fill_rounded, active: activeTool == ChartTool.fill, onTap: () => onToolChanged(ChartTool.fill)),
           _ToolBtn(icon: Icons.cleaning_services_rounded, active: activeTool == ChartTool.erase, onTap: () => onToolChanged(ChartTool.erase)),
           _ToolBtn(icon: Icons.pan_tool_rounded, active: activeTool == ChartTool.move, onTap: () => onToolChanged(ChartTool.move)),
@@ -159,10 +173,10 @@ class _TopBar extends StatelessWidget {
           _IconBtn(icon: Icons.delete_outline_rounded, enabled: true, onTap: onClear, color: Colors.red.shade300),
         ],
       ),
+      ),
     );
   }
 }
-
 
 class _ToolBtn extends StatelessWidget {
   final IconData icon;
