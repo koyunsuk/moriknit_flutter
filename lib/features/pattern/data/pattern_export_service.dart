@@ -414,6 +414,8 @@ class PatternExportService {
         return 'Color';
       case ChartMode.symbol:
         return 'Symbol';
+      case ChartMode.colorChart:
+        return 'Color Chart';
       case ChartMode.narrative:
         return 'Text';
     }

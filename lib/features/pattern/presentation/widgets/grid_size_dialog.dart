@@ -3,20 +3,30 @@ import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../domain/pattern_chart.dart';
 
 /// 그리드 크기 설정 다이얼로그
-/// 반환값: GridSizeResult(rows, cols) 또는 null (취소)
+/// 반환값: GridSizeResult(rows, cols, mode) 또는 null (취소)
 class GridSizeResult {
   final int rows;
   final int cols;
-  const GridSizeResult({required this.rows, required this.cols});
+  final ChartMode mode;
+  const GridSizeResult({
+    required this.rows,
+    required this.cols,
+    this.mode = ChartMode.symbol,
+  });
 }
 
+/// 그리드 크기 설정 다이얼로그
+/// [initialMode]: 신규 생성 시 기본 모드. null이면 ChartMode.symbol.
+/// 편집 모드(isEdit=true)에서는 모드 선택 UI를 숨기고 기존 모드를 유지함.
 Future<GridSizeResult?> showGridSizeDialog(
   BuildContext context, {
   required int initialRows,
   required int initialCols,
   bool isEdit = false,
+  ChartMode? initialMode,
 }) {
   return showDialog<GridSizeResult>(
     context: context,
@@ -25,6 +35,7 @@ Future<GridSizeResult?> showGridSizeDialog(
       initialRows: initialRows,
       initialCols: initialCols,
       isEdit: isEdit,
+      initialMode: initialMode ?? ChartMode.symbol,
     ),
   );
 }
@@ -33,11 +44,13 @@ class _GridSizeDialog extends StatefulWidget {
   final int initialRows;
   final int initialCols;
   final bool isEdit;
+  final ChartMode initialMode;
 
   const _GridSizeDialog({
     required this.initialRows,
     required this.initialCols,
     required this.isEdit,
+    required this.initialMode,
   });
 
   @override
@@ -47,6 +60,7 @@ class _GridSizeDialog extends StatefulWidget {
 class _GridSizeDialogState extends State<_GridSizeDialog> {
   late TextEditingController _rowsCtrl;
   late TextEditingController _colsCtrl;
+  late ChartMode _mode;
   String? _error;
 
   @override
@@ -54,6 +68,11 @@ class _GridSizeDialogState extends State<_GridSizeDialog> {
     super.initState();
     _rowsCtrl = TextEditingController(text: '${widget.initialRows}');
     _colsCtrl = TextEditingController(text: '${widget.initialCols}');
+    // 새로만들기 시 모드 선택 기본값: 기호(symbol) — 이전 동작 유지
+    // colorChart 모드를 지원하기 위해 최상단 칩으로 노출
+    _mode = widget.initialMode == ChartMode.colorChart
+        ? ChartMode.colorChart
+        : ChartMode.symbol;
   }
 
   @override
@@ -74,7 +93,9 @@ class _GridSizeDialogState extends State<_GridSizeDialog> {
       setState(() => _error = '최대 200 x 200까지 설정할 수 있어요.');
       return;
     }
-    Navigator.of(context).pop(GridSizeResult(rows: rows, cols: cols));
+    Navigator.of(context).pop(
+      GridSizeResult(rows: rows, cols: cols, mode: _mode),
+    );
   }
 
   @override
@@ -99,6 +120,32 @@ class _GridSizeDialogState extends State<_GridSizeDialog> {
               '코 수(가로)와 단 수(세로)를 입력하세요.\n셀 비율은 뜨개 코 실제 비율(4:6)로 표시됩니다.',
               style: T.caption.copyWith(color: C.tx2),
             ),
+            if (!widget.isEdit) ...[
+              const SizedBox(height: 16),
+              Text(
+                '도안 종류',
+                style: T.caption.copyWith(
+                  color: C.tx2,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _ModeChip(
+                    label: '기호 도안',
+                    active: _mode == ChartMode.symbol,
+                    onTap: () => setState(() => _mode = ChartMode.symbol),
+                  ),
+                  const SizedBox(width: 8),
+                  _ModeChip(
+                    label: '컬러차트',
+                    active: _mode == ChartMode.colorChart,
+                    onTap: () => setState(() => _mode = ChartMode.colorChart),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 20),
             Row(
               children: [
@@ -340,6 +387,47 @@ class _ConfirmButton extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+    );
+  }
+}
+
+/// 모드 선택 칩 — CLAUDE.md 칩 스타일 준수
+/// 선택: color C.lv, text white, fontWeight w700
+/// 미선택: color C.lvL, border C.lv.withValues(alpha:0.20), text C.lvD
+class _ModeChip extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _ModeChip({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? C.lv : C.lvL,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: active ? C.lv : C.lv.withValues(alpha: 0.20),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            color: active ? Colors.white : C.lvD,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
     );
   }
 }

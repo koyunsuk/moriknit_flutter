@@ -91,9 +91,10 @@ class _PatternCard extends StatelessWidget {
 
   String _modeLabel(ChartMode mode) {
     switch (mode) {
-      case ChartMode.color:     return isKorean ? '색상' : 'Color';
-      case ChartMode.symbol:    return isKorean ? '기호' : 'Symbol';
-      case ChartMode.narrative: return isKorean ? '서술형' : 'Narrative';
+      case ChartMode.color:      return isKorean ? '색상' : 'Color';
+      case ChartMode.symbol:     return isKorean ? '기호' : 'Symbol';
+      case ChartMode.colorChart: return isKorean ? '컬러차트' : 'Color Chart';
+      case ChartMode.narrative:  return isKorean ? '서술형' : 'Narrative';
     }
   }
 

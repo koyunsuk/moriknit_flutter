@@ -142,7 +142,13 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
           title: _chart.title,
           rows: result.rows,
           cols: result.cols,
+          mode: result.mode,
         );
+        // 컬러차트 모드: 기본 도구를 브러쉬(셀 배경색)로 설정
+        if (result.mode == ChartMode.colorChart) {
+          _activeTool = ChartTool.brush;
+          _activeLayer = DrawLayer.color;
+        }
       });
     }
   }
@@ -287,17 +293,32 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
                   setSheetState(() {});
                 },
               ),
+              // 컬러차트 모드 — 색상 범례 패널
+              if (_chart.mode == ChartMode.colorChart)
+                _ColorLegendPanel(chart: _chart, isKorean: isKorean),
               Expanded(
-                child: _NarrativeEditor(
-                  controller: _narrativeController,
-                  onChanged: (text) {
-                    _pushUndo(_chart);
-                    setState(() {
-                      _chart = _chart.copyWith(narrativeText: text);
-                    });
-                    setSheetState(() {});
-                  },
-                ),
+                child: _chart.mode == ChartMode.colorChart
+                    ? _NarrativeWithPreview(
+                        chart: _chart,
+                        controller: _narrativeController,
+                        onChanged: (text) {
+                          _pushUndo(_chart);
+                          setState(() {
+                            _chart = _chart.copyWith(narrativeText: text);
+                          });
+                          setSheetState(() {});
+                        },
+                      )
+                    : _NarrativeEditor(
+                        controller: _narrativeController,
+                        onChanged: (text) {
+                          _pushUndo(_chart);
+                          setState(() {
+                            _chart = _chart.copyWith(narrativeText: text);
+                          });
+                          setSheetState(() {});
+                        },
+                      ),
               ),
               SafeArea(
                 child: Padding(
@@ -754,18 +775,22 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
   }
 
   /// 이슈 #347: 기호 그리드 → 서술형 도안 변환 (RLE)
+  /// 이슈 #564: 컬러차트 모드 지원 — 빈 칸=겉뜨기, 색상은 MC/CC 라벨로 변환
   Future<void> _generateNarrativeFromGrid() async {
     final isKorean = ref.read(appLanguageProvider).isKorean;
-    // 기호 데이터가 있는지 확인
+    // 기호 데이터 또는 색상 데이터가 있는지 확인 (컬러차트 모드 지원)
     final hasSymbols = _chart.grid.any(
       (row) => row.any((cell) => cell.symbolId != null),
     );
-    if (!hasSymbols) {
+    final hasColors = _chart.grid.any(
+      (row) => row.any((cell) => cell.color != null),
+    );
+    if (!hasSymbols && !hasColors) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(isKorean
-              ? '기호 모드에서 먼저 기호를 그려주세요.'
-              : 'Draw symbols in symbol mode first.'),
+              ? '그리드에 먼저 기호나 색상을 그려주세요.'
+              : 'Draw symbols or colors in the grid first.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -1160,6 +1185,11 @@ class _GenerateFromGridBar extends StatelessWidget {
     final hasSymbols = chart.grid.any(
       (row) => row.any((cell) => cell.symbolId != null),
     );
+    final hasColors = chart.grid.any(
+      (row) => row.any((cell) => cell.color != null),
+    );
+    final canGenerate = hasSymbols || hasColors;
+    final isColorChart = chart.mode == ChartMode.colorChart;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1167,33 +1197,60 @@ class _GenerateFromGridBar extends StatelessWidget {
         color: C.lvL,
         border: Border(bottom: BorderSide(color: C.bd, width: 1)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.auto_awesome_rounded, size: 16, color: C.lvD),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              isKorean
-                  ? '기호 그리드를 서술형 도안으로 변환합니다.'
-                  : 'Convert symbol grid to narrative pattern.',
-              style: TextStyle(fontSize: 12, color: C.tx2),
-            ),
+          Row(
+            children: [
+              Icon(Icons.auto_awesome_rounded, size: 16, color: C.lvD),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  isColorChart
+                      ? (isKorean
+                          ? '컬러차트를 서술형 도안으로 변환합니다.'
+                          : 'Convert color chart to narrative pattern.')
+                      : (isKorean
+                          ? '기호 그리드를 서술형 도안으로 변환합니다.'
+                          : 'Convert symbol grid to narrative pattern.'),
+                  style: TextStyle(fontSize: 12, color: C.tx2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: canGenerate ? onGenerate : null,
+                icon: const Icon(Icons.text_snippet_rounded, size: 15),
+                label: Text(
+                  isKorean ? '그리드에서 생성' : 'Generate',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: C.lv,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: C.bd,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  minimumSize: const Size(0, 32),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          ElevatedButton.icon(
-            onPressed: hasSymbols ? onGenerate : null,
-            icon: const Icon(Icons.text_snippet_rounded, size: 15),
-            label: Text(
-              isKorean ? '그리드에서 생성' : 'Generate',
-              style: const TextStyle(fontSize: 12),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: C.lv,
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: C.bd,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              minimumSize: const Size(0, 32),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          // 안내칩 — 빈 칸 겉뜨기 처리 안내
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Row(
+              children: [
+                Icon(Icons.lightbulb_outline_rounded, size: 13, color: C.lvD),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    isKorean
+                        ? '겉뜨기는 빈 칸으로 생략할 수 있어요.'
+                        : 'Empty cells are treated as knit stitches.',
+                    style: TextStyle(fontSize: 11, color: C.tx2),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -1320,6 +1377,248 @@ class _NarrativeEditor extends StatelessWidget {
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           contentPadding: const EdgeInsets.all(16),
         ),
+      ),
+    );
+  }
+}
+
+/// 이슈 #564: 컬러차트 서술형 — 편집(위) + 색상 프리뷰(아래) 분할 뷰
+class _NarrativeWithPreview extends StatelessWidget {
+  final PatternChart chart;
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  const _NarrativeWithPreview({
+    required this.chart,
+    required this.controller,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final labels = PatternChart.buildColorLabels(chart.grid);
+    return Column(
+      children: [
+        Expanded(
+          flex: 3,
+          child: _NarrativeEditor(controller: controller, onChanged: onChanged),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          flex: 2,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.visibility_outlined, size: 14, color: C.lvD),
+                    const SizedBox(width: 4),
+                    Text(
+                      '프리뷰',
+                      style: T.caption.copyWith(
+                        color: C.tx2,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: ListenableBuilder(
+                      listenable: controller,
+                      builder: (context, _) => _NarrativeRichText(
+                        text: controller.text,
+                        labels: labels,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 서술형 텍스트에서 "[MC]", "[CC1]" 등 색상 라벨을 실제 색상 배지로 렌더링
+class _NarrativeRichText extends StatelessWidget {
+  final String text;
+  final Map<int, String> labels;
+
+  const _NarrativeRichText({required this.text, required this.labels});
+
+  /// 라벨 → argb 역매핑
+  Map<String, int> get _argbByLabel =>
+      {for (final e in labels.entries) e.value: e.key};
+
+  @override
+  Widget build(BuildContext context) {
+    if (text.trim().isEmpty) {
+      return Text(
+        '그리드에서 생성 버튼을 눌러 서술형 도안을 만들어 보세요.',
+        style: T.caption.copyWith(color: C.tx2),
+      );
+    }
+    final byLabel = _argbByLabel;
+    // [MC], [CC1] 패턴 매칭
+    final regex = RegExp(r'\[(MC|CC\d+)\]');
+    final spans = <InlineSpan>[];
+    int cursor = 0;
+    for (final m in regex.allMatches(text)) {
+      if (m.start > cursor) {
+        spans.add(TextSpan(text: text.substring(cursor, m.start)));
+      }
+      final label = m.group(1)!;
+      final argb = byLabel[label];
+      if (argb != null) {
+        final color = Color(argb);
+        final isLight = color.computeLuminance() > 0.6;
+        spans.add(WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: isLight ? C.bd2 : Colors.transparent,
+                width: 0.8,
+              ),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: isLight ? C.tx : Colors.white,
+              ),
+            ),
+          ),
+        ));
+      } else {
+        spans.add(TextSpan(text: m.group(0)));
+      }
+      cursor = m.end;
+    }
+    if (cursor < text.length) {
+      spans.add(TextSpan(text: text.substring(cursor)));
+    }
+    return RichText(
+      text: TextSpan(
+        style: TextStyle(fontSize: 13, height: 1.8, color: C.tx),
+        children: spans,
+      ),
+    );
+  }
+}
+
+/// 이슈 #564: 컬러차트 색상 범례 — MC/CC1/CC2... 색상 칩 + HEX 코드
+class _ColorLegendPanel extends StatelessWidget {
+  final PatternChart chart;
+  final bool isKorean;
+
+  const _ColorLegendPanel({required this.chart, required this.isKorean});
+
+  @override
+  Widget build(BuildContext context) {
+    final labels = PatternChart.buildColorLabels(chart.grid);
+    if (labels.isEmpty) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      decoration: BoxDecoration(
+        color: C.bg,
+        border: Border(bottom: BorderSide(color: C.bd, width: 1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.palette_outlined, size: 14, color: C.lvD),
+              const SizedBox(width: 4),
+              Text(
+                isKorean ? '색상 범례' : 'Color Legend',
+                style: T.caption.copyWith(
+                  color: C.tx2,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              for (final entry in labels.entries)
+                _LegendChip(argb: entry.key, label: entry.value),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LegendChip extends StatelessWidget {
+  final int argb;
+  final String label;
+
+  const _LegendChip({required this.argb, required this.label});
+
+  String get _hex {
+    final v = argb & 0xFFFFFF;
+    return '#${v.toRadixString(16).toUpperCase().padLeft(6, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Color(argb);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: C.gx,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: C.bd2),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 14,
+            height: 14,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              border: Border.all(color: C.bd2, width: 0.8),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: C.tx,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            _hex,
+            style: TextStyle(
+              fontSize: 10,
+              color: C.tx2,
+              fontFamily: 'monospace',
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'ai_pattern_section.dart';
 import 'knit_symbols.dart';
 
-enum ChartMode { color, symbol, narrative }
+enum ChartMode { color, symbol, colorChart, narrative }
 
 enum ChartTool { draw, brush, erase, fill, select, move }
 
@@ -261,40 +261,82 @@ class PatternChart {
 
   /// 심볼 모드 그리드 → RLE 서술형 도안 변환
   /// 예: "1단: 겉뜨기 10, 안뜨기 2, 바늘비우기, 2코모아겉뜨기 3"
+  ///
+  /// - 빈 칸 / 'empty' / 'no_st' = 겉뜨기(knit)로 처리
+  /// - 컬러차트 모드(ChartMode.colorChart)에서는 (symbolId, color) 조합으로 RLE,
+  ///   색상 라벨(MC/CC1...)을 함께 출력: "겉뜨기 3[MC], 겉뜨기 2[CC1]"
   String toNarrative({bool korean = true}) {
+    final isColorChart = mode == ChartMode.colorChart;
+    final colorLabels = isColorChart ? buildColorLabels(grid) : const <int, String>{};
+
     final buffer = StringBuffer();
     for (int r = 0; r < rows; r++) {
       final rowCells = grid[r];
-      // RLE — 연속 동일 심볼 압축
-      final runs = <(String, int)>[];
+      // RLE — 연속 동일 (symId, argb) 압축
+      final runs = <_NarrativeRun>[];
       int c = 0;
       while (c < cols) {
-        final symId = rowCells[c].symbolId;
-        if (symId == null || symId == 'empty' || symId == 'no_st') {
+        final cell = rowCells[c];
+        // 점유 셀(span 내부)은 앵커에서 이미 처리됨 → 건너뜀
+        if (cell.isOccupied) {
           c++;
           continue;
         }
+        final normId = _normalizeSymId(cell.symbolId);
+        final argb = cell.color?.toARGB32() ?? 0xFFFFFFFF;
         int count = 1;
-        while (c + count < cols && rowCells[c + count].symbolId == symId) {
+        while (c + count < cols) {
+          final next = rowCells[c + count];
+          if (next.isOccupied) break;
+          final nextNorm = _normalizeSymId(next.symbolId);
+          final nextArgb = next.color?.toARGB32() ?? 0xFFFFFFFF;
+          if (nextNorm != normId) break;
+          if (isColorChart && nextArgb != argb) break;
           count++;
         }
-        runs.add((symId, count));
+        runs.add(_NarrativeRun(symId: normId, argb: argb, count: count));
         c += count;
       }
       if (runs.isEmpty) continue;
 
       final rowLabel = korean ? '${r + 1}단' : 'Row ${r + 1}';
-      final parts = runs.map(((String id, int count) run) {
-        final sym = KnitSymbolLibrary.byId(run.$1);
+      final parts = runs.map((run) {
+        final sym = KnitSymbolLibrary.byId(run.symId);
         final name = korean
-            ? (sym?.verbKo ?? sym?.name ?? run.$1)
-            : (sym?.verbEn ?? sym?.abbr ?? run.$1);
-        return run.$2 > 1 ? '$name ${run.$2}' : name;
+            ? (sym?.verbKo ?? sym?.name ?? run.symId)
+            : (sym?.verbEn ?? sym?.abbr ?? run.symId);
+        final base = run.count > 1 ? '$name ${run.count}' : name;
+        if (!isColorChart) return base;
+        final label = colorLabels[run.argb] ?? 'MC';
+        return '$base[$label]';
       }).join(', ');
 
       buffer.writeln('$rowLabel: $parts');
     }
     return buffer.toString().trim();
+  }
+
+  /// 빈 칸/'empty'/'no_st' → 'knit' 로 정규화
+  static String _normalizeSymId(String? symId) {
+    if (symId == null || symId == 'empty' || symId == 'no_st') return 'k';
+    return symId;
+  }
+
+  /// 그리드에 사용된 색상(ARGB int) → 라벨 매핑
+  /// 첫 번째 등장 색상 = MC, 이후 등장 순서대로 CC1, CC2, ...
+  static Map<int, String> buildColorLabels(List<List<CellData>> grid) {
+    final colorOrder = <int>[];
+    for (final row in grid) {
+      for (final cell in row) {
+        if (cell.isOccupied) continue;
+        final argb = cell.color?.toARGB32() ?? 0xFFFFFFFF;
+        if (!colorOrder.contains(argb)) colorOrder.add(argb);
+      }
+    }
+    return {
+      for (int i = 0; i < colorOrder.length; i++)
+        colorOrder[i]: i == 0 ? 'MC' : 'CC$i',
+    };
   }
 
   PatternChart copyWith({
@@ -449,4 +491,16 @@ class PatternChart {
       narrativeText: narrativeText,
     );
   }
+}
+
+/// toNarrative 내부 RLE 런 — (심볼ID, 배경색 argb, 반복 수)
+class _NarrativeRun {
+  final String symId;
+  final int argb;
+  final int count;
+  const _NarrativeRun({
+    required this.symId,
+    required this.argb,
+    required this.count,
+  });
 }
