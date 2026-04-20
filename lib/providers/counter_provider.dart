@@ -32,6 +32,13 @@ final counterByIdProvider = StreamProvider.family<CounterModel?, String>((ref, i
   return ref.watch(counterRepositoryProvider).watchCounter(id);
 });
 
+// 도안 차트ID로 연결된 카운터 (트래킹 연동용)
+final counterByChartIdProvider = StreamProvider.family<CounterModel?, String>((ref, chartId) {
+  final isLoggedIn = ref.watch(isLoggedInProvider);
+  if (!isLoggedIn || chartId.isEmpty) return Stream.value(null);
+  return ref.watch(counterRepositoryProvider).watchCounterByChartId(chartId);
+});
+
 // 프로젝트별 카운터 목록입니다.
 final countersByProjectProvider = StreamProvider.family<List<CounterModel>, String>((ref, projectId) {
   final isLoggedIn = ref.watch(isLoggedInProvider);

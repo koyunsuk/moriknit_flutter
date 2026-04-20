@@ -32,6 +32,8 @@ class CounterModel with _$CounterModel {
     @Default(0) int targetRowCount,
     @Default([]) List<CounterMark> marks,
     @Default('') String photoUrl,
+    @Default('') String patternChartId,
+    @Default('') String patternFileId,
     DateTime? createdAt,
     DateTime? updatedAt,
     @Default(false) bool isDirty,

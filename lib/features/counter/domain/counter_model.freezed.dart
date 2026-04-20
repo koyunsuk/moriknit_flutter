@@ -230,6 +230,8 @@ mixin _$CounterModel {
   int get targetRowCount => throw _privateConstructorUsedError;
   List<CounterMark> get marks => throw _privateConstructorUsedError;
   String get photoUrl => throw _privateConstructorUsedError;
+  String get patternChartId => throw _privateConstructorUsedError;
+  String get patternFileId => throw _privateConstructorUsedError;
   DateTime? get createdAt => throw _privateConstructorUsedError;
   DateTime? get updatedAt => throw _privateConstructorUsedError;
   bool get isDirty => throw _privateConstructorUsedError;
@@ -258,6 +260,8 @@ abstract class $CounterModelCopyWith<$Res> {
       int targetRowCount,
       List<CounterMark> marks,
       String photoUrl,
+      String patternChartId,
+      String patternFileId,
       DateTime? createdAt,
       DateTime? updatedAt,
       bool isDirty});
@@ -287,6 +291,8 @@ class _$CounterModelCopyWithImpl<$Res, $Val extends CounterModel>
     Object? targetRowCount = null,
     Object? marks = null,
     Object? photoUrl = null,
+    Object? patternChartId = null,
+    Object? patternFileId = null,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
     Object? isDirty = null,
@@ -336,6 +342,14 @@ class _$CounterModelCopyWithImpl<$Res, $Val extends CounterModel>
           ? _value.photoUrl
           : photoUrl // ignore: cast_nullable_to_non_nullable
               as String,
+      patternChartId: null == patternChartId
+          ? _value.patternChartId
+          : patternChartId // ignore: cast_nullable_to_non_nullable
+              as String,
+      patternFileId: null == patternFileId
+          ? _value.patternFileId
+          : patternFileId // ignore: cast_nullable_to_non_nullable
+              as String,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -372,6 +386,8 @@ abstract class _$$CounterModelImplCopyWith<$Res>
       int targetRowCount,
       List<CounterMark> marks,
       String photoUrl,
+      String patternChartId,
+      String patternFileId,
       DateTime? createdAt,
       DateTime? updatedAt,
       bool isDirty});
@@ -399,6 +415,8 @@ class __$$CounterModelImplCopyWithImpl<$Res>
     Object? targetRowCount = null,
     Object? marks = null,
     Object? photoUrl = null,
+    Object? patternChartId = null,
+    Object? patternFileId = null,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
     Object? isDirty = null,
@@ -448,6 +466,14 @@ class __$$CounterModelImplCopyWithImpl<$Res>
           ? _value.photoUrl
           : photoUrl // ignore: cast_nullable_to_non_nullable
               as String,
+      patternChartId: null == patternChartId
+          ? _value.patternChartId
+          : patternChartId // ignore: cast_nullable_to_non_nullable
+              as String,
+      patternFileId: null == patternFileId
+          ? _value.patternFileId
+          : patternFileId // ignore: cast_nullable_to_non_nullable
+              as String,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -479,6 +505,8 @@ class _$CounterModelImpl implements _CounterModel {
       this.targetRowCount = 0,
       final List<CounterMark> marks = const [],
       this.photoUrl = '',
+      this.patternChartId = '',
+      this.patternFileId = '',
       this.createdAt,
       this.updatedAt,
       this.isDirty = false})
@@ -524,6 +552,12 @@ class _$CounterModelImpl implements _CounterModel {
   @JsonKey()
   final String photoUrl;
   @override
+  @JsonKey()
+  final String patternChartId;
+  @override
+  @JsonKey()
+  final String patternFileId;
+  @override
   final DateTime? createdAt;
   @override
   final DateTime? updatedAt;
@@ -533,7 +567,7 @@ class _$CounterModelImpl implements _CounterModel {
 
   @override
   String toString() {
-    return 'CounterModel(id: $id, uid: $uid, name: $name, projectId: $projectId, projectStepId: $projectStepId, stitchCount: $stitchCount, rowCount: $rowCount, targetStitchCount: $targetStitchCount, targetRowCount: $targetRowCount, marks: $marks, photoUrl: $photoUrl, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty)';
+    return 'CounterModel(id: $id, uid: $uid, name: $name, projectId: $projectId, projectStepId: $projectStepId, stitchCount: $stitchCount, rowCount: $rowCount, targetStitchCount: $targetStitchCount, targetRowCount: $targetRowCount, marks: $marks, photoUrl: $photoUrl, patternChartId: $patternChartId, patternFileId: $patternFileId, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty)';
   }
 
   @override
@@ -559,6 +593,10 @@ class _$CounterModelImpl implements _CounterModel {
             const DeepCollectionEquality().equals(other._marks, _marks) &&
             (identical(other.photoUrl, photoUrl) ||
                 other.photoUrl == photoUrl) &&
+            (identical(other.patternChartId, patternChartId) ||
+                other.patternChartId == patternChartId) &&
+            (identical(other.patternFileId, patternFileId) ||
+                other.patternFileId == patternFileId) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
@@ -581,6 +619,8 @@ class _$CounterModelImpl implements _CounterModel {
       targetRowCount,
       const DeepCollectionEquality().hash(_marks),
       photoUrl,
+      patternChartId,
+      patternFileId,
       createdAt,
       updatedAt,
       isDirty);
@@ -612,6 +652,8 @@ abstract class _CounterModel implements CounterModel {
       final int targetRowCount,
       final List<CounterMark> marks,
       final String photoUrl,
+      final String patternChartId,
+      final String patternFileId,
       final DateTime? createdAt,
       final DateTime? updatedAt,
       final bool isDirty}) = _$CounterModelImpl;
@@ -641,6 +683,10 @@ abstract class _CounterModel implements CounterModel {
   List<CounterMark> get marks;
   @override
   String get photoUrl;
+  @override
+  String get patternChartId;
+  @override
+  String get patternFileId;
   @override
   DateTime? get createdAt;
   @override

@@ -92,6 +92,16 @@ class CounterRepository {
             .toList());
   }
 
+  // ── READ (도안 차트별) ────────────────────────────────────
+  Stream<CounterModel?> watchCounterByChartId(String chartId) {
+    if (_uid.isEmpty || chartId.isEmpty) return Stream.value(null);
+    return _countersRef
+        .where('patternChartId', isEqualTo: chartId)
+        .limit(1)
+        .snapshots()
+        .map((snap) => snap.docs.isEmpty ? null : CounterModel.fromFirestore(snap.docs.first));
+  }
+
   // ── READ (단건) ──────────────────────────────────────────
   Stream<CounterModel?> watchCounter(String id) {
     if (_uid.isEmpty) return Stream.value(null);

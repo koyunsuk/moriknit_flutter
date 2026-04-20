@@ -38,6 +38,8 @@ _$CounterModelImpl _$$CounterModelImplFromJson(Map<String, dynamic> json) =>
               .toList() ??
           const [],
       photoUrl: json['photoUrl'] as String? ?? '',
+      patternChartId: json['patternChartId'] as String? ?? '',
+      patternFileId: json['patternFileId'] as String? ?? '',
       createdAt: json['createdAt'] == null
           ? null
           : DateTime.parse(json['createdAt'] as String),
@@ -60,6 +62,8 @@ Map<String, dynamic> _$$CounterModelImplToJson(_$CounterModelImpl instance) =>
       'targetRowCount': instance.targetRowCount,
       'marks': instance.marks,
       'photoUrl': instance.photoUrl,
+      'patternChartId': instance.patternChartId,
+      'patternFileId': instance.patternFileId,
       'createdAt': instance.createdAt?.toIso8601String(),
       'updatedAt': instance.updatedAt?.toIso8601String(),
       'isDirty': instance.isDirty,
