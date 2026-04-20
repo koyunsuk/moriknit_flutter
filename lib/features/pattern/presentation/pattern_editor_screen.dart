@@ -20,10 +20,13 @@ import '../data/pattern_export_service.dart';
 import '../data/pattern_repository.dart';
 import '../domain/knit_symbols.dart';
 import '../domain/pattern_chart.dart';
+import '../../../features/counter/domain/counter_model.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/counter_provider.dart';
 import '../../../providers/project_provider.dart';
 import 'widgets/chart_canvas.dart';
 import 'widgets/chart_toolbar.dart';
+import 'widgets/chart_tracking_overlay.dart';
 import 'widgets/grid_size_dialog.dart';
 
 class PatternEditorScreen extends ConsumerStatefulWidget {
@@ -32,12 +35,15 @@ class PatternEditorScreen extends ConsumerStatefulWidget {
   final String? referencePdfPath;
   /// 뷰어 모드 — true일 때 편집 비활성화 (툴바·저장 버튼 숨김)
   final bool readOnly;
+  /// 저장/삭제/나가기 후 이동할 경로. null이면 sourceType 기반 기본값 사용.
+  final String? returnRoute;
   const PatternEditorScreen({
     super.key,
     this.patternId,
     this.referenceImageFile,
     this.referencePdfPath,
     this.readOnly = false,
+    this.returnRoute,
   });
 
   @override
@@ -70,6 +76,7 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
     }
   }
   bool _isSaving = false;
+  bool _isDirty = false;
   bool _showReference = false;
   bool _isEditingTitle = false;
   late TextEditingController _narrativeController;
@@ -80,6 +87,12 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
 
   // 이슈 #98: 전체 조망 — ValueNotifier로 ChartCanvas에 크기 전달
   final ValueNotifier<Size?> _fitToScreenNotifier = ValueNotifier(null);
+
+  // 트래킹 오버레이 상태
+  final TransformationController _trackingCtrl = TransformationController();
+  bool _trackingEnabled = false;
+  int _trackingCurrentRow = 1; // 1단 = 맨 아래부터 시작 (뜨개 관례)
+  TrackingDisplayMode _trackingMode = TrackingDisplayMode.bar;
 
   @override
   void initState() {
@@ -110,6 +123,7 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
     _narrativeController.dispose();
     _titleController.dispose();
     _fitToScreenNotifier.dispose();
+    _trackingCtrl.dispose();
     super.dispose();
   }
 
@@ -208,7 +222,10 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
 
   void _onChartChanged(PatternChart next) {
     _pushUndo(_chart);
-    setState(() => _chart = next);
+    setState(() {
+      _chart = next;
+      _isDirty = true;
+    });
   }
 
   void _undo() {
@@ -331,6 +348,21 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
     await _runSave(context, isKorean);
   }
 
+  void _navigateAfterAction() {
+    if (widget.returnRoute != null) {
+      // Navigator.push로 열린 경우 — pop으로 복귀 (context.go는 Navigator 스택 미제거)
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      } else {
+        context.go(widget.returnRoute!);
+      }
+    } else if (_chart.sourceType == PatternSourceType.aiConverted) {
+      context.go(Routes.toolsMyParsedPatterns);
+    } else {
+      context.go(Routes.toolsPatternGate);
+    }
+  }
+
   // 실제 저장 수행 — BuildContext를 파라미터로 받아 async gap 경고 방지
   Future<void> _runSave(BuildContext ctx, bool isKorean) async {
     final messenger = ScaffoldMessenger.of(ctx);
@@ -348,7 +380,10 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
       );
       if (!mounted) return;
       showSavedSnackBar(messenger, message: isKorean ? '저장됐어요.' : 'Saved.');
-      if (mounted) context.go(Routes.toolsPatternGate);
+      if (mounted) {
+        setState(() => _isDirty = false);
+        _navigateAfterAction();
+      }
     } catch (e) {
       if (!mounted) return;
       showSaveErrorSnackBar(messenger, message: '$e');
@@ -552,18 +587,45 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
 
   Future<void> _copyChart() async {
     final isKorean = ref.read(appLanguageProvider).isKorean;
+    // 미저장 변경사항 있으면 저장 여부 확인
+    if (_isDirty) {
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(isKorean ? '저장하지 않은 변경사항' : 'Unsaved changes', style: T.h3),
+          content: Text(isKorean ? '복사 전 변경사항을 저장할까요?' : 'Save changes before copying?', style: T.body),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, 'discard'), child: Text(isKorean ? '저장 안 함' : 'Don\'t save')),
+            ElevatedButton(onPressed: () => Navigator.pop(ctx, 'save'), child: Text(isKorean ? '저장' : 'Save')),
+          ],
+        ),
+      );
+      if (choice == null || !mounted) return;
+      if (choice == 'save') {
+        await _runSave(context, isKorean);
+        if (!mounted || _isDirty) return; // 저장 실패 시 중단
+      }
+    }
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
     try {
-      await runWithMoriLoadingDialog<void>(
+      final copied = await runWithMoriLoadingDialog<PatternChart>(
         context,
         message: isKorean ? '복사하는 중입니다.' : 'Copying...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
         task: () => ref.read(patternRepositoryProvider).duplicate(_chart),
       );
       if (!mounted) return;
-      showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '도안이 복사됐어요.' : 'Pattern copied.');
+      // 복사된 도안 화면으로 이동
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PatternEditorScreen(patternId: copied.id, readOnly: false),
+        ),
+      );
     } catch (e) {
-      if (!mounted) return;
-      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+      showSaveErrorSnackBar(messenger, message: '$e');
     }
   }
 
@@ -576,9 +638,10 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
         content: Text(isKorean ? '\'${_chart.title}\' 도안을 삭제할까요?\n삭제 후 복구할 수 없어요.' : 'Delete \'${_chart.title}\'?\nThis cannot be undone.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(isKorean ? '취소' : 'Cancel')),
-          TextButton(
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: C.og, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og, fontWeight: FontWeight.w600)),
+            child: Text(isKorean ? '삭제' : 'Delete'),
           ),
         ],
       ),
@@ -592,7 +655,7 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
         task: () => ref.read(patternRepositoryProvider).delete(_chart.id),
       );
       if (!mounted) return;
-      context.go(Routes.toolsPatternGate);
+      _navigateAfterAction();
     } catch (e) {
       if (!mounted) return;
       showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
@@ -764,7 +827,41 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
   Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
 
-    return Scaffold(
+    return PopScope(
+      canPop: !_isDirty || widget.readOnly,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text(isKorean ? '저장하지 않고 나가기' : 'Leave without saving?', style: T.h3),
+            content: Text(
+              isKorean
+                  ? '변경 사항이 저장되지 않았습니다.\n그래도 나가시겠어요?'
+                  : 'Changes have not been saved.\nLeave anyway?',
+              style: T.body,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(isKorean ? '계속 편집' : 'Keep editing'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: C.og,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: Text(isKorean ? '나가기' : 'Leave'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed == true && mounted) _navigateAfterAction();
+      },
+      child: Scaffold(
       backgroundColor: C.bg,
       appBar: AppBar(
         backgroundColor: C.bg,
@@ -959,18 +1056,49 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
                   ),
                 Expanded(
                   child: ClipRect(
-                    child: RepaintBoundary(
-                      key: _chartKey,
-                      child: ChartCanvas(
-                        chart: _chart,
-                        tool: _activeTool,
-                        activeColor: _activeColor,
-                        activeSymbolId: _activeSymbolId,
-                        activeLayer: _activeLayer,
-                        onChartChanged: _onChartChanged,
-                        fitToScreenNotifier: _fitToScreenNotifier,
-                        readOnly: widget.readOnly,
-                      ),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        RepaintBoundary(
+                          key: _chartKey,
+                          child: ChartCanvas(
+                            chart: _chart,
+                            tool: _activeTool,
+                            activeColor: _activeColor,
+                            activeSymbolId: _activeSymbolId,
+                            activeLayer: _activeLayer,
+                            onChartChanged: _onChartChanged,
+                            fitToScreenNotifier: _fitToScreenNotifier,
+                            readOnly: widget.readOnly,
+                            transformationController: _trackingCtrl,
+                          ),
+                        ),
+                        // 행 트래킹 오버레이 (뷰어 모드 + 트래킹 활성 시)
+                        if (widget.readOnly && _trackingEnabled)
+                          _TrackingSection(
+                            chart: _chart,
+                            trackingCtrl: _trackingCtrl,
+                            localRow: _trackingCurrentRow,
+                            mode: _trackingMode,
+                            chartId: _chart.id,
+                            onLocalRowChange: (r) => setState(() => _trackingCurrentRow = r),
+                            onModeChange: (m) => setState(() => _trackingMode = m),
+                            onClose: () => setState(() => _trackingEnabled = false),
+                          ),
+                        // 트래킹 시작 버튼 (뷰어 모드 + 트래킹 비활성 시)
+                        if (widget.readOnly && !_trackingEnabled)
+                          Positioned(
+                            bottom: 16,
+                            right: 16,
+                            child: FloatingActionButton.small(
+                              heroTag: 'trackingFab',
+                              backgroundColor: const Color(0xFFEC4899),
+                              onPressed: () => setState(() => _trackingEnabled = true),
+                              tooltip: '행 트래킹 시작',
+                              child: const Icon(Icons.track_changes_rounded, color: Colors.white),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),
@@ -1007,6 +1135,7 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
               onFitScreen: _triggerFitToScreen,
               onGridResize: _showGridSizeDialogForEdit,
             ),
+      ),
     );
   }
 }
@@ -1066,6 +1195,101 @@ class _GenerateFromGridBar extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// 카운터↔트래킹 연동 섹션 — Firestore 실시간 반영
+class _TrackingSection extends ConsumerWidget {
+  final PatternChart chart;
+  final TransformationController trackingCtrl;
+  final int localRow;
+  final TrackingDisplayMode mode;
+  final String chartId;
+  final ValueChanged<int> onLocalRowChange;
+  final ValueChanged<TrackingDisplayMode> onModeChange;
+  final VoidCallback onClose;
+
+  const _TrackingSection({
+    required this.chart,
+    required this.trackingCtrl,
+    required this.localRow,
+    required this.mode,
+    required this.chartId,
+    required this.onLocalRowChange,
+    required this.onModeChange,
+    required this.onClose,
+  });
+
+  Future<void> _increment(BuildContext context, WidgetRef ref, String? counterId, int delta) async {
+    if (counterId != null && counterId.isNotEmpty) {
+      // Firestore 카운터 증감
+      await ref.read(counterRepositoryProvider).incrementRow(counterId, delta);
+    } else {
+      // 카운터 없으면 로컬 상태만 변경
+      onLocalRowChange((localRow + delta).clamp(1, chart.rows));
+    }
+  }
+
+  Future<void> _ensureCounter(BuildContext context, WidgetRef ref) async {
+    if (chartId.isEmpty) return;
+    final existing = ref.read(counterByChartIdProvider(chartId)).valueOrNull;
+    if (existing != null) return;
+    final uid = ref.read(authStateProvider).valueOrNull?.uid ?? '';
+    if (uid.isEmpty) return;
+    final newCounter = CounterModel(
+      id: '',
+      uid: uid,
+      name: chart.title.isNotEmpty ? chart.title : '도안 트래커',
+      patternChartId: chartId,
+      targetRowCount: chart.rows,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    await ref.read(counterRepositoryProvider).createCounter(newCounter);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Firestore 카운터 실시간 구독 (chartId 기준)
+    final counterAsync = ref.watch(counterByChartIdProvider(chartId));
+    final counter = counterAsync.valueOrNull;
+    // 카운터 있으면 rowCount 우선, 없으면 localRow
+    final currentRow = counter != null
+        ? counter.rowCount.clamp(1, chart.rows)
+        : localRow;
+    final counterId = counter?.id;
+
+    // 카운터 없으면 자동 생성 (첫 번째 빌드 시)
+    if (counter == null && chartId.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _ensureCounter(context, ref));
+    }
+
+    return Stack(
+      children: [
+        ChartTrackingOverlay(
+          chart: chart,
+          currentRow: currentRow,
+          mode: mode,
+          transformationController: trackingCtrl,
+        ),
+        Positioned(
+          bottom: 16,
+          left: 16,
+          right: 16,
+          child: TrackingControlBar(
+            currentRow: currentRow,
+            totalRows: chart.rows,
+            mode: mode,
+            onMinus: () => _increment(context, ref, counterId, -1),
+            onPlus: () => _increment(context, ref, counterId, 1),
+            onLongPressMinus: () => _increment(context, ref, counterId, -5),
+            onLongPressPlus: () => _increment(context, ref, counterId, 5),
+            onModeChange: onModeChange,
+            onClose: onClose,
+          ),
+        ),
+      ],
     );
   }
 }

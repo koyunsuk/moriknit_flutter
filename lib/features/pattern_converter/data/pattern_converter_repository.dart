@@ -50,7 +50,7 @@ class PatternConverterRepository {
     // 2. Cloud Function 호출 (파싱) — 서버 타임아웃(120s)보다 여유 있게 설정
     final callable = _functions.httpsCallable(
       'parseKnittingPattern',
-      options: HttpsCallableOptions(timeout: const Duration(seconds: 180)),
+      options: HttpsCallableOptions(timeout: const Duration(seconds: 280)),
     );
     final payload = {
       'storagePath': storagePath,

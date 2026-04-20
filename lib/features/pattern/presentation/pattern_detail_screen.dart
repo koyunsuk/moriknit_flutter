@@ -387,7 +387,7 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(isKorean ? '취소' : 'Cancel')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: C.og),
+            style: ElevatedButton.styleFrom(backgroundColor: C.og, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(isKorean ? '삭제' : 'Delete'),
           ),

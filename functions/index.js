@@ -662,7 +662,7 @@ exports.parseKnittingPattern = onCall(
   {
     region: REGION,
     secrets: [anthropicApiKey],
-    timeoutSeconds: 120,
+    timeoutSeconds: 240,
     memory: '512MiB',
   },
   async (request) => {
@@ -780,7 +780,7 @@ Important rules:
     try {
       message = await client.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 8192,
+        max_tokens: 16000,
         system: systemPrompt,
         messages: [
           {
@@ -801,21 +801,30 @@ Important rules:
 
     const rawText = message.content[0]?.text ?? '';
     let parsed;
-    try {
-      parsed = JSON.parse(rawText);
-    } catch {
-      // JSON 코드블록 감지 후 재시도
+
+    // Strategy 1: Direct JSON parse
+    try { parsed = JSON.parse(rawText); } catch (_) {}
+
+    // Strategy 2: Extract from markdown code block
+    if (!parsed) {
       const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
       if (jsonMatch) {
-        try {
-          parsed = JSON.parse(jsonMatch[1]);
-        } catch {
-          throw new HttpsError('internal', '도안 파싱에 실패했습니다. 다른 파일로 시도해 주세요.');
-        }
-      } else {
-        const { HttpsError } = require('firebase-functions/v2/https');
-        throw new HttpsError('internal', '도안 파싱에 실패했습니다. 다른 파일로 시도해 주세요.');
+        try { parsed = JSON.parse(jsonMatch[1].trim()); } catch (_) {}
       }
+    }
+
+    // Strategy 3: Extract first { ... } block
+    if (!parsed) {
+      const start = rawText.indexOf('{');
+      const end = rawText.lastIndexOf('}');
+      if (start !== -1 && end > start) {
+        try { parsed = JSON.parse(rawText.substring(start, end + 1)); } catch (_) {}
+      }
+    }
+
+    if (!parsed) {
+      console.error('parseKnittingPattern: JSON 추출 실패. rawText 앞 200자:', rawText.slice(0, 200));
+      throw new HttpsError('internal', '도안 파싱에 실패했습니다. 다른 파일로 시도해 주세요.');
     }
 
     return { result: parsed };

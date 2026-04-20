@@ -195,7 +195,11 @@ class PatternListScreen extends ConsumerWidget {
     // 이미지/PDF 도안은 기존 상세 화면 유지
     if (chart.type == PatternType.chart) {
       Navigator.push(context, MaterialPageRoute(
-        builder: (_) => PatternEditorScreen(patternId: chart.id, readOnly: true),
+        builder: (_) => PatternEditorScreen(
+          patternId: chart.id,
+          readOnly: true,
+          returnRoute: Routes.toolsPatterns,
+        ),
       ));
     } else {
       Navigator.push(context, MaterialPageRoute(

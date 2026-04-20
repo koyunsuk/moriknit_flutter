@@ -4,17 +4,17 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/localization/app_language.dart';
-import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/dropbox_provider.dart';
-import '../../pattern_converter/data/pattern_converter_repository.dart';
-import '../../pattern_converter/presentation/ai_pattern_edit_screen.dart';
+import '../../pattern_converter/presentation/pattern_converter_screen.dart';
+import '../../pattern_converter/presentation/pattern_translator_screen.dart';
+import '../../pattern_library/data/pattern_file_repository.dart';
+import '../../pattern_library/domain/pattern_file.dart';
 import '../data/dropbox_auth_provider.dart';
 import '../domain/dropbox_file_entry.dart';
 
@@ -140,18 +140,23 @@ class _DropboxScreenState extends ConsumerState<DropboxScreen> {
 
     // 2단계: 뷰어 열기
     if (!mounted) return;
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => _DropboxFileViewer(
-          bytes: bytes,
-          fileName: entry.name,
-          mimeType: mimeType,
-          dropboxPath: entry.path,
-          isKorean: isKorean,
+    try {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => _DropboxFileViewer(
+            bytes: bytes,
+            fileName: entry.name,
+            mimeType: mimeType,
+            dropboxPath: entry.path,
+            isKorean: isKorean,
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
   }
 
   @override
@@ -466,7 +471,7 @@ class _DropboxFileViewer extends ConsumerStatefulWidget {
 
 class _DropboxFileViewerState extends ConsumerState<_DropboxFileViewer> {
   String? _pdfPath;
-  bool _translated = false;
+  bool _done = false;
 
   @override
   void initState() {
@@ -484,35 +489,61 @@ class _DropboxFileViewerState extends ConsumerState<_DropboxFileViewer> {
     if (mounted) setState(() => _pdfPath = file.path);
   }
 
-  Future<void> _translatePattern() async {
-    if (_translated) return;
+  String _cleanError(Object e) => e
+      .toString()
+      .split('\n')
+      .first
+      .replaceAll(RegExp(r'^\[firebase_functions/[^\]]+\]\s*'), '');
+
+  Future<void> _saveToLibrary() async {
+    if (_done) return;
     final isKorean = widget.isKorean;
+    final messenger = ScaffoldMessenger.of(context);
     try {
-      final savedChart = await runWithMoriLoadingDialog(
+      await runWithMoriLoadingDialog<void>(
         context,
-        message: isKorean ? 'AI가 도안을 분석하는 중입니다.' : 'AI is analyzing pattern...',
-        subtitle: isKorean ? '최대 3분이 소요될 수 있어요.' : 'May take up to 3 minutes.',
-        task: () => PatternConverterRepository().uploadAndParse(
+        message: isKorean ? '라이브러리에 저장하는 중입니다.' : 'Saving to library...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () => PatternFileRepository().uploadFile(
           bytes: widget.bytes,
           fileName: widget.fileName,
           mimeType: widget.mimeType,
-          translateToKorean: true,
+          source: PatternFileSource.dropbox,
+          sourceMeta: {'dropboxPath': widget.dropboxPath},
         ),
       );
       if (!mounted) return;
-      setState(() => _translated = true);
+      setState(() => _done = true);
+      showSavedSnackBar(messenger, message: isKorean ? '라이브러리에 저장됐어요.' : 'Saved to library.');
+    } catch (e) {
+      showSaveErrorSnackBar(messenger, message: _cleanError(e));
+    }
+  }
+
+  void _convertPattern({required bool translateToKorean}) {
+    if (_done) return;
+    if (translateToKorean) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => AiPatternEditScreen(
-            unsavedChart: savedChart,
-            onGoToLibrary: () => context.push(Routes.toolsMyParsedPatterns),
+          builder: (_) => PatternTranslatorScreen(
+            preloadedBytes: widget.bytes,
+            preloadedFileName: widget.fileName,
+            preloadedTranslateToKorean: true,
           ),
         ),
       );
-    } catch (e) {
-      if (!mounted) return;
-      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PatternConverterScreen(
+            preloadedBytes: widget.bytes,
+            preloadedFileName: widget.fileName,
+            preloadedMimeType: widget.mimeType,
+          ),
+        ),
+      );
     }
   }
 
@@ -532,19 +563,69 @@ class _DropboxFileViewerState extends ConsumerState<_DropboxFileViewer> {
         backgroundColor: C.bg,
         elevation: 0,
         actions: [
-          if (!_translated)
-            TextButton.icon(
-              onPressed: _translatePattern,
-              icon: Icon(Icons.translate_rounded, size: 18, color: C.lv),
-              label: Text(
-                widget.isKorean ? 'AI 번역하기' : 'AI Translate',
-                style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w600),
-              ),
-            )
-          else
+          if (_done)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Icon(Icons.check_circle_rounded, color: C.lv, size: 22),
+            )
+          else
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert),
+              color: Colors.white,
+              onSelected: (value) {
+                switch (value) {
+                  case 'save':
+                    _saveToLibrary();
+                  case 'convert':
+                    _convertPattern(translateToKorean: false);
+                  case 'translate':
+                    _convertPattern(translateToKorean: true);
+                  case 'close':
+                    Navigator.pop(context);
+                }
+              },
+              itemBuilder: (ctx) => [
+                PopupMenuItem(
+                  value: 'save',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.save_alt_rounded, size: 18),
+                      const SizedBox(width: 10),
+                      Text(widget.isKorean ? '바로 저장' : 'Save to Library', style: T.body),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'convert',
+                  child: Row(
+                    children: [
+                      Icon(Icons.auto_fix_high_rounded, size: 18, color: C.lv),
+                      const SizedBox(width: 10),
+                      Text(widget.isKorean ? 'AI 도안 변환하기' : 'AI Convert', style: T.body.copyWith(color: C.lv)),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'translate',
+                  child: Row(
+                    children: [
+                      Icon(Icons.translate_rounded, size: 18, color: C.lv),
+                      const SizedBox(width: 10),
+                      Text(widget.isKorean ? 'AI 도안 번역하기' : 'AI Translate', style: T.body.copyWith(color: C.lv)),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'close',
+                  child: Row(
+                    children: [
+                      Icon(Icons.close_rounded, size: 18, color: C.og),
+                      const SizedBox(width: 10),
+                      Text(widget.isKorean ? '닫기' : 'Close', style: T.body.copyWith(color: C.og)),
+                    ],
+                  ),
+                ),
+              ],
             ),
         ],
       ),

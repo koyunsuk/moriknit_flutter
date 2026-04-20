@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,7 +16,16 @@ import '../data/pattern_converter_repository.dart';
 import 'ai_pattern_edit_screen.dart';
 
 class PatternConverterScreen extends ConsumerStatefulWidget {
-  const PatternConverterScreen({super.key});
+  final Uint8List? preloadedBytes;
+  final String? preloadedFileName;
+  final String? preloadedMimeType;
+
+  const PatternConverterScreen({
+    super.key,
+    this.preloadedBytes,
+    this.preloadedFileName,
+    this.preloadedMimeType,
+  });
 
   @override
   ConsumerState<PatternConverterScreen> createState() =>
@@ -28,10 +39,21 @@ class _PatternConverterScreenState
   int _stage = 1; // 1=업로드, 2=AI분석, 3=저장
   String _statusMessage = '';
 
-  Future<void> _pickAndParse() async {
-    final isKorean = ref.read(appLanguageProvider).isKorean;
-    final messenger = ScaffoldMessenger.of(context);
+  @override
+  void initState() {
+    super.initState();
+    if (widget.preloadedBytes != null && widget.preloadedFileName != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _runParsing(
+          bytes: widget.preloadedBytes!,
+          fileName: widget.preloadedFileName!,
+          mimeType: widget.preloadedMimeType ?? 'application/pdf',
+        );
+      });
+    }
+  }
 
+  Future<void> _pickAndParse() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
@@ -50,6 +72,17 @@ class _PatternConverterScreenState
         : ext == 'png'
             ? 'image/png'
             : 'image/jpeg';
+
+    await _runParsing(bytes: bytes, fileName: fileName, mimeType: mimeType);
+  }
+
+  Future<void> _runParsing({
+    required Uint8List bytes,
+    required String fileName,
+    required String mimeType,
+  }) async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final messenger = ScaffoldMessenger.of(context);
 
     // 파일 크기 제한 (10MB)
     const maxBytes = 10 * 1024 * 1024;

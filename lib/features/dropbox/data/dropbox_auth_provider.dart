@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_appauth/flutter_appauth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -83,6 +84,7 @@ class DropboxAuthProvider extends StateNotifier<DropboxAuthState> {
   }
 
   Future<void> _restoreSession() async {
+    if (kIsWeb) return;
     final accessToken = await _storage.read(key: _kKeyAccessToken);
     final accountId = await _storage.read(key: _kKeyAccountId);
     final email = await _storage.read(key: _kKeyEmail);
@@ -107,6 +109,10 @@ class DropboxAuthProvider extends StateNotifier<DropboxAuthState> {
   }
 
   Future<void> login() async {
+    if (kIsWeb) {
+      state = state.copyWith(error: '웹에서는 Dropbox 연결을 지원하지 않아요. 모바일 앱을 이용해 주세요.');
+      return;
+    }
     state = state.copyWith(isLoading: true, error: null);
     try {
       final result = await _appAuth.authorizeAndExchangeCode(

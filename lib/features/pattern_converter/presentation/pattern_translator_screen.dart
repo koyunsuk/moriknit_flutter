@@ -18,7 +18,16 @@ import '../data/pattern_converter_repository.dart';
 import 'ai_pattern_edit_screen.dart';
 
 class PatternTranslatorScreen extends ConsumerStatefulWidget {
-  const PatternTranslatorScreen({super.key});
+  final Uint8List? preloadedBytes;
+  final String? preloadedFileName;
+  final bool preloadedTranslateToKorean;
+
+  const PatternTranslatorScreen({
+    super.key,
+    this.preloadedBytes,
+    this.preloadedFileName,
+    this.preloadedTranslateToKorean = true,
+  });
 
   @override
   ConsumerState<PatternTranslatorScreen> createState() =>
@@ -31,6 +40,24 @@ class _PatternTranslatorScreenState
   double _progress = 0;
   int _stage = 1; // 1=업로드, 2=AI분석, 3=분석완료, 4=번역중
   String _statusMessage = '';
+  String _currentFileName = '';
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.preloadedBytes != null && widget.preloadedFileName != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final messenger = ScaffoldMessenger.of(context);
+        final isKorean = ref.read(appLanguageProvider).isKorean;
+        _runTranslate(
+          bytes: widget.preloadedBytes!,
+          fileName: widget.preloadedFileName!,
+          messenger: messenger,
+          isKorean: isKorean,
+        );
+      });
+    }
+  }
 
   // 소스 선택 bottom sheet
   Future<void> _showSourceSheet() async {
@@ -164,6 +191,7 @@ class _PatternTranslatorScreenState
       _isUploading = true;
       _progress = 0;
       _stage = 1;
+      _currentFileName = fileName;
       _statusMessage = isKorean ? 'AI 서버 접속 중...' : 'Connecting to AI server...';
     });
 
@@ -324,6 +352,7 @@ class _PatternTranslatorScreenState
                       progress: _progress,
                       message: _statusMessage,
                       stage: _stage,
+                      fileName: _currentFileName,
                       isKorean: isKorean)
                 else
                   _UploadButton(onTap: _showSourceSheet, isKorean: isKorean),
@@ -408,12 +437,14 @@ class _TranslateProgress extends StatelessWidget {
   final double progress;
   final String message;
   final int stage; // 1=업로드, 2=AI분석, 3=분석완료, 4=번역중
+  final String fileName;
   final bool isKorean;
 
   const _TranslateProgress({
     required this.progress,
     required this.message,
     required this.stage,
+    required this.fileName,
     required this.isKorean,
   });
 
@@ -516,6 +547,31 @@ class _TranslateProgress extends StatelessWidget {
           const SizedBox(height: 16),
 
           Text(message, style: T.sm.copyWith(color: C.tx2), textAlign: TextAlign.center),
+
+          if (fileName.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: C.lv.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.insert_drive_file_rounded, size: 13, color: C.lv),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      fileName,
+                      style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           // AI 분석 중 → 선형 프로그레스 바
           if (stage == 2) ...[
