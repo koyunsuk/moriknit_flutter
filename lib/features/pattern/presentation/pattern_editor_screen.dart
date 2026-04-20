@@ -1101,17 +1101,14 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
                             transformationController: _trackingCtrl,
                           ),
                         ),
-                        // 행 트래킹 오버레이 (뷰어 모드 + 트래킹 활성 시)
+                        // 행 트래킹 — 그리드 위 시각 오버레이만 (컨트롤바 분리)
                         if (widget.readOnly && _trackingEnabled)
-                          _TrackingSection(
+                          _TrackingOverlay(
                             chart: _chart,
                             trackingCtrl: _trackingCtrl,
+                            chartId: _chart.id,
                             localRow: _trackingCurrentRow,
                             mode: _trackingMode,
-                            chartId: _chart.id,
-                            onLocalRowChange: (r) => setState(() => _trackingCurrentRow = r),
-                            onModeChange: (m) => setState(() => _trackingMode = m),
-                            onClose: () => setState(() => _trackingEnabled = false),
                           ),
                         // 트래킹 시작 버튼 (뷰어 모드 + 트래킹 비활성 시)
                         if (widget.readOnly && !_trackingEnabled)
@@ -1120,7 +1117,7 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
                             right: 16,
                             child: FloatingActionButton.small(
                               heroTag: 'trackingFab',
-                              backgroundColor: const Color(0xFFEC4899),
+                              backgroundColor: C.lv,
                               onPressed: () => setState(() => _trackingEnabled = true),
                               tooltip: '행 트래킹 시작',
                               child: const Icon(Icons.track_changes_rounded, color: Colors.white),
@@ -1130,6 +1127,17 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
                     ),
                   ),
                 ),
+                // 트래킹 컨트롤 바 — 그리드 하단 별도 블록
+                if (widget.readOnly && _trackingEnabled)
+                  _TrackingControlBlock(
+                    chart: _chart,
+                    chartId: _chart.id,
+                    localRow: _trackingCurrentRow,
+                    mode: _trackingMode,
+                    onLocalRowChange: (r) => setState(() => _trackingCurrentRow = r),
+                    onModeChange: (m) => setState(() => _trackingMode = m),
+                    onClose: () => setState(() => _trackingEnabled = false),
+                  ),
               ],
             ),
           ),
@@ -1259,23 +1267,50 @@ class _GenerateFromGridBar extends StatelessWidget {
   }
 }
 
-// 카운터↔트래킹 연동 섹션 — Firestore 실시간 반영
-class _TrackingSection extends ConsumerWidget {
+// 그리드 위 시각 오버레이만 — Firestore 구독으로 currentRow 반영
+class _TrackingOverlay extends ConsumerWidget {
   final PatternChart chart;
   final TransformationController trackingCtrl;
+  final String chartId;
   final int localRow;
   final TrackingDisplayMode mode;
+
+  const _TrackingOverlay({
+    required this.chart,
+    required this.trackingCtrl,
+    required this.chartId,
+    required this.localRow,
+    required this.mode,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final counter = ref.watch(counterByChartIdProvider(chartId)).valueOrNull;
+    final currentRow = counter != null ? counter.rowCount.clamp(1, chart.rows) : localRow;
+    return ChartTrackingOverlay(
+      chart: chart,
+      currentRow: currentRow,
+      mode: mode,
+      transformationController: trackingCtrl,
+    );
+  }
+}
+
+// 그리드 하단 별도 컨트롤 블록 — 그리드를 가리지 않음
+class _TrackingControlBlock extends ConsumerWidget {
+  final PatternChart chart;
   final String chartId;
+  final int localRow;
+  final TrackingDisplayMode mode;
   final ValueChanged<int> onLocalRowChange;
   final ValueChanged<TrackingDisplayMode> onModeChange;
   final VoidCallback onClose;
 
-  const _TrackingSection({
+  const _TrackingControlBlock({
     required this.chart,
-    required this.trackingCtrl,
+    required this.chartId,
     required this.localRow,
     required this.mode,
-    required this.chartId,
     required this.onLocalRowChange,
     required this.onModeChange,
     required this.onClose,
@@ -1283,10 +1318,8 @@ class _TrackingSection extends ConsumerWidget {
 
   Future<void> _increment(BuildContext context, WidgetRef ref, String? counterId, int delta) async {
     if (counterId != null && counterId.isNotEmpty) {
-      // Firestore 카운터 증감
       await ref.read(counterRepositoryProvider).incrementRow(counterId, delta);
     } else {
-      // 카운터 없으면 로컬 상태만 변경
       onLocalRowChange((localRow + delta).clamp(1, chart.rows));
     }
   }
@@ -1297,7 +1330,7 @@ class _TrackingSection extends ConsumerWidget {
     if (existing != null) return;
     final uid = ref.read(authStateProvider).valueOrNull?.uid ?? '';
     if (uid.isEmpty) return;
-    final newCounter = CounterModel(
+    await ref.read(counterRepositoryProvider).createCounter(CounterModel(
       id: '',
       uid: uid,
       name: chart.title.isNotEmpty ? chart.title : '도안 트래커',
@@ -1305,51 +1338,37 @@ class _TrackingSection extends ConsumerWidget {
       targetRowCount: chart.rows,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
-    );
-    await ref.read(counterRepositoryProvider).createCounter(newCounter);
+    ));
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Firestore 카운터 실시간 구독 (chartId 기준)
     final counterAsync = ref.watch(counterByChartIdProvider(chartId));
     final counter = counterAsync.valueOrNull;
-    // 카운터 있으면 rowCount 우선, 없으면 localRow
-    final currentRow = counter != null
-        ? counter.rowCount.clamp(1, chart.rows)
-        : localRow;
+    final currentRow = counter != null ? counter.rowCount.clamp(1, chart.rows) : localRow;
     final counterId = counter?.id;
 
-    // 카운터 없으면 자동 생성 (첫 번째 빌드 시)
     if (counter == null && chartId.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _ensureCounter(context, ref));
     }
 
-    return Stack(
-      children: [
-        ChartTrackingOverlay(
-          chart: chart,
+    return Container(
+      color: C.bg,
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: SafeArea(
+        top: false,
+        child: TrackingControlBar(
           currentRow: currentRow,
+          totalRows: chart.rows,
           mode: mode,
-          transformationController: trackingCtrl,
+          onMinus: () => _increment(context, ref, counterId, -1),
+          onPlus: () => _increment(context, ref, counterId, 1),
+          onLongPressMinus: () => _increment(context, ref, counterId, -5),
+          onLongPressPlus: () => _increment(context, ref, counterId, 5),
+          onModeChange: onModeChange,
+          onClose: onClose,
         ),
-        Positioned(
-          bottom: 16,
-          left: 16,
-          right: 16,
-          child: TrackingControlBar(
-            currentRow: currentRow,
-            totalRows: chart.rows,
-            mode: mode,
-            onMinus: () => _increment(context, ref, counterId, -1),
-            onPlus: () => _increment(context, ref, counterId, 1),
-            onLongPressMinus: () => _increment(context, ref, counterId, -5),
-            onLongPressPlus: () => _increment(context, ref, counterId, 5),
-            onModeChange: onModeChange,
-            onClose: onClose,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -1362,13 +1381,12 @@ class _NarrativeEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: TextField(
         controller: controller,
         onChanged: onChanged,
         maxLines: null,
-        expands: true,
         textAlignVertical: TextAlignVertical.top,
         style: const TextStyle(fontSize: 14, height: 1.8),
         decoration: InputDecoration(
@@ -1456,6 +1474,37 @@ class _NarrativeRichText extends StatelessWidget {
   Map<String, int> get _argbByLabel =>
       {for (final e in labels.entries) e.value: e.key};
 
+  String _shortHex(int argb) {
+    final hex = (argb & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase();
+    return '#$hex';
+  }
+
+  InlineSpan _colorBadge(String label, int argb) {
+    final color = Color(argb);
+    final isLight = color.computeLuminance() > 0.6;
+    final hexStr = _shortHex(argb);
+    return WidgetSpan(
+      alignment: PlaceholderAlignment.middle,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: isLight ? color.withValues(alpha: 0.12) : color,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: color, width: isLight ? 1.0 : 0),
+        ),
+        child: Text(
+          '$label $hexStr',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            color: isLight ? C.tx : Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (text.trim().isEmpty) {
@@ -1465,50 +1514,44 @@ class _NarrativeRichText extends StatelessWidget {
       );
     }
     final byLabel = _argbByLabel;
-    // [MC], [CC1] 패턴 매칭
     final regex = RegExp(r'\[(MC|CC\d+)\]');
     final spans = <InlineSpan>[];
-    int cursor = 0;
-    for (final m in regex.allMatches(text)) {
-      if (m.start > cursor) {
-        spans.add(TextSpan(text: text.substring(cursor, m.start)));
+
+    // 줄 단위로 처리 — 각 줄의 마지막 레이블 색상을 텍스트 색상으로 적용
+    final lines = text.split('\n');
+    for (int li = 0; li < lines.length; li++) {
+      if (li > 0) spans.add(const TextSpan(text: '\n'));
+      final line = lines[li];
+      final lineMatches = regex.allMatches(line).toList();
+
+      // 줄에서 마지막 레이블의 색상 (텍스트 색상으로 사용, 너무 밝으면 기본색)
+      final lastLabel = lineMatches.isNotEmpty ? lineMatches.last.group(1)! : null;
+      final lastArgb = lastLabel != null ? byLabel[lastLabel] : null;
+      final lineColor = lastArgb != null
+          ? (Color(lastArgb).computeLuminance() < 0.7 ? Color(lastArgb) : null)
+          : null;
+
+      int cursor = 0;
+      for (final m in lineMatches) {
+        if (m.start > cursor) {
+          spans.add(TextSpan(
+            text: line.substring(cursor, m.start),
+            style: lineColor != null ? TextStyle(color: lineColor) : null,
+          ));
+        }
+        final label = m.group(1)!;
+        final argb = byLabel[label];
+        spans.add(argb != null ? _colorBadge(label, argb) : TextSpan(text: m.group(0)));
+        cursor = m.end;
       }
-      final label = m.group(1)!;
-      final argb = byLabel[label];
-      if (argb != null) {
-        final color = Color(argb);
-        final isLight = color.computeLuminance() > 0.6;
-        spans.add(WidgetSpan(
-          alignment: PlaceholderAlignment.middle,
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 2),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: isLight ? C.bd2 : Colors.transparent,
-                width: 0.8,
-              ),
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: isLight ? C.tx : Colors.white,
-              ),
-            ),
-          ),
+      if (cursor < line.length) {
+        spans.add(TextSpan(
+          text: line.substring(cursor),
+          style: lineColor != null ? TextStyle(color: lineColor) : null,
         ));
-      } else {
-        spans.add(TextSpan(text: m.group(0)));
       }
-      cursor = m.end;
     }
-    if (cursor < text.length) {
-      spans.add(TextSpan(text: text.substring(cursor)));
-    }
+
     return RichText(
       text: TextSpan(
         style: TextStyle(fontSize: 13, height: 1.8, color: C.tx),

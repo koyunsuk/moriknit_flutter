@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../domain/pattern_chart.dart';
 
 enum TrackingDisplayMode { bar, completed, checkbox }
@@ -74,10 +75,10 @@ class _TrackingPainter extends CustomPainter {
     required this.mode,
   });
 
-  static const Color _barColor = Color(0xFFEC4899);    // 핑크 바
-  static const Color _doneColor = Color(0x40000000);   // 완료행 마스크
-  static const Color _checkColor = Color(0xFF10B981);  // 체크 초록
-  static const Color _targetColor = Color(0xFF8B5CF6); // 목표선 보라
+  static Color get _barColor => C.lv;
+  static const Color _doneColor = Color(0x40000000);
+  static const Color _checkColor = Color(0xFF10B981);
+  static const Color _targetColor = Color(0xFF8B5CF6);
 
   // 뜨개 관례: 1단 = 차트 맨 아래, 위로 올라감
   // currentRow: 1-based 뜨개 단 번호 (1 = 첫 번째 단 = 그리드 맨 아래)
@@ -225,7 +226,7 @@ class TrackingControlBar extends StatelessWidget {
         boxShadow: [
           BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 16, offset: const Offset(0, 4)),
         ],
-        border: Border.all(color: const Color(0xFFEC4899).withValues(alpha: 0.25)),
+        border: Border.all(color: C.lv.withValues(alpha: 0.25)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -257,10 +258,10 @@ class TrackingControlBar extends StatelessWidget {
                     child: Container(
                       width: 40, height: 40,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEC4899).withValues(alpha: 0.10),
+                        color: C.lv.withValues(alpha: 0.10),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.remove_rounded, color: Color(0xFFEC4899), size: 22),
+                      child: Icon(Icons.remove_rounded, color: C.lv, size: 22),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -268,9 +269,9 @@ class TrackingControlBar extends StatelessWidget {
                     children: [
                       Text(
                         '$currentRow단',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 18, fontWeight: FontWeight.w800,
-                          color: Color(0xFFEC4899),
+                          color: C.lv,
                         ),
                       ),
                       Text(
@@ -286,10 +287,10 @@ class TrackingControlBar extends StatelessWidget {
                     child: Container(
                       width: 40, height: 40,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEC4899).withValues(alpha: 0.10),
+                        color: C.lv.withValues(alpha: 0.10),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.add_rounded, color: Color(0xFFEC4899), size: 22),
+                      child: Icon(Icons.add_rounded, color: C.lv, size: 22),
                     ),
                   ),
                 ],
@@ -310,7 +311,7 @@ class TrackingControlBar extends StatelessWidget {
               value: totalRows > 0 ? currentRow / totalRows : 0,
               minHeight: 4,
               backgroundColor: Colors.grey[200],
-              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFEC4899)),
+              valueColor: AlwaysStoppedAnimation<Color>(C.lv),
             ),
           ),
         ],
@@ -336,7 +337,7 @@ class _ModeBtn extends StatelessWidget {
         child: Container(
           width: 28, height: 28,
           decoration: BoxDecoration(
-            color: selected ? const Color(0xFFEC4899) : Colors.grey[100],
+            color: selected ? C.lv : Colors.grey[100],
             borderRadius: BorderRadius.circular(6),
           ),
           child: Icon(icon, size: 16,
