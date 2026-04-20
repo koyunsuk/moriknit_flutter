@@ -26,6 +26,7 @@ import 'package:moriknit_flutter/features/my/presentation/accessory_list_screen.
 import 'package:moriknit_flutter/features/my/presentation/needle_detail_screen.dart';
 import 'package:moriknit_flutter/features/my/presentation/needle_list_screen.dart';
 import 'package:moriknit_flutter/features/pattern/presentation/pattern_editor_screen.dart';
+import 'package:moriknit_flutter/features/pattern/presentation/pattern_gate_screen.dart';
 import 'package:moriknit_flutter/features/pattern/presentation/pattern_list_screen.dart';
 import 'package:moriknit_flutter/features/project/presentation/project_detail_screen.dart';
 import 'package:moriknit_flutter/features/project/presentation/project_input_screen.dart';
@@ -137,6 +138,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             pageBuilder: (_, _) => _noTransitionPage(const ToolsScreen()),
             routes: [
               GoRoute(path: 'patterns', pageBuilder: (_, _) => _fadePage(const PatternListScreen())),
+              GoRoute(path: 'pattern-gate', pageBuilder: (_, _) => _fadePage(const PatternGateScreen())),
               GoRoute(
                 path: 'pattern',
                 pageBuilder: (_, _) => _fadePage(const PatternEditorScreen()),

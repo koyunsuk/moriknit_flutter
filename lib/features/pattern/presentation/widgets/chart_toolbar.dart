@@ -10,6 +10,7 @@ import '../../domain/pattern_chart.dart';
 import 'chart_canvas.dart' show DrawLayer;
 import 'chart_canvas.dart';
 
+
 class ChartToolbar extends StatefulWidget {
   final ChartTool activeTool;
   final Color activeColor;
@@ -479,10 +480,22 @@ class _SymbolPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final allEntries = ref.watch(knitSymbolsProvider).valueOrNull ?? [];
-    // basic(전체) 탭은 모든 심볼, 나머지는 카테고리 필터
-    final symbols = selectedCategory == SymbolCategory.basic
-        ? allEntries
-        : allEntries.where((e) => e.symbolCategory == selectedCategory).toList();
+    // Firestore 심볼이 없으면 정적 라이브러리 폴백
+    final useStatic = allEntries.isEmpty;
+
+    // basic(전체) 탭: 모든 심볼, 나머지: 카테고리 필터
+    final firestoreSymbols = useStatic
+        ? <KnitSymbolEntry>[]
+        : (selectedCategory == SymbolCategory.basic
+            ? allEntries
+            : allEntries.where((e) => e.symbolCategory == selectedCategory).toList());
+    final staticSymbols = !useStatic
+        ? <KnitSymbol>[]
+        : (selectedCategory == SymbolCategory.basic
+            ? KnitSymbolLibrary.all
+            : KnitSymbolLibrary.byCategory(selectedCategory));
+
+    final hasSymbols = useStatic ? staticSymbols.isNotEmpty : firestoreSymbols.isNotEmpty;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -528,21 +541,30 @@ class _SymbolPanel extends ConsumerWidget {
         // ── 기호 가로 스크롤 ────────────────────────────────
         SizedBox(
           height: 68,
-          child: symbols.isEmpty
+          child: !hasSymbols
               ? Center(
                   child: Text('더 많은 심볼이 계속 추가됩니다.', style: TextStyle(fontSize: 11, color: C.tx2)),
                 )
               : ListView(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  children: [
-                    for (final e in symbols)
-                      _SymbolCell(
-                        entry: e,
-                        active: activeSymbolId == e.symbolId,
-                        onTap: () => onSymbolChanged(e.symbolId),
-                      ),
-                  ],
+                  children: useStatic
+                      ? [
+                          for (final s in staticSymbols)
+                            _StaticSymbolCell(
+                              symbol: s,
+                              active: activeSymbolId == s.id,
+                              onTap: () => onSymbolChanged(s.id),
+                            ),
+                        ]
+                      : [
+                          for (final e in firestoreSymbols)
+                            _SymbolCell(
+                              entry: e,
+                              active: activeSymbolId == e.symbolId,
+                              onTap: () => onSymbolChanged(e.symbolId),
+                            ),
+                        ],
                 ),
         ),
       ],
@@ -602,10 +624,20 @@ class _ExpandedSymbolSheetState extends ConsumerState<_ExpandedSymbolSheet> {
   @override
   Widget build(BuildContext context) {
     final allEntries = ref.watch(knitSymbolsProvider).valueOrNull ?? [];
-    // basic(전체) 탭은 모든 심볼, 나머지는 카테고리 필터
-    final symbols = _cat == SymbolCategory.basic
-        ? allEntries
-        : allEntries.where((e) => e.symbolCategory == _cat).toList();
+    final useStatic = allEntries.isEmpty;
+
+    final firestoreSymbols = useStatic
+        ? <KnitSymbolEntry>[]
+        : (_cat == SymbolCategory.basic
+            ? allEntries
+            : allEntries.where((e) => e.symbolCategory == _cat).toList());
+    final staticSymbols = !useStatic
+        ? <KnitSymbol>[]
+        : (_cat == SymbolCategory.basic
+            ? KnitSymbolLibrary.all
+            : KnitSymbolLibrary.byCategory(_cat));
+
+    final count = useStatic ? staticSymbols.length : firestoreSymbols.length;
 
     return Column(
       children: [
@@ -638,7 +670,7 @@ class _ExpandedSymbolSheetState extends ConsumerState<_ExpandedSymbolSheet> {
         const Divider(height: 1),
         // 기호 그리드
         Expanded(
-          child: symbols.isEmpty
+          child: count == 0
               ? Center(
                   child: Text('더 많은 심볼이 계속 추가됩니다.', style: TextStyle(fontSize: 13, color: C.tx2)),
                 )
@@ -651,9 +683,17 @@ class _ExpandedSymbolSheetState extends ConsumerState<_ExpandedSymbolSheet> {
                     crossAxisSpacing: 8,
                     mainAxisSpacing: 8,
                   ),
-                  itemCount: symbols.length,
+                  itemCount: count,
                   itemBuilder: (_, i) {
-                    final e = symbols[i];
+                    if (useStatic) {
+                      final s = staticSymbols[i];
+                      return _StaticSymbolCell(
+                        symbol: s,
+                        active: widget.activeSymbolId == s.id,
+                        onTap: () => widget.onSymbolChanged(s.id),
+                      );
+                    }
+                    final e = firestoreSymbols[i];
                     return _SymbolCell(
                       entry: e,
                       active: widget.activeSymbolId == e.symbolId,
@@ -736,6 +776,52 @@ class _UnifiedPanel extends StatelessWidget {
           onSymbolChanged: onSymbolChanged,
         ),
       ],
+    );
+  }
+}
+
+/// 정적 라이브러리 기반 심볼 셀 — Firestore 없을 때 폴백 (유니코드 표시)
+class _StaticSymbolCell extends StatelessWidget {
+  final KnitSymbol symbol;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _StaticSymbolCell({required this.symbol, required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Tooltip(
+        message: '${symbol.name} (${symbol.abbr})',
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          width: 44,
+          height: 56,
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          decoration: BoxDecoration(
+            color: active ? C.lvL : Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: active ? C.lv : Colors.grey.shade300,
+              width: active ? 2 : 1,
+            ),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(symbol.unicode, style: TextStyle(fontSize: 16, color: C.tx, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 3),
+              Text(
+                symbol.abbr.length > 6 ? symbol.abbr.substring(0, 6) : symbol.abbr,
+                style: TextStyle(fontSize: 8, color: C.tx2, fontWeight: FontWeight.w600),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

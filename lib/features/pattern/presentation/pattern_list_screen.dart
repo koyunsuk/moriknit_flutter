@@ -24,6 +24,7 @@ import '../../ravelry/presentation/ravelry_pattern_detail_screen.dart';
 import '../data/pattern_export_service.dart';
 import '../data/pattern_repository.dart';
 import '../domain/pattern_chart.dart';
+import 'pattern_detail_screen.dart';
 import 'pattern_editor_screen.dart';
 
 class PatternListScreen extends ConsumerWidget {
@@ -190,9 +191,17 @@ class PatternListScreen extends ConsumerWidget {
   }
 
   void _openPattern(BuildContext context, PatternChart chart) {
-    Navigator.push(context, MaterialPageRoute(
-      builder: (_) => PatternEditorScreen(patternId: chart.id, readOnly: true),
-    ));
+    // 에디터로 만든 도안(chart 타입)만 에디터 뷰어로 열기
+    // 이미지/PDF 도안은 기존 상세 화면 유지
+    if (chart.type == PatternType.chart) {
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => PatternEditorScreen(patternId: chart.id, readOnly: true),
+      ));
+    } else {
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => PatternDetailScreen(chart: chart),
+      ));
+    }
   }
 
   void _openFile(BuildContext context, PatternFile f) {
@@ -203,7 +212,17 @@ class PatternListScreen extends ConsumerWidget {
 
   Future<void> _showImageSourceDialog(BuildContext context, WidgetRef ref, bool isKorean) async {
     if (kIsWeb) {
-      showSavedSnackBar(context, message: isKorean ? '모바일에서만 사용 가능해요.' : 'Available on mobile only.');
+      // 웹: 파일 선택 직접 실행 (카메라 미지원)
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        withData: true,
+      );
+      if (result != null && result.files.first.bytes != null && context.mounted) {
+        final bytes = result.files.first.bytes!;
+        final ext = result.files.first.extension?.toLowerCase() ?? 'jpg';
+        final tmpFile = await _bytesToTempFile(bytes, 'picked.$ext');
+        if (context.mounted) await _saveImageFile(context, ref, tmpFile, isKorean);
+      }
       return;
     }
     await showModalBottomSheet<void>(
@@ -250,6 +269,13 @@ class PatternListScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<File> _bytesToTempFile(List<int> bytes, String name) async {
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/$name');
+    await file.writeAsBytes(bytes);
+    return file;
   }
 
   Future<void> _saveImageFile(BuildContext context, WidgetRef ref, File file, bool isKorean) async {
@@ -525,6 +551,59 @@ class PatternListScreen extends ConsumerWidget {
                         const SizedBox(height: 4),
                         Text(
                           isKorean ? '모리니트 도안 파일(.mori)을 불러와요' : 'Load a MoriKnit pattern file (.mori)',
+                          style: T.caption.copyWith(color: C.mu),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: C.mu),
+                ]),
+              ),
+              const SizedBox(height: 10),
+              // 5. 드롭박스에서 가져오기
+              GlassCard(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push(Routes.dropbox);
+                },
+                child: Row(children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0061FF).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(Icons.cloud_rounded, color: Color(0xFF0061FF)),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              isKorean ? '드롭박스에서 가져오기' : 'Import from Dropbox',
+                              style: T.bodyBold,
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: C.lv,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                'AI',
+                                style: T.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 10),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          isKorean ? 'AI가 단계별로 도안을 분석해드려요' : 'AI analyzes pattern step by step',
                           style: T.caption.copyWith(color: C.mu),
                         ),
                       ],

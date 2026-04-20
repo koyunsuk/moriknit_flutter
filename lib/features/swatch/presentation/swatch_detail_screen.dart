@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -75,29 +76,34 @@ class _SwatchDetailScreenState extends ConsumerState<SwatchDetailScreen> {
   void _cancelEdit() => setState(() { _isEditing = false; _linkedNeedleName = null; _linkedYarnName = null; });
 
   Future<void> _pickPhoto({required bool isBefore, required bool isKorean}) async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: C.bg,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(Icons.photo_library_outlined, color: C.lv),
-              title: Text(isKorean ? '갤러리에서 선택' : 'Choose from gallery', style: T.body),
-              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-            ),
-            ListTile(
-              leading: Icon(Icons.camera_alt_outlined, color: C.lv),
-              title: Text(isKorean ? '사진 촬영' : 'Take a photo', style: T.body),
-              onTap: () => Navigator.pop(ctx, ImageSource.camera),
-            ),
-          ],
+    final ImageSource? source;
+    if (kIsWeb) {
+      source = ImageSource.gallery;
+    } else {
+      source = await showModalBottomSheet<ImageSource>(
+        context: context,
+        backgroundColor: C.bg,
+        shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(Icons.photo_library_outlined, color: C.lv),
+                title: Text(isKorean ? '갤러리에서 선택' : 'Choose from gallery', style: T.body),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+              ListTile(
+                leading: Icon(Icons.camera_alt_outlined, color: C.lv),
+                title: Text(isKorean ? '사진 촬영' : 'Take a photo', style: T.body),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    }
     if (source == null) return;
     final picked = await ImagePicker().pickImage(source: source, imageQuality: 88);
     if (picked == null) return;
@@ -396,7 +402,7 @@ class _SwatchDetailScreenState extends ConsumerState<SwatchDetailScreen> {
                                         children: [
                                           Icon(Icons.folder_outlined, size: 18, color: C.lv),
                                           const SizedBox(width: 8),
-                                          Text(isKorean ? '기존 프로젝트에 연결' : 'Link to existing project'),
+                                          Text(isKorean ? '프로젝트에 연결' : 'Link to project'),
                                         ],
                                       ),
                                     ),

@@ -7,10 +7,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:printing/printing.dart';
 
 import '../../../core/localization/app_language.dart';
+import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -19,6 +21,7 @@ import '../data/pattern_repository.dart';
 import '../domain/knit_symbols.dart';
 import '../domain/pattern_chart.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/project_provider.dart';
 import 'widgets/chart_canvas.dart';
 import 'widgets/chart_toolbar.dart';
 import 'widgets/grid_size_dialog.dart';
@@ -68,7 +71,9 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
   }
   bool _isSaving = false;
   bool _showReference = false;
+  bool _isEditingTitle = false;
   late TextEditingController _narrativeController;
+  late TextEditingController _titleController;
   File? _referenceImageFile;
 
   final GlobalKey _chartKey = GlobalKey();
@@ -84,6 +89,7 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
       title: 'Untitled',
     );
     _narrativeController = TextEditingController(text: _chart.narrativeText);
+    _titleController = TextEditingController(text: _chart.title);
     _referenceImageFile = widget.referenceImageFile;
     if (widget.patternId != null && widget.patternId!.isNotEmpty) {
       _loadChart(widget.patternId!);
@@ -102,6 +108,7 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
   @override
   void dispose() {
     _narrativeController.dispose();
+    _titleController.dispose();
     _fitToScreenNotifier.dispose();
     super.dispose();
   }
@@ -128,17 +135,60 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
 
   Future<void> _showGridSizeDialogForEdit() async {
     if (!mounted) return;
+    final isKorean = ref.read(appLanguageProvider).isKorean;
     final result = await showGridSizeDialog(
       context,
       initialRows: _chart.rows,
       initialCols: _chart.cols,
       isEdit: true,
     );
-    if (!mounted) return;
-    if (result != null) {
-      _pushUndo(_chart);
-      setState(() => _chart = _chart.resize(result.rows, result.cols));
+    if (!mounted || result == null) return;
+
+    // 축소 시 잘리는 영역에 데이터가 있는지 확인
+    if (result.rows < _chart.rows || result.cols < _chart.cols) {
+      bool hasDataInCutoff = false;
+      for (int r = 0; r < _chart.rows && !hasDataInCutoff; r++) {
+        for (int c = 0; c < _chart.cols && !hasDataInCutoff; c++) {
+          if (r >= result.rows || c >= result.cols) {
+            final cell = _chart.grid[r][c];
+            if (cell.color != null || cell.symbolId != null) hasDataInCutoff = true;
+          }
+        }
+      }
+      if (hasDataInCutoff) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text(isKorean ? '데이터 손실 경고' : 'Data Loss Warning', style: T.h3),
+            content: Text(
+              isKorean
+                  ? '크기를 줄이면 잘리는 영역의 그림/기호가 삭제됩니다.\n계속할까요?'
+                  : 'Shrinking the grid will delete content outside the new bounds.\nContinue?',
+              style: T.body,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(isKorean ? '취소' : 'Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red.shade600,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: Text(isKorean ? '삭제하고 변경' : 'Trim & Resize'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed != true || !mounted) return;
+      }
     }
+    _pushUndo(_chart);
+    setState(() => _chart = _chart.resize(result.rows, result.cols));
   }
 
   Future<void> _loadChart(String id) async {
@@ -147,6 +197,7 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
     if (loaded != null && mounted) {
       setState(() => _chart = loaded);
       _narrativeController.text = loaded.narrativeText;
+      _titleController.text = loaded.title;
     }
   }
 
@@ -297,7 +348,7 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
       );
       if (!mounted) return;
       showSavedSnackBar(messenger, message: isKorean ? '저장됐어요.' : 'Saved.');
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) context.go(Routes.toolsPatternGate);
     } catch (e) {
       if (!mounted) return;
       showSaveErrorSnackBar(messenger, message: '$e');
@@ -499,6 +550,135 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
     }
   }
 
+  Future<void> _copyChart() async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '복사하는 중입니다.' : 'Copying...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () => ref.read(patternRepositoryProvider).duplicate(_chart),
+      );
+      if (!mounted) return;
+      showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '도안이 복사됐어요.' : 'Pattern copied.');
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+
+  Future<void> _deleteChart() async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isKorean ? '도안 삭제' : 'Delete Pattern', style: T.h3),
+        content: Text(isKorean ? '\'${_chart.title}\' 도안을 삭제할까요?\n삭제 후 복구할 수 없어요.' : 'Delete \'${_chart.title}\'?\nThis cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(isKorean ? '취소' : 'Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '삭제하는 중입니다.' : 'Deleting...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () => ref.read(patternRepositoryProvider).delete(_chart.id),
+      );
+      if (!mounted) return;
+      context.go(Routes.toolsPatternGate);
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+
+  void _showProjectLinkSheet() {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Consumer(
+        builder: (ctx, cRef, _) {
+          final allProjects = cRef.watch(projectListProvider).valueOrNull ?? [];
+          return DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 0.5,
+            maxChildSize: 0.9,
+            minChildSize: 0.3,
+            builder: (_, scrollCtrl) => Column(children: [
+              const SizedBox(height: 8),
+              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(2)))),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: Text(isKorean ? '프로젝트에 연결' : 'Link to Project', style: T.bodyBold),
+              ),
+              if (_chart.linkedProjectId != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Row(children: [
+                    Icon(Icons.link_off_rounded, size: 16, color: C.og),
+                    const SizedBox(width: 6),
+                    TextButton(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        await ref.read(patternRepositoryProvider).linkToProject(_chart.id, null);
+                        if (mounted) setState(() => _chart = _chart.copyWith(linkedProjectId: null));
+                      },
+                      child: Text(isKorean ? '연결 해제' : 'Unlink', style: T.caption.copyWith(color: C.og)),
+                    ),
+                  ]),
+                ),
+              if (allProjects.isEmpty)
+                Expanded(child: Center(child: Text(isKorean ? '등록된 프로젝트가 없어요.' : 'No projects.', style: T.body.copyWith(color: C.mu))))
+              else
+                Expanded(child: ListView.builder(
+                  controller: scrollCtrl,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  itemCount: allProjects.length,
+                  itemBuilder: (_, i) {
+                    final project = allProjects[i];
+                    final linked = project.id == _chart.linkedProjectId;
+                    return ListTile(
+                      leading: project.coverPhotoUrl.isNotEmpty
+                          ? ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.network(project.coverPhotoUrl, width: 40, height: 40, fit: BoxFit.cover))
+                          : Container(width: 40, height: 40, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(6)), child: Icon(Icons.folder_rounded, color: C.lv)),
+                      title: Text(project.title, style: T.bodyBold),
+                      trailing: linked ? Icon(Icons.check_circle_rounded, color: C.lv, size: 20) : null,
+                      onTap: () async {
+                        Navigator.pop(ctx);
+                        try {
+                          await runWithMoriLoadingDialog<void>(context,
+                            message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+                            subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+                            task: () => ref.read(patternRepositoryProvider).linkToProject(_chart.id, project.id),
+                          );
+                          if (!mounted) return;
+                          setState(() => _chart = _chart.copyWith(linkedProjectId: project.id));
+                          showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '프로젝트에 연결됐어요.' : 'Linked to project.');
+                        } catch (e) {
+                          if (!mounted) return;
+                          showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+                        }
+                      },
+                    );
+                  },
+                )),
+            ]),
+          );
+        },
+      ),
+    );
+  }
+
   // 이슈 #98: 전체 조망 — 현재 가용 화면 크기를 notifier에 전달
   void _triggerFitToScreen() {
     final renderBox = context.findRenderObject() as RenderBox?;
@@ -593,7 +773,38 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(_chart.title, style: T.h3),
+            if (_isEditingTitle)
+              SizedBox(
+                height: 32,
+                child: TextField(
+                  controller: _titleController,
+                  autofocus: true,
+                  style: T.h3,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (v) {
+                    final name = v.trim();
+                    if (name.isNotEmpty) setState(() => _chart = _chart.copyWith(title: name));
+                    setState(() => _isEditingTitle = false);
+                  },
+                  onTapOutside: (_) {
+                    final name = _titleController.text.trim();
+                    if (name.isNotEmpty) setState(() => _chart = _chart.copyWith(title: name));
+                    setState(() => _isEditingTitle = false);
+                  },
+                ),
+              )
+            else
+              GestureDetector(
+                onTap: widget.readOnly ? null : () {
+                  _titleController.text = _chart.title;
+                  setState(() => _isEditingTitle = true);
+                },
+                child: Text(_chart.title, style: T.h3),
+              ),
             if (_chart.sourcePatternId != null &&
                 _chart.sourceOwnerName != null &&
                 _chart.sourceOwnerName!.isNotEmpty)
@@ -676,78 +887,33 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
                       ),
                     ),
                   );
+                case 'copy':
+                  _copyChart();
+                case 'link_project':
+                  _showProjectLinkSheet();
+                case 'delete':
+                  _deleteChart();
               }
             },
             itemBuilder: (_) => widget.readOnly
                 ? [
                     // 뷰어 모드 메뉴
-                    PopupMenuItem(
-                      value: 'edit',
-                      child: Row(children: [
-                        Icon(Icons.edit_rounded, size: 18, color: C.lv),
-                        const SizedBox(width: 8),
-                        Text(isKorean ? '수정하기' : 'Edit'),
-                      ]),
-                    ),
-                    PopupMenuItem(
-                      value: 'pdf',
-                      child: Row(children: [
-                        Icon(Icons.picture_as_pdf_rounded, size: 18, color: C.og),
-                        const SizedBox(width: 8),
-                        Text(isKorean ? 'PDF로 내보내기' : 'Export as PDF'),
-                      ]),
-                    ),
-                    PopupMenuItem(
-                      value: 'image',
-                      child: Row(children: [
-                        Icon(Icons.image_rounded, size: 18, color: C.lmD),
-                        const SizedBox(width: 8),
-                        Text(isKorean ? '이미지로 내보내기' : 'Export as image'),
-                      ]),
-                    ),
+                    PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_rounded, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '수정하기' : 'Edit')])),
+                    PopupMenuItem(value: 'copy', child: Row(children: [Icon(Icons.copy_rounded, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '복사' : 'Duplicate')])),
+                    PopupMenuItem(value: 'link_project', child: Row(children: [Icon(Icons.folder_outlined, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '프로젝트에 연결' : 'Link to project')])),
+                    PopupMenuItem(value: 'pdf', child: Row(children: [Icon(Icons.picture_as_pdf_rounded, size: 18, color: C.og), const SizedBox(width: 8), Text(isKorean ? 'PDF로 내보내기' : 'Export as PDF')])),
+                    PopupMenuItem(value: 'image', child: Row(children: [Icon(Icons.image_rounded, size: 18, color: C.lmD), const SizedBox(width: 8), Text(isKorean ? '이미지로 내보내기' : 'Export as image')])),
+                    PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_rounded, size: 18, color: C.og), const SizedBox(width: 8), Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og))])),
                   ]
                 : [
                     // 편집 모드 메뉴
-                    PopupMenuItem(
-                      value: 'save',
-                      child: Row(children: [
-                        Icon(Icons.save_rounded, size: 18, color: C.lv),
-                        const SizedBox(width: 8),
-                        Text(isKorean ? '저장' : 'Save'),
-                      ]),
-                    ),
-                    PopupMenuItem(
-                      value: 'grid',
-                      child: Row(children: [
-                        Icon(Icons.grid_on_rounded, size: 18, color: C.tx2),
-                        const SizedBox(width: 8),
-                        Text(isKorean ? '그리드 크기 변경' : 'Resize grid'),
-                      ]),
-                    ),
-                    PopupMenuItem(
-                      value: 'pdf',
-                      child: Row(children: [
-                        Icon(Icons.picture_as_pdf_rounded, size: 18, color: C.og),
-                        const SizedBox(width: 8),
-                        Text(isKorean ? 'PDF로 내보내기' : 'Export as PDF'),
-                      ]),
-                    ),
-                    PopupMenuItem(
-                      value: 'image',
-                      child: Row(children: [
-                        Icon(Icons.image_rounded, size: 18, color: C.lmD),
-                        const SizedBox(width: 8),
-                        Text(isKorean ? '이미지로 내보내기' : 'Export as image'),
-                      ]),
-                    ),
-                    PopupMenuItem(
-                      value: 'mori',
-                      child: Row(children: [
-                        Icon(Icons.file_download_rounded, size: 18, color: C.lv),
-                        const SizedBox(width: 8),
-                        Text(isKorean ? '.mori 파일로 내보내기' : 'Export as .mori'),
-                      ]),
-                    ),
+                    PopupMenuItem(value: 'save', child: Row(children: [Icon(Icons.save_rounded, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '저장' : 'Save')])),
+                    PopupMenuItem(value: 'copy', child: Row(children: [Icon(Icons.copy_rounded, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '복사' : 'Duplicate')])),
+                    PopupMenuItem(value: 'link_project', child: Row(children: [Icon(Icons.folder_outlined, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '프로젝트에 연결' : 'Link to project')])),
+                    PopupMenuItem(value: 'pdf', child: Row(children: [Icon(Icons.picture_as_pdf_rounded, size: 18, color: C.og), const SizedBox(width: 8), Text(isKorean ? 'PDF로 내보내기' : 'Export as PDF')])),
+                    PopupMenuItem(value: 'image', child: Row(children: [Icon(Icons.image_rounded, size: 18, color: C.lmD), const SizedBox(width: 8), Text(isKorean ? '이미지로 내보내기' : 'Export as image')])),
+                    PopupMenuItem(value: 'mori', child: Row(children: [Icon(Icons.file_download_rounded, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '.mori 파일로 내보내기' : 'Export as .mori')])),
+                    PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_rounded, size: 18, color: C.og), const SizedBox(width: 8), Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og))])),
                   ],
           ),
         ],

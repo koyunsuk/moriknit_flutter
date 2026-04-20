@@ -49,6 +49,10 @@ class PatternRepository {
     await _ref.doc(id).delete();
   }
 
+  Future<void> linkToProject(String chartId, String? projectId) async {
+    await _ref.doc(chartId).update({'linkedProjectId': projectId});
+  }
+
   Future<PatternChart> duplicate(PatternChart original) async {
     final copy = PatternChart(
       id: '',
@@ -224,6 +228,7 @@ class PatternRepository {
 final patternRepositoryProvider = Provider<PatternRepository>((ref) => PatternRepository());
 
 final patternListProvider = StreamProvider<List<PatternChart>>((ref) {
+  ref.keepAlive();
   final repo = ref.watch(patternRepositoryProvider);
   // 구버전 도안 id 마이그레이션 (1회성, 비동기)
   Future.microtask(() => repo.migrateIds());

@@ -107,6 +107,9 @@ class PatternChart {
   /// 최초 생성 시각 (NEW 뱃지용, 24시간 내 생성 도안 표시)
   final DateTime? createdAt;
 
+  /// 연결된 프로젝트 ID
+  final String? linkedProjectId;
+
   PatternChart({
     required this.id,
     required this.title,
@@ -124,6 +127,7 @@ class PatternChart {
     this.sourceType = PatternSourceType.editor,
     this.aiSections,
     this.createdAt,
+    this.linkedProjectId,
   });
 
   PatternChart setCell(int row, int col, CellData cell) {
@@ -303,13 +307,16 @@ class PatternChart {
     PatternSourceType? sourceType,
     List<AiSection>? aiSections,
     DateTime? createdAt,
+    Object? linkedProjectId = _sentinel,
   }) => _copyWith(
     id: id, title: title, rows: rows, cols: cols, mode: mode, grid: grid,
     narrativeText: narrativeText, type: type, imageUrl: imageUrl, pdfUrl: pdfUrl,
     forkCount: forkCount, sourcePatternId: sourcePatternId,
     sourceOwnerName: sourceOwnerName, sourceType: sourceType, aiSections: aiSections,
-    createdAt: createdAt,
+    createdAt: createdAt, linkedProjectId: linkedProjectId,
   );
+
+  static const Object _sentinel = Object();
 
   PatternChart _copyWith({
     String? id,
@@ -328,6 +335,7 @@ class PatternChart {
     PatternSourceType? sourceType,
     List<AiSection>? aiSections,
     DateTime? createdAt,
+    Object? linkedProjectId = _sentinel,
   }) {
     return PatternChart(
       id: id ?? this.id,
@@ -346,6 +354,7 @@ class PatternChart {
       sourceType: sourceType ?? this.sourceType,
       aiSections: aiSections ?? this.aiSections,
       createdAt: createdAt ?? this.createdAt,
+      linkedProjectId: identical(linkedProjectId, _sentinel) ? this.linkedProjectId : linkedProjectId as String?,
     );
   }
 
@@ -367,6 +376,7 @@ class PatternChart {
         if (sourceOwnerName != null) 'sourceOwnerName': sourceOwnerName,
         'sourceType': sourceType.name,
         if (aiSections != null) 'aiSections': aiSections!.map((s) => s.toMap()).toList(),
+        if (linkedProjectId != null) 'linkedProjectId': linkedProjectId,
       };
 
   factory PatternChart.fromJson(Map<String, dynamic> json) {
@@ -406,6 +416,7 @@ class PatternChart {
           ?.map((s) => AiSection.fromMap(Map<String, dynamic>.from(s as Map)))
           .toList(),
       createdAt: (json['createdAt'] as dynamic)?.toDate() as DateTime?,
+      linkedProjectId: json['linkedProjectId'] as String?,
     );
   }
 

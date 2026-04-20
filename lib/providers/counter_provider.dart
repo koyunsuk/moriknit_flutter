@@ -10,6 +10,7 @@ final counterRepositoryProvider = Provider<CounterRepository>((ref) {
 
 // 로그인 상태에서 전체 카운터 목록을 구독합니다.
 final counterListProvider = StreamProvider<List<CounterModel>>((ref) {
+  ref.keepAlive();
   final isLoggedIn = ref.watch(isLoggedInProvider);
   if (!isLoggedIn) return Stream.value([]);
   return ref.watch(counterRepositoryProvider).watchCounters();

@@ -8,6 +8,7 @@ final templateRepositoryProvider =
     Provider<TemplateRepository>((ref) => TemplateRepository());
 
 final userTemplateListProvider = StreamProvider<List<UserTemplate>>((ref) {
+  ref.keepAlive();
   return ref.watch(templateRepositoryProvider).watchTemplates();
 });
 

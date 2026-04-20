@@ -9,6 +9,7 @@ final swatchRepositoryProvider = Provider<SwatchRepository>((ref) {
 });
 
 final swatchListProvider = StreamProvider<List<SwatchModel>>((ref) {
+  ref.keepAlive();
   final isLoggedIn = ref.watch(isLoggedInProvider);
   if (!isLoggedIn) return Stream.value([]);
   return ref.watch(swatchRepositoryProvider).watchSwatches();

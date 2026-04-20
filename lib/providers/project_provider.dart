@@ -10,6 +10,7 @@ final projectRepositoryProvider = Provider<ProjectRepository>((ref) {
 
 // 로그인 상태에서 전체 프로젝트 목록을 구독합니다.
 final projectListProvider = StreamProvider<List<ProjectModel>>((ref) {
+  ref.keepAlive();
   final isLoggedIn = ref.watch(isLoggedInProvider);
   if (!isLoggedIn) return Stream.value([]);
   return ref.watch(projectRepositoryProvider).watchProjects();

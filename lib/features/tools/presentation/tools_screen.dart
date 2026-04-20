@@ -350,9 +350,9 @@ class ToolsScreen extends ConsumerWidget {
                     _ToolCard(
                       icon: Icons.grid_on_rounded,
                       color: C.lvD,
-                      title: isKorean ? 'AI 도안 에디터' : 'AI Pattern Editor',
-                      description: isKorean ? '새 도안을 바로 그려요' : 'Open editor directly',
-                      onTap: () => context.push(Routes.toolsPattern),
+                      title: isKorean ? '도안 에디터' : 'Pattern Editor',
+                      description: isKorean ? '나의 도안 목록 및 새 도안 만들기' : 'My patterns & create new',
+                      onTap: () => context.push(Routes.toolsPatternGate),
                     ),
                     const SizedBox(height: 10),
                     _ToolCard(

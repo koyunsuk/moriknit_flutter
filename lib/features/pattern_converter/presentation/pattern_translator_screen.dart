@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +11,9 @@ import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../dropbox/data/dropbox_auth_provider.dart';
+import '../../dropbox/domain/dropbox_file_entry.dart';
+import '../../../providers/dropbox_provider.dart';
 import '../data/pattern_converter_repository.dart';
 import 'ai_pattern_edit_screen.dart';
 
@@ -26,7 +32,66 @@ class _PatternTranslatorScreenState
   int _stage = 1; // 1=업로드, 2=AI분석, 3=분석완료, 4=번역중
   String _statusMessage = '';
 
-  Future<void> _pickAndTranslate() async {
+  // 소스 선택 bottom sheet
+  Future<void> _showSourceSheet() async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: C.bd, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Text(
+                isKorean ? '파일 불러오기' : 'Import File',
+                style: T.h3,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(12)),
+                child: Icon(kIsWeb ? Icons.computer_rounded : Icons.smartphone_rounded, color: C.lvD, size: 22),
+              ),
+              title: Text(kIsWeb ? (isKorean ? '내 PC' : 'My PC') : (isKorean ? '내 핸드폰' : 'My Device'), style: T.bodyBold),
+              subtitle: Text('PDF, JPG, PNG', style: T.caption.copyWith(color: C.mu)),
+              trailing: Icon(Icons.chevron_right_rounded, color: C.mu),
+              onTap: () {
+                Navigator.pop(context);
+                _pickFromPhone();
+              },
+            ),
+            ListTile(
+              leading: Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(color: const Color(0xFF0061FF).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.cloud_rounded, color: Color(0xFF0061FF), size: 22),
+              ),
+              title: Text('Dropbox', style: T.bodyBold),
+              subtitle: Text(isKorean ? '드롭박스에서 파일 선택' : 'Pick from Dropbox', style: T.caption.copyWith(color: C.mu)),
+              trailing: Icon(Icons.chevron_right_rounded, color: C.mu),
+              onTap: () {
+                Navigator.pop(context);
+                _pickFromDropbox();
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickFromPhone() async {
     final isKorean = ref.read(appLanguageProvider).isKorean;
     final messenger = ScaffoldMessenger.of(context);
 
@@ -41,7 +106,40 @@ class _PatternTranslatorScreenState
     final bytes = picked.bytes;
     if (bytes == null) return;
 
-    final fileName = picked.name;
+    await _runTranslate(bytes: bytes, fileName: picked.name, messenger: messenger, isKorean: isKorean);
+  }
+
+  Future<void> _pickFromDropbox() async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final auth = ref.read(dropboxAuthProvider);
+    if (!auth.isLoggedIn) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(isKorean ? 'Dropbox 연결 후 이용할 수 있어요.' : 'Please connect Dropbox first.'),
+        action: SnackBarAction(
+          label: isKorean ? '연결하기' : 'Connect',
+          onPressed: () => context.push(Routes.dropbox),
+        ),
+      ));
+      return;
+    }
+
+    final selected = await Navigator.push<_DropboxPickResult>(
+      context,
+      MaterialPageRoute(builder: (_) => _DropboxPickerScreen(isKorean: isKorean)),
+    );
+    if (selected == null || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    await _runTranslate(bytes: selected.bytes, fileName: selected.fileName, messenger: messenger, isKorean: isKorean);
+  }
+
+  Future<void> _runTranslate({
+    required Uint8List bytes,
+    required String fileName,
+    required ScaffoldMessengerState messenger,
+    required bool isKorean,
+  }) async {
     final ext = fileName.split('.').last.toLowerCase();
     final mimeType = ext == 'pdf'
         ? 'application/pdf'
@@ -228,7 +326,7 @@ class _PatternTranslatorScreenState
                       stage: _stage,
                       isKorean: isKorean)
                 else
-                  _UploadButton(onTap: _pickAndTranslate, isKorean: isKorean),
+                  _UploadButton(onTap: _showSourceSheet, isKorean: isKorean),
               ],
             ),
           ),
@@ -454,6 +552,131 @@ class _TranslateProgress extends StatelessWidget {
           ],
           const SizedBox(height: 8),
         ],
+      ),
+    );
+  }
+}
+
+// ── Dropbox 파일 선택 결과 ────────────────────────────────────────────────────
+class _DropboxPickResult {
+  final Uint8List bytes;
+  final String fileName;
+  const _DropboxPickResult({required this.bytes, required this.fileName});
+}
+
+// ── Dropbox 파일 피커 화면 ────────────────────────────────────────────────────
+final _dropboxPickerFolderProvider = FutureProvider.family<List<DropboxFileEntry>, String>(
+  (ref, path) => ref.watch(dropboxApiClientProvider).listFolder(path),
+);
+
+class _DropboxPickerScreen extends ConsumerStatefulWidget {
+  final bool isKorean;
+  const _DropboxPickerScreen({required this.isKorean});
+
+  @override
+  ConsumerState<_DropboxPickerScreen> createState() => _DropboxPickerScreenState();
+}
+
+class _DropboxPickerScreenState extends ConsumerState<_DropboxPickerScreen> {
+  final List<String> _pathStack = [''];
+  String get _currentPath => _pathStack.last;
+
+  static const Color _blue = Color(0xFF0061FF);
+
+  static bool _isSupported(String name) {
+    final n = name.toLowerCase();
+    return n.endsWith('.pdf') || n.endsWith('.jpg') || n.endsWith('.jpeg') || n.endsWith('.png');
+  }
+
+  Future<void> _selectFile(DropboxFileEntry entry) async {
+    try {
+      final bytes = await runWithMoriLoadingDialog<Uint8List>(
+        context,
+        message: widget.isKorean ? '파일을 불러오는 중입니다.' : 'Loading file...',
+        subtitle: widget.isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () => ref.read(dropboxApiClientProvider).downloadFile(entry.path),
+      );
+      if (!mounted) return;
+      Navigator.pop(context, _DropboxPickResult(bytes: bytes, fileName: entry.name));
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final entriesAsync = ref.watch(_dropboxPickerFolderProvider(_currentPath));
+    final displayPath = _pathStack.length == 1 ? '/' : _currentPath;
+
+    return Scaffold(
+      backgroundColor: C.bg,
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, size: 20),
+          color: C.tx,
+          onPressed: () {
+            if (_pathStack.length > 1) {
+              setState(() => _pathStack.removeLast());
+            } else {
+              Navigator.pop(context);
+            }
+          },
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Dropbox', style: T.h3),
+            Text(displayPath, style: T.caption.copyWith(color: C.mu, fontSize: 11), overflow: TextOverflow.ellipsis),
+          ],
+        ),
+        backgroundColor: C.bg,
+        elevation: 0,
+      ),
+      body: entriesAsync.when(
+        loading: () => Center(child: CircularProgressIndicator(color: _blue)),
+        error: (e, _) => Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline_rounded, color: C.og, size: 40),
+              const SizedBox(height: 12),
+              Text('$e', style: T.caption.copyWith(color: C.og), textAlign: TextAlign.center, maxLines: 4),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => ref.invalidate(_dropboxPickerFolderProvider(_currentPath)),
+                child: Text(widget.isKorean ? '다시 시도' : 'Retry'),
+              ),
+            ],
+          ),
+        ),
+        data: (entries) => entries.isEmpty
+            ? Center(child: Text(widget.isKorean ? '이 폴더는 비어 있어요.' : 'This folder is empty.', style: T.body.copyWith(color: C.mu)))
+            : ListView.separated(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: entries.length,
+                separatorBuilder: (_, _) => Divider(height: 1, color: C.bd),
+                itemBuilder: (_, i) {
+                  final e = entries[i];
+                  final supported = !e.isFolder && _isSupported(e.name);
+                  final color = e.isFolder ? C.pk : supported ? C.lv : C.mu;
+                  return ListTile(
+                    enabled: e.isFolder || supported,
+                    leading: Icon(
+                      e.isFolder ? Icons.folder_rounded : e.name.toLowerCase().endsWith('.pdf') ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
+                      color: color, size: 26,
+                    ),
+                    title: Text(e.name, style: T.body.copyWith(fontSize: 14, color: e.isFolder || supported ? C.tx : C.mu)),
+                    subtitle: e.isFolder
+                        ? Text(widget.isKorean ? '폴더' : 'Folder', style: T.caption.copyWith(color: C.mu))
+                        : Text(supported ? 'PDF / JPG / PNG' : widget.isKorean ? '지원하지 않는 형식' : 'Unsupported', style: T.caption.copyWith(color: C.mu)),
+                    trailing: e.isFolder ? Icon(Icons.chevron_right_rounded, color: C.mu) : null,
+                    onTap: e.isFolder
+                        ? () => setState(() => _pathStack.add(e.path))
+                        : supported ? () => _selectFile(e) : null,
+                  );
+                },
+              ),
       ),
     );
   }

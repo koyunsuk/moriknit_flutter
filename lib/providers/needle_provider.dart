@@ -9,6 +9,7 @@ final needleRepositoryProvider = Provider<NeedleRepository>((ref) {
 });
 
 final needleListProvider = StreamProvider<List<NeedleModel>>((ref) {
+  ref.keepAlive();
   final isLoggedIn = ref.watch(isLoggedInProvider);
   if (!isLoggedIn) return Stream.value([]);
   return ref.watch(needleRepositoryProvider).watchNeedles();

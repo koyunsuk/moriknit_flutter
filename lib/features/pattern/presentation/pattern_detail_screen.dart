@@ -403,7 +403,11 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
         task: () => ref.read(patternRepositoryProvider).delete(widget.chart.id),
       );
       if (!mounted) return;
-      Navigator.pop(context);
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go(Routes.toolsPatterns);
+      }
       showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '삭제됐어요.' : 'Deleted.');
     } catch (e) {
       if (mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');

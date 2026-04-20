@@ -261,16 +261,34 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
           // 점유 셀(occupied)은 앵커에서 이미 그리므로 건너뜀
           if (!cell.isAnchor) continue;
           final url = _svgUrl(cell.symbolId!, svgUrls);
-          if (url == null) continue;
           final sw = cell.spanW ?? 1;
           final sh = cell.spanH ?? 1;
-          overlays.add(Positioned(
-            left: _headerW + c * _cellW + 2,
-            top: _headerH + r * _cellH + 2,
-            width: _cellW * sw - 4,
-            height: _cellH * sh - 4,
-            child: SvgPicture.network(url, fit: BoxFit.contain),
-          ));
+          if (url != null) {
+            overlays.add(Positioned(
+              left: _headerW + c * _cellW + 2,
+              top: _headerH + r * _cellH + 2,
+              width: _cellW * sw - 4,
+              height: _cellH * sh - 4,
+              child: SvgPicture.network(url, fit: BoxFit.contain),
+            ));
+          } else {
+            // SVG 없으면 정적 라이브러리 유니코드 폴백
+            final sym = KnitSymbolLibrary.byId(cell.symbolId!);
+            if (sym != null) {
+              overlays.add(Positioned(
+                left: _headerW + c * _cellW,
+                top: _headerH + r * _cellH,
+                width: _cellW * sw,
+                height: _cellH * sh,
+                child: Center(
+                  child: Text(
+                    sym.unicode,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.black87),
+                  ),
+                ),
+              ));
+            }
+          }
         }
       }
     }

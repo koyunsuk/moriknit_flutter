@@ -4,15 +4,17 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/localization/app_language.dart';
+import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/dropbox_provider.dart';
-import '../../../providers/pattern_library_provider.dart';
-import '../../pattern_library/domain/pattern_file.dart';
+import '../../pattern_converter/data/pattern_converter_repository.dart';
+import '../../pattern_converter/presentation/ai_pattern_edit_screen.dart';
 import '../data/dropbox_auth_provider.dart';
 import '../domain/dropbox_file_entry.dart';
 
@@ -464,7 +466,7 @@ class _DropboxFileViewer extends ConsumerStatefulWidget {
 
 class _DropboxFileViewerState extends ConsumerState<_DropboxFileViewer> {
   String? _pdfPath;
-  bool _saved = false;
+  bool _translated = false;
 
   @override
   void initState() {
@@ -482,26 +484,31 @@ class _DropboxFileViewerState extends ConsumerState<_DropboxFileViewer> {
     if (mounted) setState(() => _pdfPath = file.path);
   }
 
-  Future<void> _saveToLibrary() async {
-    if (_saved) return;
+  Future<void> _translatePattern() async {
+    if (_translated) return;
+    final isKorean = widget.isKorean;
     try {
-      await runWithMoriLoadingDialog<void>(
+      final savedChart = await runWithMoriLoadingDialog(
         context,
-        message: widget.isKorean ? '저장하는 중입니다.' : 'Saving...',
-        subtitle: widget.isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
-        task: () => ref.read(patternFileRepositoryProvider).uploadFile(
+        message: isKorean ? 'AI가 도안을 분석하는 중입니다.' : 'AI is analyzing pattern...',
+        subtitle: isKorean ? '최대 3분이 소요될 수 있어요.' : 'May take up to 3 minutes.',
+        task: () => PatternConverterRepository().uploadAndParse(
           bytes: widget.bytes,
           fileName: widget.fileName,
           mimeType: widget.mimeType,
-          source: PatternFileSource.dropbox,
-          sourceMeta: {'dropboxPath': widget.dropboxPath},
+          translateToKorean: true,
         ),
       );
       if (!mounted) return;
-      setState(() => _saved = true);
-      showSavedSnackBar(
-        ScaffoldMessenger.of(context),
-        message: widget.isKorean ? '도안 라이브러리에 저장됐어요.' : 'Saved to pattern library.',
+      setState(() => _translated = true);
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AiPatternEditScreen(
+            unsavedChart: savedChart,
+            onGoToLibrary: () => context.push(Routes.toolsMyParsedPatterns),
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -525,12 +532,12 @@ class _DropboxFileViewerState extends ConsumerState<_DropboxFileViewer> {
         backgroundColor: C.bg,
         elevation: 0,
         actions: [
-          if (!_saved)
+          if (!_translated)
             TextButton.icon(
-              onPressed: _saveToLibrary,
-              icon: Icon(Icons.save_alt_rounded, size: 18, color: C.lv),
+              onPressed: _translatePattern,
+              icon: Icon(Icons.translate_rounded, size: 18, color: C.lv),
               label: Text(
-                widget.isKorean ? '라이브러리 저장' : 'Save',
+                widget.isKorean ? 'AI 번역하기' : 'AI Translate',
                 style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w600),
               ),
             )

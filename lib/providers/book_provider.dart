@@ -9,6 +9,7 @@ final bookRepositoryProvider = Provider<BookRepository>((ref) {
 });
 
 final bookListProvider = StreamProvider<List<BookModel>>((ref) {
+  ref.keepAlive();
   final isLoggedIn = ref.watch(isLoggedInProvider);
   if (!isLoggedIn) return Stream.value([]);
   return ref.watch(bookRepositoryProvider).watchBooks();

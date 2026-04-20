@@ -1,6 +1,7 @@
 ﻿import 'dart:io';
 
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -350,6 +351,7 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
   }
 
   Future<ImageSource?> _showImageSourceDialog() async {
+    if (kIsWeb) return ImageSource.gallery;
     final t = ref.read(appStringsProvider);
     return showModalBottomSheet<ImageSource>(
       context: context,

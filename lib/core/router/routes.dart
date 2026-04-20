@@ -43,4 +43,5 @@ class Routes {
   static const toolsPatternConverter = '/tools/pattern-converter';
   static const toolsPatternTranslator = '/tools/pattern-translator';
   static const toolsMyParsedPatterns = '/tools/my-parsed-patterns';
+  static const toolsPatternGate = '/tools/pattern-gate';
 }

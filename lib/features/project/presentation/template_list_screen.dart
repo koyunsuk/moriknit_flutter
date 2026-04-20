@@ -130,6 +130,10 @@ class TemplateListScreen extends ConsumerWidget {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
     final builtinAsync = ref.watch(builtinTemplateListProvider);
 
+    final userTemplatesAsync = ref.watch(userTemplateListProvider);
+    final userCount = userTemplatesAsync.valueOrNull?.length ?? 0;
+    final builtinCount = builtinAsync.valueOrNull?.length ?? 0;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
@@ -144,15 +148,24 @@ class TemplateListScreen extends ConsumerWidget {
             ),
             // 스크롤 바디
             Expanded(
-              child: ListView(
+              child: Stack(
+                children: [
+                  const BgOrbs(),
+                  ListView(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
                 children: [
-                  // 기본 템플릿 섹션
-                  Row(
-                    children: [
-                      Expanded(child: SectionTitle(title: isKorean ? '📋 기본 템플릿' : '📋 Built-in Templates')),
+                  // 요약카드 (스와치 화면 패턴)
+                  WorkspaceSummaryBar(
+                    stats: [
+                      WorkStat('$builtinCount', isKorean ? '기본' : 'Built-in', color: C.lv),
+                      WorkStat('$userCount', isKorean ? '나의' : 'Mine', color: C.pkD),
                     ],
+                    addLabel: isKorean ? '추가' : 'Add',
+                    onAdd: () => context.push(Routes.templateEditor),
                   ),
+                  const SizedBox(height: 20),
+                  // 기본 템플릿 섹션
+                  SectionTitle(title: isKorean ? '📋 기본 템플릿' : '📋 Built-in Templates'),
                   const SizedBox(height: 8),
                   builtinAsync.when(
                     loading: () => GlassCard(
@@ -191,25 +204,18 @@ class TemplateListScreen extends ConsumerWidget {
                   const SizedBox(height: 20),
 
                   // 커스텀 템플릿 섹션
-                  Row(
-                    children: [
-                      Expanded(child: SectionTitle(title: isKorean ? '✨ 나의 커스텀 템플릿' : '✨ My Custom Templates')),
-                      ElevatedButton.icon(
-                        onPressed: () => context.push(Routes.templateEditor),
-                        icon: const Icon(Icons.add_rounded, size: 18),
-                        label: Text(isKorean ? '추가' : 'Add'),
-                      ),
-                    ],
-                  ),
+                  SectionTitle(title: isKorean ? '✨ 나의 커스텀 템플릿' : '✨ My Custom Templates'),
                   const SizedBox(height: 8),
                   _CustomTemplateSection(isKorean: isKorean),
                 ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
+      ],
+    ),
+  ),
+);
   }
 }
 

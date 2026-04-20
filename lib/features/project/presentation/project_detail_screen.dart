@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -758,23 +759,27 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
     final isKorean = ref.read(appLanguageProvider).isKorean;
     final messenger = ScaffoldMessenger.of(context);
     ImageSource? source;
-    await showModalBottomSheet(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          ListTile(
-            leading: const Icon(Icons.camera_alt_rounded),
-            title: Text(isKorean ? '즉시 촬영' : 'Take photo'),
-            onTap: () { source = ImageSource.camera; Navigator.pop(ctx); },
-          ),
-          ListTile(
-            leading: const Icon(Icons.photo_library_rounded),
-            title: Text(isKorean ? '갤러리에서 선택' : 'Choose from gallery'),
-            onTap: () { source = ImageSource.gallery; Navigator.pop(ctx); },
-          ),
-        ]),
-      ),
-    );
+    if (kIsWeb) {
+      source = ImageSource.gallery;
+    } else {
+      await showModalBottomSheet(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_rounded),
+              title: Text(isKorean ? '즉시 촬영' : 'Take photo'),
+              onTap: () { source = ImageSource.camera; Navigator.pop(ctx); },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded),
+              title: Text(isKorean ? '갤러리에서 선택' : 'Choose from gallery'),
+              onTap: () { source = ImageSource.gallery; Navigator.pop(ctx); },
+            ),
+          ]),
+        ),
+      );
+    }
     if (source == null || !mounted) return;
     final picked = await ImagePicker().pickImage(source: source!, imageQuality: 85, maxWidth: 1600);
     if (picked == null || !mounted) return;
@@ -2476,31 +2481,36 @@ class _StepsSection extends ConsumerWidget {
 
     Future<XFile?> pickImageForDialog(BuildContext dialogCtx) async {
       // dialogCtx 사용: 다이얼로그 위에 바텀시트가 표시되도록
-      final source = await showModalBottomSheet<ImageSource>(
-        context: dialogCtx,
-        backgroundColor: C.bg,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-        builder: (sheetCtx) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 8),
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(2))),
-              ListTile(
-                leading: Icon(Icons.photo_library_outlined, color: C.lv),
-                title: Text(isKorean ? '갤러리에서 선택' : 'Choose from Gallery', style: T.body),
-                onTap: () => Navigator.pop(sheetCtx, ImageSource.gallery),
-              ),
-              ListTile(
-                leading: Icon(Icons.camera_alt_outlined, color: C.lv),
-                title: Text(isKorean ? '즉시 촬영' : 'Take a Photo', style: T.body),
-                onTap: () => Navigator.pop(sheetCtx, ImageSource.camera),
-              ),
-              const SizedBox(height: 8),
-            ],
+      final ImageSource? source;
+      if (kIsWeb) {
+        source = ImageSource.gallery;
+      } else {
+        source = await showModalBottomSheet<ImageSource>(
+          context: dialogCtx,
+          backgroundColor: C.bg,
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+          builder: (sheetCtx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                Container(width: 40, height: 4, decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(2))),
+                ListTile(
+                  leading: Icon(Icons.photo_library_outlined, color: C.lv),
+                  title: Text(isKorean ? '갤러리에서 선택' : 'Choose from Gallery', style: T.body),
+                  onTap: () => Navigator.pop(sheetCtx, ImageSource.gallery),
+                ),
+                ListTile(
+                  leading: Icon(Icons.camera_alt_outlined, color: C.lv),
+                  title: Text(isKorean ? '즉시 촬영' : 'Take a Photo', style: T.body),
+                  onTap: () => Navigator.pop(sheetCtx, ImageSource.camera),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
           ),
-        ),
-      );
+        );
+      }
       if (source == null) return null;
       // 바텀시트 닫힘 후 딜레이 (카메라 프리즈 방지)
       await Future.delayed(const Duration(milliseconds: 350));
@@ -2853,6 +2863,7 @@ class _StepTileState extends ConsumerState<_StepTile> {
   bool _expanded = false;
 
   Future<ImageSource?> _showImageSourceDialog() {
+    if (kIsWeb) return Future.value(ImageSource.gallery);
     final isKorean = ref.read(appLanguageProvider).isKorean;
     return showModalBottomSheet<ImageSource>(
       context: context,
@@ -3361,26 +3372,31 @@ class _ProjectPhotosSectionState extends ConsumerState<_ProjectPhotosSection> {
 
   Future<void> _pickAndUpload() async {
     if (widget.project.photoUrls.length >= 4) return;
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_library),
-              title: const Text('갤러리에서 선택'),
-              onTap: () => Navigator.pop(context, ImageSource.gallery),
-            ),
-            ListTile(
-              leading: const Icon(Icons.camera_alt),
-              title: const Text('카메라로 촬영'),
-              onTap: () => Navigator.pop(context, ImageSource.camera),
-            ),
-          ],
+    final ImageSource? source;
+    if (kIsWeb) {
+      source = ImageSource.gallery;
+    } else {
+      source = await showModalBottomSheet<ImageSource>(
+        context: context,
+        builder: (_) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('갤러리에서 선택'),
+                onTap: () => Navigator.pop(context, ImageSource.gallery),
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt),
+                title: const Text('카메라로 촬영'),
+                onTap: () => Navigator.pop(context, ImageSource.camera),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    }
     if (source == null || !mounted) return;
 
     final picked = await ImagePicker().pickImage(source: source, imageQuality: 85);

@@ -9,6 +9,7 @@ final accessoryRepositoryProvider = Provider<AccessoryRepository>((ref) {
 });
 
 final accessoryListProvider = StreamProvider<List<AccessoryModel>>((ref) {
+  ref.keepAlive();
   final isLoggedIn = ref.watch(isLoggedInProvider);
   if (!isLoggedIn) return Stream.value([]);
   return ref.watch(accessoryRepositoryProvider).watchAccessories();

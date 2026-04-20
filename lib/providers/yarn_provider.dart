@@ -8,6 +8,7 @@ final yarnRepositoryProvider =
     Provider<YarnRepository>((ref) => YarnRepository());
 
 final yarnListProvider = StreamProvider<List<YarnModel>>((ref) {
+  ref.keepAlive();
   final isLoggedIn = ref.watch(isLoggedInProvider);
   if (!isLoggedIn) return Stream.value([]);
   return ref.watch(yarnRepositoryProvider).watchYarns();
