@@ -103,9 +103,11 @@ firebase deploy --only hosting                             # ❌ (스크립트 �
 - 모바일(Flutter) 코드 수정 완료 후 사용자 승인 없이 즉시 아래 순서 자동 실행:
   1. `flutter build apk --debug`
   2. `/c/Users/koyunsuk/AppData/Local/Android/Sdk/platform-tools/adb.exe install -r build/app/outputs/flutter-apk/app-debug.apk`
-  3. Pushover 알림: title="📱 모리니트 설치 완료", message="모리니트 모바일 신버전 설치했습니다. 확인해주세요"
-  4. 해당 이슈 상태 🟢로 업데이트: `gh issue edit {N} --title "🟢 #N [카테고리] 제목"`
+  3. **웹앱도 함께 빌드·배포**: `bash deploy_web.sh app` (앱 타깃만, 어드민 제외)
+  4. Pushover 알림: title="📱 모리니트 설치 완료", message="모리니트 모바일 + 웹앱 신버전 설치/배포 완료. 확인해주세요"
+  5. 해당 이슈 상태 🟢로 업데이트: `gh issue edit {N} --title "🟢 #N [카테고리] 제목"`
 - 빌드/설치 완료 후 결과만 보고. 중간에 확인 요청 금지.
+- **웹앱 코드 변경이 없어도** 모바일 빌드 시 웹앱 배포 항상 포함 (동기화 보장)
 
 ## iOS TestFlight 빌드 번호 규칙 (절대 준수)
 - **Codemagic으로 iOS 빌드 전 반드시 `pubspec.yaml`의 빌드 번호를 +1 올릴 것**

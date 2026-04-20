@@ -7,8 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/localization/app_language.dart';
@@ -19,6 +18,7 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../market/presentation/pdf_viewer_screen.dart';
 import '../../../providers/auth_provider.dart';
 import '../domain/pattern_chart.dart';
+import '../data/pattern_export_service.dart';
 import '../data/pattern_repository.dart';
 import '../../../providers/project_provider.dart';
 
@@ -622,73 +622,74 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
 
   Future<void> _exportPdf(BuildContext context, bool isKorean) async {
     try {
+      final user = ref.read(authStateProvider).valueOrNull;
+      final creatorName = user?.displayName ?? user?.email ?? 'MoriKnit';
+
       await runWithMoriLoadingDialog<void>(
         context,
         message: isKorean ? 'PDF 생성 중입니다.' : 'Generating PDF...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
         task: () async {
-          final pdfDoc = pw.Document();
-          const cellSize = 12.0;
-          final cols = widget.chart.cols;
-          final rows = widget.chart.rows;
-
-          pdfDoc.addPage(
-            pw.MultiPage(
-              pageFormat: PdfPageFormat.a4,
-              build: (ctx) => [
-                pw.Text(widget.chart.title,
-                    style: pw.TextStyle(
-                        fontSize: 18, fontWeight: pw.FontWeight.bold)),
-                pw.SizedBox(height: 8),
-                pw.Text('$rows행 × $cols열',
-                    style: const pw.TextStyle(fontSize: 12)),
-                pw.SizedBox(height: 16),
-                pw.Table(
-                  border: pw.TableBorder.all(
-                      color: PdfColors.grey300, width: 0.5),
-                  columnWidths: {
-                    for (var i = 0; i < cols; i++)
-                      i: const pw.FixedColumnWidth(cellSize)
-                  },
-                  children: List.generate(
-                    rows,
-                    (r) => pw.TableRow(
-                      children: List.generate(cols, (c) {
-                        final cell = r < widget.chart.grid.length &&
-                                c < widget.chart.grid[r].length
-                            ? widget.chart.grid[r][c]
-                            : null;
-                        final color = cell?.color;
-                        PdfColor? pdfColor;
-                        if (color != null) {
-                          final argb = color.toARGB32();
-                          final a = ((argb >> 24) & 0xFF) / 255.0;
-                          final rv = ((argb >> 16) & 0xFF) / 255.0;
-                          final gv = ((argb >> 8) & 0xFF) / 255.0;
-                          final bv = (argb & 0xFF) / 255.0;
-                          if (!(rv > 0.98 && gv > 0.98 && bv > 0.98)) {
-                            pdfColor = PdfColor(rv, gv, bv, a);
-                          }
-                        }
-                        return pw.Container(
-                          height: cellSize,
-                          color: pdfColor,
-                        );
-                      }),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          final bytes = await PatternExportService.buildMagazinePdf(
+            chart: widget.chart,
+            chartImageBytes: null,
+            creatorName: creatorName,
           );
-
-          final bytes = await pdfDoc.save();
+          // 저장·열기 — 기존 동작 유지 (임시 파일로 저장 후 열기)
           final dir = await getTemporaryDirectory();
-          final file =
-              File('${dir.path}/${widget.chart.title}.pdf');
+          final safe = widget.chart.title
+              .trim()
+              .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+          final file = File(
+              '${dir.path}/${safe.isEmpty ? 'pattern' : safe}.pdf');
           await file.writeAsBytes(bytes);
           await launchUrl(Uri.file(file.path));
         },
+      );
+    } catch (e) {
+      if (context.mounted) {
+        showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+      }
+    }
+  }
+
+  /// PDF 매거진 스타일 — 공유 시트로 전달 (sharePdf)
+  Future<void> _sharePdfMagazine(BuildContext context, bool isKorean) async {
+    try {
+      final user = ref.read(authStateProvider).valueOrNull;
+      final creatorName = user?.displayName ?? user?.email ?? 'MoriKnit';
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? 'PDF 생성 중입니다.' : 'Generating PDF...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () async {
+          final bytes = await PatternExportService.buildMagazinePdf(
+            chart: widget.chart,
+            chartImageBytes: null,
+            creatorName: creatorName,
+          );
+          await Printing.sharePdf(
+            bytes: bytes,
+            filename: '${widget.chart.title}.pdf',
+          );
+        },
+      );
+    } catch (e) {
+      if (context.mounted) {
+        showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+      }
+    }
+  }
+
+  /// .mori 파일로 내보내기
+  Future<void> _exportMori(BuildContext context, bool isKorean) async {
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '파일 내보내는 중입니다.' : 'Exporting file...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () =>
+            PatternExportService.exportMoriFile(chart: widget.chart),
       );
     } catch (e) {
       if (context.mounted) {
@@ -855,7 +856,8 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
           ),
         );
       case PatternType.chart:
-        context.push('${Routes.toolsPattern}/${widget.chart.id}');
+        // 뷰어 모드로 열기 (편집 불가)
+        context.push('${Routes.toolsPatternViewer}/${widget.chart.id}');
     }
   }
 
@@ -896,6 +898,8 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                       if (v == 'edit') _enterEditMode();
                       if (v == 'copy') _duplicatePattern(isKorean);
                       if (v == 'link_project') _linkToProject(context, isKorean);
+                      if (v == 'export_pdf') _sharePdfMagazine(context, isKorean);
+                      if (v == 'export_mori') _exportMori(context, isKorean);
                       if (v == 'delete') _confirmDelete(isKorean);
                     },
                     itemBuilder: (_) => [
@@ -923,6 +927,24 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                           Text(isKorean ? '프로젝트 연결' : 'Link to project'),
                         ]),
                       ),
+                      if (widget.chart.type == PatternType.chart) ...[
+                        PopupMenuItem(
+                          value: 'export_pdf',
+                          child: Row(children: [
+                            Icon(Icons.picture_as_pdf_rounded, size: 18, color: C.og),
+                            const SizedBox(width: 8),
+                            Text(isKorean ? 'PDF로 공유' : 'Share as PDF'),
+                          ]),
+                        ),
+                        PopupMenuItem(
+                          value: 'export_mori',
+                          child: Row(children: [
+                            Icon(Icons.file_download_rounded, size: 18, color: C.lv),
+                            const SizedBox(width: 8),
+                            Text(isKorean ? '.mori 파일로 저장' : 'Save as .mori'),
+                          ]),
+                        ),
+                      ],
                       PopupMenuItem(
                         value: 'delete',
                         child: Row(children: [

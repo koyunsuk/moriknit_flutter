@@ -669,10 +669,11 @@ exports.parseKnittingPattern = onCall(
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError('unauthenticated', '로그인이 필요합니다.');
 
-    const { storagePath, mimeType, fileName } = request.data;
+    const { storagePath, mimeType, fileName, translateLanguage } = request.data;
     if (!storagePath || !mimeType || !fileName) {
       throw new HttpsError('invalid-argument', '필수 항목이 누락됐습니다.');
     }
+    const needsKorean = translateLanguage === 'ko';
 
     // 파일 크기 제한 (10MB)
     const bucket = admin.storage().bucket();
@@ -694,9 +695,40 @@ exports.parseKnittingPattern = onCall(
 
     const client = new Anthropic({ apiKey: anthropicApiKey.value().trim() });
 
-    const systemPrompt = `You are a knitting pattern parser.
+    const systemPromptBase = `You are a knitting pattern parser.
 Parse the provided knitting pattern (PDF or image) and extract structured step-by-step instructions.
-Output ONLY valid JSON, no markdown, no extra text.
+Output ONLY valid JSON, no markdown, no extra text.`;
+
+    const systemPromptKo = `${systemPromptBase}
+
+JSON structure (with Korean translation):
+{
+  "title": "pattern title",
+  "materials": "yarn, needle size, other materials as a single string",
+  "gauge": "gauge information as a string",
+  "sizes": "available sizes as a string",
+  "sections": [
+    {
+      "id": "section_1",
+      "title": "Section name in English (e.g., Cast On, Body, Sleeve, etc.)",
+      "titleKo": "섹션 이름 한국어 번역 (예: 코 잡기, 몸통, 소매 등)",
+      "steps": [
+        {"id": "step_1_1", "instruction": "Step instruction text in original language", "instructionKo": "단계 지시 한국어 번역"},
+        {"id": "step_1_2", "instruction": "Next step", "instructionKo": "다음 단계 한국어 번역"}
+      ]
+    }
+  ]
+}
+
+Important rules:
+- Keep each step as ONE actionable instruction (not too long, not too short)
+- instruction: use the original language of the pattern
+- titleKo and instructionKo: must be natural Korean translation
+- Translate all knitting terms accurately (e.g., "cast on" → "코 잡기", "knit" → "겉뜨기", "purl" → "안뜨기", "bind off" → "코 막음")
+- section IDs: section_1, section_2, ...
+- step IDs: step_{sectionIndex}_{stepIndex} (1-based)`;
+
+    const systemPromptDefault = `${systemPromptBase}
 
 JSON structure:
 {
@@ -722,6 +754,8 @@ Important rules:
 - If Korean, keep Korean. If English, keep English.
 - section IDs: section_1, section_2, ...
 - step IDs: step_{sectionIndex}_{stepIndex} (1-based)`;
+
+    const systemPrompt = needsKorean ? systemPromptKo : systemPromptDefault;
 
     const contentBlock =
       mimeType === 'application/pdf'

@@ -27,6 +27,8 @@ class ChartCanvas extends ConsumerStatefulWidget {
   final TransformationController? transformationController;
   /// 전체 조망: non-null Size가 들어오면 해당 크기에 맞게 셀 크기 자동 조정
   final ValueNotifier<Size?>? fitToScreenNotifier;
+  /// 뷰어 모드 — 터치로 그리기 비활성화 (패닝/줌만 허용)
+  final bool readOnly;
   const ChartCanvas({
     super.key,
     required this.chart,
@@ -37,6 +39,7 @@ class ChartCanvas extends ConsumerStatefulWidget {
     required this.onChartChanged,
     this.transformationController,
     this.fitToScreenNotifier,
+    this.readOnly = false,
   });
 
   @override
@@ -230,7 +233,7 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
     }
   }
 
-  bool get _interactiveEnabled => widget.tool == ChartTool.move;
+  bool get _interactiveEnabled => widget.readOnly || widget.tool == ChartTool.move;
 
   /// symbolId → SVG URL 변환 (abbreviation 우선, id fallback)
   String? _svgUrl(String symbolId, Map<String, String> svgUrls) {

@@ -113,9 +113,9 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
 
   void _buildControllers() {
     for (final sec in _sections) {
-      _sectionTitleCtrls[sec.id] ??= TextEditingController(text: sec.title);
+      _sectionTitleCtrls[sec.id] ??= TextEditingController(text: sec.titleKo ?? sec.title);
       for (final step in sec.steps) {
-        _stepCtrls[step.id] ??= TextEditingController(text: step.instruction);
+        _stepCtrls[step.id] ??= TextEditingController(text: step.instructionKo ?? step.instruction);
       }
     }
   }
@@ -422,17 +422,31 @@ class _SectionCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: TextField(
-                  controller: titleCtrl,
-                  style: T.body.copyWith(fontWeight: FontWeight.w700),
-                  decoration: InputDecoration(
-                    hintText: isKorean ? '섹션 제목' : 'Section title',
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: EdgeInsets.zero,
-                    fillColor: Colors.transparent,
-                    filled: true,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: titleCtrl,
+                      style: T.body.copyWith(fontWeight: FontWeight.w700),
+                      decoration: InputDecoration(
+                        hintText: isKorean ? '섹션 제목' : 'Section title',
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                        fillColor: Colors.transparent,
+                        filled: true,
+                      ),
+                    ),
+                    // titleKo가 있을 때 영어 원문을 아래에 작게 표시
+                    if (section.titleKo != null && section.title.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          section.title,
+                          style: T.caption.copyWith(color: C.mu, fontSize: 12),
+                        ),
+                      ),
+                  ],
                 ),
               ),
               IconButton(
@@ -471,18 +485,32 @@ class _SectionCard extends StatelessWidget {
                           size: 16, color: C.tx2),
                     ),
                     Expanded(
-                      child: TextField(
-                        controller: ctrl,
-                        maxLines: null,
-                        style: T.sm,
-                        decoration: InputDecoration(
-                          hintText: isKorean ? '단계 내용' : 'Step instruction',
-                          fillColor: C.gx,
-                          filled: true,
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          TextField(
+                            controller: ctrl,
+                            maxLines: null,
+                            style: T.sm,
+                            decoration: InputDecoration(
+                              hintText: isKorean ? '단계 내용' : 'Step instruction',
+                              fillColor: C.gx,
+                              filled: true,
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                            ),
+                          ),
+                          // instructionKo가 있을 때 영어 원문을 아래에 작게 표시
+                          if (step.instructionKo != null && step.instruction.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 3, left: 12),
+                              child: Text(
+                                step.instruction,
+                                style: T.caption.copyWith(color: C.mu, fontSize: 12),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                     IconButton(

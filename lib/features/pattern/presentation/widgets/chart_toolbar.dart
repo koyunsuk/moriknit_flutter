@@ -27,6 +27,7 @@ class ChartToolbar extends StatefulWidget {
   final VoidCallback onClear;
   final VoidCallback onExport;
   final VoidCallback? onFitScreen;
+  final VoidCallback? onGridResize;
 
   const ChartToolbar({
     super.key,
@@ -46,6 +47,7 @@ class ChartToolbar extends StatefulWidget {
     required this.onClear,
     required this.onExport,
     this.onFitScreen,
+    this.onGridResize,
   });
 
   @override
@@ -78,6 +80,7 @@ class _ChartToolbarState extends State<ChartToolbar> {
               onClear: widget.onClear,
               onExport: widget.onExport,
               onFitScreen: widget.onFitScreen,
+              onGridResize: widget.onGridResize,
             ),
             const Divider(height: 1),
             _UnifiedPanel(
@@ -108,14 +111,7 @@ class _TopBar extends StatelessWidget {
   final VoidCallback onClear;
   final VoidCallback onExport;
   final VoidCallback? onFitScreen;
-
-  static const List<({ChartTool tool, IconData icon})> _tools = [
-    (tool: ChartTool.draw,  icon: Icons.edit_rounded),
-    (tool: ChartTool.brush, icon: Icons.brush_rounded),
-    (tool: ChartTool.fill,  icon: Icons.format_color_fill_rounded),
-    (tool: ChartTool.erase, icon: Icons.cleaning_services_rounded),
-    (tool: ChartTool.move,  icon: Icons.pan_tool_rounded),
-  ];
+  final VoidCallback? onGridResize;
 
   const _TopBar({
     required this.activeTool,
@@ -128,6 +124,7 @@ class _TopBar extends StatelessWidget {
     required this.onClear,
     required this.onExport,
     this.onFitScreen,
+    this.onGridResize,
   });
 
   @override
@@ -139,12 +136,11 @@ class _TopBar extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          for (final t in _tools)
-            _ToolBtn(
-              icon: t.icon,
-              active: activeTool == t.tool,
-              onTap: () => onToolChanged(t.tool),
-            ),
+          _ToolBtn(icon: Icons.edit_rounded, active: activeTool == ChartTool.draw, onTap: () => onToolChanged(ChartTool.draw)),
+          _ToolBtn(icon: Icons.brush, active: activeTool == ChartTool.brush, onTap: () => onToolChanged(ChartTool.brush)),
+          _ToolBtn(icon: Icons.format_color_fill_rounded, active: activeTool == ChartTool.fill, onTap: () => onToolChanged(ChartTool.fill)),
+          _ToolBtn(icon: Icons.cleaning_services_rounded, active: activeTool == ChartTool.erase, onTap: () => onToolChanged(ChartTool.erase)),
+          _ToolBtn(icon: Icons.pan_tool_rounded, active: activeTool == ChartTool.move, onTap: () => onToolChanged(ChartTool.move)),
           const VerticalDivider(width: 14, thickness: 1, indent: 6, endIndent: 6),
           _IconBtn(
             icon: Icons.article_outlined,
@@ -154,6 +150,8 @@ class _TopBar extends StatelessWidget {
           ),
           if (onFitScreen != null)
             _IconBtn(icon: Icons.fit_screen_rounded, enabled: true, onTap: onFitScreen!),
+          if (onGridResize != null)
+            _IconBtn(icon: Icons.grid_on_rounded, enabled: true, onTap: onGridResize!, tooltip: '그리드 크기'),
           _IconBtn(icon: Icons.undo_rounded, enabled: canUndo, onTap: onUndo),
           _IconBtn(icon: Icons.redo_rounded, enabled: canRedo, onTap: onRedo),
           _IconBtn(icon: Icons.ios_share_rounded, enabled: true, onTap: onExport),

@@ -147,15 +147,6 @@ class _DropboxScreenState extends ConsumerState<DropboxScreen> {
           mimeType: mimeType,
           dropboxPath: entry.path,
           isKorean: isKorean,
-          onSave: (bytes) async {
-            await ref.read(patternFileRepositoryProvider).uploadFile(
-              bytes: bytes,
-              fileName: entry.name,
-              mimeType: mimeType,
-              source: PatternFileSource.dropbox,
-              sourceMeta: {'dropboxPath': entry.path},
-            );
-          },
         ),
       ),
     );
@@ -459,7 +450,6 @@ class _DropboxFileViewer extends ConsumerStatefulWidget {
     required this.mimeType,
     required this.dropboxPath,
     required this.isKorean,
-    required this.onSave,
   });
 
   final Uint8List bytes;
@@ -467,7 +457,6 @@ class _DropboxFileViewer extends ConsumerStatefulWidget {
   final String mimeType;
   final String dropboxPath;
   final bool isKorean;
-  final Future<void> Function(Uint8List bytes) onSave;
 
   @override
   ConsumerState<_DropboxFileViewer> createState() => _DropboxFileViewerState();
@@ -500,7 +489,13 @@ class _DropboxFileViewerState extends ConsumerState<_DropboxFileViewer> {
         context,
         message: widget.isKorean ? '저장하는 중입니다.' : 'Saving...',
         subtitle: widget.isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
-        task: () => widget.onSave(widget.bytes),
+        task: () => ref.read(patternFileRepositoryProvider).uploadFile(
+          bytes: widget.bytes,
+          fileName: widget.fileName,
+          mimeType: widget.mimeType,
+          source: PatternFileSource.dropbox,
+          sourceMeta: {'dropboxPath': widget.dropboxPath},
+        ),
       );
       if (!mounted) return;
       setState(() => _saved = true);

@@ -147,6 +147,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   ),
                 ],
               ),
+              GoRoute(
+                path: 'pattern-viewer',
+                pageBuilder: (_, _) => _fadePage(const PatternEditorScreen(readOnly: true)),
+                routes: [
+                  GoRoute(
+                    path: ':id',
+                    pageBuilder: (_, state) => _fadePage(
+                      PatternEditorScreen(
+                        patternId: state.pathParameters['id'],
+                        readOnly: true,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               GoRoute(path: 'gauge', pageBuilder: (_, _) => _fadePage(const GaugeCalculatorScreen())),
               GoRoute(path: 'course', pageBuilder: (_, _) => _fadePage(const CourseScreen())),
               GoRoute(path: 'encyclopedia', pageBuilder: (_, _) => _fadePage(const EncyclopediaScreen())),

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -7,14 +8,13 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../data/pattern_export_service.dart';
 import '../data/pattern_repository.dart';
 import '../domain/knit_symbols.dart';
 import '../domain/pattern_chart.dart';
@@ -27,7 +27,15 @@ class PatternEditorScreen extends ConsumerStatefulWidget {
   final String? patternId;
   final File? referenceImageFile;
   final String? referencePdfPath;
-  const PatternEditorScreen({super.key, this.patternId, this.referenceImageFile, this.referencePdfPath});
+  /// 뷰어 모드 — true일 때 편집 비활성화 (툴바·저장 버튼 숨김)
+  final bool readOnly;
+  const PatternEditorScreen({
+    super.key,
+    this.patternId,
+    this.referenceImageFile,
+    this.referencePdfPath,
+    this.readOnly = false,
+  });
 
   @override
   ConsumerState<PatternEditorScreen> createState() => _PatternEditorScreenState();
@@ -79,8 +87,8 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
     _referenceImageFile = widget.referenceImageFile;
     if (widget.patternId != null && widget.patternId!.isNotEmpty) {
       _loadChart(widget.patternId!);
-    } else {
-      // 새 도안: 첫 프레임 후 그리드 크기 설정 다이얼로그 표시
+    } else if (!widget.readOnly) {
+      // 새 도안: 첫 프레임 후 그리드 크기 설정 다이얼로그 표시 (뷰어 모드에서는 제외)
       WidgetsBinding.instance.addPostFrameCallback((_) => _showGridSizeDialogForNew());
     }
     if (widget.referenceImageFile != null || widget.referencePdfPath != null) {
@@ -423,43 +431,67 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
 
   Future<void> _exportPdf(bool isKorean) async {
     try {
-      final boundary = _chartKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-      if (boundary == null) return;
-      final image = await boundary.toImage(pixelRatio: 2.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null || !mounted) return;
-      final bytes = byteData.buffer.asUint8List();
+      // 캔버스 캡처 (선택적 — 없으면 테이블로 대체)
+      Uint8List? imageBytes;
+      final boundary =
+          _chartKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary != null) {
+        final image = await boundary.toImage(pixelRatio: 3.0);
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        imageBytes = byteData?.buffer.asUint8List();
+      }
+      if (!mounted) return;
 
       final user = ref.read(authStateProvider).valueOrNull;
       final creatorName = user?.displayName ?? user?.email ?? 'MoriKnit';
 
-      final pdfDoc = pw.Document();
-      final pdfImage = pw.MemoryImage(bytes);
-
-      pdfDoc.addPage(pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        build: (ctx) => pw.Stack(
-          children: [
-            pw.Center(child: pw.Image(pdfImage, fit: pw.BoxFit.contain)),
-            pw.Positioned(
-              bottom: 20,
-              right: 20,
-              child: pw.Opacity(
-                opacity: 0.25,
-                child: pw.Text(
-                  'MoriKnit | $creatorName | ${_chart.title}',
-                  style: pw.TextStyle(fontSize: 9, color: PdfColors.grey),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ));
+      final pdfBytes = await PatternExportService.buildMagazinePdf(
+        chart: _chart,
+        chartImageBytes: imageBytes,
+        creatorName: creatorName,
+      );
 
       if (!mounted) return;
       await Printing.sharePdf(
-        bytes: await pdfDoc.save(),
+        bytes: pdfBytes,
         filename: '${_chart.title}.pdf',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+
+  /// 이미지(PNG) 내보내기
+  Future<void> _exportImage(bool isKorean) async {
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '이미지 내보내는 중입니다.' : 'Exporting image...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () async {
+          await PatternExportService.exportImage(
+            boundaryKey: _chartKey,
+            title: _chart.title,
+          );
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+
+  /// .mori 파일 내보내기
+  Future<void> _exportMoriFile(bool isKorean) async {
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '파일 내보내는 중입니다.' : 'Exporting file...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () async {
+          await PatternExportService.exportMoriFile(chart: _chart);
+        },
       );
     } catch (e) {
       if (!mounted) return;
@@ -588,36 +620,135 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
               tooltip: isKorean ? '참조 이미지' : 'Reference',
               onPressed: () => setState(() => _showReference = !_showReference),
             ),
-          // 그리드 크기 변경
-          IconButton(
-            icon: const Icon(Icons.grid_4x4_rounded),
-            tooltip: isKorean ? '그리드 크기 변경' : 'Resize grid',
-            onPressed: _showGridSizeDialogForEdit,
-          ),
-          // 이슈 #96: PDF 내보내기 버튼
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf_rounded),
-            tooltip: isKorean ? 'PDF 내보내기' : 'Export PDF',
-            onPressed: _showPdfDialog,
-          ),
-          // 이슈 #96: 저장 버튼 — runWithMoriLoadingDialog 표준 패턴
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: TextButton.icon(
-              onPressed: _isSaving ? null : _save,
-              icon: _isSaving
-                  ? SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(C.lv),
+          // 뷰어 모드 배지
+          if (widget.readOnly)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: C.lvL,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: C.lv.withValues(alpha: 0.4)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.visibility_rounded, size: 14, color: C.lvD),
+                      const SizedBox(width: 4),
+                      Text(
+                        isKorean ? '뷰어' : 'Viewer',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: C.lvD,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    )
-                  : const Icon(Icons.save_rounded, size: 18),
-              label: Text(isKorean ? '저장' : 'Save'),
-              style: TextButton.styleFrom(foregroundColor: C.lvD),
+                    ],
+                  ),
+                ),
+              ),
             ),
+          // 통합 햄버거 메뉴 (편집/뷰어 모드 공통)
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            tooltip: isKorean ? '메뉴' : 'Menu',
+            onSelected: (v) {
+              switch (v) {
+                case 'save':
+                  if (!_isSaving) _save();
+                case 'grid':
+                  _showGridSizeDialogForEdit();
+                case 'pdf':
+                  _showPdfDialog();
+                case 'image':
+                  _exportImage(isKorean);
+                case 'mori':
+                  _exportMoriFile(isKorean);
+                case 'edit':
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PatternEditorScreen(
+                        patternId: _chart.id,
+                        readOnly: false,
+                      ),
+                    ),
+                  );
+              }
+            },
+            itemBuilder: (_) => widget.readOnly
+                ? [
+                    // 뷰어 모드 메뉴
+                    PopupMenuItem(
+                      value: 'edit',
+                      child: Row(children: [
+                        Icon(Icons.edit_rounded, size: 18, color: C.lv),
+                        const SizedBox(width: 8),
+                        Text(isKorean ? '수정하기' : 'Edit'),
+                      ]),
+                    ),
+                    PopupMenuItem(
+                      value: 'pdf',
+                      child: Row(children: [
+                        Icon(Icons.picture_as_pdf_rounded, size: 18, color: C.og),
+                        const SizedBox(width: 8),
+                        Text(isKorean ? 'PDF로 내보내기' : 'Export as PDF'),
+                      ]),
+                    ),
+                    PopupMenuItem(
+                      value: 'image',
+                      child: Row(children: [
+                        Icon(Icons.image_rounded, size: 18, color: C.lmD),
+                        const SizedBox(width: 8),
+                        Text(isKorean ? '이미지로 내보내기' : 'Export as image'),
+                      ]),
+                    ),
+                  ]
+                : [
+                    // 편집 모드 메뉴
+                    PopupMenuItem(
+                      value: 'save',
+                      child: Row(children: [
+                        Icon(Icons.save_rounded, size: 18, color: C.lv),
+                        const SizedBox(width: 8),
+                        Text(isKorean ? '저장' : 'Save'),
+                      ]),
+                    ),
+                    PopupMenuItem(
+                      value: 'grid',
+                      child: Row(children: [
+                        Icon(Icons.grid_on_rounded, size: 18, color: C.tx2),
+                        const SizedBox(width: 8),
+                        Text(isKorean ? '그리드 크기 변경' : 'Resize grid'),
+                      ]),
+                    ),
+                    PopupMenuItem(
+                      value: 'pdf',
+                      child: Row(children: [
+                        Icon(Icons.picture_as_pdf_rounded, size: 18, color: C.og),
+                        const SizedBox(width: 8),
+                        Text(isKorean ? 'PDF로 내보내기' : 'Export as PDF'),
+                      ]),
+                    ),
+                    PopupMenuItem(
+                      value: 'image',
+                      child: Row(children: [
+                        Icon(Icons.image_rounded, size: 18, color: C.lmD),
+                        const SizedBox(width: 8),
+                        Text(isKorean ? '이미지로 내보내기' : 'Export as image'),
+                      ]),
+                    ),
+                    PopupMenuItem(
+                      value: 'mori',
+                      child: Row(children: [
+                        Icon(Icons.file_download_rounded, size: 18, color: C.lv),
+                        const SizedBox(width: 8),
+                        Text(isKorean ? '.mori 파일로 내보내기' : 'Export as .mori'),
+                      ]),
+                    ),
+                  ],
           ),
         ],
       ),
@@ -672,6 +803,7 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
                         activeLayer: _activeLayer,
                         onChartChanged: _onChartChanged,
                         fitToScreenNotifier: _fitToScreenNotifier,
+                        readOnly: widget.readOnly,
                       ),
                     ),
                   ),
@@ -681,31 +813,34 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: ChartToolbar(
-        activeTool: _activeTool,
-        activeColor: _activeColor,
-        activeSymbolId: _activeSymbolId,
-        canUndo: _undoStack.isNotEmpty,
-        canRedo: _redoStack.isNotEmpty,
-        activeLayer: _activeLayer,
-        onLayerChanged: (layer) => setState(() => _activeLayer = layer),
-        onNarrative: _openNarrativeSheet,
-        onToolChanged: (tool) => setState(() => _activeTool = tool),
-        onColorChanged: (color) => setState(() {
-          switch (_activeTool) {
-            case ChartTool.draw: _penColor = color;
-            case ChartTool.brush: _brushColor = color;
-            case ChartTool.fill: _painterColor = color;
-            default: _penColor = color;
-          }
-        }),
-        onSymbolChanged: (id) => setState(() => _activeSymbolId = id),
-        onUndo: _undo,
-        onRedo: _redo,
-        onClear: _clearChart,
-        onExport: _showPdfDialog,
-        onFitScreen: _triggerFitToScreen,
-      ),
+      bottomNavigationBar: widget.readOnly
+          ? null
+          : ChartToolbar(
+              activeTool: _activeTool,
+              activeColor: _activeColor,
+              activeSymbolId: _activeSymbolId,
+              canUndo: _undoStack.isNotEmpty,
+              canRedo: _redoStack.isNotEmpty,
+              activeLayer: _activeLayer,
+              onLayerChanged: (layer) => setState(() => _activeLayer = layer),
+              onNarrative: _openNarrativeSheet,
+              onToolChanged: (tool) => setState(() => _activeTool = tool),
+              onColorChanged: (color) => setState(() {
+                switch (_activeTool) {
+                  case ChartTool.draw: _penColor = color;
+                  case ChartTool.brush: _brushColor = color;
+                  case ChartTool.fill: _painterColor = color;
+                  default: _penColor = color;
+                }
+              }),
+              onSymbolChanged: (id) => setState(() => _activeSymbolId = id),
+              onUndo: _undo,
+              onRedo: _redo,
+              onClear: _clearChart,
+              onExport: _showPdfDialog,
+              onFitScreen: _triggerFitToScreen,
+              onGridResize: _showGridSizeDialogForEdit,
+            ),
     );
   }
 }

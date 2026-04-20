@@ -12,6 +12,7 @@ class Routes {
   static const tools = '/tools';
   static const toolsPatterns = '/tools/patterns';
   static const toolsPattern = '/tools/pattern';
+  static const toolsPatternViewer = '/tools/pattern-viewer';
   static const toolsGauge = '/tools/gauge';
   static const toolsCourse = '/tools/course';
   static const toolsEncyclopedia = '/tools/encyclopedia';

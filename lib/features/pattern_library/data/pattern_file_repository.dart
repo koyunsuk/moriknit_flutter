@@ -104,6 +104,40 @@ class PatternFileRepository {
     ]);
   }
 
+  /// 파일명 변경
+  Future<void> rename(String fileId, String newName) async {
+    await _col.doc(fileId).update({
+      'fileName': newName,
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  /// 동일 Storage URL 공유하는 새 문서 복사
+  Future<void> duplicate(String fileId) async {
+    final doc = await _col.doc(fileId).get();
+    if (!doc.exists) return;
+    final data = Map<String, dynamic>.from(doc.data()!);
+    final original = PatternFile.fromMap(fileId, data);
+    final now = DateTime.now();
+    final newDoc = _col.doc();
+    await newDoc.set({
+      ...data,
+      'fileName': '${original.fileName} (복사)',
+      'parsedChartId': null,
+      'parseStatus': PatternParseStatus.pending.name,
+      'createdAt': now.millisecondsSinceEpoch,
+      'updatedAt': now.millisecondsSinceEpoch,
+    });
+  }
+
+  /// 프로젝트 연결 — PatternFile에 linkedProjectId 기록
+  Future<void> linkToProject(String fileId, String? projectId) async {
+    await _col.doc(fileId).update({
+      'linkedProjectId': projectId,
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
   /// 파일명에서 Storage 경로에 안전한 문자열만 남김
   String _sanitizeFileName(String fileName) {
     return fileName

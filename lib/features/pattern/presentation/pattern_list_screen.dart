@@ -24,7 +24,7 @@ import '../../ravelry/presentation/ravelry_pattern_detail_screen.dart';
 import '../data/pattern_export_service.dart';
 import '../data/pattern_repository.dart';
 import '../domain/pattern_chart.dart';
-import 'pattern_detail_screen.dart';
+import 'pattern_editor_screen.dart';
 
 class PatternListScreen extends ConsumerWidget {
   const PatternListScreen({super.key});
@@ -191,7 +191,7 @@ class PatternListScreen extends ConsumerWidget {
 
   void _openPattern(BuildContext context, PatternChart chart) {
     Navigator.push(context, MaterialPageRoute(
-      builder: (_) => PatternDetailScreen(chart: chart),
+      builder: (_) => PatternEditorScreen(patternId: chart.id, readOnly: true),
     ));
   }
 
