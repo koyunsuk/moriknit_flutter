@@ -364,6 +364,14 @@ class ToolsScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 10),
                     _ToolCard(
+                      icon: Icons.square_foot_rounded,
+                      color: const Color(0xFF32D74B),
+                      title: isKorean ? '측정 도구' : 'Measure Tool',
+                      description: isKorean ? '격자·각도·원·실바늘 두께를 화면으로 측정' : 'Measure grid, angle, circle & yarn/needle',
+                      onTap: () => context.push(Routes.toolsMeasure),
+                    ),
+                    const SizedBox(height: 10),
+                    _ToolCard(
                       icon: Icons.add_task_rounded,
                       color: C.pkD,
                       title: isKorean ? '카운터 전체보기' : 'All Counters',
@@ -891,12 +899,19 @@ class _ToolCard extends StatelessWidget {
 }
 
 // ── MoriKnit + Ravelry 2단 캡슐 카드 ──────────────────────
-class _MoriRavelryCapsuleCard extends ConsumerWidget {
+class _MoriRavelryCapsuleCard extends ConsumerStatefulWidget {
   final bool isKorean;
   const _MoriRavelryCapsuleCard({required this.isKorean});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_MoriRavelryCapsuleCard> createState() => _MoriRavelryCapsuleCardState();
+}
+
+class _MoriRavelryCapsuleCardState extends ConsumerState<_MoriRavelryCapsuleCard> {
+  bool get isKorean => widget.isKorean;
+
+  @override
+  Widget build(BuildContext context) {
     final yarnCount = ref.watch(yarnCountProvider);
     final projectCount = ref.watch(projectCountProvider);
     final patternAsync = ref.watch(patternListProvider);

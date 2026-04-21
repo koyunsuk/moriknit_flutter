@@ -59,7 +59,7 @@ package-lock.json
 .firebase/
 .firebaserc
 tmp/
-tools/
+/tools/
 .vscode/
 nul
 functions/nul
