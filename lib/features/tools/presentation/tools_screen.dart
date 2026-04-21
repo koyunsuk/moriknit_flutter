@@ -365,7 +365,7 @@ class ToolsScreen extends ConsumerWidget {
                     const SizedBox(height: 10),
                     _ToolCard(
                       icon: Icons.square_foot_rounded,
-                      color: const Color(0xFF32D74B),
+                      color: C.lv,
                       title: isKorean ? '측정 도구' : 'Measure Tool',
                       description: isKorean ? '격자·각도·원·실바늘 두께를 화면으로 측정' : 'Measure grid, angle, circle & yarn/needle',
                       onTap: () => context.push(Routes.toolsMeasure),
