@@ -1381,12 +1381,13 @@ class _NarrativeEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
+    return Padding(
       padding: const EdgeInsets.all(16),
       child: TextField(
         controller: controller,
         onChanged: onChanged,
         maxLines: null,
+        expands: true,
         textAlignVertical: TextAlignVertical.top,
         style: const TextStyle(fontSize: 14, height: 1.8),
         decoration: InputDecoration(
@@ -1419,7 +1420,9 @@ class _NarrativeWithPreview extends StatelessWidget {
       children: [
         Expanded(
           flex: 3,
-          child: _NarrativeEditor(controller: controller, onChanged: onChanged),
+          child: ClipRect(
+            child: _NarrativeEditor(controller: controller, onChanged: onChanged),
+          ),
         ),
         const Divider(height: 1),
         Expanded(
