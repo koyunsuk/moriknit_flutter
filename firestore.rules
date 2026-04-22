@@ -97,6 +97,10 @@ service cloud.firestore {
       match /ai_jobs/{jobId} {
         allow read, write: if isOwner(uid);
       }
+      // 도안 뷰어 세션 (자 위치, 스티키노트, 형광펜, 프로젝트/스와치 연결)
+      match /pattern_sessions/{sessionId} {
+        allow read, write: if isOwner(uid);
+      }
     }
 
     // ── 마켓 아이템 (공개 읽기, 로그인 후 생성/수정) ────────────────────────────

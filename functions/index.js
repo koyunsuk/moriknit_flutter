@@ -796,7 +796,9 @@ Important rules:
         ],
       });
     } catch (err) {
-      throw new HttpsError('internal', 'AI 분석 중 오류가 발생했습니다. 다시 시도해 주세요.');
+      console.error('parseKnittingPattern: Claude API error:', err?.status, err?.message, err?.error);
+      const detail = err?.message ?? String(err);
+      throw new HttpsError('internal', `AI 분석 중 오류가 발생했습니다: ${detail}`);
     }
 
     const rawText = message.content[0]?.text ?? '';

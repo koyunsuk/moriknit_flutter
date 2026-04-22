@@ -12,7 +12,8 @@ import '../../../core/theme/app_theme.dart';
 class PdfViewerScreen extends StatefulWidget {
   final String url;
   final String title;
-  const PdfViewerScreen({super.key, required this.url, required this.title});
+  final bool showRuler;
+  const PdfViewerScreen({super.key, required this.url, required this.title, this.showRuler = false});
 
   @override
   State<PdfViewerScreen> createState() => _PdfViewerScreenState();
@@ -24,10 +25,13 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   String? _error;
   int _currentPage = 0;
   int _totalPages = 0;
+  late bool _rulerVisible;
+  double _rulerY = 200;
 
   @override
   void initState() {
     super.initState();
+    _rulerVisible = widget.showRuler;
     if (!kIsWeb) _loadPdf();
   }
 
@@ -59,8 +63,13 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         actions: [
           if (_totalPages > 0)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.only(right: 8),
               child: Center(child: Text('$_currentPage / $_totalPages', style: T.caption.copyWith(color: Colors.white70))),
+            ),
+          if (widget.showRuler)
+            IconButton(
+              icon: Icon(Icons.straighten_rounded, color: _rulerVisible ? Colors.orange : Colors.white54),
+              onPressed: () => setState(() => _rulerVisible = !_rulerVisible),
             ),
         ],
       ),
@@ -100,23 +109,61 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                         ],
                       ),
                     )
-                  : PDFView(
-                      filePath: _localPath!,
-                      enableSwipe: true,
-                      swipeHorizontal: false,
-                      autoSpacing: true,
-                      pageFling: true,
-                      onPageChanged: (page, total) {
-                        if (mounted) {
-                          setState(() {
-                            _currentPage = (page ?? 0) + 1;
-                            _totalPages = total ?? 0;
-                          });
-                        }
-                      },
-                      onError: (e) {
-                        if (mounted) setState(() => _error = '$e');
-                      },
+                  : LayoutBuilder(
+                      builder: (context, constraints) => Stack(
+                        children: [
+                          PDFView(
+                            filePath: _localPath!,
+                            enableSwipe: true,
+                            swipeHorizontal: false,
+                            autoSpacing: true,
+                            pageFling: true,
+                            onPageChanged: (page, total) {
+                              if (mounted) {
+                                setState(() {
+                                  _currentPage = (page ?? 0) + 1;
+                                  _totalPages = total ?? 0;
+                                });
+                              }
+                            },
+                            onError: (e) {
+                              if (mounted) setState(() => _error = '$e');
+                            },
+                          ),
+                          if (_rulerVisible)
+                            Positioned(
+                              top: _rulerY,
+                              left: 0,
+                              right: 0,
+                              child: GestureDetector(
+                                onVerticalDragUpdate: (d) => setState(() =>
+                                    _rulerY = (_rulerY + d.delta.dy)
+                                        .clamp(0, constraints.maxHeight - 44)),
+                                child: Container(
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.withValues(alpha: 0.22),
+                                    border: Border(
+                                      top: BorderSide(color: Colors.orange.shade400, width: 2),
+                                      bottom: BorderSide(color: Colors.orange.shade400, width: 2),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const SizedBox(width: 12),
+                                      Icon(Icons.drag_handle_rounded, color: Colors.orange.shade400, size: 20),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '← 드래그해서 위치 조절 →',
+                                        style: TextStyle(color: Colors.orange.shade400, fontSize: 12, fontWeight: FontWeight.w600),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
     );
   }

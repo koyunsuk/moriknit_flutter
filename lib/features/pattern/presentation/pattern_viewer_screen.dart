@@ -17,8 +17,14 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/counter_provider.dart';
+import '../../../providers/project_provider.dart';
+import '../../../providers/swatch_provider.dart';
 import '../../counter/domain/counter_model.dart';
+import '../../project/domain/project_model.dart';
+import '../../swatch/domain/swatch_model.dart';
+import '../data/pattern_session_repository.dart';
 import '../domain/pattern_chart.dart';
+import '../domain/pattern_session.dart';
 
 class PatternViewerScreen extends ConsumerStatefulWidget {
   final PatternChart chart;
@@ -77,6 +83,12 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
   String get _id => widget.chart.id;
   bool get _isDark => widget.chart.type == PatternType.pdf;
 
+  // Firestore 세션 동기화
+  PatternSession? _session;
+  bool _sessionApplied = false;
+  // 스티키노트 기본 ID (세션 내 단일 노트 — 기존 UI와 호환)
+  static const _defaultStickyId = 'default';
+
   Box<dynamic>? get _box {
     try {
       return Hive.box<dynamic>(SubscriptionConstants.boxViewerState);
@@ -89,7 +101,79 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
   void initState() {
     super.initState();
     _loadState();
+    _bootstrapSession();
     if (widget.chart.type == PatternType.pdf && !kIsWeb) _loadPdf();
+  }
+
+  // Firestore 세션 로드 — Hive 로드 후 호출되어 Firestore 값이 있으면 override.
+  Future<void> _bootstrapSession() async {
+    try {
+      final repo = ref.read(patternSessionRepositoryProvider);
+      final loaded = await repo.getOrCreate(_id);
+      if (!mounted) return;
+      setState(() {
+        _session = loaded;
+        _sessionApplied = true;
+        // Firestore에 기존 값이 있으면 로컬 상태 override
+        if (loaded.rulerY != 200.0 || loaded.strokes.isNotEmpty || loaded.stickyNotes.isNotEmpty) {
+          _rulerY = loaded.rulerY;
+          if (loaded.strokes.isNotEmpty) {
+            _strokes
+              ..clear()
+              ..addAll(loaded.strokes.map((s) {
+                final pts = <Offset>[];
+                final len = s.xs.length < s.ys.length ? s.xs.length : s.ys.length;
+                for (int i = 0; i < len; i++) {
+                  pts.add(Offset(s.xs[i], s.ys[i]));
+                }
+                return _Stroke(points: pts, color: Color(s.colorValue));
+              }));
+          }
+          final note = loaded.stickyNotes.firstWhere(
+            (n) => n.id == _defaultStickyId,
+            orElse: () => loaded.stickyNotes.isNotEmpty
+                ? loaded.stickyNotes.first
+                : const StickyNote(id: _defaultStickyId),
+          );
+          _stickyX = note.x;
+          _stickyY = note.y;
+          if (note.text.isNotEmpty) _stickyCtrl.text = note.text;
+        }
+      });
+    } catch (_) {
+      // 오프라인 등 — Hive 상태 유지
+    }
+  }
+
+  // Firestore 비동기 업데이트 (fire and forget)
+  void _syncRuler() {
+    if (!_sessionApplied) return;
+    ref.read(patternSessionRepositoryProvider).updateRuler(_id, _rulerY);
+  }
+
+  void _syncStrokes() {
+    if (!_sessionApplied) return;
+    final data = _strokes
+        .map((s) => StrokeData(
+              xs: s.points.map((p) => p.dx).toList(),
+              ys: s.points.map((p) => p.dy).toList(),
+              colorValue: s.color.toARGB32(),
+            ))
+        .toList();
+    ref.read(patternSessionRepositoryProvider).updateStrokes(_id, data);
+  }
+
+  void _syncSticky() {
+    if (!_sessionApplied) return;
+    final note = StickyNote(
+      id: _defaultStickyId,
+      text: _stickyCtrl.text,
+      x: _stickyX,
+      y: _stickyY,
+    );
+    ref
+        .read(patternSessionRepositoryProvider)
+        .updateStickyNote(_id, note);
   }
 
   @override
@@ -122,12 +206,16 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
     }
   }
 
-  void _saveRuler() => _box?.put('ruler_y_$_id', _rulerY);
+  void _saveRuler() {
+    _box?.put('ruler_y_$_id', _rulerY);
+    _syncRuler();
+  }
 
   void _saveSticky() {
     _box?.put('sticky_x_$_id', _stickyX);
     _box?.put('sticky_y_$_id', _stickyY);
     _box?.put('sticky_text_$_id', _stickyCtrl.text);
+    _syncSticky();
   }
 
   void _saveStrokes() {
@@ -136,6 +224,7 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
           'points': s.points.map((p) => [p.dx, p.dy]).toList(),
         }).toList());
     _box?.put('strokes_$_id', json);
+    _syncStrokes();
   }
 
   Future<void> _loadPdf() async {
@@ -211,6 +300,113 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
     }
   }
 
+  // ── 프로젝트 연결 시트 ───────────────────────────────────────
+  Future<void> _showLinkProjectSheet(bool isKorean) async {
+    final projects = ref.read(projectListProvider).valueOrNull ?? const <ProjectModel>[];
+    final selected = await showModalBottomSheet<_ProjectLinkChoice>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _ProjectLinkSheet(
+        projects: projects,
+        currentProjectId: _session?.projectId,
+        isKorean: isKorean,
+      ),
+    );
+    if (selected == null || !mounted) return;
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () async {
+          final repo = ref.read(patternSessionRepositoryProvider);
+          if (selected.createNew) {
+            // 새 프로젝트 생성 (도안과 자동 연결)
+            final user = ref.read(authStateProvider).valueOrNull;
+            if (user == null) return;
+            final newProject = ProjectModel.empty(uid: user.uid).copyWith(
+              title: widget.chart.title.isEmpty
+                  ? (isKorean ? '새 프로젝트' : 'New Project')
+                  : widget.chart.title,
+              sourcePatternId: _id,
+            );
+            final created =
+                await ref.read(projectRepositoryProvider).createProject(newProject);
+            await repo.linkProject(_id, created.id);
+            setState(() {
+              _session = _session?.copyWith(projectId: created.id) ??
+                  _session;
+            });
+          } else if (selected.unlink) {
+            await repo.unlinkProject(_id);
+            setState(() {
+              _session = _session?.copyWith(clearProjectId: true);
+            });
+          } else if (selected.projectId != null) {
+            await repo.linkProject(_id, selected.projectId!);
+            setState(() {
+              _session = _session?.copyWith(projectId: selected.projectId);
+            });
+          }
+        },
+      );
+      if (!mounted) return;
+      showSavedSnackBar(
+        ScaffoldMessenger.of(context),
+        message: isKorean ? '연결됐어요.' : 'Linked.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+
+  // ── 스와치 연결 시트 ─────────────────────────────────────────
+  Future<void> _showLinkSwatchSheet(bool isKorean) async {
+    final swatches = ref.read(swatchListProvider).valueOrNull ?? const <SwatchModel>[];
+    final selected = await showModalBottomSheet<_SwatchLinkChoice>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _SwatchLinkSheet(
+        swatches: swatches,
+        currentSwatchId: _session?.swatchId,
+        isKorean: isKorean,
+      ),
+    );
+    if (selected == null || !mounted) return;
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () async {
+          final repo = ref.read(patternSessionRepositoryProvider);
+          if (selected.unlink) {
+            await repo.unlinkSwatch(_id);
+            setState(() {
+              _session = _session?.copyWith(clearSwatchId: true);
+            });
+          } else if (selected.swatchId != null) {
+            await repo.linkSwatch(_id, selected.swatchId!);
+            setState(() {
+              _session = _session?.copyWith(swatchId: selected.swatchId);
+            });
+          }
+        },
+      );
+      if (!mounted) return;
+      showSavedSnackBar(
+        ScaffoldMessenger.of(context),
+        message: isKorean ? '연결됐어요.' : 'Linked.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
@@ -275,6 +471,44 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
                 _circleRadius = 80.0;
               }
             }),
+          ),
+          // 연결 메뉴 (프로젝트 / 스와치)
+          PopupMenuButton<String>(
+            tooltip: isKorean ? '연결' : 'Link',
+            icon: Icon(Icons.link_rounded,
+                color: _isDark ? Colors.white70 : C.tx2),
+            onSelected: (value) {
+              switch (value) {
+                case 'link_project':
+                  _showLinkProjectSheet(isKorean);
+                  break;
+                case 'link_swatch':
+                  _showLinkSwatchSheet(isKorean);
+                  break;
+              }
+            },
+            itemBuilder: (ctx) => [
+              PopupMenuItem(
+                value: 'link_project',
+                child: Row(children: [
+                  Icon(Icons.folder_special_rounded, color: C.pkD, size: 18),
+                  const SizedBox(width: 8),
+                  Text(_session?.projectId != null && _session!.projectId!.isNotEmpty
+                      ? (isKorean ? '프로젝트 연결 변경' : 'Change Project')
+                      : (isKorean ? '프로젝트 시작하기' : 'Link Project')),
+                ]),
+              ),
+              PopupMenuItem(
+                value: 'link_swatch',
+                child: Row(children: [
+                  Icon(Icons.grid_on_rounded, color: C.lvD, size: 18),
+                  const SizedBox(width: 8),
+                  Text(_session?.swatchId != null && _session!.swatchId!.isNotEmpty
+                      ? (isKorean ? '스와치 연결 변경' : 'Change Swatch')
+                      : (isKorean ? '스와치 연결하기' : 'Link Swatch')),
+                ]),
+              ),
+            ],
           ),
         ],
       ),
@@ -1491,4 +1725,446 @@ class _VerticalRulerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_VerticalRulerPainter old) => old.isDark != isDark;
+}
+
+// ── 연결 선택 데이터 ──────────────────────────────────────────────────────────
+
+class _ProjectLinkChoice {
+  final String? projectId;
+  final bool createNew;
+  final bool unlink;
+  const _ProjectLinkChoice({this.projectId, this.createNew = false, this.unlink = false});
+}
+
+class _SwatchLinkChoice {
+  final String? swatchId;
+  final bool unlink;
+  const _SwatchLinkChoice({this.swatchId, this.unlink = false});
+}
+
+// ── 프로젝트 연결 바텀시트 ─────────────────────────────────────────────────────
+
+class _ProjectLinkSheet extends StatelessWidget {
+  final List<ProjectModel> projects;
+  final String? currentProjectId;
+  final bool isKorean;
+
+  const _ProjectLinkSheet({
+    required this.projects,
+    required this.currentProjectId,
+    required this.isKorean,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasLinked = currentProjectId != null && currentProjectId!.isNotEmpty;
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      minChildSize: 0.4,
+      maxChildSize: 0.92,
+      expand: false,
+      builder: (ctx, scrollCtrl) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: C.bd,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Icon(Icons.folder_special_rounded, color: C.pkD, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      isKorean ? '프로젝트에 연결' : 'Link to Project',
+                      style: T.h3,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView(
+                  controller: scrollCtrl,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  children: [
+                    _LinkActionTile(
+                      icon: Icons.add_rounded,
+                      iconColor: C.lv,
+                      title: isKorean ? '새 프로젝트 시작하기' : 'Start New Project',
+                      subtitle: isKorean
+                          ? '이 도안을 기반으로 새 프로젝트 생성'
+                          : 'Create a new project from this pattern',
+                      onTap: () => Navigator.pop(
+                          ctx, const _ProjectLinkChoice(createNew: true)),
+                    ),
+                    if (hasLinked)
+                      _LinkActionTile(
+                        icon: Icons.link_off_rounded,
+                        iconColor: C.og,
+                        title: isKorean ? '연결 해제' : 'Unlink',
+                        subtitle: isKorean
+                            ? '현재 프로젝트와 연결을 해제합니다'
+                            : 'Remove link to current project',
+                        onTap: () => Navigator.pop(
+                            ctx, const _ProjectLinkChoice(unlink: true)),
+                      ),
+                    if (projects.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        child: Text(
+                          isKorean ? '기존 프로젝트에 연결' : 'Link to existing',
+                          style: T.sm.copyWith(color: C.mu, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      for (final p in projects)
+                        _ProjectRow(
+                          project: p,
+                          isSelected: p.id == currentProjectId,
+                          onTap: () => Navigator.pop(
+                              ctx, _ProjectLinkChoice(projectId: p.id)),
+                        ),
+                    ] else ...[
+                      const SizedBox(height: 24),
+                      Center(
+                        child: Text(
+                          isKorean
+                              ? '연결할 프로젝트가 없어요.\n위에서 새 프로젝트를 만들어 주세요.'
+                              : 'No projects found.\nTry starting a new one above.',
+                          textAlign: TextAlign.center,
+                          style: T.caption.copyWith(color: C.mu),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ProjectRow extends StatelessWidget {
+  final ProjectModel project;
+  final bool isSelected;
+  final VoidCallback onTap;
+  const _ProjectRow({
+    required this.project,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? C.lv.withValues(alpha: 0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? C.lv : C.bd,
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: C.pk.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(9),
+                image: project.coverPhotoUrl.isNotEmpty
+                    ? DecorationImage(
+                        image: NetworkImage(project.coverPhotoUrl),
+                        fit: BoxFit.cover)
+                    : null,
+              ),
+              child: project.coverPhotoUrl.isEmpty
+                  ? Icon(Icons.folder_rounded, color: C.pkD, size: 18)
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    project.title.isEmpty ? '(untitled)' : project.title,
+                    style: T.bodyBold,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (project.yarnName.isNotEmpty)
+                    Text(project.yarnName,
+                        style: T.caption.copyWith(color: C.mu),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+            if (isSelected) Icon(Icons.check_circle, color: C.lv, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── 스와치 연결 바텀시트 ───────────────────────────────────────────────────────
+
+class _SwatchLinkSheet extends StatelessWidget {
+  final List<SwatchModel> swatches;
+  final String? currentSwatchId;
+  final bool isKorean;
+
+  const _SwatchLinkSheet({
+    required this.swatches,
+    required this.currentSwatchId,
+    required this.isKorean,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasLinked = currentSwatchId != null && currentSwatchId!.isNotEmpty;
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      minChildSize: 0.4,
+      maxChildSize: 0.92,
+      expand: false,
+      builder: (ctx, scrollCtrl) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: C.bd,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Icon(Icons.grid_on_rounded, color: C.lvD, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      isKorean ? '스와치에 연결' : 'Link to Swatch',
+                      style: T.h3,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView(
+                  controller: scrollCtrl,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  children: [
+                    if (hasLinked)
+                      _LinkActionTile(
+                        icon: Icons.link_off_rounded,
+                        iconColor: C.og,
+                        title: isKorean ? '연결 해제' : 'Unlink',
+                        subtitle: isKorean
+                            ? '현재 스와치와 연결을 해제합니다'
+                            : 'Remove link to current swatch',
+                        onTap: () => Navigator.pop(
+                            ctx, const _SwatchLinkChoice(unlink: true)),
+                      ),
+                    if (swatches.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        child: Text(
+                          isKorean ? '기존 스와치에 연결' : 'Link to existing',
+                          style: T.sm.copyWith(color: C.mu, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      for (final s in swatches)
+                        _SwatchRow(
+                          swatch: s,
+                          isSelected: s.id == currentSwatchId,
+                          onTap: () => Navigator.pop(
+                              ctx, _SwatchLinkChoice(swatchId: s.id)),
+                        ),
+                    ] else ...[
+                      const SizedBox(height: 24),
+                      Center(
+                        child: Text(
+                          isKorean
+                              ? '연결할 스와치가 없어요.\n먼저 스와치를 만들어 주세요.'
+                              : 'No swatches found.\nCreate a swatch first.',
+                          textAlign: TextAlign.center,
+                          style: T.caption.copyWith(color: C.mu),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SwatchRow extends StatelessWidget {
+  final SwatchModel swatch;
+  final bool isSelected;
+  final VoidCallback onTap;
+  const _SwatchRow({
+    required this.swatch,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final name = swatch.swatchName.isEmpty
+        ? (swatch.yarnName.isEmpty ? '(untitled)' : swatch.yarnName)
+        : swatch.swatchName;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? C.lv.withValues(alpha: 0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? C.lv : C.bd,
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: C.lv.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(9),
+                image: swatch.beforePhotoUrl.isNotEmpty
+                    ? DecorationImage(
+                        image: NetworkImage(swatch.beforePhotoUrl),
+                        fit: BoxFit.cover)
+                    : null,
+              ),
+              child: swatch.beforePhotoUrl.isEmpty
+                  ? Icon(Icons.grid_on_rounded, color: C.lvD, size: 18)
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, style: T.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  if (swatch.gaugeDisplay != '0 x 0')
+                    Text(swatch.gaugeDisplay,
+                        style: T.caption.copyWith(color: C.mu),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+            if (isSelected) Icon(Icons.check_circle, color: C.lv, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── 공용 액션 타일 ─────────────────────────────────────────────────────────────
+
+class _LinkActionTile extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  const _LinkActionTile({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: iconColor.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: iconColor.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Icon(icon, color: iconColor, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: T.bodyBold),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: T.caption.copyWith(color: C.mu)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: C.mu, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
 }

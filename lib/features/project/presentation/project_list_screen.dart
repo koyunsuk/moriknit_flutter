@@ -495,177 +495,105 @@ class _MobileProjectList extends StatelessWidget {
         // ── 구분선 ────────────────────────────────────────────────
         const SizedBox(height: 8),
         Divider(color: C.bd, thickness: 1, height: 24),
-        // ── 플랫폼 요약 카드 (통일 디자인) ────────────────────────
-        _PlatformSummaryCard(
-          brandLabel: 'MoriKnit',
-          brandColor: C.pkD,
-          stats: [
-            (isKorean ? '전체' : 'Total', '${projects.length}'),
-            (isKorean ? '진행' : 'Active', '${active.length}'),
-            (isKorean ? '완료' : 'Done', '${done.length}'),
-          ],
-          actionLabel: isKorean ? '새 프로젝트' : 'New',
-          actionIcon: Icons.add_circle_outline_rounded,
-          onAction: onAddTap,
-        ),
-        const SizedBox(height: 10),
-        _RavelrySummaryCard(isKorean: isKorean),
+        // ── 추천 도안 플레이스홀더 ────────────────────────────────
+        _RecommendedPatternsPlaceholder(isKorean: isKorean),
       ],
     );
   }
 
 }
 
-// ── 플랫폼 요약 카드 (통일 디자인) ──────────────────────────
-class _PlatformSummaryCard extends StatelessWidget {
-  final String brandLabel;
-  final Color brandColor;
-  final List<(String, String)> stats;
-  final String actionLabel;
-  final IconData actionIcon;
-  final VoidCallback? onAction;
-
-  const _PlatformSummaryCard({
-    required this.brandLabel,
-    required this.brandColor,
-    required this.stats,
-    required this.actionLabel,
-    required this.actionIcon,
-    this.onAction,
-  });
+// ── 추천 도안 플레이스홀더 ───────────────────────────────────
+class _RecommendedPatternsPlaceholder extends StatelessWidget {
+  final bool isKorean;
+  const _RecommendedPatternsPlaceholder({required this.isKorean});
 
   @override
   Widget build(BuildContext context) {
-    return GlassCard(
-      child: Row(
-        children: [
-          // 브랜드 배지
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: brandColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: C.lv.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                isKorean ? '추천 도안' : 'Recommended',
+                style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w700),
+              ),
             ),
-            child: Text(
-              brandLabel,
-              style: T.caption.copyWith(color: brandColor, fontWeight: FontWeight.w700),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                isKorean ? '마켓 도안' : 'Market Patterns',
+                style: T.h3,
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          // 통계
-          Expanded(
-            child: Row(
-              children: stats.map((s) => Expanded(
-                child: Column(
-                  children: [
-                    Text(s.$2, style: T.h3.copyWith(color: brandColor)),
-                    const SizedBox(height: 2),
-                    Text(s.$1, style: T.caption.copyWith(color: C.mu)),
-                  ],
-                ),
-              )).toList(),
-            ),
-          ),
-          // 액션 버튼
-          if (onAction != null)
             GestureDetector(
-              onTap: onAction,
+              onTap: () => context.go(Routes.market),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: brandColor.withValues(alpha: 0.10),
+                  color: C.lv.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: brandColor.withValues(alpha: 0.25)),
+                  border: Border.all(color: C.lv.withValues(alpha: 0.25)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(actionIcon, size: 14, color: brandColor),
+                    Icon(Icons.storefront_rounded, size: 13, color: C.lv),
                     const SizedBox(width: 4),
-                    Text(actionLabel, style: T.caption.copyWith(color: brandColor, fontWeight: FontWeight.w600)),
+                    Text(
+                      isKorean ? '마켓 보기' : 'View Market',
+                      style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w600),
+                    ),
                   ],
                 ),
               ),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Ravelry 요약 카드 (통일 디자인) ──────────────────────────
-class _RavelrySummaryCard extends ConsumerWidget {
-  final bool isKorean;
-  const _RavelrySummaryCard({required this.isKorean});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final auth = ref.watch(ravelryAuthProvider);
-    final ravelryProjectsAsync = auth.isLoggedIn ? ref.watch(ravelryProjectsProvider) : null;
-    final ravelryCount = ravelryProjectsAsync?.maybeWhen(data: (p) => p.length, orElse: () => 0) ?? 0;
-
-    return GlassCard(
-      child: Row(
-        children: [
-          // 브랜드 배지
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: C.lv.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              'Ravelry',
-              style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w700),
-            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        // 플레이스홀더 카드 3개
+        ...List.generate(3, (i) => Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            color: C.gx,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: C.bd),
           ),
-          const SizedBox(width: 12),
-          // 통계 또는 안내
-          Expanded(
-            child: auth.isLoggedIn
-                ? Row(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            child: Row(
+              children: [
+                Container(
+                  width: 44, height: 44,
+                  decoration: BoxDecoration(
+                    color: C.lvL,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.auto_stories_rounded, color: C.lv.withValues(alpha: 0.4), size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Column(
-                          children: [
-                            Text('$ravelryCount', style: T.h3.copyWith(color: C.lv)),
-                            const SizedBox(height: 2),
-                            Text(isKorean ? '전체' : 'Total', style: T.caption.copyWith(color: C.mu)),
-                          ],
-                        ),
-                      ),
+                      Container(height: 12, width: 120, decoration: BoxDecoration(color: C.bd, borderRadius: BorderRadius.circular(6))),
+                      const SizedBox(height: 6),
+                      Container(height: 10, width: 80, decoration: BoxDecoration(color: C.bd, borderRadius: BorderRadius.circular(6))),
                     ],
-                  )
-                : Text(
-                    isKorean ? 'Ravelry 연결 시 프로젝트가 표시돼요' : 'Connect Ravelry to see your projects',
-                    style: T.caption.copyWith(color: C.mu),
                   ),
-          ),
-          // 액션 버튼
-          GestureDetector(
-            onTap: () => context.push(Routes.ravelry),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: C.lv.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: C.lv.withValues(alpha: 0.25)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(auth.isLoggedIn ? Icons.open_in_new_rounded : Icons.link_rounded, size: 14, color: C.lv),
-                  const SizedBox(width: 4),
-                  Text(
-                    auth.isLoggedIn ? (isKorean ? '보기' : 'View') : (isKorean ? '연결' : 'Connect'),
-                    style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        )),
+      ],
     );
   }
 }

@@ -117,22 +117,37 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
     if (hit == null) return;
     final (row, col) = hit;
     final byId = ref.read(knitSymbolByIdProvider);
+    final mirrorMode = widget.chart.mirrorMode;
+    final mirrorCol = widget.chart.cols - 1 - col;
+
+    PatternChart applyToCell(PatternChart chart, int r, int c) {
+      switch (widget.tool) {
+        case ChartTool.draw:
+          final sym = widget.activeSymbolId != null ? byId[widget.activeSymbolId] : null;
+          final sw = sym?.spanWidth ?? 1;
+          final sh = sym?.spanHeight ?? 1;
+          return chart.setSpanCell(r, c, _activeCell, sw, sh);
+        case ChartTool.brush:
+          return chart.setCellColor(r, c, widget.activeColor);
+        case ChartTool.erase:
+          return chart.eraseSpanCell(r, c);
+        case ChartTool.fill:
+          return _floodFill(chart, r, c, CellData(color: widget.activeColor), DrawLayer.color);
+        default:
+          return chart;
+      }
+    }
+
     switch (widget.tool) {
       case ChartTool.draw:
-        // 펜: 심볼 + 활성 배경색 함께 적용
-        final sym = widget.activeSymbolId != null ? byId[widget.activeSymbolId] : null;
-        final sw = sym?.spanWidth ?? 1;
-        final sh = sym?.spanHeight ?? 1;
-        widget.onChartChanged(widget.chart.setSpanCell(row, col, _activeCell, sw, sh));
       case ChartTool.brush:
-        // 브러쉬: 셀 배경색만 칠하기 (기호 보존)
-        widget.onChartChanged(widget.chart.setCellColor(row, col, widget.activeColor));
       case ChartTool.erase:
-        widget.onChartChanged(widget.chart.eraseSpanCell(row, col));
       case ChartTool.fill:
-        // 페인터: 같은 색상 연결 셀 일괄 색상 변경
-        final filled = _floodFill(widget.chart, row, col, CellData(color: widget.activeColor), DrawLayer.color);
-        widget.onChartChanged(filled);
+        var chart = applyToCell(widget.chart, row, col);
+        if (mirrorMode && mirrorCol != col) {
+          chart = applyToCell(chart, row, mirrorCol);
+        }
+        widget.onChartChanged(chart);
       case ChartTool.select:
         break;
       case ChartTool.move:
@@ -146,20 +161,34 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
     if (hit == null) return;
     final byId = ref.read(knitSymbolByIdProvider);
     final (row, col) = hit;
+    final mirrorMode = widget.chart.mirrorMode;
+    final mirrorCol = widget.chart.cols - 1 - col;
+
+    var chart = widget.chart;
     switch (widget.tool) {
       case ChartTool.draw:
         // 펜: 심볼 + 활성 배경색 함께 적용
         final sym = widget.activeSymbolId != null ? byId[widget.activeSymbolId] : null;
         final sw = sym?.spanWidth ?? 1;
         final sh = sym?.spanHeight ?? 1;
-        widget.onChartChanged(widget.chart.setSpanCell(row, col, _activeCell, sw, sh));
+        chart = chart.setSpanCell(row, col, _activeCell, sw, sh);
+        if (mirrorMode && mirrorCol != col) {
+          chart = chart.setSpanCell(row, mirrorCol, _activeCell, sw, sh);
+        }
       case ChartTool.brush:
-        widget.onChartChanged(widget.chart.setCellColor(row, col, widget.activeColor));
+        chart = chart.setCellColor(row, col, widget.activeColor);
+        if (mirrorMode && mirrorCol != col) {
+          chart = chart.setCellColor(row, mirrorCol, widget.activeColor);
+        }
       case ChartTool.erase:
-        widget.onChartChanged(widget.chart.eraseSpanCell(row, col));
+        chart = chart.eraseSpanCell(row, col);
+        if (mirrorMode && mirrorCol != col) {
+          chart = chart.eraseSpanCell(row, mirrorCol);
+        }
       default:
         break;
     }
+    widget.onChartChanged(chart);
   }
 
   PatternChart _floodFill(
@@ -299,7 +328,7 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
         children: [
           CustomPaint(
             size: Size(canvasWidth, canvasHeight),
-            painter: _ChartPainter(chart: widget.chart),
+            painter: _ChartPainter(chart: widget.chart, mirrorMode: widget.chart.mirrorMode),
           ),
           ...overlays,
         ],
@@ -337,8 +366,9 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
 /// 기호 모드 셀은 SVG 오버레이로 처리하므로 Canvas 심볼 코드 없음
 class _ChartPainter extends CustomPainter {
   final PatternChart chart;
+  final bool mirrorMode;
 
-  const _ChartPainter({required this.chart});
+  const _ChartPainter({required this.chart, this.mirrorMode = false});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -346,6 +376,30 @@ class _ChartPainter extends CustomPainter {
     _drawCells(canvas);
     _drawGrid(canvas);
     _drawHeaders(canvas);
+    if (mirrorMode) _drawMirrorLine(canvas);
+  }
+
+  void _drawMirrorLine(Canvas canvas) {
+    final gridLeft = _headerW;
+    final gridTop = _headerH;
+    final gridBottom = _headerH + chart.rows * _cellH;
+    final centerX = gridLeft + (chart.cols / 2) * _cellW;
+    final mirrorLinePaint = Paint()
+      ..color = Colors.deepPurple.withValues(alpha: 0.5)
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke;
+    const dashHeight = 6.0;
+    const dashSpace = 4.0;
+    double startY = gridTop;
+    while (startY < gridBottom) {
+      final endY = (startY + dashHeight).clamp(gridTop, gridBottom);
+      canvas.drawLine(
+        Offset(centerX, startY),
+        Offset(centerX, endY),
+        mirrorLinePaint,
+      );
+      startY += dashHeight + dashSpace;
+    }
   }
 
   void _drawBackground(Canvas canvas) {
@@ -440,7 +494,9 @@ class _ChartPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter old) {
     if (old is _ChartPainter) {
-      return old.chart != chart || !identical(old.chart.grid, chart.grid);
+      return old.chart != chart ||
+          !identical(old.chart.grid, chart.grid) ||
+          old.mirrorMode != mirrorMode;
     }
     return true;
   }

@@ -16,6 +16,9 @@ import '../../../providers/counter_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/project_step_provider.dart';
 import '../domain/counter_model.dart';
+import '../../pattern/data/pattern_repository.dart';
+import '../../pattern/domain/pattern_chart.dart';
+import '../../pattern/presentation/pattern_viewer_screen.dart';
 
 class CounterScreen extends ConsumerStatefulWidget {
   final String counterId;
@@ -432,6 +435,119 @@ class _CounterScreenState extends ConsumerState<CounterScreen> {
     }
   }
 
+  void _linkToPattern(BuildContext context, CounterModel counter, bool isKorean) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Consumer(
+        builder: (ctx, cRef, child3) {
+          final patterns = cRef.watch(patternListProvider).valueOrNull ?? [];
+          final viewable = patterns
+              .where((p) => p.type == PatternType.image || p.type == PatternType.pdf)
+              .toList();
+          return SafeArea(
+            child: DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.5,
+              maxChildSize: 0.9,
+              minChildSize: 0.3,
+              builder: (_, scrollCtrl) => Column(
+                children: [
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(2))),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: Text(isKorean ? '도안 연결' : 'Link Pattern',
+                        style: Theme.of(ctx)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700)),
+                  ),
+                  if (viewable.isEmpty)
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          isKorean
+                              ? '연결 가능한 이미지/PDF 도안이 없어요.'
+                              : 'No image or PDF patterns available.',
+                          style: Theme.of(ctx)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(color: Colors.grey),
+                        ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: ListView.builder(
+                        controller: scrollCtrl,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        itemCount: viewable.length,
+                        itemBuilder: (_, i) {
+                          final p = viewable[i];
+                          final linked = counter.patternChartId == p.id;
+                          return ListTile(
+                            leading: Icon(
+                              p.type == PatternType.pdf
+                                  ? Icons.picture_as_pdf_rounded
+                                  : Icons.image_rounded,
+                              color: linked ? C.lv : C.mu,
+                            ),
+                            title: Text(p.title,
+                                style:
+                                    Theme.of(ctx).textTheme.bodyMedium),
+                            trailing: linked
+                                ? Icon(Icons.check_circle_rounded,
+                                    color: Colors.green.shade400, size: 18)
+                                : null,
+                            onTap: linked
+                                ? null
+                                : () async {
+                                    Navigator.pop(ctx);
+                                    await runWithMoriLoadingDialog<void>(
+                                      context,
+                                      message: isKorean
+                                          ? '연결하는 중입니다.'
+                                          : 'Linking...',
+                                      subtitle: isKorean
+                                          ? '잠시만 기다려 주세요.'
+                                          : 'Please wait.',
+                                      task: () => ref
+                                          .read(counterRepositoryProvider)
+                                          .updateCounter(counter.copyWith(
+                                              patternChartId: p.id)),
+                                    );
+                                    if (context.mounted) {
+                                      showSavedSnackBar(
+                                          ScaffoldMessenger.of(context),
+                                          message: isKorean
+                                              ? '연결됐어요.'
+                                              : 'Linked.');
+                                    }
+                                  },
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   void _confirmDelete(bool isKorean) {
     showDialog<void>(
       context: context,
@@ -500,6 +616,8 @@ class _CounterScreenState extends ConsumerState<CounterScreen> {
                       _duplicateCounter(c, isKorean);
                     } else if (value == 'link_project') {
                       _linkToProject(context, c.id, isKorean);
+                    } else if (value == 'link_pattern') {
+                      _linkToPattern(context, c, isKorean);
                     } else if (value == 'delete') {
                       _confirmDelete(isKorean);
                     }
@@ -532,6 +650,16 @@ class _CounterScreenState extends ConsumerState<CounterScreen> {
                           Icon(Icons.folder_outlined, color: C.lv, size: 18),
                           const SizedBox(width: 10),
                           Text(isKorean ? '프로젝트 연결' : 'Link to project', style: T.body),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'link_pattern',
+                      child: Row(
+                        children: [
+                          Icon(Icons.image_rounded, color: C.lmD, size: 18),
+                          const SizedBox(width: 10),
+                          Text(isKorean ? '도안 연결' : 'Link pattern', style: T.body),
                         ],
                       ),
                     ),
@@ -575,6 +703,53 @@ class _CounterScreenState extends ConsumerState<CounterScreen> {
                         ),
                       ),
                     ),
+                  if (counter.patternChartId.isNotEmpty) ...[
+                    Builder(builder: (ctx2) {
+                      final allPatterns = ref.watch(patternListProvider).valueOrNull ?? [];
+                      final linked = allPatterns.firstWhere(
+                        (p) => p.id == counter.patternChartId,
+                        orElse: () => PatternChart(id: '', title: '', rows: 0, cols: 0,
+                            mode: ChartMode.color, grid: const []),
+                      );
+                      if (linked.id.isEmpty) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: GlassCard(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => PatternViewerScreen(chart: linked)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                linked.type == PatternType.pdf
+                                    ? Icons.picture_as_pdf_rounded
+                                    : Icons.image_rounded,
+                                color: C.lmD,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(linked.title,
+                                    style: T.body,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis),
+                              ),
+                              Text(isKorean ? '도안 열기' : 'Open',
+                                  style: TextStyle(
+                                      color: C.lv,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13)),
+                              const SizedBox(width: 4),
+                              Icon(Icons.chevron_right_rounded,
+                                  color: C.mu, size: 18),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
                   if (counter.projectId.isNotEmpty && counter.projectStepId.isNotEmpty)
                     _StepGuideBanner(
                       projectId: counter.projectId,

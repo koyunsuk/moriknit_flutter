@@ -116,6 +116,12 @@ class PatternChart {
   /// 연결된 프로젝트 ID
   final String? linkedProjectId;
 
+  /// 좌우 대칭 모드 (왼쪽 절반만 그리면 오른쪽 자동 미러)
+  final bool mirrorMode;
+
+  /// 도안 카테고리 ('의상', '소품', '기타', null)
+  final String? category;
+
   PatternChart({
     required this.id,
     required this.title,
@@ -134,6 +140,8 @@ class PatternChart {
     this.aiSections,
     this.createdAt,
     this.linkedProjectId,
+    this.mirrorMode = false,
+    this.category,
   });
 
   PatternChart setCell(int row, int col, CellData cell) {
@@ -357,12 +365,15 @@ class PatternChart {
     List<AiSection>? aiSections,
     DateTime? createdAt,
     Object? linkedProjectId = _sentinel,
+    bool? mirrorMode,
+    Object? category = _sentinel,
   }) => _copyWith(
     id: id, title: title, rows: rows, cols: cols, mode: mode, grid: grid,
     narrativeText: narrativeText, type: type, imageUrl: imageUrl, pdfUrl: pdfUrl,
     forkCount: forkCount, sourcePatternId: sourcePatternId,
     sourceOwnerName: sourceOwnerName, sourceType: sourceType, aiSections: aiSections,
     createdAt: createdAt, linkedProjectId: linkedProjectId,
+    mirrorMode: mirrorMode, category: category,
   );
 
   static const Object _sentinel = Object();
@@ -385,6 +396,8 @@ class PatternChart {
     List<AiSection>? aiSections,
     DateTime? createdAt,
     Object? linkedProjectId = _sentinel,
+    bool? mirrorMode,
+    Object? category = _sentinel,
   }) {
     return PatternChart(
       id: id ?? this.id,
@@ -404,6 +417,8 @@ class PatternChart {
       aiSections: aiSections ?? this.aiSections,
       createdAt: createdAt ?? this.createdAt,
       linkedProjectId: identical(linkedProjectId, _sentinel) ? this.linkedProjectId : linkedProjectId as String?,
+      mirrorMode: mirrorMode ?? this.mirrorMode,
+      category: identical(category, _sentinel) ? this.category : category as String?,
     );
   }
 
@@ -426,6 +441,8 @@ class PatternChart {
         'sourceType': sourceType.name,
         if (aiSections != null) 'aiSections': aiSections!.map((s) => s.toMap()).toList(),
         if (linkedProjectId != null) 'linkedProjectId': linkedProjectId,
+        'mirrorMode': mirrorMode,
+        if (category != null) 'category': category,
       };
 
   factory PatternChart.fromJson(Map<String, dynamic> json) {
@@ -466,6 +483,8 @@ class PatternChart {
           .toList(),
       createdAt: (json['createdAt'] as dynamic)?.toDate() as DateTime?,
       linkedProjectId: json['linkedProjectId'] as String?,
+      mirrorMode: json['mirrorMode'] as bool? ?? false,
+      category: json['category'] as String?,
     );
   }
 
@@ -476,6 +495,9 @@ class PatternChart {
     int cols = 20,
     ChartMode mode = ChartMode.color,
     String narrativeText = '',
+    bool mirrorMode = false,
+    String? category,
+    DateTime? createdAt,
   }) {
     final grid = List.generate(
       rows,
@@ -489,6 +511,9 @@ class PatternChart {
       mode: mode,
       grid: grid,
       narrativeText: narrativeText,
+      mirrorMode: mirrorMode,
+      category: category,
+      createdAt: createdAt,
     );
   }
 }

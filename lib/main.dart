@@ -25,6 +25,7 @@ import 'providers/theme_provider.dart';
 void main() async {
   if (kIsWeb) usePathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
+
   GoogleFonts.config.allowRuntimeFetching = false;
   if (!kIsWeb) {
     await Hive.initFlutter();
@@ -35,6 +36,7 @@ void main() async {
       Hive.openBox<Map>(SubscriptionConstants.boxNeedles),
       Hive.openBox<Map>(SubscriptionConstants.boxSyncQueue),
       Hive.openBox<Map>(SubscriptionConstants.boxUser),
+      Hive.openBox<dynamic>(SubscriptionConstants.boxViewerState),
     ]);
   }
 

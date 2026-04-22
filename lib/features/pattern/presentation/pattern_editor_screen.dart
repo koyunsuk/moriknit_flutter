@@ -90,9 +90,12 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
 
   // 트래킹 오버레이 상태
   final TransformationController _trackingCtrl = TransformationController();
-  bool _trackingEnabled = false;
+  bool _trackingEnabled = true;
   int _trackingCurrentRow = 1; // 1단 = 맨 아래부터 시작 (뜨개 관례)
   TrackingDisplayMode _trackingMode = TrackingDisplayMode.bar;
+  TrackingBarDirection _trackingDirection = TrackingBarDirection.bottomUp;
+  int? _trackingCurrentCol = 1; // 기본 활성 (1코)
+  double _trackingMarkerWidth = 2.0;
 
   @override
   void initState() {
@@ -139,10 +142,13 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
       setState(() {
         _chart = PatternChart.empty(
           id: _chart.id,
-          title: _chart.title,
+          title: result.title.isNotEmpty ? result.title : _chart.title,
           rows: result.rows,
           cols: result.cols,
           mode: result.mode,
+          mirrorMode: result.mirrorMode,
+          category: result.category,
+          createdAt: result.createdAt,
         );
         // 컬러차트 모드: 기본 도구를 브러쉬(셀 배경색)로 설정
         if (result.mode == ChartMode.colorChart) {
@@ -270,12 +276,12 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.4,
-        maxChildSize: 0.92,
+        initialChildSize: 0.85,
+        minChildSize: 0.6,
+        maxChildSize: 0.95,
         expand: false,
         snap: true,
-        snapSizes: const [0.6, 0.92],
+        snapSizes: const [0.85, 0.95],
         builder: (_, scrollCtrl) => StatefulBuilder(
           builder: (ctx2, setSheetState) => Column(
             children: [
@@ -1102,23 +1108,29 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
                           ),
                         ),
                         // 행 트래킹 — 그리드 위 시각 오버레이만 (컨트롤바 분리)
-                        if (widget.readOnly && _trackingEnabled)
+                        if (_trackingEnabled)
                           _TrackingOverlay(
                             chart: _chart,
                             trackingCtrl: _trackingCtrl,
                             chartId: _chart.id,
                             localRow: _trackingCurrentRow,
                             mode: _trackingMode,
+                            direction: _trackingDirection,
+                            currentCol: _trackingCurrentCol,
+                            markerWidth: _trackingMarkerWidth,
                           ),
-                        // 트래킹 시작 버튼 (뷰어 모드 + 트래킹 비활성 시)
-                        if (widget.readOnly && !_trackingEnabled)
+                        // 트래킹 시작 버튼 (트래킹 비활성 시)
+                        if (!_trackingEnabled)
                           Positioned(
                             bottom: 16,
                             right: 16,
                             child: FloatingActionButton.small(
                               heroTag: 'trackingFab',
                               backgroundColor: C.lv,
-                              onPressed: () => setState(() => _trackingEnabled = true),
+                              onPressed: () => setState(() {
+                                _trackingEnabled = true;
+                                _trackingCurrentCol ??= 1;
+                              }),
                               tooltip: '행 트래킹 시작',
                               child: const Icon(Icons.track_changes_rounded, color: Colors.white),
                             ),
@@ -1128,14 +1140,23 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
                   ),
                 ),
                 // 트래킹 컨트롤 바 — 그리드 하단 별도 블록
-                if (widget.readOnly && _trackingEnabled)
+                if (_trackingEnabled)
                   _TrackingControlBlock(
                     chart: _chart,
                     chartId: _chart.id,
                     localRow: _trackingCurrentRow,
                     mode: _trackingMode,
+                    direction: _trackingDirection,
+                    currentCol: _trackingCurrentCol,
+                    markerWidth: _trackingMarkerWidth,
                     onLocalRowChange: (r) => setState(() => _trackingCurrentRow = r),
                     onModeChange: (m) => setState(() => _trackingMode = m),
+                    onDirectionChange: (d) => setState(() => _trackingDirection = d),
+                    onColToggle: () => setState(() {
+                      _trackingCurrentCol = _trackingCurrentCol == null ? 1 : null;
+                    }),
+                    onLocalColChange: (c) => setState(() => _trackingCurrentCol = c),
+                    onMarkerWidthChange: (w) => setState(() => _trackingMarkerWidth = w),
                     onClose: () => setState(() => _trackingEnabled = false),
                   ),
               ],
@@ -1274,6 +1295,9 @@ class _TrackingOverlay extends ConsumerWidget {
   final String chartId;
   final int localRow;
   final TrackingDisplayMode mode;
+  final TrackingBarDirection direction;
+  final int? currentCol;
+  final double markerWidth;
 
   const _TrackingOverlay({
     required this.chart,
@@ -1281,6 +1305,9 @@ class _TrackingOverlay extends ConsumerWidget {
     required this.chartId,
     required this.localRow,
     required this.mode,
+    this.direction = TrackingBarDirection.bottomUp,
+    this.currentCol,
+    this.markerWidth = 2.0,
   });
 
   @override
@@ -1291,6 +1318,9 @@ class _TrackingOverlay extends ConsumerWidget {
       chart: chart,
       currentRow: currentRow,
       mode: mode,
+      direction: direction,
+      currentCol: currentCol,
+      markerWidth: markerWidth,
       transformationController: trackingCtrl,
     );
   }
@@ -1302,8 +1332,15 @@ class _TrackingControlBlock extends ConsumerWidget {
   final String chartId;
   final int localRow;
   final TrackingDisplayMode mode;
+  final TrackingBarDirection direction;
+  final int? currentCol;
+  final double markerWidth;
   final ValueChanged<int> onLocalRowChange;
   final ValueChanged<TrackingDisplayMode> onModeChange;
+  final ValueChanged<TrackingBarDirection> onDirectionChange;
+  final VoidCallback onColToggle;
+  final ValueChanged<int> onLocalColChange;
+  final ValueChanged<double> onMarkerWidthChange;
   final VoidCallback onClose;
 
   const _TrackingControlBlock({
@@ -1311,8 +1348,15 @@ class _TrackingControlBlock extends ConsumerWidget {
     required this.chartId,
     required this.localRow,
     required this.mode,
+    this.direction = TrackingBarDirection.bottomUp,
+    this.currentCol,
+    this.markerWidth = 2.0,
     required this.onLocalRowChange,
     required this.onModeChange,
+    required this.onDirectionChange,
+    required this.onColToggle,
+    required this.onLocalColChange,
+    required this.onMarkerWidthChange,
     required this.onClose,
   });
 
@@ -1361,11 +1405,22 @@ class _TrackingControlBlock extends ConsumerWidget {
           currentRow: currentRow,
           totalRows: chart.rows,
           mode: mode,
+          direction: direction,
+          currentCol: currentCol,
+          totalCols: chart.cols,
+          markerWidth: markerWidth,
           onMinus: () => _increment(context, ref, counterId, -1),
           onPlus: () => _increment(context, ref, counterId, 1),
           onLongPressMinus: () => _increment(context, ref, counterId, -5),
           onLongPressPlus: () => _increment(context, ref, counterId, 5),
           onModeChange: onModeChange,
+          onDirectionChange: onDirectionChange,
+          onColToggle: onColToggle,
+          onColMinus: () => onLocalColChange(((currentCol ?? 1) - 1).clamp(1, chart.cols)),
+          onColPlus: () => onLocalColChange(((currentCol ?? 1) + 1).clamp(1, chart.cols)),
+          onColLongPressMinus: () => onLocalColChange(((currentCol ?? 1) - 5).clamp(1, chart.cols)),
+          onColLongPressPlus: () => onLocalColChange(((currentCol ?? 1) + 5).clamp(1, chart.cols)),
+          onMarkerWidthChange: onMarkerWidthChange,
           onClose: onClose,
         ),
       ),
@@ -1382,19 +1437,22 @@ class _NarrativeEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(16),
-      child: TextField(
-        controller: controller,
-        onChanged: onChanged,
-        maxLines: null,
-        expands: true,
-        textAlignVertical: TextAlignVertical.top,
-        style: const TextStyle(fontSize: 14, height: 1.8),
-        decoration: InputDecoration(
-          hintText: '1단: 겉뜨기 20코\n2단: 안뜨기 20코\n3단: ...',
-          hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          contentPadding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: TextField(
+          controller: controller,
+          onChanged: onChanged,
+          maxLines: null,
+          expands: true,
+          textAlignVertical: TextAlignVertical.top,
+          style: const TextStyle(fontSize: 14, height: 1.8),
+          decoration: InputDecoration(
+            hintText: '1단: 겉뜨기 20코\n2단: 안뜨기 20코\n3단: ...',
+            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            contentPadding: const EdgeInsets.all(16),
+          ),
         ),
       ),
     );
@@ -1419,14 +1477,15 @@ class _NarrativeWithPreview extends StatelessWidget {
     return Column(
       children: [
         Expanded(
-          flex: 3,
+          flex: 4,
           child: ClipRect(
+            clipBehavior: Clip.hardEdge,
             child: _NarrativeEditor(controller: controller, onChanged: onChanged),
           ),
         ),
         const Divider(height: 1),
         Expanded(
-          flex: 2,
+          flex: 3,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: Column(
@@ -1466,46 +1525,105 @@ class _NarrativeWithPreview extends StatelessWidget {
   }
 }
 
-/// 서술형 텍스트에서 "[MC]", "[CC1]" 등 색상 라벨을 실제 색상 배지로 렌더링
+/// 이슈 #568: 서술형 프리뷰 — A(단별 카드) + B(색상 사용량) + C(배지 개선)
 class _NarrativeRichText extends StatelessWidget {
   final String text;
-  final Map<int, String> labels;
+  final Map<int, String> labels; // argb → label
 
   const _NarrativeRichText({required this.text, required this.labels});
 
-  /// 라벨 → argb 역매핑
   Map<String, int> get _argbByLabel =>
       {for (final e in labels.entries) e.value: e.key};
 
-  String _shortHex(int argb) {
-    final hex = (argb & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase();
-    return '#$hex';
+  // B안: 색상별 코수 집계 — `겉뜨기 3[MC]` → MC: 3
+  Map<String, int> _countByLabel() {
+    final counts = <String, int>{};
+    final regex = RegExp(r'(\d+)?\[(MC|CC\d+)\]');
+    for (final m in regex.allMatches(text)) {
+      final count = int.tryParse(m.group(1) ?? '') ?? 1;
+      final label = m.group(2)!;
+      counts[label] = (counts[label] ?? 0) + count;
+    }
+    return counts;
   }
 
+  // A안: 줄 파싱 → (단 라벨, 내용) 리스트
+  List<({String rowLabel, String content})> _parseRows() {
+    final result = <({String rowLabel, String content})>[];
+    final rowRegex = RegExp(r'^(\d+단|Row \d+):\s*(.+)$');
+    for (final line in text.split('\n')) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+      final m = rowRegex.firstMatch(trimmed);
+      if (m != null) {
+        result.add((rowLabel: m.group(1)!, content: m.group(2)!));
+      } else {
+        result.add((rowLabel: '', content: trimmed));
+      }
+    }
+    return result;
+  }
+
+  // C안: 배지 — 색상 원 + 라벨 (HEX 제거)
   InlineSpan _colorBadge(String label, int argb) {
     final color = Color(argb);
     final isLight = color.computeLuminance() > 0.6;
-    final hexStr = _shortHex(argb);
     return WidgetSpan(
       alignment: PlaceholderAlignment.middle,
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        padding: const EdgeInsets.fromLTRB(5, 2, 7, 2),
         decoration: BoxDecoration(
-          color: isLight ? color.withValues(alpha: 0.12) : color,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: color, width: isLight ? 1.0 : 0),
-        ),
-        child: Text(
-          '$label $hexStr',
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            color: isLight ? C.tx : Colors.white,
+          color: isLight ? color.withValues(alpha: 0.15) : color,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isLight ? color.withValues(alpha: 0.4) : Colors.transparent,
+            width: 1,
           ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: isLight ? color : Colors.white.withValues(alpha: 0.85),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: isLight ? C.tx : Colors.white,
+              ),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  List<InlineSpan> _buildLineSpans(String line, Map<String, int> byLabel) {
+    final regex = RegExp(r'\[(MC|CC\d+)\]');
+    final spans = <InlineSpan>[];
+    int cursor = 0;
+    for (final m in regex.allMatches(line)) {
+      if (m.start > cursor) {
+        spans.add(TextSpan(text: line.substring(cursor, m.start)));
+      }
+      final label = m.group(1)!;
+      final argb = byLabel[label];
+      spans.add(argb != null ? _colorBadge(label, argb) : TextSpan(text: m.group(0)));
+      cursor = m.end;
+    }
+    if (cursor < line.length) {
+      spans.add(TextSpan(text: line.substring(cursor)));
+    }
+    return spans;
   }
 
   @override
@@ -1516,49 +1634,164 @@ class _NarrativeRichText extends StatelessWidget {
         style: T.caption.copyWith(color: C.tx2),
       );
     }
+
     final byLabel = _argbByLabel;
-    final regex = RegExp(r'\[(MC|CC\d+)\]');
-    final spans = <InlineSpan>[];
+    final counts = _countByLabel();
+    final total = counts.values.fold(0, (a, b) => a + b);
+    final rows = _parseRows();
 
-    // 줄 단위로 처리 — 각 줄의 마지막 레이블 색상을 텍스트 색상으로 적용
-    final lines = text.split('\n');
-    for (int li = 0; li < lines.length; li++) {
-      if (li > 0) spans.add(const TextSpan(text: '\n'));
-      final line = lines[li];
-      final lineMatches = regex.allMatches(line).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // B안: 색상 사용량 요약 바
+        if (counts.isNotEmpty && total > 0) ...[
+          _ColorUsageSummary(counts: counts, byLabel: byLabel, total: total),
+          const SizedBox(height: 8),
+          Divider(height: 1, color: C.bd),
+          const SizedBox(height: 6),
+        ],
+        // A안: 단별 카드
+        ...rows.asMap().entries.map((e) {
+          final spans = _buildLineSpans(e.value.content, byLabel);
+          return _NarrativeRowCard(
+            rowLabel: e.value.rowLabel,
+            spans: spans,
+            isEven: e.key.isEven,
+          );
+        }),
+      ],
+    );
+  }
+}
 
-      // 줄에서 마지막 레이블의 색상 (텍스트 색상으로 사용, 너무 밝으면 기본색)
-      final lastLabel = lineMatches.isNotEmpty ? lineMatches.last.group(1)! : null;
-      final lastArgb = lastLabel != null ? byLabel[lastLabel] : null;
-      final lineColor = lastArgb != null
-          ? (Color(lastArgb).computeLuminance() < 0.7 ? Color(lastArgb) : null)
-          : null;
+/// B안: 색상별 코수 사용량 바
+class _ColorUsageSummary extends StatelessWidget {
+  final Map<String, int> counts;
+  final Map<String, int> byLabel; // label → argb
+  final int total;
 
-      int cursor = 0;
-      for (final m in lineMatches) {
-        if (m.start > cursor) {
-          spans.add(TextSpan(
-            text: line.substring(cursor, m.start),
-            style: lineColor != null ? TextStyle(color: lineColor) : null,
-          ));
-        }
-        final label = m.group(1)!;
-        final argb = byLabel[label];
-        spans.add(argb != null ? _colorBadge(label, argb) : TextSpan(text: m.group(0)));
-        cursor = m.end;
-      }
-      if (cursor < line.length) {
-        spans.add(TextSpan(
-          text: line.substring(cursor),
-          style: lineColor != null ? TextStyle(color: lineColor) : null,
-        ));
-      }
-    }
+  const _ColorUsageSummary({
+    required this.counts,
+    required this.byLabel,
+    required this.total,
+  });
 
-    return RichText(
-      text: TextSpan(
-        style: TextStyle(fontSize: 13, height: 1.8, color: C.tx),
-        children: spans,
+  @override
+  Widget build(BuildContext context) {
+    final sortedLabels = counts.keys.toList()
+      ..sort((a, b) {
+        if (a == 'MC') return -1;
+        if (b == 'MC') return 1;
+        return a.compareTo(b);
+      });
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: sortedLabels.map((label) {
+        final count = counts[label]!;
+        final argb = byLabel[label] ?? 0xFFCCCCCC;
+        final color = Color(argb);
+        final ratio = total > 0 ? count / total : 0.0;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 5),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 36,
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: C.tx,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: ratio,
+                    backgroundColor: C.bd,
+                    color: color,
+                    minHeight: 8,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 48,
+                child: Text(
+                  '$count코',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: C.tx2,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+/// A안: 단별 카드 — 단 번호 배지 + 내용 인라인 스팬
+class _NarrativeRowCard extends StatelessWidget {
+  final String rowLabel;
+  final List<InlineSpan> spans;
+  final bool isEven;
+
+  const _NarrativeRowCard({
+    required this.rowLabel,
+    required this.spans,
+    required this.isEven,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: isEven ? C.gx : C.bg,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (rowLabel.isNotEmpty) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: C.lv,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                rowLabel,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: TextStyle(fontSize: 13, height: 1.6, color: C.tx),
+                children: spans,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -230,7 +230,6 @@ final patternRepositoryProvider = Provider<PatternRepository>((ref) => PatternRe
 final patternListProvider = StreamProvider<List<PatternChart>>((ref) {
   ref.keepAlive();
   final repo = ref.watch(patternRepositoryProvider);
-  // 구버전 도안 id 마이그레이션 (1회성, 비동기)
   Future.microtask(() => repo.migrateIds());
   return repo.watchAll();
 });

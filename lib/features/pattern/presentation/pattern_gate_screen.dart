@@ -9,12 +9,18 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../data/pattern_repository.dart';
 import '../domain/pattern_chart.dart';
+import 'pattern_editor_screen.dart';
 
-class PatternGateScreen extends ConsumerWidget {
+class PatternGateScreen extends ConsumerStatefulWidget {
   const PatternGateScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PatternGateScreen> createState() => _PatternGateScreenState();
+}
+
+class _PatternGateScreenState extends ConsumerState<PatternGateScreen> {
+  @override
+  Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
     final patternsAsync = ref.watch(patternListProvider);
 
@@ -101,7 +107,12 @@ class _PatternCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GlassCard(
-      onTap: () => context.push('${Routes.toolsPatternViewer}/${chart.id}'),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PatternEditorScreen(patternId: chart.id, readOnly: true),
+        ),
+      ),
       child: Row(
         children: [
           Container(

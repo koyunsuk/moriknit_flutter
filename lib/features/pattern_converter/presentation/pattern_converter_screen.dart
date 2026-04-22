@@ -83,7 +83,7 @@ class _PatternConverterScreenState
               title: Text(kIsWeb ? (isKorean ? '내 컴퓨터' : 'My Computer') : (isKorean ? '내 핸드폰' : 'My Device'), style: T.bodyBold),
               subtitle: Text('PDF, JPG, PNG', style: T.caption.copyWith(color: C.mu)),
               trailing: Icon(Icons.chevron_right_rounded, color: C.mu),
-              onTap: () { Navigator.pop(context); _pickFromPhone(); },
+              onTap: () async { Navigator.pop(context); await Future.microtask(() {}); _pickFromPhone(); },
             ),
             ListTile(
               leading: Container(
@@ -94,7 +94,7 @@ class _PatternConverterScreenState
               title: Text('Dropbox', style: T.bodyBold),
               subtitle: Text(isKorean ? '드롭박스에서 파일 선택' : 'Pick from Dropbox', style: T.caption.copyWith(color: C.mu)),
               trailing: Icon(Icons.chevron_right_rounded, color: C.mu),
-              onTap: () { Navigator.pop(context); _pickFromDropbox(); },
+              onTap: () async { Navigator.pop(context); await Future.microtask(() {}); _pickFromDropbox(); },
             ),
             const SizedBox(height: 12),
           ],

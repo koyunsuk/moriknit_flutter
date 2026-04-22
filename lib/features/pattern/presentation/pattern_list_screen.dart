@@ -27,11 +27,16 @@ import '../domain/pattern_chart.dart';
 import 'pattern_detail_screen.dart';
 import 'pattern_editor_screen.dart';
 
-class PatternListScreen extends ConsumerWidget {
+class PatternListScreen extends ConsumerStatefulWidget {
   const PatternListScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PatternListScreen> createState() => _PatternListScreenState();
+}
+
+class _PatternListScreenState extends ConsumerState<PatternListScreen> {
+  @override
+  Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
     final patternsAsync = ref.watch(patternListProvider);
     final filesAsync = ref.watch(patternFilesProvider);
@@ -251,7 +256,8 @@ class PatternListScreen extends ConsumerWidget {
                 title: Text(isKorean ? '카메라로 찍기' : 'Take a photo', style: T.body),
                 onTap: () async {
                   Navigator.pop(ctx);
-                  final picked = await ImagePicker().pickImage(source: ImageSource.camera);
+                  await Future.microtask(() {});
+                  final picked = await ImagePicker().pickImage(source: ImageSource.camera, maxWidth: 1200, imageQuality: 85);
                   if (picked != null && context.mounted) {
                     await _saveImageFile(context, ref, File(picked.path), isKorean);
                   }
@@ -262,7 +268,8 @@ class PatternListScreen extends ConsumerWidget {
                 title: Text(isKorean ? '갤러리에서 선택' : 'Choose from gallery', style: T.body),
                 onTap: () async {
                   Navigator.pop(ctx);
-                  final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+                  await Future.microtask(() {});
+                  final picked = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1200, imageQuality: 85);
                   if (picked != null && context.mounted) {
                     await _saveImageFile(context, ref, File(picked.path), isKorean);
                   }
@@ -283,18 +290,22 @@ class PatternListScreen extends ConsumerWidget {
   }
 
   Future<void> _saveImageFile(BuildContext context, WidgetRef ref, File file, bool isKorean) async {
-    // async gap 이전에 repo 캡처 → ref가 disposed된 이후 접근 방지
     final repo = ref.read(patternRepositoryProvider);
     final title = await _askPatternTitle(context, isKorean);
     if (title == null || !context.mounted) return;
+
     try {
+      PatternChart? saved;
       await runWithMoriLoadingDialog<void>(
         context,
         message: isKorean ? '저장하는 중입니다.' : 'Saving...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
-        task: () => repo.saveImagePattern(title: title, imageFile: file),
+        task: () async {
+          saved = await repo.saveImagePattern(title: title, imageFile: file);
+        },
       );
-      if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '저장됐어요.' : 'Saved.');
+      if (!context.mounted || saved == null) return;
+      Navigator.push(context, MaterialPageRoute(builder: (_) => PatternDetailScreen(chart: saved!)));
     } catch (e) {
       if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
     }
@@ -328,18 +339,22 @@ class PatternListScreen extends ConsumerWidget {
   }
 
   Future<void> _savePdfFile(BuildContext context, WidgetRef ref, File file, bool isKorean) async {
-    // async gap 이전에 repo 캡처 → ref가 disposed된 이후 접근 방지
     final repo = ref.read(patternRepositoryProvider);
     final title = await _askPatternTitle(context, isKorean);
     if (title == null || !context.mounted) return;
+
     try {
+      PatternChart? saved;
       await runWithMoriLoadingDialog<void>(
         context,
         message: isKorean ? '저장하는 중입니다.' : 'Saving...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
-        task: () => repo.savePdfPattern(title: title, pdfFile: file),
+        task: () async {
+          saved = await repo.savePdfPattern(title: title, pdfFile: file);
+        },
       );
-      if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '저장됐어요.' : 'Saved.');
+      if (!context.mounted || saved == null) return;
+      Navigator.push(context, MaterialPageRoute(builder: (_) => PatternDetailScreen(chart: saved!)));
     } catch (e) {
       if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
     }
@@ -347,32 +362,72 @@ class PatternListScreen extends ConsumerWidget {
 
   Future<String?> _askPatternTitle(BuildContext context, bool isKorean) async {
     final ctrl = TextEditingController();
-    final result = await showDialog<String>(
+    String? result;
+    await showModalBottomSheet<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(isKorean ? '도안 이름' : 'Pattern name', style: T.h3),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: isKorean ? '도안 이름을 입력하세요' : 'Enter pattern name',
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Theme.of(ctx).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
-          onSubmitted: (v) => Navigator.pop(ctx, v.trim().isEmpty ? (isKorean ? '내 도안' : 'My Pattern') : v.trim()),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36, height: 4,
+                  decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(isKorean ? '도안 이름' : 'Pattern name', style: T.h3),
+              const SizedBox(height: 12),
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: isKorean ? '도안 이름을 입력하세요' : 'Enter pattern name',
+                ),
+                onSubmitted: (v) {
+                  result = v.trim().isEmpty ? (isKorean ? '내 도안' : 'My Pattern') : v.trim();
+                  Navigator.pop(ctx);
+                },
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text(isKorean ? '취소' : 'Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        result = ctrl.text.trim().isEmpty ? (isKorean ? '내 도안' : 'My Pattern') : ctrl.text.trim();
+                        Navigator.pop(ctx);
+                      },
+                      child: Text(isKorean ? '등록' : 'Save'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(isKorean ? '취소' : 'Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              final v = ctrl.text.trim();
-              Navigator.pop(ctx, v.isEmpty ? (isKorean ? '내 도안' : 'My Pattern') : v);
-            },
-            child: Text(isKorean ? '등록' : 'Save'),
-          ),
-        ],
       ),
     );
-    ctrl.dispose();
+    // ctrl.dispose()를 여기서 호출하면 BottomSheet 닫힘 애니메이션 중
+    // TextField가 이미 disposed된 controller를 사용하여 크래쉬 발생.
+    // 로컬 변수이므로 GC가 처리하도록 dispose 생략.
     return result;
   }
 
@@ -408,9 +463,10 @@ class PatternListScreen extends ConsumerWidget {
               const SizedBox(height: 16),
               // 1. 사진에서 만들기
               GlassCard(
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(ctx);
-                  _showImageSourceDialog(context, ref, isKorean);
+                  await Future.microtask(() {});
+                  if (context.mounted) _showImageSourceDialog(context, ref, isKorean);
                 },
                 child: Row(children: [
                   Container(
@@ -447,8 +503,9 @@ class PatternListScreen extends ConsumerWidget {
               GlassCard(
                 onTap: () async {
                   Navigator.pop(ctx);
+                  await Future.microtask(() {});
                   if (kIsWeb) {
-                    showSavedSnackBar(context, message: isKorean ? '모바일에서만 사용 가능해요.' : 'Available on mobile only.');
+                    if (context.mounted) showSavedSnackBar(context, message: isKorean ? '모바일에서만 사용 가능해요.' : 'Available on mobile only.');
                     return;
                   }
                   final result = await FilePicker.platform.pickFiles(

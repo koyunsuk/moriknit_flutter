@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -14,9 +16,13 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/market_provider.dart';
 import '../../../providers/project_provider.dart';
+import '../../../providers/template_provider.dart';
 import '../../../providers/ui_copy_provider.dart';
 import '../../my/data/mori_service.dart';
+import '../../pattern/data/pattern_repository.dart';
+import '../../pattern/domain/pattern_chart.dart';
 import '../../project/domain/project_model.dart';
+import '../../project/domain/user_template.dart';
 import '../domain/market_item.dart';
 
 class MarketScreen extends ConsumerWidget {
@@ -128,15 +134,27 @@ class MarketScreen extends ConsumerWidget {
 
   Future<void> _showCreateItemSheet(BuildContext context, WidgetRef ref, String uid, String sellerName) async {
     final isKorean = ref.read(appLanguageProvider).isKorean;
+    final gates = ref.read(featureGatesProvider);
+    final canUsePro = gates.isProOrAbove;
+
     final titleCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     final priceCtrl = TextEditingController();
     String category = 'pattern';
     bool isFree = true;
+    // 파일 소스 (기존)
     String? imageFilePath;
     String? pdfFilePath;
-    final accentHex = ['#FA5BB4', '#B47EEB', '#A3E635', '#F472B6', '#60A5FA', '#34D399', '#FB923C', '#F9A8D4'][Random().nextInt(8)];
+    // 내도안 소스
+    PatternChart? selectedChart;
+    Uint8List? chartMoriBytes;
+    // 내템플릿 소스
+    UserTemplate? selectedTemplate;
+    Uint8List? templateBytes;
+    // 소스 타입: 'file'(기존) | 'myPattern' | 'myTemplate'
+    String sourceType = 'file';
 
+    final accentHex = ['#FA5BB4', '#B47EEB', '#A3E635', '#F472B6', '#60A5FA', '#34D399', '#FB923C', '#F9A8D4'][Random().nextInt(8)];
     bool saving = false;
 
     await showModalBottomSheet<void>(
@@ -154,7 +172,44 @@ class MarketScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(isKorean ? '새 상품 추가' : 'Add new item', style: T.h3),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
+                  // ── 소스 타입 선택 ──────────────────────────────
+                  SectionTitle(title: isKorean ? '콘텐츠 소스' : 'Content Source'),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _SourceChip(
+                        label: isKorean ? '파일' : 'File',
+                        icon: Icons.upload_file_rounded,
+                        selected: sourceType == 'file',
+                        onTap: saving ? null : () => setState(() { sourceType = 'file'; selectedChart = null; selectedTemplate = null; chartMoriBytes = null; templateBytes = null; }),
+                      ),
+                      const SizedBox(width: 6),
+                      _SourceChip(
+                        label: isKorean ? '내 도안' : 'My Pattern',
+                        icon: Icons.grid_on_rounded,
+                        selected: sourceType == 'myPattern',
+                        isPro: true,
+                        onTap: (saving || !canUsePro) ? null : () => setState(() { sourceType = 'myPattern'; imageFilePath = null; pdfFilePath = null; }),
+                      ),
+                      const SizedBox(width: 6),
+                      _SourceChip(
+                        label: isKorean ? '내 템플릿' : 'My Template',
+                        icon: Icons.list_alt_rounded,
+                        selected: sourceType == 'myTemplate',
+                        isPro: true,
+                        onTap: (saving || !canUsePro) ? null : () => setState(() { sourceType = 'myTemplate'; imageFilePath = null; pdfFilePath = null; }),
+                      ),
+                    ],
+                  ),
+                  if (!canUsePro) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      isKorean ? '⭐ 내 도안/템플릿 등록은 Pro 요금제 이상에서 사용할 수 있어요' : '⭐ My Pattern/Template listing requires Pro plan',
+                      style: T.caption.copyWith(color: C.lv),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
                   TextField(controller: titleCtrl, decoration: InputDecoration(labelText: isKorean ? '상품 이름' : 'Title')),
                   const SizedBox(height: 10),
                   TextField(controller: descCtrl, maxLines: 3, decoration: InputDecoration(labelText: isKorean ? '설명' : 'Description')),
@@ -194,47 +249,101 @@ class MarketScreen extends ConsumerWidget {
                     onChanged: (value) => setState(() => category = value ?? 'pattern'),
                   ),
                   const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: saving ? null : () async {
-                        final result = await FilePicker.platform.pickFiles(type: FileType.image);
-                        if (result != null) setState(() => imageFilePath = result.files.single.path);
-                      },
-                      icon: Icon(Icons.image_rounded, size: 18),
-                      label: Text(imageFilePath != null ? (isKorean ? '✓ 이미지 선택됨' : '✓ Image selected') : (isKorean ? '이미지 선택' : 'Select image')),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: imageFilePath != null ? C.lmD : C.tx2,
-                        side: BorderSide(color: imageFilePath != null ? C.lmD : C.bd),
+                  // ── 소스별 파일 선택 UI ─────────────────────────
+                  if (sourceType == 'file') ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: saving ? null : () async {
+                          final result = await FilePicker.platform.pickFiles(type: FileType.image);
+                          if (result != null) setState(() => imageFilePath = result.files.single.path);
+                        },
+                        icon: const Icon(Icons.image_rounded, size: 18),
+                        label: Text(imageFilePath != null ? (isKorean ? '✓ 이미지 선택됨' : '✓ Image selected') : (isKorean ? '이미지 선택' : 'Select image')),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: imageFilePath != null ? C.lmD : C.tx2,
+                          side: BorderSide(color: imageFilePath != null ? C.lmD : C.bd),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: saving ? null : () async {
-                        final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
-                        if (result != null) setState(() => pdfFilePath = result.files.single.path);
-                      },
-                      icon: Icon(Icons.description_rounded, size: 18),
-                      label: Text(pdfFilePath != null ? (isKorean ? '✓ PDF 선택됨' : '✓ PDF selected') : (isKorean ? 'PDF 선택' : 'Select PDF')),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: pdfFilePath != null ? C.lmD : C.tx2,
-                        side: BorderSide(color: pdfFilePath != null ? C.lmD : C.bd),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: saving ? null : () async {
+                          final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
+                          if (result != null) setState(() => pdfFilePath = result.files.single.path);
+                        },
+                        icon: const Icon(Icons.description_rounded, size: 18),
+                        label: Text(pdfFilePath != null ? (isKorean ? '✓ PDF 선택됨' : '✓ PDF selected') : (isKorean ? 'PDF 선택' : 'Select PDF')),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: pdfFilePath != null ? C.lmD : C.tx2,
+                          side: BorderSide(color: pdfFilePath != null ? C.lmD : C.bd),
+                        ),
                       ),
                     ),
-                  ),
+                  ] else if (sourceType == 'myPattern') ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: saving ? null : () async {
+                          final chart = await Navigator.push<PatternChart>(
+                            ctx,
+                            MaterialPageRoute(builder: (_) => _PatternPickerScreen(isKorean: isKorean)),
+                          );
+                          if (chart != null) {
+                            final bytes = Uint8List.fromList(utf8.encode(
+                              const JsonEncoder().convert({'format': 'mori', 'version': 1, 'chart': chart.toJson()}),
+                            ));
+                            setState(() { selectedChart = chart; chartMoriBytes = bytes; });
+                            if (titleCtrl.text.trim().isEmpty) titleCtrl.text = chart.title;
+                          }
+                        },
+                        icon: const Icon(Icons.grid_on_rounded, size: 18),
+                        label: Text(selectedChart != null ? '✓ ${selectedChart!.title}' : (isKorean ? '도안 선택' : 'Select pattern')),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: selectedChart != null ? C.lmD : C.tx2,
+                          side: BorderSide(color: selectedChart != null ? C.lmD : C.bd),
+                        ),
+                      ),
+                    ),
+                  ] else if (sourceType == 'myTemplate') ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: saving ? null : () async {
+                          final tmpl = await Navigator.push<UserTemplate>(
+                            ctx,
+                            MaterialPageRoute(builder: (_) => _TemplatePickerScreen(isKorean: isKorean)),
+                          );
+                          if (tmpl != null) {
+                            final bytes = Uint8List.fromList(utf8.encode(
+                              const JsonEncoder().convert({'format': 'mori_template', 'version': 1, 'template': tmpl.toMap()}),
+                            ));
+                            setState(() { selectedTemplate = tmpl; templateBytes = bytes; });
+                            if (titleCtrl.text.trim().isEmpty) titleCtrl.text = tmpl.title;
+                          }
+                        },
+                        icon: const Icon(Icons.list_alt_rounded, size: 18),
+                        label: Text(selectedTemplate != null ? '✓ ${selectedTemplate!.title}' : (isKorean ? '템플릿 선택' : 'Select template')),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: selectedTemplate != null ? C.lmD : C.tx2,
+                          side: BorderSide(color: selectedTemplate != null ? C.lmD : C.bd),
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: saving ? null : () async {
                         final price = isFree ? 0 : (int.tryParse(priceCtrl.text.trim()) ?? 0);
-                        // 필수항목 검증
                         final missing = <String>[];
                         if (titleCtrl.text.trim().isEmpty) missing.add(isKorean ? '상품 이름' : 'Title');
                         if (!isFree && priceCtrl.text.trim().isEmpty) missing.add(isKorean ? '가격' : 'Price');
+                        if (sourceType == 'myPattern' && selectedChart == null) missing.add(isKorean ? '도안' : 'Pattern');
+                        if (sourceType == 'myTemplate' && selectedTemplate == null) missing.add(isKorean ? '템플릿' : 'Template');
                         if (missing.isNotEmpty) {
                           showDialog(
                             context: ctx,
@@ -276,7 +385,24 @@ class MarketScreen extends ConsumerWidget {
                                 createdAt: DateTime.now(),
                                 status: (!isFree && price > 0) ? 'pending' : 'approved',
                               );
-                              await ref.read(marketRepositoryProvider).createItem(item, imageFile: imageFilePath, pdfFile: pdfFilePath);
+                              // 소스 타입에 따라 업로드
+                              if (sourceType == 'myPattern') {
+                                final imageUrl = selectedChart?.imageUrl ?? '';
+                                await ref.read(marketRepositoryProvider).createItem(
+                                  item,
+                                  imageBytes: imageUrl.isEmpty ? null : null, // 썸네일 없으면 생략
+                                  pdfBytes: chartMoriBytes,
+                                  extraData: {'sourceType': 'myPattern', 'patternChartId': selectedChart?.id ?? ''},
+                                );
+                              } else if (sourceType == 'myTemplate') {
+                                await ref.read(marketRepositoryProvider).createItem(
+                                  item,
+                                  pdfBytes: templateBytes,
+                                  extraData: {'sourceType': 'myTemplate', 'templateId': selectedTemplate?.id ?? ''},
+                                );
+                              } else {
+                                await ref.read(marketRepositoryProvider).createItem(item, imageFile: imageFilePath, pdfFile: pdfFilePath);
+                              }
                             },
                           );
                           if (ctx.mounted) Navigator.pop(ctx);
@@ -286,7 +412,7 @@ class MarketScreen extends ConsumerWidget {
                         }
                       },
                       child: saving
-                          ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white)))
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white)))
                           : Text(isKorean ? '상품 등록' : 'Create item'),
                     ),
                   ),
@@ -984,6 +1110,217 @@ class _PriceTypeChip extends StatelessWidget {
             color: selected ? Colors.white : C.lvD,
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── 소스 타입 선택 칩 ─────────────────────────────────────────
+class _SourceChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final bool isPro;
+  final VoidCallback? onTap;
+
+  const _SourceChip({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    this.isPro = false,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = onTap == null;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? C.lv : (disabled ? C.gx : C.lvL),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? C.lv : C.lv.withValues(alpha: disabled ? 0.1 : 0.2),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: selected ? Colors.white : (disabled ? C.mu : C.lvD)),
+            const SizedBox(width: 5),
+            Text(label, style: T.caption.copyWith(
+              color: selected ? Colors.white : (disabled ? C.mu : C.lvD),
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            )),
+            if (isPro) ...[
+              const SizedBox(width: 4),
+              Text('Pro', style: TextStyle(
+                color: selected ? Colors.white.withValues(alpha: 0.8) : C.lv,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              )),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── 내 도안 선택 화면 ─────────────────────────────────────────
+class _PatternPickerScreen extends ConsumerWidget {
+  final bool isKorean;
+
+  const _PatternPickerScreen({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final patternsAsync = ref.watch(patternListProvider);
+
+    return Scaffold(
+      backgroundColor: C.bg,
+      appBar: AppBar(
+        backgroundColor: C.bg,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(isKorean ? '도안 선택' : 'Select Pattern', style: T.h3),
+      ),
+      body: patternsAsync.when(
+        data: (patterns) {
+          if (patterns.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.grid_off_rounded, color: C.mu, size: 40),
+                  const SizedBox(height: 12),
+                  Text(isKorean ? '도안이 없어요' : 'No patterns yet', style: T.body.copyWith(color: C.mu)),
+                ],
+              ),
+            );
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+            itemCount: patterns.length,
+            itemBuilder: (_, i) {
+              final chart = patterns[i];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: GlassCard(
+                  onTap: () => Navigator.pop(context, chart),
+                  child: Row(
+                    children: [
+                      chart.imageUrl.isNotEmpty
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.network(chart.imageUrl, width: 48, height: 48, fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(width: 48, height: 48, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(8)), child: Icon(Icons.grid_on_rounded, color: C.lv))),
+                            )
+                          : Container(width: 48, height: 48, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(8)), child: Icon(Icons.grid_on_rounded, color: C.lv)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(chart.title.isEmpty ? (isKorean ? '제목 없음' : 'Untitled') : chart.title, style: T.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            Text('${chart.rows} × ${chart.cols}', style: T.caption.copyWith(color: C.mu)),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right_rounded, color: C.mu),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+        loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
+        error: (e, _) => Center(child: Text('$e', style: T.body.copyWith(color: C.mu))),
+      ),
+    );
+  }
+}
+
+// ── 내 템플릿 선택 화면 ───────────────────────────────────────
+class _TemplatePickerScreen extends ConsumerWidget {
+  final bool isKorean;
+
+  const _TemplatePickerScreen({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final templatesAsync = ref.watch(userTemplateListProvider);
+
+    return Scaffold(
+      backgroundColor: C.bg,
+      appBar: AppBar(
+        backgroundColor: C.bg,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(isKorean ? '템플릿 선택' : 'Select Template', style: T.h3),
+      ),
+      body: templatesAsync.when(
+        data: (templates) {
+          if (templates.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.list_alt_rounded, color: C.mu, size: 40),
+                  const SizedBox(height: 12),
+                  Text(isKorean ? '템플릿이 없어요' : 'No templates yet', style: T.body.copyWith(color: C.mu)),
+                ],
+              ),
+            );
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+            itemCount: templates.length,
+            itemBuilder: (_, i) {
+              final tmpl = templates[i];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: GlassCard(
+                  onTap: () => Navigator.pop(context, tmpl),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48, height: 48,
+                        decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(8)),
+                        child: Icon(Icons.list_alt_rounded, color: C.lv),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(tmpl.title.isEmpty ? (isKorean ? '제목 없음' : 'Untitled') : tmpl.title, style: T.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            if (tmpl.description.isNotEmpty)
+                              Text(tmpl.description, style: T.caption.copyWith(color: C.mu), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            Text(isKorean ? '${tmpl.stepTitles.length}단계' : '${tmpl.stepTitles.length} steps', style: T.caption.copyWith(color: C.mu)),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right_rounded, color: C.mu),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+        loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
+        error: (e, _) => Center(child: Text('$e', style: T.body.copyWith(color: C.mu))),
       ),
     );
   }

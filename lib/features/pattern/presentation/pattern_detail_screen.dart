@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,12 +14,15 @@ import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
-import '../../market/presentation/pdf_viewer_screen.dart';
 import '../../../providers/auth_provider.dart';
+import 'pattern_viewer_screen.dart';
+import '../../../providers/counter_provider.dart';
+import '../../counter/domain/counter_model.dart';
 import '../domain/pattern_chart.dart';
 import '../data/pattern_export_service.dart';
 import '../data/pattern_repository.dart';
 import '../../../providers/project_provider.dart';
+
 
 class PatternDetailScreen extends ConsumerStatefulWidget {
   final PatternChart chart;
@@ -546,6 +548,50 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
     }
   }
 
+  Future<void> _createAndLinkCounter(bool isKorean) async {
+    final nameCtrl = TextEditingController(text: widget.chart.title);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(isKorean ? '카운터 만들기' : 'Create Counter', style: T.h3),
+        content: TextField(
+          controller: nameCtrl,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: isKorean ? '카운터 이름' : 'Counter name',
+            hintText: widget.chart.title,
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(isKorean ? '취소' : 'Cancel', style: TextStyle(color: C.mu))),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: Text(isKorean ? '만들기' : 'Create')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final name = nameCtrl.text.trim().isEmpty ? widget.chart.title : nameCtrl.text.trim();
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
+    CounterModel? saved;
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '카운터 만드는 중입니다.' : 'Creating counter...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () async {
+          final counter = CounterModel.empty(uid: user.uid, name: name)
+              .copyWith(patternChartId: widget.chart.id);
+          saved = await ref.read(counterRepositoryProvider).createCounter(counter);
+        },
+      );
+      if (!mounted || saved == null) return;
+      context.push('/counter/${saved!.id}');
+    } catch (e) {
+      if (mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+
   Future<void> _changeImage() async {
     final isKorean = ref.read(appLanguageProvider).isKorean;
     await showModalBottomSheet<void>(
@@ -623,6 +669,7 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
       }
     }
   }
+
 
   Future<void> _exportPdf(BuildContext context, bool isKorean) async {
     try {
@@ -825,38 +872,16 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => Scaffold(
-                appBar: AppBar(title: Text(widget.chart.title)),
-                body: InteractiveViewer(
-                  child: Center(
-                      child: Image.network(widget.chart.imageUrl,
-                          fit: BoxFit.contain)),
-                ),
-              ),
+              builder: (_) => PatternViewerScreen(chart: widget.chart),
             ),
           );
         }
       case PatternType.pdf:
-        final rawUrl = widget.chart.pdfUrl;
-        if (rawUrl.isEmpty) return;
-        // Storage 경로(users/...)인 경우 다운로드 URL로 변환
-        String downloadUrl = rawUrl;
-        if (!rawUrl.startsWith('http')) {
-          try {
-            downloadUrl = await FirebaseStorage.instance.ref(rawUrl).getDownloadURL();
-          } catch (e) {
-            if (mounted) {
-              showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: 'PDF를 열 수 없어요: $e');
-            }
-            return;
-          }
-        }
-        if (!mounted) return;
+        if (widget.chart.pdfUrl.isEmpty) return;
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => PdfViewerScreen(
-                url: downloadUrl, title: widget.chart.title),
+            builder: (_) => PatternViewerScreen(chart: widget.chart),
           ),
         );
       case PatternType.chart:
@@ -1162,6 +1187,69 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                     ),
                   ),
                 ],
+                // Counter section
+                const SizedBox(height: 10),
+                Consumer(
+                  builder: (ctx2, cRef, child2) {
+                    final counterAsync = cRef.watch(counterByChartIdProvider(widget.chart.id));
+                    return counterAsync.when(
+                      loading: () => const SizedBox.shrink(),
+                      error: (e2, s2) => const SizedBox.shrink(),
+                      data: (counter) {
+                        if (counter != null) {
+                          return GlassCard(
+                            onTap: () => context.push('/counter/${counter.id}'),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 36, height: 36,
+                                  decoration: BoxDecoration(
+                                    color: C.pk.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Icon(Icons.exposure_plus_1_rounded, color: C.pkD, size: 20),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(counter.name, style: T.bodyBold),
+                                      Text(
+                                        isKorean
+                                            ? '단 ${counter.rowCount}  ·  코 ${counter.stitchCount}'
+                                            : 'Row ${counter.rowCount}  ·  St ${counter.stitchCount}',
+                                        style: T.caption.copyWith(color: C.mu),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Text(isKorean ? '보기' : 'Open',
+                                    style: TextStyle(color: C.lv, fontWeight: FontWeight.w700, fontSize: 13)),
+                                const SizedBox(width: 4),
+                                Icon(Icons.chevron_right_rounded, color: C.mu, size: 18),
+                              ],
+                            ),
+                          );
+                        }
+                        return SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: OutlinedButton.icon(
+                            onPressed: () => _createAndLinkCounter(isKorean),
+                            icon: const Icon(Icons.exposure_plus_1_rounded, size: 18),
+                            label: Text(isKorean ? '카운터 연결하기' : 'Link counter'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: C.pkD,
+                              side: BorderSide(color: C.pkD),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
                 // Memo section
                 const SizedBox(height: 20),
                 const Divider(height: 1),

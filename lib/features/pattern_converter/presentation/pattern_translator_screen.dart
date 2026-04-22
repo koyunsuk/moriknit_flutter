@@ -94,8 +94,9 @@ class _PatternTranslatorScreenState
               title: Text(kIsWeb ? (isKorean ? '내 PC' : 'My PC') : (isKorean ? '내 핸드폰' : 'My Device'), style: T.bodyBold),
               subtitle: Text('PDF, JPG, PNG', style: T.caption.copyWith(color: C.mu)),
               trailing: Icon(Icons.chevron_right_rounded, color: C.mu),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
+                await Future.microtask(() {});
                 _pickFromPhone();
               },
             ),
@@ -108,8 +109,9 @@ class _PatternTranslatorScreenState
               title: Text('Dropbox', style: T.bodyBold),
               subtitle: Text(isKorean ? '드롭박스에서 파일 선택' : 'Pick from Dropbox', style: T.caption.copyWith(color: C.mu)),
               trailing: Icon(Icons.chevron_right_rounded, color: C.mu),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
+                await Future.microtask(() {});
                 _pickFromDropbox();
               },
             ),

@@ -11,6 +11,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/swatch_provider.dart';
 import '../../swatch/domain/swatch_model.dart';
 import '../../swatch/presentation/swatch_input_screen.dart';
 
@@ -122,6 +123,7 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
                 stsLabel: isKorean ? '코수 (sts/10cm)' : 'Stitches per 10cm',
                 rowsLabel: isKorean ? '단수 (rows/10cm)' : 'Rows per 10cm',
                 color: C.lv,
+                onPickFromSwatch: () => _showSwatchPicker(isKorean),
               ),
               const SizedBox(height: 14),
 
@@ -390,6 +392,79 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
       _detectedSts = null;
       _detectedRows = null;
     });
+  }
+
+  void _showSwatchPicker(bool isKorean) {
+    final swatches = ref.read(swatchListProvider).valueOrNull ?? [];
+    final withGauge = swatches.where((s) => s.beforeStitchCount > 0 && s.beforeRowCount > 0).toList();
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.5,
+        maxChildSize: 0.85,
+        minChildSize: 0.3,
+        expand: false,
+        builder: (_, scrollCtrl) => Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Row(
+                children: [
+                  Text(isKorean ? '스와치 선택' : 'Select Swatch', style: T.h3),
+                  const Spacer(),
+                  IconButton(
+                    icon: Icon(Icons.close, color: C.mu, size: 20),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: C.bd),
+            if (withGauge.isEmpty)
+              Expanded(
+                child: Center(
+                  child: Text(
+                    isKorean ? '게이지가 입력된 스와치가 없어요' : 'No swatches with gauge data',
+                    style: T.caption.copyWith(color: C.mu),
+                  ),
+                ),
+              )
+            else
+              Expanded(
+                child: ListView.separated(
+                  controller: scrollCtrl,
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                  itemCount: withGauge.length,
+                  separatorBuilder: (_, __) => Divider(height: 1, color: C.bd),
+                  itemBuilder: (_, i) {
+                    final s = withGauge[i];
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                      title: Text(s.swatchName.isNotEmpty ? s.swatchName : s.yarnName, style: T.body),
+                      subtitle: Text(
+                        isKorean
+                            ? '코 ${s.beforeStitchCount} / 단 ${s.beforeRowCount} (10cm 기준)'
+                            : '${s.beforeStitchCount} sts / ${s.beforeRowCount} rows per 10cm',
+                        style: T.caption.copyWith(color: C.mu),
+                      ),
+                      trailing: Icon(Icons.chevron_right_rounded, color: C.mu, size: 18),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        setState(() {
+                          _myStsCtrl.text = '${s.beforeStitchCount}';
+                          _myRowsCtrl.text = '${s.beforeRowCount}';
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showImageSourceDialog(bool isKorean) {
@@ -1023,6 +1098,7 @@ class _GaugeInputCard extends StatelessWidget {
   final String stsLabel;
   final String rowsLabel;
   final Color color;
+  final VoidCallback? onPickFromSwatch;
 
   const _GaugeInputCard({
     required this.title,
@@ -1032,6 +1108,7 @@ class _GaugeInputCard extends StatelessWidget {
     required this.stsLabel,
     required this.rowsLabel,
     required this.color,
+    this.onPickFromSwatch,
   });
 
   @override
@@ -1052,7 +1129,31 @@ class _GaugeInputCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: T.bodyBold),
+                    Row(
+                      children: [
+                        Expanded(child: Text(title, style: T.bodyBold)),
+                        if (onPickFromSwatch != null)
+                          GestureDetector(
+                            onTap: onPickFromSwatch,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: C.lv.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: C.lv.withValues(alpha: 0.4)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.library_books_outlined, size: 12, color: C.lv),
+                                  const SizedBox(width: 4),
+                                  Text('스와치', style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                     Text(subtitle, style: T.caption.copyWith(color: C.mu)),
                   ],
                 ),

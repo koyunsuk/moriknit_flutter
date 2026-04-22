@@ -30,6 +30,7 @@ class SubscriptionConstants {
   static const String boxNeedles = 'needles';
   static const String boxSyncQueue = 'sync_queue';
   static const String boxUser = 'user';
+  static const String boxViewerState = 'viewer_state';
 
   // ── Sync ───────────────────────────────────────────────────
   static const int syncIntervalMinutes = 30;
