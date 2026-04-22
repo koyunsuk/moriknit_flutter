@@ -22,6 +22,8 @@ import '../domain/builtin_template.dart';
 import '../domain/project_model.dart';
 import '../domain/user_template.dart';
 import '../../swatch/presentation/brand_search_sheet.dart';
+import '../../ravelry/data/ravelry_repository.dart';
+import '../../ravelry/data/ravelry_auth_provider.dart';
 
 class ProjectInputScreen extends ConsumerStatefulWidget {
   final String? projectId;
@@ -39,6 +41,7 @@ class ProjectInputScreen extends ConsumerStatefulWidget {
 class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
   bool _isSaving = false;
   bool _uploading = false;
+  bool _syncToRavelry = false;
   String? _localCoverPath;
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
@@ -266,6 +269,48 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                   maxLines: 3,
                   onChanged: notifier.setMemo,
                 ),
+                if (ref.watch(ravelryAuthProvider).isLoggedIn && widget.projectId == null) ...[
+                  const SizedBox(height: 16),
+                  GestureDetector(
+                    onTap: () => setState(() => _syncToRavelry = !_syncToRavelry),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: _syncToRavelry ? C.lv.withValues(alpha: 0.08) : C.gx,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _syncToRavelry ? C.lv : C.bd),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _syncToRavelry ? Icons.check_circle_rounded : Icons.circle_outlined,
+                            color: _syncToRavelry ? C.lv : C.mu,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  isKorean ? '라벨리에도 올리기' : 'Also add to Ravelry',
+                                  style: T.body.copyWith(
+                                    color: _syncToRavelry ? C.lv : C.tx,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  isKorean ? '제목, 메모가 라벨리 프로젝트로 함께 저장돼요' : 'Title and notes will be synced to Ravelry',
+                                  style: T.caption.copyWith(color: C.mu),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
                 // 템플릿 단계로그 미리보기
                 if (widget.builtinTemplate != null || widget.userTemplate != null) ...[
                   const SizedBox(height: 20),
@@ -417,6 +462,18 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
           } else {
             final saved = await repository.createProject(project.copyWith(uid: user.uid));
             MoriService.earn(user.uid, amount: 100, reason: 'project_save');
+            if (_syncToRavelry) {
+              final ravelryRepo = ref.read(ravelryRepositoryProvider);
+              if (ravelryRepo != null) {
+                int statusTypeId = 1;
+                if (project.status == 'finished') statusTypeId = 3;
+                await ravelryRepo.createProject(
+                  name: project.title,
+                  notes: project.memo.trim().isEmpty ? null : project.memo.trim(),
+                  statusTypeId: statusTypeId,
+                );
+              }
+            }
             if (widget.templateType != null) {
               await ref.read(projectStepRepositoryProvider).addTemplateSteps(saved.id, widget.templateType!);
             }

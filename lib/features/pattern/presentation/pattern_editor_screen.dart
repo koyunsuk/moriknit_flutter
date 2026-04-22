@@ -689,6 +689,182 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
     }
   }
 
+  // ── 게이지 설정 다이얼로그 ──────────────────────────────────────────────────────
+  void _showGaugeDialog(bool isKorean) {
+    final stitchCtrl = TextEditingController(
+        text: _chart.gauge != null ? _chart.gauge!.stitchesPer10cm.toString() : '');
+    final rowCtrl = TextEditingController(
+        text: _chart.gauge != null ? _chart.gauge!.rowsPer10cm.toString() : '');
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: C.bg,
+        title: Text(isKorean ? '게이지 설정 (10cm 기준)' : 'Gauge (per 10cm)', style: T.h3),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: stitchCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: isKorean ? '코 수 (stitches)' : 'Stitches',
+                hintText: '예: 22',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: rowCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: isKorean ? '단 수 (rows)' : 'Rows',
+                hintText: '예: 30',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              setState(() => _chart = _chart.copyWith(gauge: _sentinelGauge));
+              Navigator.pop(ctx);
+            },
+            child: Text(isKorean ? '게이지 삭제' : 'Clear', style: TextStyle(color: C.og)),
+          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(isKorean ? '취소' : 'Cancel')),
+          FilledButton(
+            onPressed: () {
+              final s = double.tryParse(stitchCtrl.text.trim());
+              final r = double.tryParse(rowCtrl.text.trim());
+              if (s != null && r != null && s > 0 && r > 0) {
+                setState(() => _chart = _chart.copyWith(gauge: GaugeInfo(stitchesPer10cm: s, rowsPer10cm: r)));
+                _isDirty = true;
+              }
+              Navigator.pop(ctx);
+            },
+            child: Text(isKorean ? '적용' : 'Apply'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // sentinel — gauge를 null로 지우기 위한 copyWith용
+  static const _sentinelGauge = Object();
+
+  // ── 뜨기 방향 토글 ──────────────────────────────────────────────────────────
+  void _toggleKnittingDirection() {
+    setState(() {
+      _chart = _chart.copyWith(
+        knittingDirection: _chart.knittingDirection == KnittingDirection.flatRows
+            ? KnittingDirection.inTheRound
+            : KnittingDirection.flatRows,
+      );
+      _isDirty = true;
+    });
+  }
+
+  // ── 반복 구간 지정 다이얼로그 ──────────────────────────────────────────────────
+  void _showRepeatRegionDialog(bool isKorean) {
+    final startRowCtrl = TextEditingController();
+    final endRowCtrl = TextEditingController();
+    final startColCtrl = TextEditingController();
+    final endColCtrl = TextEditingController();
+    final repeatCountCtrl = TextEditingController(text: '1');
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: C.bg,
+        title: Text(isKorean ? '반복 구간 지정' : 'Set Repeat Region', style: T.h3),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(isKorean ? '단 범위 (1단 = 맨 아래)' : 'Row range (Row 1 = bottom)', style: T.caption.copyWith(color: C.mu)),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(child: TextField(
+                controller: startRowCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(labelText: isKorean ? '시작단' : 'Start row'),
+              )),
+              const SizedBox(width: 8),
+              Expanded(child: TextField(
+                controller: endRowCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(labelText: isKorean ? '끝단' : 'End row'),
+              )),
+            ]),
+            const SizedBox(height: 8),
+            Text(isKorean ? '코 범위 (1코 = 맨 오른쪽)' : 'Col range (Col 1 = right)', style: T.caption.copyWith(color: C.mu)),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(child: TextField(
+                controller: startColCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(labelText: isKorean ? '시작코' : 'Start col'),
+              )),
+              const SizedBox(width: 8),
+              Expanded(child: TextField(
+                controller: endColCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(labelText: isKorean ? '끝코' : 'End col'),
+              )),
+            ]),
+            const SizedBox(height: 8),
+            TextField(
+              controller: repeatCountCtrl,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(labelText: isKorean ? '반복 횟수' : 'Repeat count'),
+            ),
+            const SizedBox(height: 12),
+            if (_chart.repeatRegions.isNotEmpty)
+              TextButton.icon(
+                onPressed: () {
+                  setState(() => _chart = _chart.copyWith(repeatRegions: []));
+                  _isDirty = true;
+                  Navigator.pop(ctx);
+                },
+                icon: Icon(Icons.clear_all, color: C.og, size: 16),
+                label: Text(isKorean ? '모든 반복 구간 삭제' : 'Clear all regions', style: TextStyle(color: C.og)),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(isKorean ? '취소' : 'Cancel')),
+          FilledButton(
+            onPressed: () {
+              final sr = int.tryParse(startRowCtrl.text.trim());
+              final er = int.tryParse(endRowCtrl.text.trim());
+              final sc = int.tryParse(startColCtrl.text.trim());
+              final ec = int.tryParse(endColCtrl.text.trim());
+              final rc = int.tryParse(repeatCountCtrl.text.trim()) ?? 1;
+              if (sr != null && er != null && sc != null && ec != null) {
+                // 사용자 입력은 1-based (뜨개 관례), 내부는 0-based index
+                // row: 1단=맨아래 → grid index = rows - rowLabel
+                final r0 = (_chart.rows - er).clamp(0, _chart.rows - 1);
+                final r1 = (_chart.rows - sr).clamp(0, _chart.rows - 1);
+                // col: 1코=맨오른쪽 → grid index = cols - colLabel
+                final c0 = (_chart.cols - ec).clamp(0, _chart.cols - 1);
+                final c1 = (_chart.cols - sc).clamp(0, _chart.cols - 1);
+                final region = RepeatRegion(
+                  startRow: r0, endRow: r1,
+                  startCol: c0, endCol: c1,
+                  repeatCount: rc,
+                );
+                setState(() => _chart = _chart.copyWith(
+                  repeatRegions: [..._chart.repeatRegions, region],
+                ));
+                _isDirty = true;
+              }
+              Navigator.pop(ctx);
+            },
+            child: Text(isKorean ? '추가' : 'Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showProjectLinkSheet() {
     final isKorean = ref.read(appLanguageProvider).isKorean;
     showModalBottomSheet<void>(
@@ -1002,6 +1178,12 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
                   if (!_isSaving) _save();
                 case 'grid':
                   _showGridSizeDialogForEdit();
+                case 'gauge':
+                  _showGaugeDialog(isKorean);
+                case 'direction':
+                  _toggleKnittingDirection();
+                case 'repeat':
+                  _showRepeatRegionDialog(isKorean);
                 case 'pdf':
                   _showPdfDialog();
                 case 'image':
@@ -1039,6 +1221,9 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
                 : [
                     // 편집 모드 메뉴
                     PopupMenuItem(value: 'save', child: Row(children: [Icon(Icons.save_rounded, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '저장' : 'Save')])),
+                    PopupMenuItem(value: 'gauge', child: Row(children: [Icon(Icons.straighten_rounded, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '게이지 설정' : 'Set Gauge')])),
+                    PopupMenuItem(value: 'direction', child: Row(children: [Icon(Icons.swap_horiz_rounded, size: 18, color: C.lv), const SizedBox(width: 8), Text(_chart.knittingDirection == KnittingDirection.flatRows ? (isKorean ? '뜨기 방향: 평면 → 원통' : 'Direction: Flat → Round') : (isKorean ? '뜨기 방향: 원통 → 평면' : 'Direction: Round → Flat'))])),
+                    PopupMenuItem(value: 'repeat', child: Row(children: [Icon(Icons.repeat_rounded, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '반복 구간 지정' : 'Set Repeat Region')])),
                     PopupMenuItem(value: 'copy', child: Row(children: [Icon(Icons.copy_rounded, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '복사' : 'Duplicate')])),
                     PopupMenuItem(value: 'link_project', child: Row(children: [Icon(Icons.folder_outlined, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '프로젝트에 연결' : 'Link to project')])),
                     PopupMenuItem(value: 'pdf', child: Row(children: [Icon(Icons.picture_as_pdf_rounded, size: 18, color: C.og), const SizedBox(width: 8), Text(isKorean ? 'PDF로 내보내기' : 'Export as PDF')])),
@@ -1055,6 +1240,25 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
           Positioned.fill(
             child: Column(
               children: [
+                // 게이지 치수 배지
+                if (_chart.gauge != null)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    color: C.lv.withValues(alpha: 0.08),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.straighten_rounded, size: 13, color: C.lv),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${_chart.gauge!.widthCm(_chart.cols).toStringAsFixed(1)} × ${_chart.gauge!.heightCm(_chart.rows).toStringAsFixed(1)} cm'
+                          '  (${_chart.gauge!.stitchesPer10cm.toStringAsFixed(0)}코/${_chart.gauge!.rowsPer10cm.toStringAsFixed(0)}단 / 10cm)',
+                          style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
                 // 참조 이미지 패널 (최대 200px로 제한)
                 if (_showReference && _referenceImageFile != null)
                   Stack(

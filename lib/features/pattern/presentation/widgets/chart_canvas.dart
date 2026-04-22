@@ -377,6 +377,7 @@ class _ChartPainter extends CustomPainter {
     _drawGrid(canvas);
     _drawHeaders(canvas);
     if (mirrorMode) _drawMirrorLine(canvas);
+    if (chart.repeatRegions.isNotEmpty) _drawRepeatBoxes(canvas);
   }
 
   void _drawMirrorLine(Canvas canvas) {
@@ -450,9 +451,19 @@ class _ChartPainter extends CustomPainter {
       fontSize: 9,
       fontWeight: ui.FontWeight.w500,
     );
+    // 독해 방향 화살표 색상
+    final arrowPaintRS = Paint()
+      ..color = const Color(0xFF8B5CF6).withValues(alpha: 0.7)
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    final arrowPaintWS = Paint()
+      ..color = const Color(0xFF9CA3AF).withValues(alpha: 0.6)
+      ..strokeWidth = 1.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
 
     for (int c = 0; c < chart.cols; c++) {
-      // 뜨개 방식: 오른쪽이 코1, 왼쪽으로 갈수록 증가
       final colLabel = chart.cols - c;
       final pb = ui.ParagraphBuilder(
         ui.ParagraphStyle(textAlign: TextAlign.center, fontSize: 9),
@@ -465,13 +476,16 @@ class _ChartPainter extends CustomPainter {
       canvas.drawParagraph(p, Offset(x, dy.clamp(0, _headerH)));
     }
 
+    final gridRight = _headerW + chart.cols * _cellW;
+    final isFlat = chart.knittingDirection == KnittingDirection.flatRows;
+
     for (int r = 0; r < chart.rows; r++) {
-      // 뜨개 방식: 아랫줄이 1단 (수학 그래프와 동일)
       final rowLabel = chart.rows - r;
       final y = _headerH + r * _cellH + (_cellH - 9) / 2;
-      final gridRight = _headerW + chart.cols * _cellW;
+      // 뜨개 관례: 아래부터 1단 → rowLabel 홀수 = RS, 짝수 = WS
+      final isRS = !isFlat || rowLabel.isOdd;
 
-      // 왼쪽 단수 (홀수단 = 겉면 = 오른쪽→왼쪽 읽기)
+      // 왼쪽 단수
       final pbL = ui.ParagraphBuilder(
         ui.ParagraphStyle(textAlign: TextAlign.right, fontSize: 9),
       )
@@ -480,7 +494,7 @@ class _ChartPainter extends CustomPainter {
       final pL = pbL.build()..layout(const ui.ParagraphConstraints(width: _headerW - 2));
       canvas.drawParagraph(pL, Offset(0, y));
 
-      // 오른쪽 단수 (짝수단 = 안면 = 왼쪽→오른쪽 읽기)
+      // 오른쪽 단수
       final pbR = ui.ParagraphBuilder(
         ui.ParagraphStyle(textAlign: TextAlign.left, fontSize: 9),
       )
@@ -488,6 +502,99 @@ class _ChartPainter extends CustomPainter {
         ..addText('$rowLabel');
       final pR = pbR.build()..layout(const ui.ParagraphConstraints(width: _headerW));
       canvas.drawParagraph(pR, Offset(gridRight + 2, y));
+
+      // 독해 방향 화살표 (RS: 오른쪽 헤더에 ←, WS: 왼쪽 헤더에 →)
+      final arrowY = _headerH + r * _cellH + _cellH * 0.5;
+      final arrowPaint = isRS ? arrowPaintRS : arrowPaintWS;
+      if (isRS) {
+        // RS: 오른쪽→왼쪽 읽기 → 오른쪽 헤더에 ← 화살표
+        final ax = gridRight + _headerW - 1;
+        _drawArrow(canvas, ax, arrowY, ax - 7, arrowY, arrowPaint);
+      } else {
+        // WS: 왼쪽→오른쪽 읽기 → 왼쪽 헤더에 → 화살표
+        _drawArrow(canvas, 1, arrowY, 8, arrowY, arrowPaint);
+      }
+    }
+  }
+
+  void _drawArrow(Canvas canvas, double fromX, double fromY, double toX, double toY, Paint paint) {
+    canvas.drawLine(Offset(fromX, fromY), Offset(toX, toY), paint);
+    // 화살촉
+    final dx = toX - fromX;
+    const headLen = 3.5;
+    final sign = dx > 0 ? 1 : -1;
+    canvas.drawLine(Offset(toX, toY), Offset(toX - sign * headLen, toY - headLen * 0.6), paint);
+    canvas.drawLine(Offset(toX, toY), Offset(toX - sign * headLen, toY + headLen * 0.6), paint);
+  }
+
+  void _drawRepeatBoxes(Canvas canvas) {
+    final borderPaint = Paint()
+      ..color = const Color(0xFFEF4444)
+      ..strokeWidth = 1.8
+      ..style = PaintingStyle.stroke;
+    final labelBg = Paint()..color = const Color(0xFFEF4444);
+    const dashLen = 5.0;
+    const dashGap = 3.0;
+
+    for (final region in chart.repeatRegions) {
+      final left = _headerW + region.startCol * _cellW;
+      final top = _headerH + region.startRow * _cellH;
+      final right = _headerW + (region.endCol + 1) * _cellW;
+      final bottom = _headerH + (region.endRow + 1) * _cellH;
+      final rect = Rect.fromLTRB(left, top, right, bottom);
+
+      // 대시 테두리
+      _drawDashedRect(canvas, rect, borderPaint, dashLen, dashGap);
+
+      // 반복 횟수 라벨 (우상단)
+      if (region.repeatCount > 1) {
+        final label = '×${region.repeatCount}';
+        final pb = ui.ParagraphBuilder(ui.ParagraphStyle(fontSize: 8))
+          ..pushStyle(ui.TextStyle(color: Colors.white, fontSize: 8, fontWeight: ui.FontWeight.w700))
+          ..addText(label);
+        final p = pb.build()..layout(const ui.ParagraphConstraints(width: 24));
+        final labelX = right - 2 - 24;
+        final labelY = top + 2;
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(Rect.fromLTWH(labelX - 1, labelY - 1, p.longestLine + 4, p.height + 2), const Radius.circular(3)),
+          labelBg,
+        );
+        canvas.drawParagraph(p, Offset(labelX + 1, labelY));
+      }
+    }
+  }
+
+  void _drawDashedRect(Canvas canvas, Rect rect, Paint paint, double dashLen, double dashGap) {
+    // top
+    _drawDashedLine(canvas, Offset(rect.left, rect.top), Offset(rect.right, rect.top), paint, dashLen, dashGap);
+    // bottom
+    _drawDashedLine(canvas, Offset(rect.left, rect.bottom), Offset(rect.right, rect.bottom), paint, dashLen, dashGap);
+    // left
+    _drawDashedLine(canvas, Offset(rect.left, rect.top), Offset(rect.left, rect.bottom), paint, dashLen, dashGap);
+    // right
+    _drawDashedLine(canvas, Offset(rect.right, rect.top), Offset(rect.right, rect.bottom), paint, dashLen, dashGap);
+  }
+
+  void _drawDashedLine(Canvas canvas, Offset from, Offset to, Paint paint, double dashLen, double dashGap) {
+    final dx = to.dx - from.dx;
+    final dy = to.dy - from.dy;
+    final total = (dx.abs() > dy.abs()) ? dx.abs() : dy.abs();
+    final nx = total == 0 ? 0.0 : dx / total;
+    final ny = total == 0 ? 0.0 : dy / total;
+    double dist = 0;
+    bool drawing = true;
+    while (dist < total) {
+      final segLen = drawing ? dashLen : dashGap;
+      final end = (dist + segLen).clamp(0, total);
+      if (drawing) {
+        canvas.drawLine(
+          Offset(from.dx + nx * dist, from.dy + ny * dist),
+          Offset(from.dx + nx * end, from.dy + ny * end),
+          paint,
+        );
+      }
+      dist += segLen;
+      drawing = !drawing;
     }
   }
 

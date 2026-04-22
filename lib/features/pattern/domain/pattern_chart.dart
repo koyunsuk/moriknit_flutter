@@ -10,6 +10,67 @@ enum PatternType { chart, image, pdf }
 
 enum PatternSourceType { editor, image, external, aiConverted }
 
+/// RS(겉면)/WS(안면) 독해 방향 — 평면뜨기 vs 원통뜨기
+enum KnittingDirection { flatRows, inTheRound }
+
+/// 게이지(스와치) 정보 — 10cm 기준 코수·단수
+class GaugeInfo {
+  final double stitchesPer10cm;
+  final double rowsPer10cm;
+
+  const GaugeInfo({required this.stitchesPer10cm, required this.rowsPer10cm});
+
+  /// 그리드 크기로 완성 치수 계산 (cm)
+  double widthCm(int cols) => cols / (stitchesPer10cm / 10);
+  double heightCm(int rows) => rows / (rowsPer10cm / 10);
+
+  Map<String, dynamic> toJson() => {
+        'stitchesPer10cm': stitchesPer10cm,
+        'rowsPer10cm': rowsPer10cm,
+      };
+
+  factory GaugeInfo.fromJson(Map<String, dynamic> json) => GaugeInfo(
+        stitchesPer10cm: (json['stitchesPer10cm'] as num).toDouble(),
+        rowsPer10cm: (json['rowsPer10cm'] as num).toDouble(),
+      );
+}
+
+/// 반복 구간 마커 — 도안에서 * ~ * 반복 표시
+class RepeatRegion {
+  final int startRow;
+  final int startCol;
+  final int endRow;   // inclusive
+  final int endCol;   // inclusive
+  final int repeatCount; // 반복 횟수 (표시용)
+
+  const RepeatRegion({
+    required this.startRow,
+    required this.startCol,
+    required this.endRow,
+    required this.endCol,
+    this.repeatCount = 1,
+  });
+
+  int get rowSpan => endRow - startRow + 1;
+  int get colSpan => endCol - startCol + 1;
+
+  Map<String, dynamic> toJson() => {
+        'startRow': startRow,
+        'startCol': startCol,
+        'endRow': endRow,
+        'endCol': endCol,
+        'repeatCount': repeatCount,
+      };
+
+  factory RepeatRegion.fromJson(Map<String, dynamic> json) => RepeatRegion(
+        startRow: json['startRow'] as int,
+        startCol: json['startCol'] as int,
+        endRow: json['endRow'] as int,
+        endCol: json['endCol'] as int,
+        repeatCount: json['repeatCount'] as int? ?? 1,
+      );
+}
+
 class CellData {
   final Color? color;       // 배경색
   final Color? symbolColor; // 심볼(SVG) 색상
@@ -122,6 +183,15 @@ class PatternChart {
   /// 도안 카테고리 ('의상', '소품', '기타', null)
   final String? category;
 
+  /// 뜨기 방향 — 평면뜨기(flatRows) vs 원통뜨기(inTheRound)
+  final KnittingDirection knittingDirection;
+
+  /// 게이지 정보 — 10cm 기준 코수·단수 (치수 계산용)
+  final GaugeInfo? gauge;
+
+  /// 반복 구간 마커 목록
+  final List<RepeatRegion> repeatRegions;
+
   PatternChart({
     required this.id,
     required this.title,
@@ -142,6 +212,9 @@ class PatternChart {
     this.linkedProjectId,
     this.mirrorMode = false,
     this.category,
+    this.knittingDirection = KnittingDirection.flatRows,
+    this.gauge,
+    this.repeatRegions = const [],
   });
 
   PatternChart setCell(int row, int col, CellData cell) {
@@ -367,6 +440,9 @@ class PatternChart {
     Object? linkedProjectId = _sentinel,
     bool? mirrorMode,
     Object? category = _sentinel,
+    KnittingDirection? knittingDirection,
+    Object? gauge = _sentinel,
+    List<RepeatRegion>? repeatRegions,
   }) => _copyWith(
     id: id, title: title, rows: rows, cols: cols, mode: mode, grid: grid,
     narrativeText: narrativeText, type: type, imageUrl: imageUrl, pdfUrl: pdfUrl,
@@ -374,6 +450,7 @@ class PatternChart {
     sourceOwnerName: sourceOwnerName, sourceType: sourceType, aiSections: aiSections,
     createdAt: createdAt, linkedProjectId: linkedProjectId,
     mirrorMode: mirrorMode, category: category,
+    knittingDirection: knittingDirection, gauge: gauge, repeatRegions: repeatRegions,
   );
 
   static const Object _sentinel = Object();
@@ -398,6 +475,9 @@ class PatternChart {
     Object? linkedProjectId = _sentinel,
     bool? mirrorMode,
     Object? category = _sentinel,
+    KnittingDirection? knittingDirection,
+    Object? gauge = _sentinel,
+    List<RepeatRegion>? repeatRegions,
   }) {
     return PatternChart(
       id: id ?? this.id,
@@ -419,6 +499,9 @@ class PatternChart {
       linkedProjectId: identical(linkedProjectId, _sentinel) ? this.linkedProjectId : linkedProjectId as String?,
       mirrorMode: mirrorMode ?? this.mirrorMode,
       category: identical(category, _sentinel) ? this.category : category as String?,
+      knittingDirection: knittingDirection ?? this.knittingDirection,
+      gauge: identical(gauge, _sentinel) ? this.gauge : gauge as GaugeInfo?,
+      repeatRegions: repeatRegions ?? this.repeatRegions,
     );
   }
 
@@ -443,6 +526,9 @@ class PatternChart {
         if (linkedProjectId != null) 'linkedProjectId': linkedProjectId,
         'mirrorMode': mirrorMode,
         if (category != null) 'category': category,
+        'knittingDirection': knittingDirection.name,
+        if (gauge != null) 'gauge': gauge!.toJson(),
+        if (repeatRegions.isNotEmpty) 'repeatRegions': repeatRegions.map((r) => r.toJson()).toList(),
       };
 
   factory PatternChart.fromJson(Map<String, dynamic> json) {
@@ -485,6 +571,14 @@ class PatternChart {
       linkedProjectId: json['linkedProjectId'] as String?,
       mirrorMode: json['mirrorMode'] as bool? ?? false,
       category: json['category'] as String?,
+      knittingDirection: KnittingDirection.values.byName(
+          json['knittingDirection'] as String? ?? 'flatRows'),
+      gauge: json['gauge'] != null
+          ? GaugeInfo.fromJson(json['gauge'] as Map<String, dynamic>)
+          : null,
+      repeatRegions: (json['repeatRegions'] as List?)
+          ?.map((r) => RepeatRegion.fromJson(r as Map<String, dynamic>))
+          .toList() ?? const [],
     );
   }
 
