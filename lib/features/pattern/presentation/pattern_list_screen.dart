@@ -56,58 +56,29 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
                 children: [
-                  // 도안 요약 카드 (MoriKnit + Ravelry 뱃지)
-                  GlassCard(
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(color: C.pk.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
-                                child: Text('MoriKnit', style: T.caption.copyWith(color: C.pkD, fontWeight: FontWeight.w700)),
-                              ),
-                              const SizedBox(height: 4),
-                              Builder(builder: (_) {
-                                final pc = patternsAsync.valueOrNull?.length ?? 0;
-                                final fc = filesAsync.valueOrNull?.length ?? 0;
-                                final total = pc + fc;
-                                return Text(patternsAsync.isLoading ? '-' : '$total', style: T.h3.copyWith(color: C.pkD));
-                              }),
-                              Text(isKorean ? '내 도안' : 'My patterns', style: T.caption.copyWith(color: C.mu)),
-                            ],
-                          ),
-                        ),
-                        Container(width: 1, height: 40, color: C.bd),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-                                child: Text('Ravelry', style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w700)),
-                              ),
-                              const SizedBox(height: 4),
-                              Consumer(
-                                builder: (ctx, ref, _) {
-                                  final libraryAsync = ref.watch(ravelryLibraryProvider);
-                                  return Text(
-                                    libraryAsync.maybeWhen(data: (p) => '${p.length}', orElse: () => '-'),
-                                    style: T.h3.copyWith(color: C.lv),
-                                  );
-                                },
-                              ),
-                              Text(isKorean ? '라이브러리' : 'Library', style: T.caption.copyWith(color: C.mu)),
-                            ],
-                          ),
-                        ),
+                  // 도안 요약 카드 (2행 DualSourceSummaryBar)
+                  Builder(builder: (_) {
+                    final pc = patternsAsync.valueOrNull?.length ?? 0;
+                    final fc = filesAsync.valueOrNull?.length ?? 0;
+                    final total = pc + fc;
+                    final auth = ref.watch(ravelryAuthProvider);
+                    final libraryAsync = auth.isLoggedIn ? ref.watch(ravelryLibraryProvider) : null;
+                    final libCount = libraryAsync?.maybeWhen(data: (p) => '${p.length}', orElse: () => '-') ?? '-';
+                    return DualSourceSummaryBar(
+                      row1Stats: [
+                        WorkStat(patternsAsync.isLoading ? '-' : '$total', isKorean ? '전체' : 'Total', color: C.pkD),
                       ],
-                    ),
-                  ),
+                      row2Stats: [
+                        WorkStat(libCount, isKorean ? '전체' : 'Total', color: auth.isLoggedIn ? C.lv : C.mu),
+                      ],
+                      row1Badge: 'MoriKnit',
+                      row2Badge: 'Ravelry',
+                      row1Color: C.pkD,
+                      row2Color: C.lv,
+                      addLabel: isKorean ? '새 도안' : 'New',
+                      onAdd: () => _showPatternStartSheet(context, ref),
+                    );
+                  }),
                   const SizedBox(height: 16),
                   // 모리니트 도안 라이브러리
                   GlassCard(

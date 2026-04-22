@@ -8,6 +8,8 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/swatch_provider.dart';
+import '../../ravelry/data/ravelry_auth_provider.dart';
+import '../../ravelry/data/ravelry_repository.dart';
 import 'swatch_detail_screen.dart';
 import 'swatch_input_screen.dart';
 import 'widgets/swatch_list_sections.dart';
@@ -110,16 +112,26 @@ class _SwatchListScreenState extends ConsumerState<SwatchListScreen> {
                             final done = swatches.where(isSwatchDone).length;
                             final inProgress = swatches.where((s) => !isSwatchDone(s) && s.beforeStitchCount > 0).length;
                             final unset = swatches.where((s) => !isSwatchDone(s) && s.beforeStitchCount == 0).length;
+                            final auth = ref.watch(ravelryAuthProvider);
+                            final stashAsync = auth.isLoggedIn ? ref.watch(ravelryStashProvider) : null;
+                            final stashCount = stashAsync?.maybeWhen(data: (s) => '${s.length}', orElse: () => '-') ?? '-';
                             return Column(
                               children: [
-                                WorkspaceSummaryBar(
-                                  stats: [
-                                    WorkStat('${swatches.length}', isKorean ? '전체' : 'Total', color: C.lmD),
+                                DualSourceSummaryBar(
+                                  row1Stats: [
+                                    WorkStat('${swatches.length}', isKorean ? '전체' : 'Total', color: C.pkD),
                                     WorkStat('$inProgress', isKorean ? '진행' : 'Active', color: C.lv),
-                                    WorkStat('$done', isKorean ? '완료' : 'Done', color: C.pkD),
+                                    WorkStat('$done', isKorean ? '완료' : 'Done', color: C.lmD),
                                     WorkStat('$unset', isKorean ? '미지정' : 'Free', color: C.mu),
                                   ],
-                                  addLabel: isKorean ? '추가' : 'Add',
+                                  row2Stats: [
+                                    WorkStat(stashCount, isKorean ? '전체' : 'Total', color: C.lv),
+                                  ],
+                                  row1Badge: 'MoriKnit',
+                                  row2Badge: 'Ravelry',
+                                  row1Color: C.pkD,
+                                  row2Color: C.lv,
+                                  addLabel: isKorean ? '실 추가' : 'Add Yarn',
                                   onAdd: isLimitReached
                                       ? () => _showLimitDialog(isKorean)
                                       : () => _showSwatchStartSheet(context),

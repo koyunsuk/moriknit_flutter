@@ -1266,6 +1266,103 @@ class WorkspaceSummaryBar extends StatelessWidget {
   }
 }
 
+/// 2행 요약카드 — 상단 MoriKnit 행 + 하단 Ravelry 행 + 우측 액션 버튼
+/// 필드 용어: Dual-Source KPI Bar (이중 소스 KPI 바)
+class DualSourceSummaryBar extends StatelessWidget {
+  final List<WorkStat> row1Stats;
+  final List<WorkStat> row2Stats;
+  final String row1Badge;   // 예: 'MoriKnit'
+  final String row2Badge;   // 예: 'Ravelry'
+  final Color row1Color;
+  final Color row2Color;
+  final String addLabel;
+  final VoidCallback onAdd;
+
+  const DualSourceSummaryBar({
+    super.key,
+    required this.row1Stats,
+    required this.row2Stats,
+    required this.row1Badge,
+    required this.row2Badge,
+    required this.row1Color,
+    required this.row2Color,
+    required this.addLabel,
+    required this.onAdd,
+  });
+
+  Widget _badge(String label, Color color) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.13),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(label, style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.w700)),
+      );
+
+  Widget _row(List<WorkStat> stats) => Row(
+        children: [
+          for (int i = 0; i < stats.length; i++) ...[
+            if (i > 0) Container(width: 1, height: 28, color: C.bd),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(stats[i].value,
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: stats[i].color ?? C.tx)),
+                  const SizedBox(height: 1),
+                  Text(stats[i].label,
+                      style: TextStyle(fontSize: 9, color: C.mu), textAlign: TextAlign.center),
+                ],
+              ),
+            ),
+          ],
+        ],
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _badge(row1Badge, row1Color),
+                const SizedBox(height: 4),
+                _row(row1Stats),
+                const SizedBox(height: 6),
+                Container(height: 1, color: C.bd),
+                const SizedBox(height: 6),
+                _badge(row2Badge, row2Color),
+                const SizedBox(height: 4),
+                _row(row2Stats),
+              ],
+            ),
+          ),
+          Container(width: 1, height: 80, color: C.bd),
+          const SizedBox(width: 10),
+          ElevatedButton.icon(
+            onPressed: onAdd,
+            icon: const Icon(Icons.add_rounded, size: 15),
+            label: Text(addLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: C.lv,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              elevation: 0,
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class MoriCompactRow extends StatelessWidget {
   final VoidCallback onTap;
   final Widget? leading;

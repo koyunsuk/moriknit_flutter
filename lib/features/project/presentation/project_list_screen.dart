@@ -17,6 +17,8 @@ import 'package:moriknit_flutter/providers/project_provider.dart';
 import 'package:moriknit_flutter/providers/ui_copy_provider.dart';
 import 'package:moriknit_flutter/features/ravelry/data/ravelry_auth_provider.dart';
 import 'package:moriknit_flutter/features/ravelry/data/ravelry_repository.dart';
+import 'package:moriknit_flutter/features/ravelry/domain/ravelry_models.dart';
+import 'package:moriknit_flutter/features/ravelry/presentation/ravelry_project_detail_screen.dart';
 import 'widgets/project_start_sheet.dart';
 
 
@@ -155,10 +157,15 @@ class ProjectListScreen extends ConsumerWidget {
                             }
 
                             // 모바일 레이아웃 — 프로젝트 목록만 표시
+                            final ravelryAuth = ref.watch(ravelryAuthProvider);
+                            final ravelryProjectsAsync = ravelryAuth.isLoggedIn ? ref.watch(ravelryProjectsProvider) : null;
+                            final ravelryProjects = ravelryProjectsAsync?.valueOrNull ?? [];
                             return _MobileProjectList(
                               projects: projects,
                               isKorean: isKorean,
                               limitReached: limitReached,
+                              ravelryProjects: ravelryProjects,
+                              isRavelryLoggedIn: ravelryAuth.isLoggedIn,
                               onAddTap: () => _onAddTap(context, ref, limitReached, gates, count, isKorean),
                               onDuplicate: (project) => _duplicateProject(context, ref, project, isKorean),
                               onEdit: (project) => Navigator.push(context, MaterialPageRoute(
@@ -296,6 +303,8 @@ class _MobileProjectList extends StatelessWidget {
   final List<dynamic> projects;
   final bool isKorean;
   final bool limitReached;
+  final List<RavelryProject> ravelryProjects;
+  final bool isRavelryLoggedIn;
   final VoidCallback onAddTap;
   final void Function(dynamic project) onDuplicate;
   final void Function(dynamic project) onEdit;
@@ -305,11 +314,23 @@ class _MobileProjectList extends StatelessWidget {
     required this.projects,
     required this.isKorean,
     required this.limitReached,
+    required this.ravelryProjects,
+    required this.isRavelryLoggedIn,
     required this.onAddTap,
     required this.onDuplicate,
     required this.onEdit,
     required this.onDelete,
   });
+
+  static bool _isInProgress(String? status) {
+    final s = status?.toLowerCase() ?? '';
+    return s == 'in progress' || s == 'inprogress' || s == 'in-progress' || s == 'hibernating';
+  }
+
+  static bool _isDone(String? status) {
+    final s = status?.toLowerCase() ?? '';
+    return s == 'finished' || s == 'frogged';
+  }
 
   Widget _projectCard(BuildContext context, dynamic project) {
     return Padding(
@@ -327,12 +348,59 @@ class _MobileProjectList extends StatelessWidget {
     );
   }
 
+  Widget _ravelryProjectCard(BuildContext context, RavelryProject project) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: GlassCard(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => RavelryProjectDetailScreen(projectId: project.id, projectName: project.name),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                color: C.lv.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.auto_stories_rounded, color: C.lv, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(project.name, style: T.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  if (project.patternName != null)
+                    Text(project.patternName!, style: T.caption.copyWith(color: C.mu), maxLines: 1, overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: C.mu, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _ravelryBadge() => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+        child: Text('Ravelry', style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w700)),
+      );
+
   @override
   Widget build(BuildContext context) {
     final active = projects.where((p) => p.status != 'finished').toList();
     final done = projects.where((p) => p.status == 'finished').toList();
     // 진행중(in_progress) 프로젝트 중 첫 번째를 요약카드로 표시
     final featured = projects.where((p) => p.status == 'in_progress').firstOrNull;
+
+    final ravelryActive = ravelryProjects.where((p) => _isInProgress(p.status)).toList();
+    final ravelryDone = ravelryProjects.where((p) => _isDone(p.status)).toList();
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
@@ -420,6 +488,38 @@ class _MobileProjectList extends StatelessWidget {
           )
         else
           ...active.map((project) => _projectCard(context, project)),
+        // ── Ravelry 진행중 블록 ──────────────────────────────────
+        if (isRavelryLoggedIn) ...[
+          const SizedBox(height: 4),
+          Divider(color: C.bd, thickness: 1, height: 16),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              _ravelryBadge(),
+              const SizedBox(width: 8),
+              Expanded(child: Text(isKorean ? '라벨리 진행 중' : 'Ravelry Active', style: T.body.copyWith(color: C.mu))),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (ravelryActive.isEmpty)
+            GlassCard(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                child: Row(
+                  children: [
+                    Icon(Icons.auto_stories_rounded, color: C.mu, size: 16),
+                    const SizedBox(width: 10),
+                    Text(
+                      isKorean ? '라벨리 진행중 프로젝트가 없어요' : 'No active Ravelry projects',
+                      style: T.caption.copyWith(color: C.mu),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            ...ravelryActive.map((p) => _ravelryProjectCard(context, p)),
+        ],
         ...[
           const SizedBox(height: 8),
           Divider(color: C.bd, thickness: 1, height: 20),
@@ -491,6 +591,39 @@ class _MobileProjectList extends StatelessWidget {
                 }).toList(),
               ),
             ),
+          // ── Ravelry 완료 블록 ────────────────────────────────────
+          if (isRavelryLoggedIn) ...[
+            const SizedBox(height: 4),
+            Divider(color: C.bd, thickness: 1, height: 16),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                _ravelryBadge(),
+                const SizedBox(width: 8),
+                Expanded(child: Text(isKorean ? '라벨리 완료' : 'Ravelry Finished', style: T.body.copyWith(color: C.mu))),
+                Text('${ravelryDone.length}', style: T.caption.copyWith(color: C.mu)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (ravelryDone.isEmpty)
+              GlassCard(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.auto_stories_rounded, color: C.mu, size: 16),
+                      const SizedBox(width: 10),
+                      Text(
+                        isKorean ? '라벨리 완료 프로젝트가 없어요' : 'No finished Ravelry projects',
+                        style: T.caption.copyWith(color: C.mu),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              ...ravelryDone.map((p) => _ravelryProjectCard(context, p)),
+          ],
         ],
         // ── 구분선 ────────────────────────────────────────────────
         const SizedBox(height: 8),
@@ -604,24 +737,52 @@ class _ProjectSummaryCard extends ConsumerWidget {
   final VoidCallback onAdd;
   const _ProjectSummaryCard({required this.projects, required this.isKorean, required this.onAdd});
 
+  static bool _isRavelryInProgress(String? status) {
+    final s = status?.toLowerCase() ?? '';
+    return s == 'in progress' || s == 'inprogress' || s == 'in-progress' || s == 'hibernating';
+  }
+
+  static bool _isRavelryDone(String? status) {
+    final s = status?.toLowerCase() ?? '';
+    return s == 'finished' || s == 'frogged';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final active = projects.where((p) => p.status != 'finished').length;
     final done = projects.where((p) => p.status == 'finished').length;
     final auth = ref.watch(ravelryAuthProvider);
     final ravelryProjectsAsync = auth.isLoggedIn ? ref.watch(ravelryProjectsProvider) : null;
-    final ravelryCount = ravelryProjectsAsync?.maybeWhen(data: (p) => p.length, orElse: () => 0) ?? 0;
+    final ravelryProjects = ravelryProjectsAsync?.valueOrNull ?? [];
+    final ravelryTotal = ravelryProjects.length;
+    final ravelryActive = ravelryProjects.where((p) => _isRavelryInProgress(p.status)).length;
+    final ravelryDone = ravelryProjects.where((p) => _isRavelryDone(p.status)).length;
 
-    final stats = [
+    final row1Stats = [
       WorkStat('${projects.length}', isKorean ? '전체' : 'Total', color: C.pkD),
-      WorkStat('$active', isKorean ? '진행' : 'Active', color: C.lv),
+      WorkStat('$active', isKorean ? '진행중' : 'Active', color: C.lv),
       WorkStat('$done', isKorean ? '완료' : 'Done', color: C.lmD),
-      if (auth.isLoggedIn)
-        WorkStat('$ravelryCount', 'Ravelry', color: C.lv),
     ];
 
-    return WorkspaceSummaryBar(
-      stats: stats,
+    final row2Stats = auth.isLoggedIn
+        ? [
+            WorkStat('$ravelryTotal', isKorean ? '전체' : 'Total', color: C.pkD),
+            WorkStat('$ravelryActive', isKorean ? '진행중' : 'Active', color: C.lv),
+            WorkStat('$ravelryDone', isKorean ? '완료' : 'Done', color: C.lmD),
+          ]
+        : [
+            WorkStat('-', isKorean ? '전체' : 'Total', color: C.mu),
+            WorkStat('-', isKorean ? '진행중' : 'Active', color: C.mu),
+            WorkStat('-', isKorean ? '완료' : 'Done', color: C.mu),
+          ];
+
+    return DualSourceSummaryBar(
+      row1Stats: row1Stats,
+      row2Stats: row2Stats,
+      row1Badge: 'MoriKnit',
+      row2Badge: 'Ravelry',
+      row1Color: C.pk,
+      row2Color: C.lv,
       addLabel: isKorean ? '새 프로젝트' : 'New',
       onAdd: onAdd,
     );
