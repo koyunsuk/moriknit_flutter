@@ -432,6 +432,30 @@ exports.ravelryStash = onRequest(
   },
 );
 
+exports.ravelryCreateStash = onRequest(
+  { region: REGION, secrets: [ravelryClientSecret] },
+  async (req, res) => {
+    await withUser(req, res, async (decoded) => {
+      if (req.method !== 'POST') { res.status(405).json({ error: 'Method Not Allowed' }); return; }
+      const connection = await getValidConnection(decoded.uid);
+      const username = connection.username;
+      const stashData = req.body.stash ?? req.body;
+      const response = await fetch(`${RAVELRY_API_BASE}/people/${username}/stash/create.json`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${connection.accessToken}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(stashData),
+      });
+      const text = await response.text();
+      if (!response.ok) { res.status(response.status).json({ error: `Ravelry API error: ${text.slice(0, 200)}` }); return; }
+      res.json(JSON.parse(text));
+    });
+  },
+);
+
 exports.ravelryLibrary = onRequest(
   { region: REGION, secrets: [ravelryClientSecret] },
   async (req, res) => {

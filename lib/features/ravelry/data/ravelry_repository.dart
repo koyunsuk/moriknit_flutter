@@ -137,6 +137,23 @@ class RavelryRepository {
     return RavelryProject.fromJson(project);
   }
 
+  // ── 스태시 생성 ───────────────────────────────────────────────────────────────
+  Future<void> createStash({
+    required String name,
+    String? colorwayName,
+    String? notes,
+    int stashStatusId = 1,
+  }) async {
+    await _post('/ravelryCreateStash', {
+      'stash': {
+        'name': name,
+        if (colorwayName != null && colorwayName.isNotEmpty) 'colorway_name': colorwayName,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+        'stash_status_id': stashStatusId,
+      },
+    });
+  }
+
   // ── HTTP 헬퍼 ─────────────────────────────────────────────────────────────────
   Future<Map<String, dynamic>> _get(String path, {Map<String, String>? queryParams}) async {
     final user = FirebaseAuth.instance.currentUser;

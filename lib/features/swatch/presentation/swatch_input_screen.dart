@@ -19,6 +19,8 @@ import '../../../providers/yarn_provider.dart';
 import '../../my/data/mori_service.dart';
 import '../../my/domain/accessory_model.dart';
 import '../../my/domain/needle_model.dart';
+import '../../ravelry/data/ravelry_auth_provider.dart';
+import '../../ravelry/data/ravelry_repository.dart';
 import '../domain/swatch_model.dart';
 import 'brand_search_sheet.dart';
 
@@ -36,6 +38,7 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
   final TextEditingController _memoController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
   bool _isSaving = false;
+  bool _syncToRavelry = false;
   String? _linkedNeedleName;
   String? _linkedYarnName;
   String? _linkedAccessoryName;
@@ -455,6 +458,51 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
                         decoration: InputDecoration(hintText: t.memoHintSwatch),
                         onChanged: notifier.updateMemo,
                       ),
+                      // ── 라벨리 동기화 옵션 ────────────────────────────
+                      if (ref.watch(ravelryAuthProvider).isLoggedIn && widget.swatchId == null) ...[
+                        const SizedBox(height: 16),
+                        GestureDetector(
+                          onTap: () => setState(() => _syncToRavelry = !_syncToRavelry),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: _syncToRavelry ? C.lv.withValues(alpha: 0.08) : C.gx,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: _syncToRavelry ? C.lv : C.bd,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _syncToRavelry ? Icons.check_circle_rounded : Icons.circle_outlined,
+                                  color: _syncToRavelry ? C.lv : C.mu,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        isKorean ? '라벨리 스태시에도 올리기' : 'Also add to Ravelry stash',
+                                        style: T.body.copyWith(
+                                          color: _syncToRavelry ? C.lv : C.tx,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      Text(
+                                        isKorean ? '이름, 색상, 메모가 함께 저장돼요' : 'Name, color, and notes will be synced',
+                                        style: T.caption.copyWith(color: C.mu),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -635,10 +683,10 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
       return;
     }
 
+    final isKorean = ref.read(appLanguageProvider).isKorean;
     final notifier = ref.read(swatchInputProvider.notifier);
     final error = notifier.validationError;
     if (error != null) {
-      final isKorean = ref.read(appLanguageProvider).isKorean;
       await showMissingFieldsDialog(context, missing: [error], isKorean: isKorean);
       return;
     }
@@ -661,6 +709,21 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
           } else {
             await repository.createSwatch(swatch);
             MoriService.earn(authUser.uid, amount: 100, reason: 'swatch_save');
+            if (_syncToRavelry) {
+              final ravelryRepo = ref.read(ravelryRepositoryProvider);
+              if (ravelryRepo != null) {
+                final yarnInfo = [swatch.yarnBrandName, swatch.yarnName]
+                    .where((s) => s.isNotEmpty)
+                    .join(' / ');
+                final notesText = [if (yarnInfo.isNotEmpty) yarnInfo, if (swatch.memo.isNotEmpty) swatch.memo]
+                    .join('\n');
+                await ravelryRepo.createStash(
+                  name: swatch.swatchName.isEmpty ? (isKorean ? '내 실' : 'My yarn') : swatch.swatchName,
+                  colorwayName: swatch.yarnColor.isEmpty ? null : swatch.yarnColor,
+                  notes: notesText.isEmpty ? null : notesText,
+                );
+              }
+            }
           }
         },
       );
