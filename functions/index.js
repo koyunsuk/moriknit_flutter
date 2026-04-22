@@ -553,7 +553,7 @@ exports.ravelryCreateProject = onRequest(
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
-        body: JSON.stringify(req.body),
+        body: JSON.stringify(req.body.project ?? req.body),
       });
       const text = await response.text();
       if (!response.ok) { res.status(response.status).json({ error: `Ravelry API error: ${text.slice(0, 200)}` }); return; }
