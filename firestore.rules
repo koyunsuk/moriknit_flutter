@@ -249,5 +249,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── 에디토리얼 포스트 (로그인 사용자 읽기, 관리자만 쓰기) ────────────────────────
+    match /editorial_posts/{docId} {
+      allow read: if isLoggedIn();
+      allow write: if isAdmin();
+    }
+
   }
 }
