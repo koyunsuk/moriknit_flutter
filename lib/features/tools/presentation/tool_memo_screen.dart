@@ -1,9 +1,14 @@
+import 'dart:io' as io;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
@@ -58,6 +63,11 @@ class _ToolMemoScreenState extends ConsumerState<ToolMemoScreen> {
   bool _migrated = false;
   bool _isLocked = false;
   bool _lockChecked = false;
+  int _tabIndex = 0; // 0=전체, 1=사진, 2=음성
+  bool _isRecording = false;
+  final AudioRecorder _recorder = AudioRecorder();
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  String? _currentPlayingUrl;
 
   @override
   void initState() {
@@ -83,6 +93,13 @@ class _ToolMemoScreenState extends ConsumerState<ToolMemoScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    _recorder.dispose();
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
   void _openEditor({MemoModel? existing}) {
     final uid = ref.read(authStateProvider).valueOrNull?.uid ?? '';
     Navigator.of(context).push(
@@ -93,6 +110,85 @@ class _ToolMemoScreenState extends ConsumerState<ToolMemoScreen> {
         ),
       ),
     );
+  }
+
+  // ── 음성 녹음 토글 ─────────────────────────────────────────
+  Future<void> _toggleRecording() async {
+    if (_isRecording) {
+      final path = await _recorder.stop();
+      setState(() => _isRecording = false);
+      if (path == null || !mounted) return;
+      final scaffoldMsg = ScaffoldMessenger.of(context);
+      try {
+        // dart:io — 웹에서는 path_provider + recorder 자체가 불가하므로 모바일 전용
+        final bytes = await _readVoiceBytes(path);
+        if (bytes == null || bytes.isEmpty) return;
+        if (!mounted) return;
+        final uid = ref.read(authStateProvider).valueOrNull?.uid ?? '';
+        final memo = MemoModel.empty(uid: uid);
+        await runWithMoriLoadingDialog<void>(
+          context,
+          message: '음성 메모를 저장하는 중입니다.',
+          subtitle: '잠시만 기다려 주세요.',
+          task: () async {
+            await ref
+                .read(memoNotifierProvider.notifier)
+                .createVoiceMemo(memo, bytes);
+          },
+        );
+        if (!mounted) return;
+        showSavedSnackBar(scaffoldMsg, message: '음성 메모가 저장됐어요.');
+      } catch (e) {
+        if (!mounted) return;
+        showSaveErrorSnackBar(scaffoldMsg, message: '$e');
+      }
+    } else {
+      final hasPermission = await _recorder.hasPermission();
+      if (!hasPermission) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('마이크 권한이 필요합니다')),
+          );
+        }
+        return;
+      }
+      final dir = await getTemporaryDirectory();
+      final path =
+          '${dir.path}/memo_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await _recorder.start(const RecordConfig(), path: path);
+      setState(() => _isRecording = true);
+    }
+  }
+
+  /// 녹음 파일을 bytes로 읽습니다 (모바일 전용 — 웹은 null 반환).
+  Future<Uint8List?> _readVoiceBytes(String path) async {
+    if (kIsWeb) return null;
+    try {
+      // ignore: avoid_dynamic_calls
+      return await _readIoFile(path);
+    } catch (e) {
+      debugPrint('[ToolMemo] 음성 파일 읽기 실패: $e');
+      return null;
+    }
+  }
+
+  Future<Uint8List> _readIoFile(String path) => io.File(path).readAsBytes();
+
+  // ── 음성 재생 토글 ─────────────────────────────────────────
+  Future<void> _togglePlayback(String url) async {
+    if (_currentPlayingUrl == url) {
+      await _audioPlayer.stop();
+      setState(() => _currentPlayingUrl = null);
+    } else {
+      setState(() => _currentPlayingUrl = url);
+      await _audioPlayer.setUrl(url);
+      await _audioPlayer.play();
+      _audioPlayer.playerStateStream.listen((state) {
+        if (state.processingState == ProcessingState.completed && mounted) {
+          setState(() => _currentPlayingUrl = null);
+        }
+      });
+    }
   }
 
   @override
@@ -274,40 +370,77 @@ class _ToolMemoScreenState extends ConsumerState<ToolMemoScreen> {
     );
   }
 
+  static const _tabLabels = ['전체', '사진', '음성'];
+
   Widget _buildList(List<MemoModel> memos) {
+    // 탭 필터 적용
+    final filtered = _tabIndex == 1
+        ? memos.where((m) => m.imageUrls.isNotEmpty).toList()
+        : _tabIndex == 2
+            ? memos.where((m) => m.voiceUrl != null).toList()
+            : memos;
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
       children: [
-        // 통계
-        GlassCard(
-          child: Row(
-            children: [
-              Expanded(
-                child: _MemoStatCell(
-                  label: '전체 메모',
-                  value: '${memos.length}',
-                  color: C.pkD,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _MemoStatCell(
-                  label: '사진 포함',
-                  value: '${memos.where((m) => m.imageUrls.isNotEmpty).length}',
-                  color: C.lvD,
-                ),
-              ),
-            ],
-          ),
+        // ── 요약 카드 ────────────────────────────────────────
+        LibrarySummaryCard(
+          headers: const ['전체', '사진', '음성'],
+          rows: [
+            LibrarySummaryRowData(
+              badge: '메모',
+              badgeColor: C.pkD,
+              values: [
+                '${memos.length}',
+                '${memos.where((m) => m.imageUrls.isNotEmpty).length}',
+                '${memos.where((m) => m.voiceUrl != null).length}',
+              ],
+              valueColors: [C.tx, C.lv, C.og],
+            ),
+          ],
+          addLabel: '추가',
+          onAdd: () => _openEditor(),
         ),
         const SizedBox(height: 12),
-        // 잠금 설정
+
+        // ── 탭 필터 ──────────────────────────────────────────
+        Row(
+          children: [
+            for (int i = 0; i < _tabLabels.length; i++)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  onTap: () => setState(() => _tabIndex = i),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: _tabIndex == i ? C.lv : C.lvL,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      _tabLabels[i],
+                      style: T.caption.copyWith(
+                        color: _tabIndex == i ? Colors.white : C.lvD,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // ── 잠금 설정 ────────────────────────────────────────
         GlassCard(
           child: Row(
             children: [
               Container(
-                width: 38, height: 38,
-                decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(10)),
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                    color: C.lvL, borderRadius: BorderRadius.circular(10)),
                 child: Icon(Icons.lock_outline_rounded, color: C.lvD, size: 20),
               ),
               const SizedBox(width: 12),
@@ -316,7 +449,8 @@ class _ToolMemoScreenState extends ConsumerState<ToolMemoScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('메모장 잠금', style: T.bodyBold),
-                    Text('앱 시작 시 PIN으로 잠궈요', style: T.caption.copyWith(color: C.mu)),
+                    Text('앱 시작 시 PIN으로 잠궈요',
+                        style: T.caption.copyWith(color: C.mu)),
                   ],
                 ),
               ),
@@ -324,7 +458,8 @@ class _ToolMemoScreenState extends ConsumerState<ToolMemoScreen> {
                 onTap: () => _toggleLock(ref.read(memoLockProvider)),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: ref.watch(memoLockProvider) ? C.lv : C.lvL,
                     borderRadius: BorderRadius.circular(20),
@@ -332,7 +467,8 @@ class _ToolMemoScreenState extends ConsumerState<ToolMemoScreen> {
                   child: Text(
                     ref.watch(memoLockProvider) ? '잠금 ON' : '잠금 OFF',
                     style: T.caption.copyWith(
-                      color: ref.watch(memoLockProvider) ? Colors.white : C.lvD,
+                      color:
+                          ref.watch(memoLockProvider) ? Colors.white : C.lvD,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -342,16 +478,19 @@ class _ToolMemoScreenState extends ConsumerState<ToolMemoScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        // 리스트
+
+        // ── 메모 목록 ────────────────────────────────────────
         GlassCard(
-          child: memos.isEmpty
+          child: filtered.isEmpty
               ? MoriEmptyState(
                   icon: Icons.edit_note_rounded,
                   iconColor: C.pk,
-                  title: '아직 메모가 없어요',
-                  subtitle: '생각을 자유롭게 기록해보세요.',
-                  buttonLabel: '첫 메모 작성하기',
-                  onAction: () => _openEditor(),
+                  title: _tabIndex == 0 ? '아직 메모가 없어요' : '해당 메모가 없어요',
+                  subtitle: _tabIndex == 0
+                      ? '생각을 자유롭게 기록해보세요.'
+                      : '다른 탭을 확인해보세요.',
+                  buttonLabel: _tabIndex == 0 ? '첫 메모 작성하기' : null,
+                  onAction: _tabIndex == 0 ? () => _openEditor() : null,
                 )
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -359,17 +498,47 @@ class _ToolMemoScreenState extends ConsumerState<ToolMemoScreen> {
                     Row(
                       children: [
                         Expanded(child: Text('메모 목록', style: T.bodyBold)),
+                        // 음성 녹음 버튼 (모바일 전용)
+                        if (!kIsWeb)
+                          IconButton(
+                            icon: Icon(
+                              _isRecording
+                                  ? Icons.stop_circle_rounded
+                                  : Icons.mic_rounded,
+                              color: _isRecording ? C.og : C.lv,
+                            ),
+                            onPressed: _toggleRecording,
+                            tooltip: _isRecording ? '녹음 중지' : '음성 녹음',
+                          ),
                         TextButton.icon(
                           onPressed: () => _openEditor(),
-                          icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+                          icon: const Icon(Icons.add_circle_outline_rounded,
+                              size: 18),
                           label: const Text('새 메모'),
                         ),
                       ],
                     ),
+                    if (_isRecording)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            Icon(Icons.fiber_manual_record,
+                                color: C.og, size: 12),
+                            const SizedBox(width: 6),
+                            Text('녹음 중...',
+                                style: T.caption.copyWith(color: C.og)),
+                          ],
+                        ),
+                      ),
                     const SizedBox(height: 8),
-                    ...memos.map((memo) => _MemoListTile(
+                    ...filtered.map((memo) => _MemoListTile(
                           memo: memo,
+                          isPlaying: _currentPlayingUrl == memo.voiceUrl,
                           onTap: () => _openEditor(existing: memo),
+                          onPlayVoice: memo.voiceUrl != null
+                              ? () => _togglePlayback(memo.voiceUrl!)
+                              : null,
                         )),
                   ],
                 ),
@@ -379,39 +548,19 @@ class _ToolMemoScreenState extends ConsumerState<ToolMemoScreen> {
   }
 }
 
-// ── 통계 셀 ───────────────────────────────────────────────
-class _MemoStatCell extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-  const _MemoStatCell({required this.label, required this.value, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.16)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: T.caption.copyWith(color: C.mu)),
-          const SizedBox(height: 4),
-          Text(value, style: T.bodyBold.copyWith(color: color)),
-        ],
-      ),
-    );
-  }
-}
-
 // ── 목록 타일 ─────────────────────────────────────────────
 class _MemoListTile extends StatelessWidget {
   final MemoModel memo;
   final VoidCallback onTap;
-  const _MemoListTile({required this.memo, required this.onTap});
+  final VoidCallback? onPlayVoice;
+  final bool isPlaying;
+
+  const _MemoListTile({
+    required this.memo,
+    required this.onTap,
+    this.onPlayVoice,
+    this.isPlaying = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -420,6 +569,7 @@ class _MemoListTile extends StatelessWidget {
         .firstWhere((l) => l.trim().isNotEmpty, orElse: () => '');
     final dateStr = DateFormat('yyyy.MM.dd').format(memo.createdAt);
     final firstImageUrl = memo.imageUrls.isNotEmpty ? memo.imageUrls.first : null;
+    final hasVoice = memo.voiceUrl != null;
 
     return GlassCard(
       onTap: onTap,
@@ -427,28 +577,59 @@ class _MemoListTile extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: firstImageUrl != null
-                  ? Image.network(
-                      firstImageUrl,
+            child: hasVoice
+                ? GestureDetector(
+                    onTap: onPlayVoice,
+                    child: Container(
                       width: 52,
                       height: 52,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => _noImageBox(),
-                    )
-                  : _noImageBox(),
-            ),
+                      decoration: BoxDecoration(
+                        color: isPlaying
+                            ? C.og.withValues(alpha: 0.15)
+                            : C.lvL,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        isPlaying ? Icons.stop_rounded : Icons.play_arrow_rounded,
+                        color: isPlaying ? C.og : C.lv,
+                        size: 28,
+                      ),
+                    ),
+                  )
+                : ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: firstImageUrl != null
+                        ? Image.network(
+                            firstImageUrl,
+                            width: 52,
+                            height: 52,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _noImageBox(),
+                          )
+                        : _noImageBox(),
+                  ),
           ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  firstLine.isEmpty ? '(내용 없음)' : firstLine,
-                  style: T.bodyBold,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  children: [
+                    if (hasVoice) ...[
+                      Icon(Icons.mic_rounded, size: 14, color: C.og),
+                      const SizedBox(width: 4),
+                    ],
+                    Expanded(
+                      child: Text(
+                        hasVoice
+                            ? '음성 메모'
+                            : (firstLine.isEmpty ? '(내용 없음)' : firstLine),
+                        style: T.bodyBold,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Text(dateStr, style: T.caption.copyWith(color: C.mu)),
@@ -464,7 +645,8 @@ class _MemoListTile extends StatelessWidget {
   Widget _noImageBox() => Container(
         width: 52,
         height: 52,
-        decoration: BoxDecoration(color: C.pkL, borderRadius: BorderRadius.circular(10)),
+        decoration: BoxDecoration(
+            color: C.pkL, borderRadius: BorderRadius.circular(10)),
         child: Icon(Icons.edit_note_rounded, color: C.pkD, size: 24),
       );
 }
@@ -514,6 +696,7 @@ class _MemoEditScreenState extends ConsumerState<_MemoEditScreen> {
     final toAdd = picked.take(remaining < 0 ? 0 : remaining).toList();
     for (final xFile in toAdd) {
       final bytes = await xFile.readAsBytes();
+      if (!mounted) break;
       setState(() {
         _newImageBytes.add(bytes);
         _newImagePreviews.add(bytes);
@@ -532,6 +715,7 @@ class _MemoEditScreenState extends ConsumerState<_MemoEditScreen> {
       uid: widget.uid,
       content: _controller.text.trim(),
       imageUrls: _existingUrls,
+      voiceUrl: widget.initial?.voiceUrl,
       createdAt: widget.initial?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
     );

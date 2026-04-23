@@ -52,34 +52,41 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                 subtitle: isKorean ? '나만의 뜨개 도안을 만들어요' : 'Create your own knitting charts',
               ),
             ),
+            // 도안 요약카드 틀고정
+            Consumer(
+              builder: (_, ref2, _) {
+                final pc = patternsAsync.valueOrNull?.length ?? 0;
+                final fc = filesAsync.valueOrNull?.length ?? 0;
+                final total = pc + fc;
+                final auth = ref2.watch(ravelryAuthProvider);
+                final libraryAsync = auth.isLoggedIn ? ref2.watch(ravelryLibraryProvider) : null;
+                final libCount = libraryAsync?.maybeWhen(data: (p) => '${p.length}', orElse: () => '-') ?? '-';
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: LibrarySummaryCard(
+                    headers: [isKorean ? '전체' : 'Total'],
+                    rows: [
+                      LibrarySummaryRowData(
+                        badge: 'MoriKnit',
+                        badgeColor: C.pkD,
+                        values: [patternsAsync.isLoading ? '-' : '$total'],
+                        valueColors: [C.tx],
+                      ),
+                      LibrarySummaryRowData(
+                        badge: 'Ravelry',
+                        badgeColor: auth.isLoggedIn ? C.lv : C.mu,
+                        values: [libCount],
+                        valueColors: [auth.isLoggedIn ? C.tx : C.mu],
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
                 children: [
-                  // 도안 요약 카드 (2행 DualSourceSummaryBar)
-                  Builder(builder: (_) {
-                    final pc = patternsAsync.valueOrNull?.length ?? 0;
-                    final fc = filesAsync.valueOrNull?.length ?? 0;
-                    final total = pc + fc;
-                    final auth = ref.watch(ravelryAuthProvider);
-                    final libraryAsync = auth.isLoggedIn ? ref.watch(ravelryLibraryProvider) : null;
-                    final libCount = libraryAsync?.maybeWhen(data: (p) => '${p.length}', orElse: () => '-') ?? '-';
-                    return DualSourceSummaryBar(
-                      row1Stats: [
-                        WorkStat(patternsAsync.isLoading ? '-' : '$total', isKorean ? '전체' : 'Total', color: C.pkD),
-                      ],
-                      row2Stats: [
-                        WorkStat(libCount, isKorean ? '전체' : 'Total', color: auth.isLoggedIn ? C.lv : C.mu),
-                      ],
-                      row1Badge: 'MoriKnit',
-                      row2Badge: 'Ravelry',
-                      row1Color: C.pkD,
-                      row2Color: C.lv,
-                      addLabel: isKorean ? '새 도안' : 'New',
-                      onAdd: () => _showPatternStartSheet(context, ref),
-                    );
-                  }),
-                  const SizedBox(height: 16),
                   // 모리니트 도안 라이브러리
                   GlassCard(
                     child: Column(
@@ -140,7 +147,7 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                                 ...patterns.map((p) => _PatternRow(
                                   chart: p,
                                   isKorean: isKorean,
-                                  onTap: () => _openPattern(context, p),
+                                  onTap: () => _openPattern(context, p, filesAsync),
                                 )),
                                 ...files.map((f) => _FileRow(
                                   file: f,
@@ -166,9 +173,7 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
     );
   }
 
-  void _openPattern(BuildContext context, PatternChart chart) {
-    // 에디터로 만든 도안(chart 타입)만 에디터 뷰어로 열기
-    // 이미지/PDF 도안은 기존 상세 화면 유지
+  void _openPattern(BuildContext context, PatternChart chart, AsyncValue<List<PatternFile>> filesAsync) {
     if (chart.type == PatternType.chart) {
       Navigator.push(context, MaterialPageRoute(
         builder: (_) => PatternEditorScreen(
@@ -177,6 +182,18 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
           returnRoute: Routes.toolsPatterns,
         ),
       ));
+    } else if (chart.aiSections != null && chart.aiSections!.isNotEmpty) {
+      // AI 변환 도안 → 원본 파일(_PatternFileViewerScreen)으로 통합. 텍스트뷰어 아이콘 활성화됨.
+      final relatedFile = filesAsync.valueOrNull
+          ?.where((f) => f.parsedChartId == chart.id)
+          .firstOrNull;
+
+      if (relatedFile != null) {
+        _openFile(context, relatedFile);
+      } else {
+        // fallback: 연관 파일 없을 시 텍스트뷰어 직접
+        context.push('${Routes.toolsMyParsedPatterns}/${chart.id}/text');
+      }
     } else {
       Navigator.push(context, MaterialPageRoute(
         builder: (_) => PatternDetailScreen(chart: chart),
@@ -792,6 +809,10 @@ class _PatternFileViewerScreenState extends ConsumerState<_PatternFileViewerScre
   int _currentPage = 0;
   int _totalPages = 0;
 
+  // 세로 헤어라인
+  bool _hairlineEnabled = false;
+  double _hairlineX = 0.5; // 화면 너비 비율 (0.0~1.0)
+
   @override
   void initState() {
     super.initState();
@@ -964,6 +985,46 @@ class _PatternFileViewerScreenState extends ConsumerState<_PatternFileViewerScre
     }
   }
 
+  Widget _buildHairline(BoxConstraints constraints) {
+    final x = _hairlineX * constraints.maxWidth;
+    return Stack(
+      children: [
+        Positioned(
+          left: x - 0.75,
+          top: 0,
+          bottom: 0,
+          child: IgnorePointer(
+            child: SizedBox(
+              width: 1.5,
+              child: Container(color: const Color(0xFFF59E0B).withValues(alpha: 0.85)),
+            ),
+          ),
+        ),
+        Positioned(
+          left: x - 18,
+          top: 4,
+          child: GestureDetector(
+            onHorizontalDragUpdate: (details) {
+              setState(() {
+                _hairlineX = (_hairlineX + details.delta.dx / constraints.maxWidth).clamp(0.0, 1.0);
+              });
+            },
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF59E0B),
+                shape: BoxShape.circle,
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 6, offset: const Offset(0, 2))],
+              ),
+              child: const Icon(Icons.drag_indicator_rounded, color: Colors.white, size: 18),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildPdfBody() {
     if (kIsWeb) {
       return Center(
@@ -1016,6 +1077,26 @@ class _PatternFileViewerScreenState extends ConsumerState<_PatternFileViewerScre
         foregroundColor: Colors.white,
         title: Text(_file.fileName, style: T.bodyBold.copyWith(color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
+          IconButton(
+            icon: Icon(
+              Icons.straighten_rounded,
+              color: _hairlineEnabled ? const Color(0xFFF59E0B) : Colors.white.withValues(alpha: 0.55),
+            ),
+            tooltip: isKorean ? '세로 헤어라인' : 'Vertical hairline',
+            onPressed: () => setState(() => _hairlineEnabled = !_hairlineEnabled),
+          ),
+          IconButton(
+            icon: Icon(
+              Icons.menu_book_rounded,
+              color: (_file.parsedChartId != null && _file.parseStatus == PatternParseStatus.done)
+                  ? Colors.white
+                  : Colors.white.withValues(alpha: 0.35),
+            ),
+            tooltip: isKorean ? '텍스트 뷰어' : 'Text Viewer',
+            onPressed: (_file.parsedChartId != null && _file.parseStatus == PatternParseStatus.done)
+                ? () => context.push('${Routes.toolsMyParsedPatterns}/${_file.parsedChartId}/text')
+                : null,
+          ),
           if (_isPdf && _totalPages > 0)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -1038,11 +1119,20 @@ class _PatternFileViewerScreenState extends ConsumerState<_PatternFileViewerScre
           ),
         ],
       ),
-      body: _isPdf
-          ? _buildPdfBody()
-          : _isImage
-              ? InteractiveViewer(child: Center(child: Image.network(_file.storageUrl, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_rounded, color: Colors.white54, size: 64))))
-              : Center(child: Text(_file.fileName, style: const TextStyle(color: Colors.white))),
+      body: LayoutBuilder(
+        builder: (context, constraints) => Stack(
+          children: [
+            Positioned.fill(
+              child: _isPdf
+                  ? _buildPdfBody()
+                  : _isImage
+                      ? InteractiveViewer(child: Center(child: Image.network(_file.storageUrl, fit: BoxFit.contain, errorBuilder: (_, _, _) => const Icon(Icons.broken_image_rounded, color: Colors.white54, size: 64))))
+                      : Center(child: Text(_file.fileName, style: const TextStyle(color: Colors.white))),
+            ),
+            if (_hairlineEnabled) _buildHairline(constraints),
+          ],
+        ),
+      ),
     );
   }
 }

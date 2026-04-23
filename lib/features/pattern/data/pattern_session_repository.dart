@@ -62,6 +62,15 @@ class PatternSessionRepository {
     }, SetOptions(merge: true));
   }
 
+  // ── UPDATE: HAIRLINE ───────────────────────────────────────
+  Future<void> updateHairline(String sessionId, double x) async {
+    if (_uid.isEmpty) return;
+    await _sessionsRef.doc(sessionId).set({
+      'hairlineX': x,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
   // ── UPDATE: STROKES ────────────────────────────────────────
   Future<void> updateStrokes(String sessionId, List<StrokeData> strokes) async {
     if (_uid.isEmpty) return;
@@ -108,6 +117,15 @@ class PatternSessionRepository {
     if (_uid.isEmpty) return;
     await _sessionsRef.doc(sessionId).set({
       'stickyNotes': notes.map((e) => e.toJson()).toList(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  // ── UPDATE: TOTAL SECONDS (타이머 누적시간) ─────────────────────
+  Future<void> updateTotalSeconds(String sessionId, int seconds) async {
+    if (_uid.isEmpty) return;
+    await _sessionsRef.doc(sessionId).set({
+      'totalSeconds': seconds,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }

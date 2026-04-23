@@ -41,28 +41,35 @@ class _YarnListScreenState extends ConsumerState<YarnListScreen> {
                     subtitle: isKorean ? '보유 중인 실을 기록하세요' : 'Track your yarn stash',
                   ),
                 ),
+                // 요약카드 틀고정
+                Consumer(
+                  builder: (ctx, ref2, _) {
+                    final stashAsync = ref2.watch(ravelryStashProvider);
+                    final ravelryCount = stashAsync.maybeWhen(data: (s) => '${s.length}', orElse: () => '-');
+                    final yarnCount = yarnListAsync.maybeWhen(data: (y) => '${y.length}', orElse: () => '$count');
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                      child: LibrarySummaryCard(
+                        headers: ['MoriKnit', 'Ravelry'],
+                        rows: [
+                          LibrarySummaryRowData(
+                            badge: isKorean ? '실' : 'Yarn',
+                            badgeColor: C.pkD,
+                            values: [yarnCount, ravelryCount],
+                            valueColors: [C.pkD, C.lv],
+                          ),
+                        ],
+                        addLabel: isKorean ? '추가' : 'Add',
+                        onAdd: () => Navigator.push(ctx, MaterialPageRoute(builder: (_) => const YarnInputScreen())),
+                      ),
+                    );
+                  },
+                ),
                 // 스크롤 바디
                 Expanded(
                   child: ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
                     children: [
-                      // 실 요약 바 (WorkspaceSummaryBar)
-                      Consumer(
-                        builder: (ctx, ref2, _) {
-                          final stashAsync = ref2.watch(ravelryStashProvider);
-                          final ravelryCount = stashAsync.maybeWhen(data: (s) => '${s.length}', orElse: () => '-');
-                          final yarnCount = yarnListAsync.maybeWhen(data: (y) => '${y.length}', orElse: () => '$count');
-                          return WorkspaceSummaryBar(
-                            stats: [
-                              WorkStat(yarnCount, isKorean ? '전체' : 'Total', color: C.pkD),
-                              WorkStat(ravelryCount, 'Ravelry', color: C.lv),
-                            ],
-                            addLabel: isKorean ? '실 추가' : 'Add',
-                            onAdd: () => Navigator.push(ctx, MaterialPageRoute(builder: (_) => const YarnInputScreen())),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 16),
                       // 모리니트 실 목록
                       GlassCard(
                         child: Column(

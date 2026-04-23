@@ -67,6 +67,17 @@ class MemoRepository {
     return urls;
   }
 
+  // ── VOICE ─────────────────────────────────────────────────
+
+  /// 음성 파일(bytes)을 Storage에 업로드하고 URL을 반환합니다.
+  Future<String> uploadVoice(Uint8List bytes) async {
+    if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    final ref = _storage.ref('memos/$_uid/voice_$ts.m4a');
+    await ref.putData(bytes, SettableMetadata(contentType: 'audio/m4a'));
+    return ref.getDownloadURL();
+  }
+
   // ── MIGRATION ─────────────────────────────────────────────
 
   /// Hive 데이터 맵을 Firestore로 마이그레이션합니다.

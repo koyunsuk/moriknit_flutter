@@ -151,71 +151,103 @@ class TemplateListScreen extends ConsumerWidget {
               child: Stack(
                 children: [
                   const BgOrbs(),
-                  ListView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
-                children: [
-                  // 요약카드 (스와치 화면 패턴)
-                  WorkspaceSummaryBar(
-                    stats: [
-                      WorkStat('$builtinCount', isKorean ? '기본' : 'Built-in', color: C.lv),
-                      WorkStat('$userCount', isKorean ? '나의' : 'Mine', color: C.pkD),
-                    ],
-                    addLabel: isKorean ? '추가' : 'Add',
-                    onAdd: () => context.push(Routes.templateEditor),
-                  ),
-                  const SizedBox(height: 20),
-                  // 기본 템플릿 섹션
-                  SectionTitle(title: isKorean ? '📋 기본 템플릿' : '📋 Built-in Templates'),
-                  const SizedBox(height: 8),
-                  builtinAsync.when(
-                    loading: () => GlassCard(
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: CircularProgressIndicator(color: C.lv),
-                        ),
-                      ),
-                    ),
-                    error: (e, _) => GlassCard(child: Text('$e', style: T.caption.copyWith(color: C.og))),
-                    data: (templates) {
-                      if (templates.isEmpty) {
-                        return GlassCard(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Text(
-                              isKorean ? '기본 템플릿이 없습니다.' : 'No built-in templates.',
-                              style: T.caption.copyWith(color: C.mu),
-                            ),
+                  Positioned.fill(
+                    child: Column(
+                      children: [
+                        // 요약카드 고정
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                          child: LibrarySummaryCard(
+                            headers: [
+                              isKorean ? '기본' : 'Built-in',
+                              isKorean ? '커스텀' : 'Custom',
+                              isKorean ? '구매' : 'Paid',
+                            ],
+                            rows: [
+                              LibrarySummaryRowData(
+                                badge: isKorean ? '템플릿' : 'Template',
+                                badgeColor: C.lv,
+                                values: ['$builtinCount', '$userCount', '0'],
+                                valueColors: [C.lv, C.pkD, C.mu],
+                              ),
+                            ],
+                            addLabel: isKorean ? '추가' : 'Add',
+                            onAdd: () => context.push(Routes.templateEditor),
                           ),
-                        );
-                      }
-                      return GlassCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: templates.map((tmpl) => _BuiltinTemplateRow(
-                            template: tmpl,
-                            isKorean: isKorean,
-                            onTap: () => _showTemplateSteps(context, tmpl, isKorean),
-                          )).toList(),
                         ),
-                      );
-                    },
+                        // 스크롤 목록
+                        Expanded(
+                          child: ListView(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
+                            children: [
+                              const SizedBox(height: 16),
+                              // 기본 템플릿 섹션
+                              SectionTitle(title: isKorean ? '📋 기본 템플릿' : '📋 Built-in Templates'),
+                              const SizedBox(height: 8),
+                              builtinAsync.when(
+                                loading: () => GlassCard(
+                                  child: Center(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(20),
+                                      child: CircularProgressIndicator(color: C.lv),
+                                    ),
+                                  ),
+                                ),
+                                error: (e, _) => GlassCard(child: Text('$e', style: T.caption.copyWith(color: C.og))),
+                                data: (templates) {
+                                  if (templates.isEmpty) {
+                                    return GlassCard(
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Text(
+                                          isKorean ? '기본 템플릿이 없습니다.' : 'No built-in templates.',
+                                          style: T.caption.copyWith(color: C.mu),
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                  return GlassCard(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: templates.map((tmpl) => _BuiltinTemplateRow(
+                                        template: tmpl,
+                                        isKorean: isKorean,
+                                        onTap: () => _showTemplateSteps(context, tmpl, isKorean),
+                                      )).toList(),
+                                    ),
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 20),
+                              // 커스텀 템플릿 섹션
+                              SectionTitle(title: isKorean ? '✨ 나의 커스텀 템플릿' : '✨ My Custom Templates'),
+                              const SizedBox(height: 8),
+                              _CustomTemplateSection(isKorean: isKorean),
+                              const SizedBox(height: 16),
+                              // 구매한 템플릿 섹션 (플레이스홀더)
+                              SectionTitle(title: isKorean ? '🛍️ 구매한 템플릿' : '🛍️ Purchased Templates'),
+                              const SizedBox(height: 8),
+                              GlassCard(
+                                child: MoriEmptyState(
+                                  icon: Icons.shopping_bag_outlined,
+                                  iconColor: C.mu,
+                                  title: isKorean ? '구매한 템플릿이 없어요' : 'No purchased templates',
+                                  subtitle: isKorean ? '마켓에서 프리미엄 템플릿을 구매해보세요' : 'Browse premium templates in the market',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 20),
-
-                  // 커스텀 템플릿 섹션
-                  SectionTitle(title: isKorean ? '✨ 나의 커스텀 템플릿' : '✨ My Custom Templates'),
-                  const SizedBox(height: 8),
-                  _CustomTemplateSection(isKorean: isKorean),
                 ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      ],
-    ),
-  ),
-);
+      ),
+    );
   }
 }
 

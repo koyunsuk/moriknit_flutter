@@ -14,10 +14,12 @@ class PatternSession {
   final String? projectId;
   final String? swatchId;
   final double rulerY;
+  final double? hairlineX;
   final List<StickyNote> stickyNotes;
   final List<StrokeData> strokes;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final int totalSeconds;
 
   const PatternSession({
     required this.id,
@@ -26,10 +28,12 @@ class PatternSession {
     this.projectId,
     this.swatchId,
     this.rulerY = 200.0,
+    this.hairlineX,
     this.stickyNotes = const [],
     this.strokes = const [],
     this.createdAt,
     this.updatedAt,
+    this.totalSeconds = 0,
   });
 
   PatternSession copyWith({
@@ -39,12 +43,15 @@ class PatternSession {
     String? projectId,
     String? swatchId,
     double? rulerY,
+    double? hairlineX,
+    bool clearHairlineX = false,
     List<StickyNote>? stickyNotes,
     List<StrokeData>? strokes,
     DateTime? createdAt,
     DateTime? updatedAt,
     bool clearProjectId = false,
     bool clearSwatchId = false,
+    int? totalSeconds,
   }) {
     return PatternSession(
       id: id ?? this.id,
@@ -53,10 +60,12 @@ class PatternSession {
       projectId: clearProjectId ? null : (projectId ?? this.projectId),
       swatchId: clearSwatchId ? null : (swatchId ?? this.swatchId),
       rulerY: rulerY ?? this.rulerY,
+      hairlineX: clearHairlineX ? null : (hairlineX ?? this.hairlineX),
       stickyNotes: stickyNotes ?? this.stickyNotes,
       strokes: strokes ?? this.strokes,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      totalSeconds: totalSeconds ?? this.totalSeconds,
     );
   }
 
@@ -67,10 +76,12 @@ class PatternSession {
         'projectId': projectId,
         'swatchId': swatchId,
         'rulerY': rulerY,
+        'hairlineX': hairlineX,
         'stickyNotes': stickyNotes.map((e) => e.toJson()).toList(),
         'strokes': strokes.map((e) => e.toJson()).toList(),
         'createdAt': createdAt?.toIso8601String(),
         'updatedAt': updatedAt?.toIso8601String(),
+        'totalSeconds': totalSeconds,
       };
 
   factory PatternSession.fromJson(Map<String, dynamic> json) {
@@ -81,6 +92,7 @@ class PatternSession {
       projectId: json['projectId'] as String?,
       swatchId: json['swatchId'] as String?,
       rulerY: (json['rulerY'] as num?)?.toDouble() ?? 200.0,
+      hairlineX: (json['hairlineX'] as num?)?.toDouble(),
       stickyNotes: (json['stickyNotes'] as List?)
               ?.map((e) => StickyNote.fromJson(Map<String, dynamic>.from(e as Map)))
               .toList() ??
@@ -91,6 +103,7 @@ class PatternSession {
           const [],
       createdAt: _parseDate(json['createdAt']),
       updatedAt: _parseDate(json['updatedAt']),
+      totalSeconds: (json['totalSeconds'] as num?)?.toInt() ?? 0,
     );
   }
 

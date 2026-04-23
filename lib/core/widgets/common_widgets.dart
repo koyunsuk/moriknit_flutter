@@ -614,11 +614,61 @@ class MoriKnitTitle extends StatelessWidget {
 class MoriBrandHeader extends StatelessWidget {
   final String? subtitle;
   final bool includeUrl;
+  final bool compact;
 
-  const MoriBrandHeader({super.key, this.subtitle, this.includeUrl = false});
+  const MoriBrandHeader({super.key, this.subtitle, this.includeUrl = false, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
+    if (compact) {
+      return Container(
+        width: double.infinity,
+        height: 90,
+        color: Colors.transparent,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Column(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                const SizedBox(height: 4),
+                Image.asset(
+                  'assets/login_logo.png',
+                  width: 50,
+                  height: 50,
+                  fit: BoxFit.contain,
+                ),
+                const SizedBox(height: 2),
+                MoriKnitTitle(fontSize: 14, width: 120),
+              ],
+            ),
+            if (subtitle != null)
+              Positioned(
+                bottom: 4,
+                left: 0,
+                right: 0,
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.84),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: C.tint(C.lv, 0.18)),
+                    boxShadow: [BoxShadow(color: C.tint(C.lv, 0.06), blurRadius: 8, offset: const Offset(0, 2))],
+                  ),
+                  child: Text(
+                    subtitle!,
+                    style: T.caption.copyWith(color: C.tx2, height: 1.3, fontSize: 11, fontWeight: FontWeight.w600),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
     return Container(
       width: double.infinity,
       height: 150,
@@ -685,22 +735,24 @@ class MoriWideHeader extends StatelessWidget {
   final String title;
   final String subtitle;
   final List<Widget>? trailing;
+  final bool compact;
 
   const MoriWideHeader({
     super.key,
     required this.title,
     required this.subtitle,
     this.trailing,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
     if (trailing == null || trailing!.isEmpty) {
-      return MoriBrandHeader(subtitle: subtitle);
+      return MoriBrandHeader(subtitle: subtitle, compact: compact);
     }
     return Stack(
       children: [
-        MoriBrandHeader(subtitle: subtitle),
+        MoriBrandHeader(subtitle: subtitle, compact: compact),
         Positioned(
           top: 12,
           right: 12,
@@ -1260,6 +1312,131 @@ class WorkspaceSummaryBar extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── 라이브러리 화면 공통 요약카드 (ProjectSummaryCard 컨셉 통일) ──────────────
+class LibrarySummaryRowData {
+  final String badge;
+  final Color badgeColor;
+  final List<String> values;
+  final List<Color> valueColors;
+  const LibrarySummaryRowData({
+    required this.badge,
+    required this.badgeColor,
+    required this.values,
+    required this.valueColors,
+  });
+}
+
+class LibrarySummaryCard extends StatelessWidget {
+  final List<String> headers;
+  final List<LibrarySummaryRowData> rows;
+  final String? addLabel;
+  final VoidCallback? onAdd;
+
+  /// 모든 라이브러리 화면 공통 치수 — 균일 고정
+  static const double _lw = 72.0;
+  static const double _cw = 52.0;
+
+  const LibrarySummaryCard({
+    super.key,
+    required this.headers,
+    required this.rows,
+    this.addLabel,
+    this.onAdd,
+  });
+
+  Widget _headerCell(String text) => SizedBox(
+        width: _cw,
+        child: Center(child: Text(text, style: T.caption.copyWith(color: C.mu))),
+      );
+
+  Widget _valueCell(String text, Color color) => SizedBox(
+        width: _cw,
+        child: Center(child: Text(text, style: T.bodyBold.copyWith(color: color))),
+      );
+
+  Widget _badgeCell(String text, Color color) => Container(
+        width: _lw,
+        color: color.withValues(alpha: 0.07),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        child: Center(
+          child: Text(
+            text,
+            style: T.caption.copyWith(color: color, fontWeight: FontWeight.w700),
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: EdgeInsets.zero,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const SizedBox(width: _lw),
+                        ...headers.map(_headerCell),
+                      ],
+                    ),
+                    Divider(height: 1, thickness: 0.5, color: C.bd),
+                    for (int i = 0; i < rows.length; i++) ...[
+                      if (i > 0) Divider(height: 1, thickness: 0.5, color: C.bd),
+                      Row(
+                        children: [
+                          _badgeCell(rows[i].badge, rows[i].badgeColor),
+                          for (int j = 0; j < rows[i].values.length; j++)
+                            _valueCell(rows[i].values[j], rows[i].valueColors[j]),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (addLabel != null && onAdd != null) ...[
+                VerticalDivider(width: 1, thickness: 1, color: C.bd),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: onAdd,
+                        icon: const Icon(Icons.add_rounded, size: 15),
+                        label: Text(
+                          addLabel!,
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: C.lv,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          elevation: 0,
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );

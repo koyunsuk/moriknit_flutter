@@ -5,6 +5,7 @@ class MemoModel {
   final String uid;
   final String content;
   final List<String> imageUrls;
+  final String? voiceUrl;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -13,6 +14,7 @@ class MemoModel {
     required this.uid,
     required this.content,
     required this.imageUrls,
+    this.voiceUrl,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -22,6 +24,7 @@ class MemoModel {
         uid: uid,
         content: '',
         imageUrls: const [],
+        voiceUrl: null,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -33,6 +36,7 @@ class MemoModel {
       uid: data['uid'] as String? ?? '',
       content: data['content'] as String? ?? '',
       imageUrls: (data['imageUrls'] as List<dynamic>?)?.cast<String>() ?? [],
+      voiceUrl: data['voiceUrl'] as String?,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
@@ -42,6 +46,7 @@ class MemoModel {
         'uid': uid,
         'content': content,
         'imageUrls': imageUrls,
+        if (voiceUrl != null) 'voiceUrl': voiceUrl,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
@@ -49,6 +54,7 @@ class MemoModel {
   Map<String, dynamic> toUpdateJson() => {
         'content': content,
         'imageUrls': imageUrls,
+        if (voiceUrl != null) 'voiceUrl': voiceUrl,
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
@@ -57,6 +63,8 @@ class MemoModel {
     String? uid,
     String? content,
     List<String>? imageUrls,
+    String? voiceUrl,
+    bool clearVoiceUrl = false,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) =>
@@ -65,6 +73,7 @@ class MemoModel {
         uid: uid ?? this.uid,
         content: content ?? this.content,
         imageUrls: imageUrls ?? this.imageUrls,
+        voiceUrl: clearVoiceUrl ? null : (voiceUrl ?? this.voiceUrl),
         createdAt: createdAt ?? this.createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
       );

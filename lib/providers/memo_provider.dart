@@ -52,6 +52,16 @@ class MemoNotifier extends AsyncNotifier<void> {
       await ref.read(memoRepositoryProvider).deleteMemo(memoId);
     });
   }
+
+  /// 음성 bytes를 Storage 업로드 후 voiceUrl로 메모 생성
+  Future<void> createVoiceMemo(MemoModel memo, Uint8List voiceBytes) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      final repo = ref.read(memoRepositoryProvider);
+      final voiceUrl = await repo.uploadVoice(voiceBytes);
+      await repo.createMemo(memo.copyWith(voiceUrl: voiceUrl));
+    });
+  }
 }
 
 final memoNotifierProvider = AsyncNotifierProvider<MemoNotifier, void>(

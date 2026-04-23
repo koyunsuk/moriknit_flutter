@@ -66,6 +66,8 @@ dependencies:
   pdf: ^3.12.0
   printing: ^5.14.3
   font_awesome_flutter: ^10.7.0
+  record: 6.0.0
+  just_audio: ^0.9.39
 
 dev_dependencies:
   flutter_test:

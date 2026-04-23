@@ -200,6 +200,20 @@ class ToolsScreen extends ConsumerWidget {
                     SectionTitle(title: isKorean ? '나의 작업관리' : 'My Work Management'),
                     const SizedBox(height: 10),
                     _ToolCard(
+                      icon: Icons.timer_rounded,
+                      color: C.lv,
+                      title: isKorean ? '뜨개 타이머' : 'Knitting Timer',
+                      description: isKorean ? '도안별 작업시간 추적' : 'Track time per pattern',
+                      onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(isKorean ? '도안 뷰어에서 ⏱️ 아이콘을 탭해서 사용하세요' : 'Tap the ⏱️ icon in the pattern viewer'),
+                          behavior: SnackBarBehavior.floating,
+                          duration: const Duration(seconds: 3),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _ToolCard(
                       icon: Icons.grid_view_rounded,
                       color: C.lmD,
                       title: isKorean ? '스와치 라이브러리' : 'Swatch Library',

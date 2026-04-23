@@ -417,6 +417,21 @@ class _WebShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final location = GoRouterState.of(context).matchedLocation;
+
+    // 도안에디터는 풀스크린 — 사이드바 없이 전체 화면
+    if (location.startsWith('/tools/pattern')) {
+      return Scaffold(
+        backgroundColor: C.bg,
+        body: Stack(
+          children: [
+            const BgOrbs(),
+            child,
+          ],
+        ),
+      );
+    }
+
     final screenWidth = MediaQuery.of(context).size.width;
     final showSidebar = screenWidth >= _sidebarBreakpoint;
 
@@ -692,52 +707,12 @@ class _WebContentArea extends ConsumerStatefulWidget {
 }
 
 class _WebContentAreaState extends ConsumerState<_WebContentArea> {
-  bool _fabOpen = false;
-
-  void _closeFab() => setState(() => _fabOpen = false);
-
   @override
   Widget build(BuildContext context) {
-    final t = ref.watch(appStringsProvider);
-    final speedItems = [
-      _SpeedItem(icon: Icons.folder_open_rounded, label: '새 프로젝트', color: C.lv, onTap: () { _closeFab(); showProjectStartSheet(context, ref); }),
-      _SpeedItem(icon: Icons.grid_view_rounded, label: t.swatches, color: C.lmD, onTap: () { _closeFab(); context.push(Routes.swatchInput); }),
-      _SpeedItem(icon: Icons.edit_note_rounded, label: '새 메모', color: C.pk, onTap: () { _closeFab(); context.push(Routes.toolsMemo); }),
-      _SpeedItem(icon: Icons.exposure_plus_1_rounded, label: t.newCounter, color: C.pkD, onTap: () { _closeFab(); context.push(Routes.counterList); }),
-    ];
-
     return Stack(
       children: [
         const BgOrbs(),
         widget.child,
-        if (_fabOpen)
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: _closeFab,
-              child: Container(color: Colors.black.withValues(alpha: 0.2)),
-            ),
-          ),
-        Positioned(
-          left: 24,
-          bottom: 24,
-          child: FloatingActionButton(
-            heroTag: 'global_back_fab_web',
-            onPressed: () => Navigator.maybePop(context),
-            backgroundColor: C.lm,
-            foregroundColor: const Color(0xFF1a3000),
-            elevation: 4,
-            child: const Icon(Icons.arrow_back_ios_rounded, size: 24),
-          ),
-        ),
-        Positioned(
-          right: 24,
-          bottom: 24,
-          child: _WebSpeedDial(
-            open: _fabOpen,
-            onToggle: () => setState(() => _fabOpen = !_fabOpen),
-            items: speedItems,
-          ),
-        ),
       ],
     );
   }
@@ -751,77 +726,6 @@ class _WebNavItem {
   const _WebNavItem(this.icon, this.label, this.color, this.route);
 }
 
-
-// ── 웹용 스피드다이얼 (기존 FAB 방식 유지) ────────────────────────────────────
-class _WebSpeedDial extends StatelessWidget {
-  final bool open;
-  final VoidCallback onToggle;
-  final List<_SpeedItem> items;
-  const _WebSpeedDial({required this.open, required this.onToggle, required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        ...items.asMap().entries.map((e) {
-          final item = e.value;
-          return IgnorePointer(
-            ignoring: !open,
-            child: AnimatedSlide(
-              offset: open ? Offset.zero : const Offset(0, 0.3),
-              duration: Duration(milliseconds: 150 + e.key * 30),
-              curve: Curves.easeOut,
-              child: AnimatedOpacity(
-                opacity: open ? 1 : 0,
-                duration: Duration(milliseconds: 150 + e.key * 30),
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.10), blurRadius: 8)],
-                        ),
-                        child: Text(item.label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                      ),
-                      const SizedBox(width: 10),
-                      FloatingActionButton.small(
-                        heroTag: 'web_fab_${item.label}',
-                        onPressed: item.onTap,
-                        backgroundColor: item.color.withValues(alpha: 0.75),
-                        foregroundColor: Colors.white,
-                        child: Icon(item.icon, size: 18),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        }),
-        const SizedBox(height: 8),
-        FloatingActionButton(
-          heroTag: 'web_main_speed_fab',
-          onPressed: onToggle,
-          backgroundColor: C.lm,
-          foregroundColor: const Color(0xFF1a3000),
-          elevation: open ? 6 : 4,
-          child: AnimatedRotation(
-            turns: open ? 0.125 : 0,
-            duration: const Duration(milliseconds: 200),
-            child: const Icon(Icons.add, size: 26),
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 class _CreateChip extends StatelessWidget {
   final IconData icon;

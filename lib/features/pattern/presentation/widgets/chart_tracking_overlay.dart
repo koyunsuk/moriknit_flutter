@@ -276,7 +276,7 @@ class _TrackingPainter extends CustomPainter {
 }
 
 // ── 하단 플로팅 컨트롤 바 ──────────────────────────────────────────
-class TrackingControlBar extends StatelessWidget {
+class TrackingControlBar extends StatefulWidget {
   final int currentRow;
   final int totalRows;
   final TrackingDisplayMode mode;
@@ -300,6 +300,10 @@ class TrackingControlBar extends StatelessWidget {
   final VoidCallback onColLongPressPlus;
   final ValueChanged<double> onMarkerWidthChange;
 
+  // 단 이동 — 마지막단/첫단 점프
+  final VoidCallback? onJumpToLastRow;
+  final VoidCallback? onJumpToFirstRow;
+
   const TrackingControlBar({
     super.key,
     required this.currentRow,
@@ -322,14 +326,58 @@ class TrackingControlBar extends StatelessWidget {
     required this.onColLongPressMinus,
     required this.onColLongPressPlus,
     required this.onMarkerWidthChange,
+    this.onJumpToLastRow,
+    this.onJumpToFirstRow,
   });
 
   @override
+  State<TrackingControlBar> createState() => _TrackingControlBarState();
+}
+
+class _TrackingControlBarState extends State<TrackingControlBar> {
+  bool _expanded = false;
+
+  void _toggleExpanded() => setState(() => _expanded = !_expanded);
+
+  void _showHelpDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('트래킹바 버튼 안내', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _HelpRow(icon: Icons.horizontal_rule_rounded, label: '━ 바 모드', desc: '현재 단 위치에 선 표시'),
+              _HelpRow(icon: Icons.layers_rounded, label: '▓ 완료 모드', desc: '완료된 단을 어둡게 표시'),
+              _HelpRow(icon: Icons.check_box_rounded, label: '☑ 체크 모드', desc: '완료 단에 체크 표시'),
+              _HelpRow(icon: Icons.swap_vert_rounded, label: '↕ 방향', desc: '아래→위 / 위→아래 전환'),
+              _HelpRow(icon: Icons.add_rounded, label: '⊕ 세로 포인터', desc: '코 위치 세로선 표시/숨김'),
+              _HelpRow(icon: Icons.skip_previous_rounded, label: '⏮ 1단↓', desc: '첫 번째 단으로 이동'),
+              _HelpRow(icon: Icons.skip_next_rounded, label: '⏭ 마지막단↑', desc: '마지막 단으로 이동'),
+              _HelpRow(icon: Icons.remove_rounded, label: '[-] / [+]', desc: '단 증감 (길게 누르면 10단씩)'),
+              _HelpRow(icon: Icons.chevron_left_rounded, label: '← →', desc: '코 위치 이동'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final colEnabled = currentCol != null;
+    final colEnabled = widget.currentCol != null;
+    final progress = widget.totalRows > 0 ? widget.currentRow / widget.totalRows : 0.0;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(20),
@@ -341,239 +389,358 @@ class TrackingControlBar extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── 메인 행: 모드 | 방향·크로스헤어 | 단 증감 | 닫기 ──
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // 가로 모드 버튼 + 방향 + 크로스헤어
-              Row(
-                children: [
-                  _ModeBtn(
-                    icon: Icons.horizontal_rule_rounded,
-                    selected: mode == TrackingDisplayMode.bar,
-                    tooltip: '바 모드',
-                    onTap: () => onModeChange(TrackingDisplayMode.bar),
-                  ),
-                  const SizedBox(width: 4),
-                  _ModeBtn(
-                    icon: Icons.layers_rounded,
-                    selected: mode == TrackingDisplayMode.completed,
-                    tooltip: '완료 모드',
-                    onTap: () => onModeChange(TrackingDisplayMode.completed),
-                  ),
-                  const SizedBox(width: 4),
-                  _ModeBtn(
-                    icon: Icons.check_box_rounded,
-                    selected: mode == TrackingDisplayMode.checkbox,
-                    tooltip: '체크박스',
-                    onTap: () => onModeChange(TrackingDisplayMode.checkbox),
-                  ),
-                  const SizedBox(width: 8),
-                  // 방향 토글: 아래→위 / 위→아래
-                  Tooltip(
-                    message: direction == TrackingBarDirection.bottomUp ? '위에서 아래로 전환' : '아래에서 위로 전환',
-                    child: GestureDetector(
-                      onTap: () => onDirectionChange(
-                        direction == TrackingBarDirection.bottomUp
-                            ? TrackingBarDirection.topDown
-                            : TrackingBarDirection.bottomUp,
-                      ),
-                      child: Container(
-                        width: 28, height: 28,
-                        decoration: BoxDecoration(
-                          color: direction == TrackingBarDirection.topDown
-                              ? C.lv.withValues(alpha: 0.15)
-                              : Colors.grey[100],
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: direction == TrackingBarDirection.topDown
-                                ? C.lv.withValues(alpha: 0.50)
-                                : Colors.transparent,
-                          ),
-                        ),
-                        child: Icon(
-                          direction == TrackingBarDirection.topDown
-                              ? Icons.arrow_downward_rounded
-                              : Icons.arrow_upward_rounded,
-                          size: 15,
-                          color: direction == TrackingBarDirection.topDown ? C.lv : Colors.grey[500],
-                        ),
-                      ),
+          // ── 확장 패널 (위로 펼침) ──
+          if (_expanded) ...[
+            // 모드 + 방향 + 크로스헤어 + 점프버튼 행
+            Row(
+              children: [
+                _ModeBtn(
+                  icon: Icons.horizontal_rule_rounded,
+                  selected: widget.mode == TrackingDisplayMode.bar,
+                  tooltip: '바 모드',
+                  onTap: () => widget.onModeChange(TrackingDisplayMode.bar),
+                ),
+                const SizedBox(width: 4),
+                _ModeBtn(
+                  icon: Icons.layers_rounded,
+                  selected: widget.mode == TrackingDisplayMode.completed,
+                  tooltip: '완료 모드',
+                  onTap: () => widget.onModeChange(TrackingDisplayMode.completed),
+                ),
+                const SizedBox(width: 4),
+                _ModeBtn(
+                  icon: Icons.check_box_rounded,
+                  selected: widget.mode == TrackingDisplayMode.checkbox,
+                  tooltip: '체크박스',
+                  onTap: () => widget.onModeChange(TrackingDisplayMode.checkbox),
+                ),
+                const SizedBox(width: 8),
+                // 방향 토글
+                Tooltip(
+                  message: widget.direction == TrackingBarDirection.bottomUp ? '위에서 아래로 전환' : '아래에서 위로 전환',
+                  child: GestureDetector(
+                    onTap: () => widget.onDirectionChange(
+                      widget.direction == TrackingBarDirection.bottomUp
+                          ? TrackingBarDirection.topDown
+                          : TrackingBarDirection.bottomUp,
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  // 세로 포인터 (크로스헤어) 토글
-                  Tooltip(
-                    message: colEnabled ? '세로 포인터 끄기' : '세로 포인터 켜기',
-                    child: GestureDetector(
-                      onTap: onColToggle,
-                      child: Container(
-                        width: 28, height: 28,
-                        decoration: BoxDecoration(
-                          color: colEnabled
-                              ? const Color(0xFFF59E0B).withValues(alpha: 0.15)
-                              : Colors.grey[100],
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: colEnabled
-                                ? const Color(0xFFF59E0B).withValues(alpha: 0.60)
-                                : Colors.transparent,
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.add_rounded, // 십자(+) 아이콘 = 크로스헤어
-                          size: 16,
-                          color: colEnabled ? const Color(0xFFF59E0B) : Colors.grey[500],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              // 단 증감 컨트롤
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: onMinus,
-                    onLongPress: onLongPressMinus,
                     child: Container(
-                      width: 40, height: 40,
+                      width: 28, height: 28,
                       decoration: BoxDecoration(
-                        color: C.lv.withValues(alpha: 0.10),
+                        color: widget.direction == TrackingBarDirection.topDown
+                            ? C.lv.withValues(alpha: 0.15)
+                            : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: widget.direction == TrackingBarDirection.topDown
+                              ? C.lv.withValues(alpha: 0.50)
+                              : Colors.transparent,
+                        ),
+                      ),
+                      child: Icon(
+                        widget.direction == TrackingBarDirection.topDown
+                            ? Icons.arrow_downward_rounded
+                            : Icons.arrow_upward_rounded,
+                        size: 15,
+                        color: widget.direction == TrackingBarDirection.topDown ? C.lv : Colors.grey[500],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                // 크로스헤어 토글
+                Tooltip(
+                  message: colEnabled ? '세로 포인터 끄기' : '세로 포인터 켜기',
+                  child: GestureDetector(
+                    onTap: widget.onColToggle,
+                    child: Container(
+                      width: 28, height: 28,
+                      decoration: BoxDecoration(
+                        color: colEnabled
+                            ? const Color(0xFFF59E0B).withValues(alpha: 0.15)
+                            : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: colEnabled
+                              ? const Color(0xFFF59E0B).withValues(alpha: 0.60)
+                              : Colors.transparent,
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.add_rounded,
+                        size: 16,
+                        color: colEnabled ? const Color(0xFFF59E0B) : Colors.grey[500],
+                      ),
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                // 점프 버튼
+                if (widget.onJumpToFirstRow != null)
+                  _JumpBtn(label: '1단↓', onTap: widget.onJumpToFirstRow!),
+                if (widget.onJumpToFirstRow != null && widget.onJumpToLastRow != null)
+                  const SizedBox(width: 6),
+                if (widget.onJumpToLastRow != null)
+                  _JumpBtn(label: '마지막단↑', onTap: widget.onJumpToLastRow!),
+              ],
+            ),
+
+            // 크로스헤어 활성 시: 코증감 + 마커너비 슬라이더 행
+            if (colEnabled) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  // 코 증감
+                  GestureDetector(
+                    onTap: widget.onColMinus,
+                    onLongPress: widget.onColLongPressMinus,
+                    child: Container(
+                      width: 30, height: 30,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.remove_rounded, color: C.lv, size: 22),
+                      child: const Icon(Icons.chevron_left_rounded, color: Color(0xFFF59E0B), size: 18),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 6),
                   Column(
                     children: [
                       Text(
-                        '$currentRow단',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.lv),
+                        '${widget.currentCol}코',
+                        style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w700,
+                          color: Color(0xFFF59E0B),
+                        ),
                       ),
-                      Text('/ $totalRows', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                      Text('/ ${widget.totalCols}', style: TextStyle(fontSize: 9, color: Colors.grey[500])),
                     ],
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 6),
                   GestureDetector(
-                    onTap: onPlus,
-                    onLongPress: onLongPressPlus,
+                    onTap: widget.onColPlus,
+                    onLongPress: widget.onColLongPressPlus,
                     child: Container(
-                      width: 40, height: 40,
+                      width: 30, height: 30,
                       decoration: BoxDecoration(
-                        color: C.lv.withValues(alpha: 0.10),
+                        color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.add_rounded, color: C.lv, size: 22),
+                      child: const Icon(Icons.chevron_right_rounded, color: Color(0xFFF59E0B), size: 18),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  // 마커 너비 슬라이더
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '마커 너비 ${widget.markerWidth.toStringAsFixed(1)}칸',
+                          style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                        ),
+                        SliderTheme(
+                          data: SliderThemeData(
+                            trackHeight: 3,
+                            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                            overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                            activeTrackColor: const Color(0xFFF59E0B),
+                            inactiveTrackColor: Colors.grey[200],
+                            thumbColor: const Color(0xFFF59E0B),
+                            overlayColor: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                          ),
+                          child: Slider(
+                            value: widget.markerWidth.clamp(0.5, 7.0),
+                            min: 0.5,
+                            max: 7.0,
+                            divisions: 13,
+                            onChanged: widget.onMarkerWidthChange,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
+            ],
 
-              // 닫기
+            const SizedBox(height: 4),
+            Divider(height: 1, color: Colors.grey[200]),
+            const SizedBox(height: 4),
+          ],
+
+          // ── 슬림 메인 행: [-] 진행률바+단수 [+] [?] [≡/✕] ──
+          Row(
+            children: [
+              // [-] 버튼
               GestureDetector(
-                onTap: onClose,
-                child: Icon(Icons.close_rounded, color: Colors.grey[400], size: 20),
+                onTap: widget.onMinus,
+                onLongPress: widget.onLongPressMinus,
+                child: Container(
+                  width: 34, height: 34,
+                  decoration: BoxDecoration(
+                    color: C.lv.withValues(alpha: 0.10),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.remove_rounded, color: C.lv, size: 18),
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              // 진행률바 + 단수 텍스트 (중앙 확장)
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 단수 텍스트
+                    RichText(
+                      text: TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '${widget.currentRow}단',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: C.lv,
+                            ),
+                          ),
+                          TextSpan(
+                            text: ' / ${widget.totalRows}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey[500],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    // 진행률바
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 5,
+                        backgroundColor: Colors.grey[200],
+                        valueColor: AlwaysStoppedAnimation<Color>(C.lv),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              // [+] 버튼
+              GestureDetector(
+                onTap: widget.onPlus,
+                onLongPress: widget.onLongPressPlus,
+                child: Container(
+                  width: 34, height: 34,
+                  decoration: BoxDecoration(
+                    color: C.lv.withValues(alpha: 0.10),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.add_rounded, color: C.lv, size: 18),
+                ),
+              ),
+              const SizedBox(width: 6),
+
+              // [?] 도움말 버튼
+              GestureDetector(
+                onTap: _showHelpDialog,
+                child: Container(
+                  width: 28, height: 28,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.help_outline_rounded, size: 15, color: Colors.grey[500]),
+                ),
+              ),
+              const SizedBox(width: 4),
+
+              // [≡/✕] 확장 토글 버튼
+              GestureDetector(
+                onTap: _toggleExpanded,
+                child: Container(
+                  width: 28, height: 28,
+                  decoration: BoxDecoration(
+                    color: _expanded ? C.lv.withValues(alpha: 0.12) : Colors.grey[100],
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: _expanded ? C.lv.withValues(alpha: 0.40) : Colors.transparent,
+                    ),
+                  ),
+                  child: Icon(
+                    _expanded ? Icons.close_rounded : Icons.menu_rounded,
+                    size: 15,
+                    color: _expanded ? C.lv : Colors.grey[500],
+                  ),
+                ),
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
 
-          const SizedBox(height: 8),
-          // 진행률 바
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: totalRows > 0 ? currentRow / totalRows : 0,
-              minHeight: 4,
-              backgroundColor: Colors.grey[200],
-              valueColor: AlwaysStoppedAnimation<Color>(C.lv),
-            ),
-          ),
+// 도움말 다이얼로그 내부 행 위젯
+class _HelpRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String desc;
 
-          // ── 세로 포인터 컨트롤 (활성 시만 표시) ──
-          if (colEnabled) ...[
-            const SizedBox(height: 10),
-            const Divider(height: 1),
-            const SizedBox(height: 8),
-            Row(
+  const _HelpRow({required this.icon, required this.label, required this.desc});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: Colors.grey[600]),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 코 증감
-                GestureDetector(
-                  onTap: onColMinus,
-                  onLongPress: onColLongPressMinus,
-                  child: Container(
-                    width: 32, height: 32,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.chevron_left_rounded, color: Color(0xFFF59E0B), size: 20),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Column(
-                  children: [
-                    Text(
-                      '$currentCol코',
-                      style: const TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w700,
-                        color: Color(0xFFF59E0B),
-                      ),
-                    ),
-                    Text('/ $totalCols', style: TextStyle(fontSize: 10, color: Colors.grey[500])),
-                  ],
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: onColPlus,
-                  onLongPress: onColLongPressPlus,
-                  child: Container(
-                    width: 32, height: 32,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.chevron_right_rounded, color: Color(0xFFF59E0B), size: 20),
-                  ),
-                ),
-
-                const SizedBox(width: 12),
-                // 마커 너비 슬라이더
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '마커 너비 ${markerWidth.toStringAsFixed(1)}칸',
-                        style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-                      ),
-                      SliderTheme(
-                        data: SliderThemeData(
-                          trackHeight: 3,
-                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-                          overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-                          activeTrackColor: const Color(0xFFF59E0B),
-                          inactiveTrackColor: Colors.grey[200],
-                          thumbColor: const Color(0xFFF59E0B),
-                          overlayColor: const Color(0xFFF59E0B).withValues(alpha: 0.15),
-                        ),
-                        child: Slider(
-                          value: markerWidth.clamp(0.5, 7.0),
-                          min: 0.5,
-                          max: 7.0,
-                          divisions: 13,
-                          onChanged: onMarkerWidthChange,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                Text(desc, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
               ],
             ),
-          ],
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _JumpBtn extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _JumpBtn({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: C.lv.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: C.lv.withValues(alpha: 0.25)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: C.lv),
+        ),
       ),
     );
   }

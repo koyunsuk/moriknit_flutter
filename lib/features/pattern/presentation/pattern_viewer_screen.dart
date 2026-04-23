@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' show acos, pi, max;
@@ -63,6 +64,31 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
   final _stickyCtrl = TextEditingController();
   bool _stickyEditing = false;
 
+  // Timer
+  bool _timerDockVisible = false;
+  bool _timerRunning = false;
+  int _sessionSeconds = 0;
+  int _totalSeconds = 0;
+  Timer? _timer;
+  int _reminderIntervalMin = 40;
+  int _reminderCountdown = 0;
+  int _reminderIndex = 0;
+
+  static const _reminders = [
+    '잠시 스트레칭하세요 🙆',
+    '물 한잔 마시세요 💧',
+    '잠시 환기하세요 🌬️',
+    '눈을 잠깐 감고 쉬어요 👁️',
+    '손목을 가볍게 풀어주세요 🤲',
+    '어깨를 돌려보세요 🔄',
+    '잠깐 일어나서 걸어볼까요? 🚶',
+    '목을 좌우로 천천히 돌려보세요 ↔️',
+  ];
+
+  // Vertical hairline
+  bool _hairlineActive = false;
+  double _hairlineX = 0.5;
+
   // Measurement tool
   bool _measureActive = false;
   _MeasureMode _measureMode = _MeasureMode.grid;
@@ -114,9 +140,11 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
       setState(() {
         _session = loaded;
         _sessionApplied = true;
+        _totalSeconds = loaded.totalSeconds;
         // Firestore에 기존 값이 있으면 로컬 상태 override
-        if (loaded.rulerY != 200.0 || loaded.strokes.isNotEmpty || loaded.stickyNotes.isNotEmpty) {
+        if (loaded.rulerY != 200.0 || loaded.hairlineX != null || loaded.strokes.isNotEmpty || loaded.stickyNotes.isNotEmpty) {
           _rulerY = loaded.rulerY;
+          if (loaded.hairlineX != null) _hairlineX = loaded.hairlineX!;
           if (loaded.strokes.isNotEmpty) {
             _strokes
               ..clear()
@@ -178,14 +206,75 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
 
   @override
   void dispose() {
+    _timer?.cancel();
+    // 타이머 세션 종료 시 누적시간 Firestore 저장
+    if (_sessionApplied && _sessionSeconds > 0) {
+      ref.read(patternSessionRepositoryProvider)
+          .updateTotalSeconds(_id, _totalSeconds + _sessionSeconds);
+    }
     _stickyCtrl.dispose();
     super.dispose();
+  }
+
+  // ── 타이머 메서드 ──────────────────────────────────────────────
+  void _startTimer() {
+    if (_timerRunning) return;
+    setState(() => _timerRunning = true);
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() {
+        _sessionSeconds++;
+        _reminderCountdown++;
+        if (_reminderCountdown >= _reminderIntervalMin * 60) {
+          _reminderCountdown = 0;
+          final msg = _reminders[_reminderIndex % _reminders.length];
+          _reminderIndex++;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(msg, style: const TextStyle(fontWeight: FontWeight.w600)),
+              duration: const Duration(seconds: 5),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      });
+    });
+  }
+
+  void _pauseTimer() {
+    _timer?.cancel();
+    _timer = null;
+    setState(() => _timerRunning = false);
+  }
+
+  void _syncTimerToFirestore() {
+    if (!_sessionApplied) return;
+    ref.read(patternSessionRepositoryProvider)
+        .updateTotalSeconds(_id, _totalSeconds + _sessionSeconds);
+  }
+
+  String _formatSession(int seconds) {
+    final h = seconds ~/ 3600;
+    final m = (seconds % 3600) ~/ 60;
+    final s = seconds % 60;
+    if (h > 0) {
+      return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    }
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
+  String _formatTotal(int seconds) {
+    final h = seconds ~/ 3600;
+    final m = (seconds % 3600) ~/ 60;
+    if (h > 0) return '${h}h ${m}m';
+    return '${m}m';
   }
 
   void _loadState() {
     final b = _box;
     if (b == null) return;
     _rulerY = (b.get('ruler_y_$_id') as double?) ?? 200.0;
+    _hairlineX = (b.get('hairline_x_$_id') as double?) ?? 0.5;
     _stickyX = (b.get('sticky_x_$_id') as double?) ?? 20.0;
     _stickyY = (b.get('sticky_y_$_id') as double?) ?? 120.0;
     _stickyCtrl.text = (b.get('sticky_text_$_id') as String?) ?? '';
@@ -203,6 +292,13 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
       } catch (e) {
         // ignore
       }
+    }
+  }
+
+  void _saveHairline() {
+    _box?.put('hairline_x_$_id', _hairlineX);
+    if (_sessionApplied) {
+      ref.read(patternSessionRepositoryProvider).updateHairline(_id, _hairlineX);
     }
   }
 
@@ -429,6 +525,13 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
                 style: T.h3.copyWith(color: _isDark ? Colors.white : null)),
         actions: [
           _ToolIcon(
+            icon: Icons.timer_rounded,
+            active: _timerDockVisible,
+            activeColor: C.lv,
+            dimColor: _isDark ? Colors.white38 : C.tx2,
+            onTap: () => setState(() => _timerDockVisible = !_timerDockVisible),
+          ),
+          _ToolIcon(
             icon: Icons.edit_rounded,
             active: _highlighterActive,
             activeColor: C.og,
@@ -441,6 +544,22 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
             activeColor: C.lmD,
             dimColor: _isDark ? Colors.white38 : C.tx2,
             onTap: () => setState(() => _stickyActive = !_stickyActive),
+          ),
+          // 세로 헤어라인 (straighten 90° 회전)
+          Tooltip(
+            message: '세로 헤어라인',
+            child: IconButton(
+              icon: Transform.rotate(
+                angle: pi / 2,
+                child: Icon(
+                  Icons.straighten_rounded,
+                  color: _hairlineActive
+                      ? const Color(0xFFF59E0B)
+                      : (_isDark ? Colors.white38 : C.tx2),
+                ),
+              ),
+              onPressed: () => setState(() => _hairlineActive = !_hairlineActive),
+            ),
           ),
           _ToolIcon(
             icon: Icons.exposure_plus_1_rounded,
@@ -471,6 +590,28 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
                 _circleRadius = 80.0;
               }
             }),
+          ),
+          // 서술형 도안 뷰어
+          IconButton(
+            icon: Icon(
+              Icons.subject_rounded,
+              color: widget.chart.narrativeText.trim().isNotEmpty
+                  ? (_isDark ? Colors.white : C.tx2)
+                  : (_isDark ? Colors.white24 : C.tx2.withValues(alpha: 0.3)),
+            ),
+            tooltip: isKorean ? '서술형 보기' : 'Narrative View',
+            onPressed: widget.chart.narrativeText.trim().isNotEmpty
+                ? () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => _NarrativeViewerScreen(
+                        title: widget.chart.title,
+                        narrativeText: widget.chart.narrativeText,
+                        isKorean: isKorean,
+                      ),
+                    ),
+                  )
+                : null,
           ),
           // 연결 메뉴 (프로젝트 / 스와치)
           PopupMenuButton<String>(
@@ -672,6 +813,42 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
                         ),
                       ),
                     ),
+                  // Vertical hairline
+                  if (_hairlineActive) ...[
+                    Positioned(
+                      left: _hairlineX * maxW - 0.75,
+                      top: 0,
+                      bottom: 0,
+                      child: IgnorePointer(
+                        child: SizedBox(
+                          width: 1.5,
+                          child: Container(color: const Color(0xFFF59E0B).withValues(alpha: 0.85)),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: _hairlineX * maxW - 18,
+                      top: 4,
+                      child: GestureDetector(
+                        onHorizontalDragUpdate: (d) {
+                          setState(() {
+                            _hairlineX = (_hairlineX + d.delta.dx / maxW).clamp(0.0, 1.0);
+                          });
+                          _saveHairline();
+                        },
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B),
+                            shape: BoxShape.circle,
+                            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 6, offset: const Offset(0, 2))],
+                          ),
+                          child: const Icon(Icons.drag_indicator_rounded, color: Colors.white, size: 18),
+                        ),
+                      ),
+                    ),
+                  ],
                   // Sticky note
                   if (_stickyActive)
                     Positioned(
@@ -727,6 +904,24 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
                 onMode: (m) => setState(() => _measureMode = m),
                 onToggleUnit: () =>
                     setState(() => _measureUseInch = !_measureUseInch),
+              ),
+            // Timer dock
+            if (_timerDockVisible)
+              _TimerDock(
+                sessionSeconds: _sessionSeconds,
+                totalSeconds: _totalSeconds,
+                isRunning: _timerRunning,
+                reminderIntervalMin: _reminderIntervalMin,
+                isDark: _isDark,
+                onStart: _startTimer,
+                onPause: _pauseTimer,
+                onSave: _syncTimerToFirestore,
+                onIntervalChanged: (min) => setState(() {
+                  _reminderIntervalMin = min;
+                  _reminderCountdown = 0;
+                }),
+                formatSession: _formatSession,
+                formatTotal: _formatTotal,
               ),
             // Counter dock
             if (_counterActive)
@@ -1047,6 +1242,189 @@ class _StickyNoteWidget extends StatelessWidget {
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Timer dock ────────────────────────────────────────────────────────────────
+
+class _TimerDock extends StatelessWidget {
+  final int sessionSeconds;
+  final int totalSeconds;
+  final bool isRunning;
+  final int reminderIntervalMin;
+  final bool isDark;
+  final VoidCallback onStart;
+  final VoidCallback onPause;
+  final VoidCallback onSave;
+  final ValueChanged<int> onIntervalChanged;
+  final String Function(int) formatSession;
+  final String Function(int) formatTotal;
+
+  const _TimerDock({
+    required this.sessionSeconds,
+    required this.totalSeconds,
+    required this.isRunning,
+    required this.reminderIntervalMin,
+    required this.isDark,
+    required this.onStart,
+    required this.onPause,
+    required this.onSave,
+    required this.onIntervalChanged,
+    required this.formatSession,
+    required this.formatTotal,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isDark ? const Color(0xFF0F0F1E) : C.bg;
+    final textColor = isDark ? Colors.white : C.tx;
+    final muted = isDark ? Colors.white38 : C.mu;
+    final accumulated = totalSeconds + sessionSeconds;
+
+    return Container(
+      color: bg,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.timer_rounded, color: C.lv, size: 16),
+              const SizedBox(width: 6),
+              // 세션 타이머
+              Text(
+                formatSession(sessionSeconds),
+                style: TextStyle(
+                  color: textColor,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 22,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+              const SizedBox(width: 10),
+              // 누적 시간
+              Text(
+                '누적 ${formatTotal(accumulated)}',
+                style: TextStyle(color: muted, fontSize: 12),
+              ),
+              const Spacer(),
+              // 시작/일시정지 버튼
+              GestureDetector(
+                onTap: isRunning ? onPause : onStart,
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: C.lv.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: C.lv.withValues(alpha: 0.4)),
+                  ),
+                  child: Icon(
+                    isRunning ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    color: C.lv,
+                    size: 22,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // 알림 간격 설정 버튼
+              GestureDetector(
+                onTap: () => _showIntervalPicker(context),
+                child: Container(
+                  height: 40,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white10 : C.gx,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: isDark ? Colors.white12 : C.bd),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.notifications_none_rounded, size: 14, color: muted),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$reminderIntervalMin분',
+                        style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showIntervalPicker(BuildContext context) {
+    const intervals = [10, 20, 30, 40, 50, 60];
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(color: C.bd, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '건강 알림 간격',
+              style: T.h3.copyWith(color: isDark ? Colors.white : C.tx),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'N분마다 스트레칭·물마시기 등 알림을 보내요',
+              style: T.caption.copyWith(color: C.mu),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: intervals.map((min) {
+                final selected = min == reminderIntervalMin;
+                return GestureDetector(
+                  onTap: () {
+                    onIntervalChanged(min);
+                    Navigator.pop(ctx);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: selected ? C.lv : C.lv.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: selected ? C.lv : C.lv.withValues(alpha: 0.20),
+                      ),
+                    ),
+                    child: Text(
+                      '$min분',
+                      style: TextStyle(
+                        color: selected ? Colors.white : C.lvD,
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2165,6 +2543,64 @@ class _LinkActionTile extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── 서술형 도안 뷰어 ──────────────────────────────────────────────────────────
+
+class _NarrativeViewerScreen extends StatelessWidget {
+  final String title;
+  final String narrativeText;
+  final bool isKorean;
+  const _NarrativeViewerScreen({
+    required this.title,
+    required this.narrativeText,
+    required this.isKorean,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, size: 20),
+          color: C.tx,
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: T.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(isKorean ? '서술형 도안' : 'Narrative Pattern',
+                style: T.caption.copyWith(color: C.mu)),
+          ],
+        ),
+      ),
+      body: narrativeText.trim().isEmpty
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.subject_rounded, size: 48, color: C.mu),
+                  const SizedBox(height: 12),
+                  Text(
+                    isKorean
+                        ? '서술형 도안이 없어요.\n도안에디터에서 생성해 주세요.'
+                        : 'No narrative pattern.\nGenerate it in the pattern editor.',
+                    textAlign: TextAlign.center,
+                    style: T.body.copyWith(color: C.mu),
+                  ),
+                ],
+              ),
+            )
+          : SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+              child: SelectableText(
+                narrativeText,
+                style: T.body.copyWith(height: 1.8),
+              ),
+            ),
     );
   }
 }

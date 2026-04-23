@@ -18,6 +18,21 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/course_provider.dart';
 import '../domain/course_item.dart';
 
+// mediaType 카운트 헬퍼
+Map<String, int> _countByMediaType(List<CourseItem> courses) {
+  int youtube = 0, video = 0, file = 0;
+  for (final c in courses) {
+    if (c.mediaType == 'youtube' || c.mediaType == '') {
+      youtube++;
+    } else if (c.mediaType == 'video') {
+      video++;
+    } else {
+      file++;
+    }
+  }
+  return {'youtube': youtube, 'video': video, 'file': file};
+}
+
 String? _extractVideoId(String url) {
   final uri = Uri.tryParse(url);
   if (uri == null) return null;
@@ -77,6 +92,29 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
               child: MoriWideHeader(
                 title: isKorean ? '클라스' : 'Class',
                 subtitle: isKorean ? '유튜브 링크로 뜨개 강의를 모아두는 임시 보드예요.' : 'A temporary board for knitting lessons with YouTube links.',
+              ),
+            ),
+            // 요약카드 (고정 영역)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Builder(
+                builder: (context) {
+                  final courses = coursesAsync.valueOrNull ?? [];
+                  final counts = _countByMediaType(courses);
+                  return LibrarySummaryCard(
+                    headers: [isKorean ? '동영상' : 'Video', isKorean ? '파일' : 'File', 'YouTube'],
+                    rows: [
+                      LibrarySummaryRowData(
+                        badge: isKorean ? '클라스' : 'Class',
+                        badgeColor: C.lv,
+                        values: ['${counts['video']}', '${counts['file']}', '${counts['youtube']}'],
+                        valueColors: [C.lv, C.pkD, C.og],
+                      ),
+                    ],
+                    addLabel: isKorean ? '추가' : 'Add',
+                    onAdd: () => _showCourseStartSheet(context, ref, isKorean),
+                  );
+                },
               ),
             ),
             Expanded(
@@ -397,9 +435,9 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 ),
                 items: [
-                  DropdownMenuItem(value: isKorean ? '입문' : 'Beginner', child: Text(isKorean ? '입문' : 'Beginner')),
-                  DropdownMenuItem(value: isKorean ? '중급' : 'Intermediate', child: Text(isKorean ? '중급' : 'Intermediate')),
-                  DropdownMenuItem(value: isKorean ? '고급' : 'Advanced', child: Text(isKorean ? '고급' : 'Advanced')),
+                  DropdownMenuItem(value: isKorean ? '입문' : 'Beginner', child: Text(isKorean ? '입문' : 'Beginner', style: T.body)),
+                  DropdownMenuItem(value: isKorean ? '중급' : 'Intermediate', child: Text(isKorean ? '중급' : 'Intermediate', style: T.body)),
+                  DropdownMenuItem(value: isKorean ? '고급' : 'Advanced', child: Text(isKorean ? '고급' : 'Advanced', style: T.body)),
                 ],
                 onChanged: (value) => setState(() => category = value ?? category),
               ),
@@ -891,9 +929,9 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 ),
                 items: [
-                  DropdownMenuItem(value: widget.isKorean ? '입문' : 'Beginner', child: Text(widget.isKorean ? '입문' : 'Beginner')),
-                  DropdownMenuItem(value: widget.isKorean ? '중급' : 'Intermediate', child: Text(widget.isKorean ? '중급' : 'Intermediate')),
-                  DropdownMenuItem(value: widget.isKorean ? '고급' : 'Advanced', child: Text(widget.isKorean ? '고급' : 'Advanced')),
+                  DropdownMenuItem(value: widget.isKorean ? '입문' : 'Beginner', child: Text(widget.isKorean ? '입문' : 'Beginner', style: T.body)),
+                  DropdownMenuItem(value: widget.isKorean ? '중급' : 'Intermediate', child: Text(widget.isKorean ? '중급' : 'Intermediate', style: T.body)),
+                  DropdownMenuItem(value: widget.isKorean ? '고급' : 'Advanced', child: Text(widget.isKorean ? '고급' : 'Advanced', style: T.body)),
                 ],
                 onChanged: (value) => setLocalState(() => category = value ?? category),
               ),
