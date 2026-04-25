@@ -601,7 +601,7 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
                         final yarn = yarns[i];
                         return ListTile(
                           leading: yarn.photoUrl.isNotEmpty
-                              ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(yarn.photoUrl, width: 44, height: 44, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(width: 44, height: 44, decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)), child: Icon(Icons.color_lens_outlined, color: C.lvD, size: 20))))
+                              ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(yarn.photoUrl, width: 44, height: 44, fit: BoxFit.cover, errorBuilder: (_, _, _) => Container(width: 44, height: 44, decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)), child: Icon(Icons.color_lens_outlined, color: C.lvD, size: 20))))
                               : Container(width: 44, height: 44, decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)), child: Icon(Icons.color_lens_outlined, color: C.lvD, size: 20)),
                           title: Text(yarn.name.isNotEmpty ? yarn.name : yarn.brandName, style: T.bodyBold),
                           subtitle: Text('${yarn.brandName.isNotEmpty ? yarn.brandName : (isKorean ? "브랜드 없음" : "No brand")}${yarn.color.isNotEmpty ? " · ${yarn.color}" : ""}', style: T.caption.copyWith(color: C.mu)),
@@ -648,7 +648,7 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
                         final acc = accessories[i];
                         return ListTile(
                           leading: acc.photoUrl.isNotEmpty
-                              ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(acc.photoUrl, width: 44, height: 44, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(width: 44, height: 44, decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)), child: Icon(Icons.diamond_outlined, color: C.lvD, size: 20))))
+                              ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(acc.photoUrl, width: 44, height: 44, fit: BoxFit.cover, errorBuilder: (_, _, _) => Container(width: 44, height: 44, decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)), child: Icon(Icons.diamond_outlined, color: C.lvD, size: 20))))
                               : Container(width: 44, height: 44, decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)), child: Icon(Icons.diamond_outlined, color: C.lvD, size: 20)),
                           title: Text(acc.name.isNotEmpty ? acc.name : acc.localizedTypeLabel(isKorean), style: T.bodyBold),
                           subtitle: Text(acc.localizedTypeLabel(isKorean), style: T.caption.copyWith(color: C.mu)),
@@ -717,11 +717,36 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
                     .join(' / ');
                 final notesText = [if (yarnInfo.isNotEmpty) yarnInfo, if (swatch.memo.isNotEmpty) swatch.memo]
                     .join('\n');
-                await ravelryRepo.createStash(
+                // 이슈 #644 Phase 7 — 연결된 myYarn의 ravelryYarnId를 stash 생성에 전달 → Ravelry 공식 yarn 매핑
+                int? linkedRavelryYarnId;
+                if (swatch.myYarnId.isNotEmpty) {
+                  final yarns = ref.read(yarnListProvider).valueOrNull ?? [];
+                  final linkedYarn = yarns.where((y) => y.id == swatch.myYarnId).firstOrNull;
+                  if (linkedYarn != null && linkedYarn.ravelryYarnId != null && linkedYarn.ravelryYarnId! > 0) {
+                    linkedRavelryYarnId = linkedYarn.ravelryYarnId;
+                  }
+                }
+                // 이슈 #644 — createStash 반환 ID 캡처 후 연결된 myYarn에 저장
+                final stashEntry = await ravelryRepo.createStash(
                   name: swatch.swatchName.isEmpty ? (isKorean ? '내 실' : 'My yarn') : swatch.swatchName,
                   colorwayName: swatch.yarnColor.isEmpty ? null : swatch.yarnColor,
                   notes: notesText.isEmpty ? null : notesText,
+                  yarnId: linkedRavelryYarnId,
                 );
+                if (swatch.myYarnId.isNotEmpty && stashEntry.id > 0) {
+                  try {
+                    final yarnRepo = ref.read(yarnRepositoryProvider);
+                    final yarns = ref.read(yarnListProvider).valueOrNull ?? [];
+                    final linkedYarn = yarns.where((y) => y.id == swatch.myYarnId).firstOrNull;
+                    if (linkedYarn != null) {
+                      await yarnRepo.updateYarn(
+                        linkedYarn.copyWith(ravelryStashId: stashEntry.id),
+                      );
+                    }
+                  } catch (_) {
+                    // yarn 업데이트 실패해도 stash 등록 자체는 성공이므로 무시
+                  }
+                }
               }
             }
           }

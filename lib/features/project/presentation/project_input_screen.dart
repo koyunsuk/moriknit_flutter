@@ -13,11 +13,14 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/book_provider.dart';
+import '../../../providers/counter_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/project_step_provider.dart';
 import '../../../providers/swatch_provider.dart';
 import '../../pattern/data/pattern_repository.dart';
+import '../../pattern/domain/pattern_chart.dart';
 import '../../my/data/mori_service.dart';
+import '../../../providers/yarn_provider.dart';
 import '../domain/builtin_template.dart';
 import '../domain/project_model.dart';
 import '../domain/user_template.dart';
@@ -31,8 +34,18 @@ class ProjectInputScreen extends ConsumerStatefulWidget {
   final String? templateType;
   final BuiltinTemplate? builtinTemplate;
   final UserTemplate? userTemplate;
+  // 이슈 #627 — AI 변환 도안에서 프로젝트 시작. 섹션이 ProjectStep으로 자동 미러링됨.
+  final PatternChart? sourcePatternChart;
 
-  const ProjectInputScreen({super.key, this.projectId, this.initialProject, this.templateType, this.builtinTemplate, this.userTemplate});
+  const ProjectInputScreen({
+    super.key,
+    this.projectId,
+    this.initialProject,
+    this.templateType,
+    this.builtinTemplate,
+    this.userTemplate,
+    this.sourcePatternChart,
+  });
 
   @override
   ConsumerState<ProjectInputScreen> createState() => _ProjectInputScreenState();
@@ -311,13 +324,16 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                     ),
                   ),
                 ],
-                // 템플릿 단계로그 미리보기
-                if (widget.builtinTemplate != null || widget.userTemplate != null) ...[
+                // 템플릿 단계로그 미리보기 (#647 — AI 도안 sections 미리보기 포함)
+                if (widget.builtinTemplate != null ||
+                    widget.userTemplate != null ||
+                    widget.sourcePatternChart != null) ...[
                   const SizedBox(height: 20),
                   _TemplateStepsPreview(
                     isKorean: isKorean,
                     builtinTemplate: widget.builtinTemplate,
                     userTemplate: widget.userTemplate,
+                    patternChart: widget.sourcePatternChart,
                   ),
                 ],
                 const SizedBox(height: 20),
@@ -355,6 +371,7 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
   String _templateName(String type) {
     const names = {
       'topdown': '탑다운 스웨터',
+      'crop_raglan_topdown': '크롭 레글런 탑다운',
       'socks': '양말',
       'scarf': '목도리',
       'gloves': '장갑',
@@ -458,20 +475,44 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
         subtitle: t.pleaseWaitMoment,
         task: () async {
           if (widget.projectId != null) {
+            // 이슈 #644 — 수정 시 ravelryProjectId 있으면 Ravelry에도 동기화
             await repository.updateProject(project);
+            await _syncProjectUpdateToRavelry(project);
           } else {
-            final saved = await repository.createProject(project.copyWith(uid: user.uid));
+            // 이슈 #644 — Phase 4: 도안/실의 Ravelry IDs 수집해서 createProject에 전달
+            final ravelryPatternId = _resolveRavelryPatternId(project);
+            final ravelryStashIds = _resolveRavelryStashIds(project);
+            // ProjectModel에 매핑 정보 미리 박아 두고 저장 (createProject 응답 받기 전)
+            var prepared = project.copyWith(
+              uid: user.uid,
+              ravelryPatternId: ravelryPatternId,
+              ravelryStashIds: ravelryStashIds,
+            );
+            final saved = await repository.createProject(prepared);
             MoriService.earn(user.uid, amount: 100, reason: 'project_save');
             if (_syncToRavelry) {
               final ravelryRepo = ref.read(ravelryRepositoryProvider);
               if (ravelryRepo != null) {
                 int statusTypeId = 1;
                 if (project.status == 'finished') statusTypeId = 3;
-                await ravelryRepo.createProject(
+                final packs = ravelryStashIds
+                    .map((id) => <String, dynamic>{'stash_id': id})
+                    .toList();
+                final created = await ravelryRepo.createProject(
                   name: project.title,
                   notes: project.memo.trim().isEmpty ? null : project.memo.trim(),
                   statusTypeId: statusTypeId,
+                  patternId: ravelryPatternId,
+                  packs: packs.isEmpty ? null : packs,
                 );
+                // 반환된 ravelryProjectId를 모리니트 프로젝트에 역동기화
+                if (created.id > 0) {
+                  await repository.updateProject(saved.copyWith(
+                    ravelryProjectId: created.id,
+                    ravelryPatternId: ravelryPatternId,
+                    ravelryStashIds: ravelryStashIds,
+                  ));
+                }
               }
             }
             if (widget.templateType != null) {
@@ -493,6 +534,18 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                 );
               }
             }
+            // 이슈 #627 (B-1) — AI 변환 도안에서 섹션 + 카운터 자동 미러링
+            if (widget.sourcePatternChart != null) {
+              final isKorean = ref.read(appLanguageProvider).isKorean;
+              await ref
+                  .read(projectStepRepositoryProvider)
+                  .addPatternSectionStepsWithCounters(
+                    saved.id,
+                    widget.sourcePatternChart!,
+                    isKorean,
+                    ref.read(counterRepositoryProvider),
+                  );
+            }
           }
         },
       );
@@ -507,6 +560,79 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
       if (mounted) setState(() => _isSaving = false);
     }
   }
+
+  /// 이슈 #644 — 프로젝트의 sourcePatternId로 PatternChart를 찾아 ravelryPatternId 반환
+  int? _resolveRavelryPatternId(ProjectModel project) {
+    if (widget.sourcePatternChart != null) {
+      return widget.sourcePatternChart!.ravelryPatternId;
+    }
+    if (project.sourcePatternId.isEmpty) return null;
+    final patterns = ref.read(patternListProvider).valueOrNull ?? [];
+    for (final p in patterns) {
+      if (p.id == project.sourcePatternId) return p.ravelryPatternId;
+    }
+    return null;
+  }
+
+  /// 이슈 #644 — 프로젝트의 yarnIds 각각에 대해 ravelryStashId 수집 (없는 것 제외)
+  List<int> _resolveRavelryStashIds(ProjectModel project) {
+    if (project.yarnIds.isEmpty) return const [];
+    final yarns = ref.read(yarnListProvider).valueOrNull ?? [];
+    final ids = <int>[];
+    for (final yarnId in project.yarnIds) {
+      for (final y in yarns) {
+        if (y.id == yarnId && y.ravelryStashId != null && y.ravelryStashId! > 0) {
+          ids.add(y.ravelryStashId!);
+          break;
+        }
+      }
+    }
+    return ids;
+  }
+
+  /// 이슈 #644 — Phase 5: 수정 시 ravelryProjectId가 있으면 Ravelry에도 업데이트
+  Future<void> _syncProjectUpdateToRavelry(ProjectModel project) async {
+    final ravelryProjectId = project.ravelryProjectId;
+    if (ravelryProjectId == null || ravelryProjectId <= 0) return;
+    final ravelryRepo = ref.read(ravelryRepositoryProvider);
+    if (ravelryRepo == null) return;
+
+    int statusTypeId = 1;
+    if (project.status == 'finished') statusTypeId = 3;
+
+    // 도안/실 IDs 재수집 (수정 흐름에서도 packs 다시 동기화)
+    final ravelryStashIds = _resolveRavelryStashIds(project);
+    final packs = ravelryStashIds
+        .map((id) => <String, dynamic>{'stash_id': id})
+        .toList();
+
+    try {
+      await ravelryRepo.updateProject(
+        projectId: ravelryProjectId,
+        name: project.title,
+        notes: project.memo.trim(),
+        statusTypeId: statusTypeId,
+        packs: packs.isEmpty ? null : packs,
+      );
+      // 새 stash IDs를 ProjectModel에도 반영
+      if (ravelryStashIds.isNotEmpty &&
+          !_listEquals(ravelryStashIds, project.ravelryStashIds)) {
+        await ref.read(projectRepositoryProvider).updateProject(
+              project.copyWith(ravelryStashIds: ravelryStashIds),
+            );
+      }
+    } catch (_) {
+      // Ravelry 동기화 실패해도 모리니트 저장은 이미 성공이므로 무시
+    }
+  }
+
+  bool _listEquals(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
 }
 
 
@@ -517,11 +643,14 @@ class _TemplateStepsPreview extends StatelessWidget {
   final bool isKorean;
   final BuiltinTemplate? builtinTemplate;
   final UserTemplate? userTemplate;
+  // 이슈 #647 — AI 변환 도안 sections 미리보기 지원
+  final PatternChart? patternChart;
 
   const _TemplateStepsPreview({
     required this.isKorean,
     this.builtinTemplate,
     this.userTemplate,
+    this.patternChart,
   });
 
   List<String> get _steps {
@@ -529,6 +658,20 @@ class _TemplateStepsPreview extends StatelessWidget {
       return isKorean ? builtinTemplate!.stepsKo : builtinTemplate!.stepsEn;
     }
     if (userTemplate != null) return userTemplate!.stepTitles;
+    // 이슈 #647 — AI 도안 섹션 제목을 단계 미리보기로 표시
+    if (patternChart != null) {
+      final sections = patternChart!.aiSections ?? const [];
+      return [
+        for (int i = 0; i < sections.length; i++)
+          () {
+            final s = sections[i];
+            final title = isKorean ? (s.titleKo ?? s.title) : s.title;
+            return title.trim().isEmpty
+                ? (isKorean ? '섹션 ${i + 1}' : 'Section ${i + 1}')
+                : title;
+          }(),
+      ];
+    }
     return [];
   }
 
@@ -1056,6 +1199,7 @@ class _TemplateBanner extends StatelessWidget {
 
   static const _info = <String, (IconData, String, String)>{
     'topdown': (Icons.dry_cleaning_rounded, '탑다운 스웨터', '8단계 가이드 자동 생성'),
+    'crop_raglan_topdown': (Icons.checkroom_rounded, '크롭 레글런 탑다운', 'Banul 도안 기반 12단계 자동 생성'),
     'socks':   (Icons.hiking_rounded,         '양말',           '8단계 힐 가이드 자동 생성'),
     'scarf':   (Icons.ac_unit_rounded,        '목도리',         '5단계 가이드 자동 생성'),
     'gloves':  (Icons.back_hand_rounded,      '장갑',           '7단계 가이드 자동 생성'),

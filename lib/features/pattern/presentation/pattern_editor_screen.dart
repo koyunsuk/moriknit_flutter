@@ -19,6 +19,7 @@ import '../../../core/widgets/common_widgets.dart';
 import '../data/pattern_export_service.dart';
 import '../data/pattern_repository.dart';
 import '../domain/knit_symbols.dart';
+import '../domain/narrative_block.dart';
 import '../domain/pattern_chart.dart';
 import '../../../features/counter/domain/counter_model.dart';
 import '../../../providers/auth_provider.dart';
@@ -28,6 +29,7 @@ import 'widgets/chart_canvas.dart';
 import 'widgets/chart_toolbar.dart';
 import 'widgets/chart_tracking_overlay.dart';
 import 'widgets/grid_size_dialog.dart';
+import 'widgets/section_grouper.dart';
 
 class PatternEditorScreen extends ConsumerStatefulWidget {
   final String? patternId;
@@ -95,7 +97,7 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
   TrackingDisplayMode _trackingMode = TrackingDisplayMode.bar;
   TrackingBarDirection _trackingDirection = TrackingBarDirection.bottomUp;
   int? _trackingCurrentCol = 1; // 기본 활성 (1코)
-  double _trackingMarkerWidth = 2.0;
+  double _trackingMarkerWidth = 1.0;
 
   @override
   void initState() {
@@ -268,6 +270,9 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
 
   void _openNarrativeSheet() {
     final isKorean = ref.read(appLanguageProvider).isKorean;
+    // 탭 상태: 0 = 서술형 편집(기존), 1 = 섹션 나누기(신규)
+    // showModalBottomSheet builder 스코프 closure 변수로 세션 내 유지.
+    int tab = 0;
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -302,25 +307,78 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
               // 컬러차트 모드 — 색상 범례 패널
               if (_chart.mode == ChartMode.colorChart)
                 _ColorLegendPanel(chart: _chart, isKorean: isKorean),
+              // 탭 토글 (신규 — 기존 UI는 탭 0에 그대로 유지)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _NarrativeTabBtn(
+                        label: isKorean ? '서술형 편집' : 'Narrative',
+                        icon: Icons.edit_note_rounded,
+                        active: tab == 0,
+                        onTap: () => setSheetState(() => tab = 0),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _NarrativeTabBtn(
+                        label: isKorean ? '섹션 나누기' : 'Sections',
+                        icon: Icons.segment_rounded,
+                        active: tab == 1,
+                        onTap: () => setSheetState(() => tab = 1),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               Expanded(
-                child: _chart.mode == ChartMode.colorChart
-                    ? _NarrativeWithPreview(
+                child: tab == 0
+                    ? (_chart.mode == ChartMode.colorChart
+                        ? _NarrativeWithPreview(
+                            chart: _chart,
+                            controller: _narrativeController,
+                            onChanged: (text) {
+                              _pushUndo(_chart);
+                              setState(() {
+                                _chart = _chart.copyWith(
+                                  narrativeText: text,
+                                  narrativeBlocks: NarrativeBlock.reconcile(
+                                    text,
+                                    _chart.narrativeBlocks,
+                                  ),
+                                );
+                              });
+                              setSheetState(() {});
+                            },
+                          )
+                        : _NarrativeEditor(
+                            controller: _narrativeController,
+                            onChanged: (text) {
+                              _pushUndo(_chart);
+                              setState(() {
+                                _chart = _chart.copyWith(
+                                  narrativeText: text,
+                                  narrativeBlocks: NarrativeBlock.reconcile(
+                                    text,
+                                    _chart.narrativeBlocks,
+                                  ),
+                                );
+                              });
+                              setSheetState(() {});
+                            },
+                          ))
+                    : SectionGrouper(
                         chart: _chart,
-                        controller: _narrativeController,
-                        onChanged: (text) {
+                        isKorean: isKorean,
+                        onChanged: (updated) {
                           _pushUndo(_chart);
                           setState(() {
-                            _chart = _chart.copyWith(narrativeText: text);
-                          });
-                          setSheetState(() {});
-                        },
-                      )
-                    : _NarrativeEditor(
-                        controller: _narrativeController,
-                        onChanged: (text) {
-                          _pushUndo(_chart);
-                          setState(() {
-                            _chart = _chart.copyWith(narrativeText: text);
+                            _chart = updated;
+                            // 서술형 컨트롤러 텍스트도 블록 기준으로 동기화
+                            if (_narrativeController.text != updated.narrativeText) {
+                              _narrativeController.text = updated.narrativeText;
+                            }
                           });
                           setSheetState(() {});
                         },
@@ -770,64 +828,86 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
     final startColCtrl = TextEditingController();
     final endColCtrl = TextEditingController();
     final repeatCountCtrl = TextEditingController(text: '1');
+    // 이슈 #625 커밋 3 — 반복구간 레이블 (서술형 블록과의 연결 식별)
+    final labelKoCtrl = TextEditingController();
+    final labelEnCtrl = TextEditingController();
 
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: C.bg,
         title: Text(isKorean ? '반복 구간 지정' : 'Set Repeat Region', style: T.h3),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(isKorean ? '단 범위 (1단 = 맨 아래)' : 'Row range (Row 1 = bottom)', style: T.caption.copyWith(color: C.mu)),
-            const SizedBox(height: 8),
-            Row(children: [
-              Expanded(child: TextField(
-                controller: startRowCtrl,
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(isKorean ? '단 범위 (1단 = 맨 아래)' : 'Row range (Row 1 = bottom)', style: T.caption.copyWith(color: C.mu)),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(child: TextField(
+                  controller: startRowCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(labelText: isKorean ? '시작단' : 'Start row'),
+                )),
+                const SizedBox(width: 8),
+                Expanded(child: TextField(
+                  controller: endRowCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(labelText: isKorean ? '끝단' : 'End row'),
+                )),
+              ]),
+              const SizedBox(height: 8),
+              Text(isKorean ? '코 범위 (1코 = 맨 오른쪽)' : 'Col range (Col 1 = right)', style: T.caption.copyWith(color: C.mu)),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(child: TextField(
+                  controller: startColCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(labelText: isKorean ? '시작코' : 'Start col'),
+                )),
+                const SizedBox(width: 8),
+                Expanded(child: TextField(
+                  controller: endColCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(labelText: isKorean ? '끝코' : 'End col'),
+                )),
+              ]),
+              const SizedBox(height: 8),
+              TextField(
+                controller: repeatCountCtrl,
                 keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: isKorean ? '시작단' : 'Start row'),
-              )),
-              const SizedBox(width: 8),
-              Expanded(child: TextField(
-                controller: endRowCtrl,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: isKorean ? '끝단' : 'End row'),
-              )),
-            ]),
-            const SizedBox(height: 8),
-            Text(isKorean ? '코 범위 (1코 = 맨 오른쪽)' : 'Col range (Col 1 = right)', style: T.caption.copyWith(color: C.mu)),
-            const SizedBox(height: 8),
-            Row(children: [
-              Expanded(child: TextField(
-                controller: startColCtrl,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: isKorean ? '시작코' : 'Start col'),
-              )),
-              const SizedBox(width: 8),
-              Expanded(child: TextField(
-                controller: endColCtrl,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: isKorean ? '끝코' : 'End col'),
-              )),
-            ]),
-            const SizedBox(height: 8),
-            TextField(
-              controller: repeatCountCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(labelText: isKorean ? '반복 횟수' : 'Repeat count'),
-            ),
-            const SizedBox(height: 12),
-            if (_chart.repeatRegions.isNotEmpty)
-              TextButton.icon(
-                onPressed: () {
-                  setState(() => _chart = _chart.copyWith(repeatRegions: []));
-                  _isDirty = true;
-                  Navigator.pop(ctx);
-                },
-                icon: Icon(Icons.clear_all, color: C.og, size: 16),
-                label: Text(isKorean ? '모든 반복 구간 삭제' : 'Clear all regions', style: TextStyle(color: C.og)),
+                decoration: InputDecoration(labelText: isKorean ? '반복 횟수' : 'Repeat count'),
               ),
-          ],
+              const SizedBox(height: 8),
+              // 반복구간 레이블 (서술형 블록과의 연결용)
+              TextField(
+                controller: labelKoCtrl,
+                decoration: InputDecoration(
+                  labelText: isKorean ? '반복구간 이름 (한글, 선택)' : 'Label (Korean, optional)',
+                  hintText: isKorean ? '예: 소매 반복, 케이블 무늬' : '',
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: labelEnCtrl,
+                decoration: InputDecoration(
+                  labelText: isKorean ? '반복구간 이름 (영문, 선택)' : 'Label (English, optional)',
+                  hintText: 'e.g. Sleeve repeat',
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (_chart.repeatRegions.isNotEmpty)
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() => _chart = _chart.copyWith(repeatRegions: []));
+                    _isDirty = true;
+                    Navigator.pop(ctx);
+                  },
+                  icon: Icon(Icons.clear_all, color: C.og, size: 16),
+                  label: Text(isKorean ? '모든 반복 구간 삭제' : 'Clear all regions', style: TextStyle(color: C.og)),
+                ),
+            ],
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text(isKorean ? '취소' : 'Cancel')),
@@ -846,10 +926,15 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
                 // col: 1코=맨오른쪽 → grid index = cols - colLabel
                 final c0 = (_chart.cols - ec).clamp(0, _chart.cols - 1);
                 final c1 = (_chart.cols - sc).clamp(0, _chart.cols - 1);
-                final region = RepeatRegion(
+                final ko = labelKoCtrl.text.trim();
+                final en = labelEnCtrl.text.trim();
+                // id 자동 부여 — 서술형 블록과의 연결 기반
+                final region = RepeatRegion.create(
                   startRow: r0, endRow: r1,
                   startCol: c0, endCol: c1,
                   repeatCount: rc,
+                  label: en.isEmpty ? null : en,
+                  labelKo: ko.isEmpty ? null : ko,
                 );
                 setState(() => _chart = _chart.copyWith(
                   repeatRegions: [..._chart.repeatRegions, region],
@@ -1026,6 +1111,9 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
         sourceOwnerName: _chart.sourceOwnerName,
         sourceType: _chart.sourceType,
         aiSections: _chart.aiSections,
+        // 사용자 보고 버그 (#625) — 그리드에서 불러오기 후 섹션 나누기 탭 진입 시
+        // 블록이 비어있다는 안내가 뜨는 문제. narrativeBlocks를 함께 동기화해서 해결.
+        narrativeBlocks: NarrativeBlock.reconcile(narrative, _chart.narrativeBlocks),
       );
     });
   }
@@ -1596,7 +1684,7 @@ class _TrackingControlBlock extends ConsumerWidget {
     final currentRow = counter != null ? counter.rowCount.clamp(1, chart.rows) : localRow;
     final counterId = counter?.id;
 
-    if (counter == null && chartId.isNotEmpty) {
+    if (counterAsync is AsyncData && counter == null && chartId.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _ensureCounter(context, ref));
     }
 
@@ -1626,6 +1714,60 @@ class _TrackingControlBlock extends ConsumerWidget {
           onColLongPressPlus: () => onLocalColChange(((currentCol ?? 1) + 5).clamp(1, chart.cols)),
           onMarkerWidthChange: onMarkerWidthChange,
           onClose: onClose,
+          onJumpToLastRow: () => _increment(context, ref, counterId, chart.rows - currentRow),
+          onJumpToFirstRow: () => _increment(context, ref, counterId, 1 - currentRow),
+        ),
+      ),
+    );
+  }
+}
+
+/// 서술형 시트 상단 탭 버튼 (이슈 #625 — 서술형 편집 / 섹션 나누기 토글)
+class _NarrativeTabBtn extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _NarrativeTabBtn({
+    required this.label,
+    required this.icon,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        decoration: BoxDecoration(
+          color: active ? C.lv : C.lvL,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: active ? C.lv : C.lv.withValues(alpha: 0.2),
+            width: active ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: active ? Colors.white : C.lvD,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: T.caption.copyWith(
+                color: active ? Colors.white : C.lvD,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+              ),
+            ),
+          ],
         ),
       ),
     );

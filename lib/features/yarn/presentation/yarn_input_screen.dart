@@ -11,6 +11,9 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/yarn_provider.dart';
+import '../../ravelry/domain/ravelry_models.dart';
+import '../../ravelry/presentation/ravelry_yarn_search_sheet.dart';
+import '../../swatch/data/public_brand_repository.dart';
 import '../../swatch/presentation/brand_search_sheet.dart';
 import '../domain/yarn_model.dart';
 import 'yarn_color_sheet.dart';
@@ -180,6 +183,28 @@ class _YarnInputScreenState extends ConsumerState<YarnInputScreen> {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 14),
+                // 이슈 #644 Phase 7 — Ravelry yarn DB 검색 카드 (자동 채우기)
+                _RavelryYarnSearchCard(
+                  isKorean: isKorean,
+                  linkedYarnId: yarn.ravelryYarnId,
+                  onPick: (item) {
+                    notifier.updateRavelryYarnId(item.id);
+                    notifier.updateName(item.name);
+                    _nameController.text = item.name;
+                    if (item.yarnCompanyName != null) {
+                      notifier.updateBrandName(item.yarnCompanyName!);
+                    }
+                    if (item.yarnWeight != null) {
+                      notifier.updateWeight(item.yarnWeight!);
+                    }
+                    if (item.fiberContent != null) {
+                      notifier.updateComposition(item.fiberContent!);
+                      notifier.updateMaterial(item.fiberContent!);
+                    }
+                  },
+                  onClear: () => notifier.updateRavelryYarnId(null),
                 ),
                 const SizedBox(height: 14),
                 // 브랜드명
@@ -583,6 +608,12 @@ class _YarnInputScreenState extends ConsumerState<YarnInputScreen> {
           } else {
             await repository.createYarn(yarn);
           }
+          // #650 — 사용자 입력 브랜드를 공용 yarn_brands에 자동 upsert
+          if (yarn.brandName.trim().isNotEmpty) {
+            await ref
+                .read(publicBrandRepositoryProvider)
+                .upsertYarnBrand(yarn.brandName);
+          }
         },
       );
       if (!ctx.mounted) return;
@@ -669,6 +700,102 @@ class _YarnPhotoPicker extends StatelessWidget {
   }
 }
 
+
+// ── 이슈 #644 Phase 7 — Ravelry yarn DB 검색 카드 ─────────
+class _RavelryYarnSearchCard extends StatelessWidget {
+  final bool isKorean;
+  final int? linkedYarnId;
+  final ValueChanged<RavelryYarnSearchItem> onPick;
+  final VoidCallback onClear;
+
+  const _RavelryYarnSearchCard({
+    required this.isKorean,
+    required this.linkedYarnId,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasLink = linkedYarnId != null && linkedYarnId! > 0;
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.search, color: C.lv, size: 18),
+              const SizedBox(width: 6),
+              Expanded(
+                child: SectionTitle(
+                  title: isKorean ? 'Ravelry yarn 검색' : 'Search Ravelry yarn',
+                ),
+              ),
+              if (hasLink)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: C.lv.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    isKorean ? '연결됨' : 'Linked',
+                    style: T.caption.copyWith(color: C.lvD, fontWeight: FontWeight.w700),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            isKorean
+                ? 'Ravelry 글로벌 yarn DB(10만+ 항목)에서 검색하면\n실 정보가 자동으로 채워지고 stash 매핑됩니다.'
+                : 'Search Ravelry yarn DB to auto-fill yarn info\nand link with stash entries.',
+            style: T.caption.copyWith(color: C.mu),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 44,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.search, size: 18),
+                    label: Text(
+                      hasLink
+                          ? (isKorean ? '다시 검색' : 'Search again')
+                          : (isKorean ? 'Ravelry yarn 검색' : 'Search Ravelry yarn'),
+                    ),
+                    onPressed: () async {
+                      final picked = await RavelryYarnSearchSheet.show(context);
+                      if (picked != null) onPick(picked);
+                    },
+                  ),
+                ),
+              ),
+              if (hasLink) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: isKorean ? '연결 해제' : 'Unlink',
+                  icon: Icon(Icons.link_off, color: C.og),
+                  onPressed: onClear,
+                ),
+              ],
+            ],
+          ),
+          if (!hasLink) ...[
+            const SizedBox(height: 6),
+            Text(
+              isKorean
+                  ? 'Ravelry에 없는 한국 브랜드는 아래 항목에 직접 입력해 주세요.'
+                  : 'Not on Ravelry? Enter manually below.',
+              style: T.caption.copyWith(color: C.mu),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
 
 // ── 브랜드 픽커 필드 ──────────────────────────────────────
 class _PickerField extends StatelessWidget {

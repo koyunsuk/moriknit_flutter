@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image/image.dart' as img;
@@ -12,13 +14,25 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/swatch_provider.dart';
+import '../../pattern/data/pattern_repository.dart';
+import '../../pattern/domain/pattern_chart.dart';
+import '../../pattern/presentation/pattern_editor_screen.dart';
+import '../../pattern_generator/domain/body_measurement.dart';
+import '../../pattern_generator/domain/raglan_generated_pattern.dart';
+import '../../pattern_generator/domain/raglan_generated_pattern_chart_builder.dart';
+import '../../pattern_generator/domain/raglan_pattern_generator.dart';
 import '../../swatch/domain/swatch_model.dart';
 import '../../swatch/presentation/swatch_input_screen.dart';
 
-enum _GaugeMode { myGauge, patternConvert, bidirectional, photoReading }
+enum _GaugeMode { myGauge, patternConvert, bidirectional, photoReading, raglanGenerator }
+
+enum _EasePreset { doll, slim, adultStandard, loose, oversizedCrop }
 
 class GaugeCalculatorScreen extends ConsumerStatefulWidget {
-  const GaugeCalculatorScreen({super.key});
+  /// #639 — 인형 치수 프리셋 자동 입력용 measurementData (BuiltinTemplate.measurementData)
+  final Map<String, dynamic>? preloadMeasurementData;
+
+  const GaugeCalculatorScreen({super.key, this.preloadMeasurementData});
 
   @override
   ConsumerState<GaugeCalculatorScreen> createState() => _GaugeCalculatorScreenState();
@@ -47,6 +61,19 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
   final _rowsToConvertCtrl = TextEditingController(text: '60');
   final _cmHeightToConvertCtrl = TextEditingController(text: '25');
 
+  // ── 모드 5: 래글런 도안 생성 ──
+  final _chestCtrl = TextEditingController(text: '90');
+  final _neckCtrl = TextEditingController(text: '36');
+  final _bodyLenCtrl = TextEditingController(text: '55');
+  final _sleeveLenCtrl = TextEditingController(text: '52');
+  final _upperArmCtrl = TextEditingController();
+  final _wristCtrl = TextEditingController();
+  final _shoulderCtrl = TextEditingController();
+  final _armholeDepthCtrl = TextEditingController();
+  bool _optionalExpanded = false;
+  _EasePreset _easePreset = _EasePreset.adultStandard;
+  RaglanGeneratedPattern? _generatedPattern;
+
   // ── 모드 4: 사진 판독 ──
   Uint8List? _photoBytes;
   Size? _imageSize;
@@ -63,6 +90,55 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
     for (final c in _allControllers) {
       c.addListener(_rebuild);
     }
+    // #639 — 인형 프리셋 자동 입력
+    if (widget.preloadMeasurementData != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _applyPreload());
+    }
+  }
+
+  void _applyPreload() {
+    final data = widget.preloadMeasurementData;
+    if (data == null) return;
+    final measurement = data['measurement'] as Map<String, dynamic>?;
+    final gauge = data['suggestedGauge'] as Map<String, dynamic>?;
+    final easeName = data['suggestedEase'] as String?;
+    setState(() {
+      _mode = _GaugeMode.raglanGenerator;
+      if (measurement != null) {
+        _chestCtrl.text = _str(measurement['chestCm']);
+        _neckCtrl.text = _str(measurement['neckCm']);
+        _bodyLenCtrl.text = _str(measurement['bodyLengthCm']);
+        _sleeveLenCtrl.text = _str(measurement['sleeveLengthCm']);
+        _upperArmCtrl.text = _str(measurement['upperArmCm']);
+        _wristCtrl.text = _str(measurement['wristCm']);
+        _shoulderCtrl.text = _str(measurement['shoulderCm']);
+        _armholeDepthCtrl.text = _str(measurement['armholeDepthCm']);
+        _optionalExpanded = true;
+      }
+      if (gauge != null) {
+        _myStsCtrl.text = _str(gauge['stitchesPer10cm']);
+        _myRowsCtrl.text = _str(gauge['rowsPer10cm']);
+      }
+      if (easeName != null) {
+        _easePreset = switch (easeName) {
+          'doll' => _EasePreset.doll,
+          'slim' => _EasePreset.slim,
+          'loose' => _EasePreset.loose,
+          'oversizedCrop' => _EasePreset.oversizedCrop,
+          _ => _EasePreset.adultStandard,
+        };
+      }
+    });
+  }
+
+  String _str(dynamic v) {
+    if (v == null) return '';
+    if (v is num) {
+      // 정수면 소수점 제거, 소수점 있으면 그대로
+      if (v == v.toInt()) return v.toInt().toString();
+      return v.toString();
+    }
+    return v.toString();
   }
 
   List<TextEditingController> get _allControllers => [
@@ -70,6 +146,8 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
         _widthCtrl, _heightCtrl,
         _patStsCtrl, _patRowsCtrl, _patStCountCtrl, _patRowCountCtrl,
         _stsToConvertCtrl, _cmToConvertCtrl, _rowsToConvertCtrl, _cmHeightToConvertCtrl,
+        _chestCtrl, _neckCtrl, _bodyLenCtrl, _sleeveLenCtrl,
+        _upperArmCtrl, _wristCtrl, _shoulderCtrl, _armholeDepthCtrl,
       ];
 
   void _rebuild() => setState(() {});
@@ -134,8 +212,10 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
                 _buildModePatternConvert(isKorean),
               ] else if (_mode == _GaugeMode.bidirectional) ...[
                 _buildModeBidirectional(isKorean),
-              ] else ...[
+              ] else if (_mode == _GaugeMode.photoReading) ...[
                 _buildModePhotoReading(isKorean, t),
+              ] else ...[
+                _buildModeRaglanGenerator(isKorean),
               ],
               const SizedBox(height: 20),
               _RegisterSwatchButton(
@@ -437,7 +517,7 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
                   controller: scrollCtrl,
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                   itemCount: withGauge.length,
-                  separatorBuilder: (_, __) => Divider(height: 1, color: C.bd),
+                  separatorBuilder: (_, _) => Divider(height: 1, color: C.bd),
                   itemBuilder: (_, i) {
                     final s = withGauge[i];
                     return ListTile(
@@ -1035,6 +1115,449 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
       ],
     );
   }
+
+  // ── Mode 5: 래글런 도안 자동 생성 ───────────────────────────
+  EaseSettings _easeFromPreset(_EasePreset p) {
+    switch (p) {
+      case _EasePreset.doll:
+        return EaseSettings.doll;
+      case _EasePreset.slim:
+        return EaseSettings.slim;
+      case _EasePreset.adultStandard:
+        return EaseSettings.adultStandard;
+      case _EasePreset.loose:
+        return EaseSettings.loose;
+      case _EasePreset.oversizedCrop:
+        return EaseSettings.oversizedCrop;
+    }
+  }
+
+  String _easePresetLabel(_EasePreset p, bool isKorean) {
+    switch (p) {
+      case _EasePreset.doll:
+        return isKorean ? '인형용' : 'Doll';
+      case _EasePreset.slim:
+        return isKorean ? '슬림 핏' : 'Slim';
+      case _EasePreset.adultStandard:
+        return isKorean ? '표준 핏' : 'Standard';
+      case _EasePreset.loose:
+        return isKorean ? '루즈 핏' : 'Loose';
+      case _EasePreset.oversizedCrop:
+        return isKorean ? '극단 오버사이즈' : 'Oversized Crop';
+    }
+  }
+
+  String _easePresetDescription(_EasePreset p, bool isKorean) {
+    final e = _easeFromPreset(p);
+    if (isKorean) {
+      return '가슴 +${e.chestEaseCm}cm · 상완 +${e.upperArmEaseCm}cm · 목 +${e.neckEaseCm}cm';
+    }
+    return 'Chest +${e.chestEaseCm}cm · Upper arm +${e.upperArmEaseCm}cm · Neck +${e.neckEaseCm}cm';
+  }
+
+  double? _parseOptional(TextEditingController c) {
+    final t = c.text.trim();
+    if (t.isEmpty) return null;
+    return double.tryParse(t);
+  }
+
+  void _generateRaglanPattern(bool isKorean) {
+    final myS = _parse(_myStsCtrl);
+    final myR = _parse(_myRowsCtrl);
+    if (myS <= 0 || myR <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(isKorean ? '내 스와치 게이지를 먼저 입력해 주세요.' : 'Please enter your gauge first.')),
+      );
+      return;
+    }
+
+    final chest = _parse(_chestCtrl);
+    final neck = _parse(_neckCtrl);
+    final bodyLen = _parse(_bodyLenCtrl);
+    final sleeveLen = _parse(_sleeveLenCtrl);
+
+    final measurements = BodyMeasurement(
+      chestCm: chest,
+      neckCm: neck,
+      bodyLengthCm: bodyLen,
+      sleeveLengthCm: sleeveLen,
+      upperArmCm: _parseOptional(_upperArmCtrl),
+      wristCm: _parseOptional(_wristCtrl),
+      shoulderCm: _parseOptional(_shoulderCtrl),
+      armholeDepthCm: _parseOptional(_armholeDepthCtrl),
+    );
+
+    final validationError = measurements.validate();
+    if (validationError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(isKorean ? '입력값 오류: $validationError' : 'Input error: $validationError')),
+      );
+      return;
+    }
+
+    // #638 P0 — gauge 0/음수 가드 (ZeroDivisionError + NaN 방어)
+    if (myS <= 0 || myR <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(isKorean
+            ? '게이지는 0보다 커야 합니다 (단/10cm: $myS, 코/10cm: $myR).'
+            : 'Gauge must be greater than 0.')),
+      );
+      return;
+    }
+
+    final gauge = UserGauge(stitchesPer10cm: myS, rowsPer10cm: myR);
+    final ease = _easeFromPreset(_easePreset);
+
+    final generator = RaglanPatternGenerator(
+      measurements: measurements,
+      gauge: gauge,
+      ease: ease,
+    );
+
+    try {
+      final result = generator.generate();
+      setState(() {
+        _generatedPattern = result;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(isKorean ? '도안 생성 실패: $e' : 'Generation failed: $e')),
+      );
+    }
+  }
+
+  /// 이슈 #638 Phase 4 — 생성된 래글런 도안을 PatternChart 로 변환 후 저장,
+  /// 저장 성공 시 도안에디터로 진입.
+  ///
+  /// PatternRepository.save() 가 narrativeBlocks / repeatRegions /
+  /// knittingDirection / gauge 필드를 누락하는 기존 버그를 Firestore merge set으로 보완.
+  Future<void> _saveGeneratedRaglanAsPattern(bool isKorean) async {
+    final pattern = _generatedPattern;
+    if (pattern == null) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final saved = await runWithMoriLoadingDialog<PatternChart>(
+        context,
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () async {
+          // 1) 생성된 스펙 → PatternChart 변환
+          final chart = buildPatternChartFromGenerated(
+            pattern,
+            isKorean: isKorean,
+          );
+
+          // 2) 기본 저장 (id 발급 + aiSections/grid/narrativeText)
+          final repo = ref.read(patternRepositoryProvider);
+          final base = await repo.save(chart);
+
+          // 3) repository.save()가 누락하는 필드(narrativeBlocks · repeatRegions ·
+          //    knittingDirection · gauge 등)를 Firestore merge set 으로 보완.
+          final uid = FirebaseAuth.instance.currentUser?.uid;
+          if (uid == null || uid.isEmpty) {
+            throw Exception(isKorean ? '로그인이 필요해요.' : 'Login required.');
+          }
+          final docRef = FirebaseFirestore.instance
+              .collection('users')
+              .doc(uid)
+              .collection('pattern_charts')
+              .doc(base.id);
+          final full = chart.copyWith(id: base.id);
+          await docRef.set({
+            ...full.toJson(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+          return full;
+        },
+      );
+
+      if (!mounted) return;
+      showSavedSnackBar(
+        messenger,
+        message: isKorean ? '도안을 저장했어요.' : 'Pattern saved.',
+      );
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PatternEditorScreen(patternId: saved.id),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(
+        messenger,
+        message: isKorean ? '오류가 발생했어요: $e' : 'Error: $e',
+      );
+    }
+  }
+
+  void _showNarrativeSheet(bool isKorean) {
+    final pattern = _generatedPattern;
+    if (pattern == null) return;
+    final steps = pattern.toNarrativeSteps(isKorean: isKorean);
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        maxChildSize: 0.95,
+        minChildSize: 0.4,
+        expand: false,
+        builder: (_, scrollCtrl) => Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Row(
+                children: [
+                  Icon(Icons.menu_book_rounded, color: C.lv, size: 20),
+                  const SizedBox(width: 8),
+                  Text(isKorean ? '서술형 도안 (12단계)' : 'Narrative Pattern', style: T.h3),
+                  const Spacer(),
+                  IconButton(
+                    icon: Icon(Icons.close, color: C.mu, size: 20),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: C.bd),
+            Expanded(
+              child: ListView.separated(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                itemCount: steps.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                itemBuilder: (_, i) => Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: C.lv.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: C.lv.withValues(alpha: 0.15)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 26,
+                        height: 26,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: C.lv,
+                          borderRadius: BorderRadius.circular(13),
+                        ),
+                        child: Text(
+                          '${i + 1}',
+                          style: T.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(steps[i], style: T.body.copyWith(height: 1.5)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModeRaglanGenerator(bool isKorean) {
+    return Column(
+      children: [
+        // 인체 치수 (필수)
+        GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.accessibility_new_rounded, color: C.lv, size: 18),
+                  const SizedBox(width: 6),
+                  Text(isKorean ? '🧍 인체 치수 (cm)' : '🧍 Body Measurements (cm)', style: T.bodyBold),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                isKorean ? '필수 항목을 입력하세요' : 'Enter required values',
+                style: T.caption.copyWith(color: C.mu),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(child: _NumberField(controller: _chestCtrl, label: isKorean ? '가슴 둘레 *' : 'Chest *')),
+                  const SizedBox(width: 10),
+                  Expanded(child: _NumberField(controller: _neckCtrl, label: isKorean ? '목 둘레 *' : 'Neck *')),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(child: _NumberField(controller: _bodyLenCtrl, label: isKorean ? '옷 길이 *' : 'Body length *')),
+                  const SizedBox(width: 10),
+                  Expanded(child: _NumberField(controller: _sleeveLenCtrl, label: isKorean ? '소매 길이 *' : 'Sleeve length *')),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // 선택 치수 (접기/펼치기)
+        GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GestureDetector(
+                onTap: () => setState(() => _optionalExpanded = !_optionalExpanded),
+                behavior: HitTestBehavior.opaque,
+                child: Row(
+                  children: [
+                    Icon(Icons.tune_rounded, color: C.pk, size: 18),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        isKorean ? '선택 치수 (비우면 자동 추정)' : 'Optional (auto-estimated if blank)',
+                        style: T.bodyBold,
+                      ),
+                    ),
+                    Icon(
+                      _optionalExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                      color: C.mu,
+                      size: 20,
+                    ),
+                  ],
+                ),
+              ),
+              if (_optionalExpanded) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: _NumberField(controller: _upperArmCtrl, label: isKorean ? '상완 둘레' : 'Upper arm')),
+                    const SizedBox(width: 10),
+                    Expanded(child: _NumberField(controller: _wristCtrl, label: isKorean ? '손목 둘레' : 'Wrist')),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(child: _NumberField(controller: _shoulderCtrl, label: isKorean ? '어깨 폭' : 'Shoulder')),
+                    const SizedBox(width: 10),
+                    Expanded(child: _NumberField(controller: _armholeDepthCtrl, label: isKorean ? '겨드랑이 깊이' : 'Armhole depth')),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // 핏 프리셋
+        GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.style_rounded, color: C.og, size: 18),
+                  const SizedBox(width: 6),
+                  Text(isKorean ? '👕 핏 프리셋' : '👕 Fit Preset', style: T.bodyBold),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _EasePreset.values.map((p) {
+                  final selected = _easePreset == p;
+                  return GestureDetector(
+                    onTap: () => setState(() => _easePreset = p),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: selected ? C.lv : C.lvL,
+                        border: Border.all(
+                          color: selected ? C.lv : C.lv.withValues(alpha: 0.20),
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        _easePresetLabel(p, isKorean),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                          color: selected ? Colors.white : C.lvD,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: C.og.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${_easePresetLabel(_easePreset, isKorean)}: ${_easePresetDescription(_easePreset, isKorean)}',
+                  style: T.caption.copyWith(color: C.tx2, height: 1.5),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // 생성 버튼
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () => _generateRaglanPattern(isKorean),
+            icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+            label: Text(isKorean ? '도안 생성' : 'Generate Pattern'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: C.lv,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // 결과 카드
+        if (_generatedPattern != null) ...[
+          _RaglanResultCard(
+            isKorean: isKorean,
+            pattern: _generatedPattern!,
+            onShowNarrative: () => _showNarrativeSheet(isKorean),
+            onSaveAsPattern: () => _saveGeneratedRaglanAsPattern(isKorean),
+          ),
+          const SizedBox(height: 8),
+        ],
+        _TipCard(
+          isKorean: isKorean,
+          text: isKorean
+              ? '가슴·목·옷길이·소매길이는 필수입니다. 선택 항목은 비워두면 가슴 둘레 비율로 자동 추정합니다.\n생성 후 "서술형 도안 보기"로 12단계 작업 지시를 확인하세요.'
+              : 'Chest, neck, body & sleeve length are required. Blank optional values are estimated from chest ratio.\nTap "View narrative pattern" for the 12-step breakdown.',
+        ),
+      ],
+    );
+  }
 }
 
 // ── 위젯들 ────────────────────────────────────────────────────
@@ -1053,6 +1576,7 @@ class _ModeSelector extends StatelessWidget {
       (_GaugeMode.patternConvert, isKorean ? '도안 변환' : 'Pattern'),
       (_GaugeMode.bidirectional, isKorean ? '코↔cm' : 'Sts↔cm'),
       (_GaugeMode.photoReading, isKorean ? '사진 판독' : 'Photo'),
+      (_GaugeMode.raglanGenerator, isKorean ? '래글런 도안 생성' : 'Raglan Generator'),
     ];
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -1381,6 +1905,221 @@ class _SelectionOverlayPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _SelectionOverlayPainter oldDelegate) =>
       start != oldDelegate.start || end != oldDelegate.end;
+}
+
+// ── 래글런 도안 결과 카드 ──────────────────────────────────────
+class _RaglanResultCard extends StatelessWidget {
+  final bool isKorean;
+  final RaglanGeneratedPattern pattern;
+  final VoidCallback onShowNarrative;
+  final VoidCallback onSaveAsPattern;
+
+  const _RaglanResultCard({
+    required this.isKorean,
+    required this.pattern,
+    required this.onShowNarrative,
+    required this.onSaveAsPattern,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = pattern;
+    final actualChest = p.actualChestCm.toStringAsFixed(1);
+    final actualUpperArm = p.actualUpperArmCm.toStringAsFixed(1);
+
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.auto_awesome_rounded, color: C.lv, size: 18),
+              const SizedBox(width: 6),
+              Text(isKorean ? '🧶 생성된 래글런 도안' : '🧶 Generated Raglan', style: T.bodyBold),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // 목 / 구간별 초기 코수
+          _SectionBlock(
+            title: isKorean ? '목 코잡기 & 구간 배분' : 'Neck Cast-on & Sections',
+            rows: [
+              _KvRow(label: isKorean ? '목 코잡기' : 'Neck cast-on', value: '${p.neckCastOn}${isKorean ? "코" : " sts"}', color: C.lv),
+              _KvRow(label: isKorean ? '앞판 초기' : 'Front init', value: '${p.initFront}${isKorean ? "코" : " sts"}'),
+              _KvRow(label: isKorean ? '뒷판 초기 (좌/우 각)' : 'Back init (each)', value: '${p.initBackEach}${isKorean ? "코" : " sts"}'),
+              _KvRow(label: isKorean ? '소매 초기 (좌/우 각)' : 'Sleeve init (each)', value: '${p.initSleeveEach}${isKorean ? "코" : " sts"}'),
+              _KvRow(label: isKorean ? '래글런 마커' : 'Raglan markers', value: '${p.raglanStitches}${isKorean ? "코 (2×4)" : " sts (2×4)"}'),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // 래글런 반복
+          _SectionBlock(
+            title: isKorean ? '래글런 늘림' : 'Raglan Increases',
+            rows: [
+              _KvRow(label: isKorean ? '래글런 반복' : 'Raglan repeats', value: '${p.raglanRepeat}${isKorean ? "회" : "×"}', color: C.pk),
+              _KvRow(label: isKorean ? '앞목 쉐이핑' : 'Front-neck shaping', value: '${p.frontNeckShapingRows}${isKorean ? "단" : " rows"}'),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // 몸통
+          _SectionBlock(
+            title: isKorean ? '몸통' : 'Body',
+            rows: [
+              _KvRow(
+                label: isKorean ? '몸통 총코' : 'Body total',
+                value: '${p.bodyTotalStitches}${isKorean ? "코" : " sts"}',
+                sub: isKorean ? '실제 약 ${actualChest}cm' : 'Actual ~${actualChest}cm',
+                color: C.lv,
+              ),
+              _KvRow(label: isKorean ? '겨드랑이 감아코 (각)' : 'Underarm cast-on (each)', value: '${p.underarmCastOn}${isKorean ? "코" : " sts"}'),
+              _KvRow(label: isKorean ? '몸통 메리야스' : 'Body stockinette', value: '${p.bodyRows}${isKorean ? "단" : " rows"}'),
+              _KvRow(label: isKorean ? '몸통 고무단' : 'Body rib', value: '${p.bodyRibRows}${isKorean ? "단" : " rows"}'),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // 소매
+          _SectionBlock(
+            title: isKorean ? '소매' : 'Sleeve',
+            rows: [
+              _KvRow(
+                label: isKorean ? '소매 총코' : 'Sleeve total',
+                value: '${p.sleeveTotalStitches}${isKorean ? "코" : " sts"}',
+                sub: isKorean ? '상완 약 ${actualUpperArm}cm' : 'Upper arm ~${actualUpperArm}cm',
+                color: C.og,
+              ),
+              _KvRow(label: isKorean ? '소매 메리야스' : 'Sleeve stockinette', value: '${p.sleeveRows}${isKorean ? "단" : " rows"}'),
+              _KvRow(label: isKorean ? '소매 고무단' : 'Sleeve rib', value: '${p.sleeveRibRows}${isKorean ? "단" : " rows"}'),
+              _KvRow(
+                label: isKorean ? '코줄임' : 'Decrease',
+                value: isKorean
+                    ? '${p.sleeveDecreaseCount}회 / ${p.sleeveDecreaseIntervalRows}단마다'
+                    : '${p.sleeveDecreaseCount}× / every ${p.sleeveDecreaseIntervalRows} rows',
+              ),
+            ],
+          ),
+
+          // 경고
+          if (p.warnings.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: C.og.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: C.og.withValues(alpha: 0.30)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded, color: C.og, size: 16),
+                      const SizedBox(width: 6),
+                      Text(isKorean ? '경고' : 'Warnings', style: T.captionBold.copyWith(color: C.og)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ...p.warnings.map((w) => Padding(
+                        padding: const EdgeInsets.only(top: 2, bottom: 2),
+                        child: Text('• $w', style: T.caption.copyWith(color: C.tx2, height: 1.4)),
+                      )),
+                ],
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: onShowNarrative,
+                  icon: const Icon(Icons.menu_book_rounded, size: 16),
+                  label: Text(isKorean ? '서술형 도안 보기' : 'View narrative'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: C.lvD,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onSaveAsPattern,
+                  icon: const Icon(Icons.save_outlined, size: 16),
+                  label: Text(isKorean ? '도안 저장' : 'Save pattern'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: C.lv,
+                    side: BorderSide(color: C.lv),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionBlock extends StatelessWidget {
+  final String title;
+  final List<_KvRow> rows;
+  const _SectionBlock({required this.title, required this.rows});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: T.captionBold.copyWith(color: C.mu)),
+        const SizedBox(height: 6),
+        ...rows.map((r) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: r,
+            )),
+      ],
+    );
+  }
+}
+
+class _KvRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final String? sub;
+  final Color? color;
+  const _KvRow({required this.label, required this.value, this.sub, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: T.body),
+              if (sub != null) Text(sub!, style: T.caption.copyWith(color: C.mu)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          value,
+          style: T.bodyBold.copyWith(color: color ?? C.tx, fontSize: 15),
+        ),
+      ],
+    );
+  }
 }
 
 // ── 스와치 등록 버튼 ─────────────────────────────────────────────

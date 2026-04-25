@@ -21,16 +21,64 @@ const _kDesktopBreakpoint = 900.0;
 
 // ?? 硫붾돱 ?곗씠?????????????????????????????????????????????????????????????????
 
-const _featureItems = [
-  ('project', '프로젝트 기록'),
-  ('swatch', '스와치 보관함'),
-  ('market', '도안 마켓'),
-  ('community', '커뮤니티'),
-  ('encyclopedia', '뜨개 백과사전'),
-  ('gauge', '게이지 계산기'),
-  ('ravelry', 'Ravelry 연동'),
-  ('etsy', 'Etsy 연동'),
-  ('ai-gauge', 'AI 게이지 판독'),
+// ?? 移댄뀒怨좊━ 洹몃９ ?쒖쓽 (Wave 3 #656) ???????????????????????????????????????
+// id: feature_detail_screen.dart??痍④툒?섎뒗 ID. 鍮?routePath瑜?二쇰㈃ 湲곕낯 `/features/{id}` ??????
+// `class`???뱀닔 ?쇱슦?? `/classes`. ?앹꽦/濡쒓렇???대?蹂닿컻???ㅻⅨ 寃쎈줈瑜?寃쎄퀬瑜??꾧커 異붽?.
+
+class _FeatureMenuItem {
+  const _FeatureMenuItem(this.id, this.label, {this.routePath});
+  final String id;
+  final String label;
+  final String? routePath;
+
+  String get path => routePath ?? '/features/$id';
+}
+
+class _FeatureCategory {
+  const _FeatureCategory(this.title, this.items);
+  final String title;
+  final List<_FeatureMenuItem> items;
+}
+
+const _featureCategories = <_FeatureCategory>[
+  _FeatureCategory('🎨 창작 도구', [
+    _FeatureMenuItem('pattern-editor', '도안 제작'),
+    _FeatureMenuItem('pattern-viewer', '도안 뷰어'),
+  ]),
+  _FeatureCategory('📚 뜨개정보', [
+    _FeatureMenuItem('encyclopedia', '백과사전'),
+    _FeatureMenuItem('class', '클라스', routePath: '/classes'),
+  ]),
+  _FeatureCategory('📐 측정 도구', [
+    _FeatureMenuItem('gauge', '게이지 계산기'),
+    _FeatureMenuItem('counter', '카운터 & 트래커'),
+    _FeatureMenuItem('measure', '측정 도구'),
+  ]),
+  _FeatureCategory('🤖 AI 기능', [
+    _FeatureMenuItem('ai-pattern-converter', 'AI 도안 변환기'),
+    _FeatureMenuItem('ai-gauge', 'AI 게이지 판독'),
+    _FeatureMenuItem('ai-translator', 'AI 영문 도안 번역기'),
+  ]),
+  _FeatureCategory('🔗 외부 연결', [
+    _FeatureMenuItem('ravelry', 'Ravelry 연동'),
+    _FeatureMenuItem('etsy', 'Etsy 연동'),
+  ]),
+  _FeatureCategory('☁️ 클라우드', [
+    _FeatureMenuItem('cloud-sync', '클라우드 연결'),
+  ]),
+  _FeatureCategory('📚 라이브러리', [
+    _FeatureMenuItem('project', '프로젝트 기록'),
+    _FeatureMenuItem('swatch', '스와치 보관함'),
+    _FeatureMenuItem('pattern-library', '도안 라이브러리'),
+    _FeatureMenuItem('yarn', '실 보관함'),
+    _FeatureMenuItem('needle', '바늘 보관함'),
+    _FeatureMenuItem('book', '도서 보관함'),
+    _FeatureMenuItem('accessory', '부자재 보관함'),
+  ]),
+  _FeatureCategory('🌐 커뮤니티', [
+    _FeatureMenuItem('community', '커뮤니티'),
+    _FeatureMenuItem('market', '도안 마켓'),
+  ]),
 ];
 
 const _boardItems = [
@@ -210,16 +258,54 @@ class _DropdownPanel extends StatelessWidget {
   }
 }
 
+// 移댄뀒怨좊━ 洹몃９ ?ㅻ뜑 (?쒕∼?ㅼ슫 ?댁뿉 移댄뀒怨좊━紐?異쒕젰)
+class _DropdownCategoryHeader extends StatelessWidget {
+  const _DropdownCategoryHeader({required this.title, this.topPadding = 10});
+
+  final String title;
+  final double topPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, topPadding, 16, 4),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: C.lv,
+          letterSpacing: 0.2,
+        ),
+      ),
+    );
+  }
+}
+
+class _DropdownDivider extends StatelessWidget {
+  const _DropdownDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Divider(height: 1, color: C.bd.withValues(alpha: 0.6)),
+    );
+  }
+}
+
 class _DropdownItem extends StatefulWidget {
   const _DropdownItem({
     required this.label,
     this.icon,
     required this.onTap,
+    this.indent = false,
   });
 
   final String label;
   final IconData? icon;
   final VoidCallback onTap;
+  final bool indent;
 
   @override
   State<_DropdownItem> createState() => _DropdownItemState();
@@ -230,6 +316,7 @@ class _DropdownItemState extends State<_DropdownItem> {
 
   @override
   Widget build(BuildContext context) {
+    final leftPad = widget.indent ? 28.0 : 16.0;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hovered = true),
@@ -238,7 +325,7 @@ class _DropdownItemState extends State<_DropdownItem> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+          padding: EdgeInsets.fromLTRB(leftPad, 9, 16, 9),
           decoration: BoxDecoration(
             color: _hovered ? C.lv.withValues(alpha: 0.07) : Colors.transparent,
           ),
@@ -458,15 +545,7 @@ class _MobileDrawerOverlayState extends State<_MobileDrawerOverlay>
                       expanded: _featuresExpanded,
                       onToggle: () =>
                           setState(() => _featuresExpanded = !_featuresExpanded),
-                      children: _featureItems
-                          .map(
-                            (e) => _mobileTile(
-                              e.$2,
-                              indent: true,
-                              onTap: () => widget.onNavigate('/features/${e.$1}'),
-                            ),
-                          )
-                          .toList(),
+                      children: _buildMobileFeatureGroups(),
                     ),
                     _mobileFreeInfoTile('뜨개백과', Icons.menu_book_rounded, () => widget.onNavigate('/encyclopedia')),
                     _mobileFreeInfoTile('클라스', Icons.school_rounded, () => widget.onNavigate('/classes')),
@@ -507,6 +586,33 @@ class _MobileDrawerOverlayState extends State<_MobileDrawerOverlay>
         ),
       ),
     );
+  }
+
+  List<Widget> _buildMobileFeatureGroups() {
+    final widgets = <Widget>[];
+    for (var i = 0; i < _featureCategories.length; i++) {
+      final cat = _featureCategories[i];
+      widgets.add(Padding(
+        padding: EdgeInsets.fromLTRB(28, i == 0 ? 6 : 14, 20, 4),
+        child: Text(
+          cat.title,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: C.lv,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ));
+      for (final item in cat.items) {
+        widgets.add(_mobileTile(
+          item.label,
+          indent: true,
+          onTap: () => widget.onNavigate(item.path),
+        ));
+      }
+    }
+    return widgets;
   }
 
   Widget _mobileTile(
@@ -625,7 +731,8 @@ class _LandingTopBarState extends ConsumerState<LandingTopBar> with TickerProvid
     );
     setState(() => _particles.add(p));
     ctrl.forward().then((_) {
-      if (mounted) setState(() => _particles.remove(p));
+      if (!mounted) return;
+      setState(() => _particles.remove(p));
       ctrl.dispose();
     });
   }
@@ -672,14 +779,28 @@ class _LandingTopBarState extends ConsumerState<LandingTopBar> with TickerProvid
   }
 
   Widget _featureDropdown(BuildContext context) {
+    final children = <Widget>[];
+    for (var i = 0; i < _featureCategories.length; i++) {
+      final cat = _featureCategories[i];
+      if (i > 0) {
+        children.add(const _DropdownDivider());
+      }
+      children.add(_DropdownCategoryHeader(
+        title: cat.title,
+        topPadding: i == 0 ? 12 : 10,
+      ));
+      for (final item in cat.items) {
+        children.add(_DropdownItem(
+          label: item.label,
+          indent: true,
+          onTap: () => context.go(item.path),
+        ));
+      }
+    }
+    children.add(const SizedBox(height: 8));
     return _DropdownOverlay(
       label: '기능',
-      children: _featureItems
-          .map((e) => _DropdownItem(
-                label: e.$2,
-                onTap: () => context.go('/features/${e.$1}'),
-              ))
-          .toList(),
+      children: children,
     );
   }
 

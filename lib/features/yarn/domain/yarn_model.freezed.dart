@@ -45,6 +45,12 @@ mixin _$YarnModel {
   int get lengthMeters => throw _privateConstructorUsedError;
   int get lengthYards => throw _privateConstructorUsedError;
 
+  /// 이슈 #644 — Ravelry stash entry id (createStash 응답값)
+  int? get ravelryStashId => throw _privateConstructorUsedError;
+
+  /// 이슈 #644 Phase 7 — Ravelry 공식 yarn DB id (검색→매핑)
+  int? get ravelryYarnId => throw _privateConstructorUsedError;
+
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
   $YarnModelCopyWith<YarnModel> get copyWith =>
@@ -80,7 +86,9 @@ abstract class $YarnModelCopyWith<$Res> {
       int quantity,
       String composition,
       int lengthMeters,
-      int lengthYards});
+      int lengthYards,
+      int? ravelryStashId,
+      int? ravelryYarnId});
 }
 
 /// @nodoc
@@ -120,6 +128,8 @@ class _$YarnModelCopyWithImpl<$Res, $Val extends YarnModel>
     Object? composition = null,
     Object? lengthMeters = null,
     Object? lengthYards = null,
+    Object? ravelryStashId = freezed,
+    Object? ravelryYarnId = freezed,
   }) {
     return _then(_value.copyWith(
       id: null == id
@@ -218,6 +228,14 @@ class _$YarnModelCopyWithImpl<$Res, $Val extends YarnModel>
           ? _value.lengthYards
           : lengthYards // ignore: cast_nullable_to_non_nullable
               as int,
+      ravelryStashId: freezed == ravelryStashId
+          ? _value.ravelryStashId
+          : ravelryStashId // ignore: cast_nullable_to_non_nullable
+              as int?,
+      ravelryYarnId: freezed == ravelryYarnId
+          ? _value.ravelryYarnId
+          : ravelryYarnId // ignore: cast_nullable_to_non_nullable
+              as int?,
     ) as $Val);
   }
 }
@@ -254,7 +272,9 @@ abstract class _$$YarnModelImplCopyWith<$Res>
       int quantity,
       String composition,
       int lengthMeters,
-      int lengthYards});
+      int lengthYards,
+      int? ravelryStashId,
+      int? ravelryYarnId});
 }
 
 /// @nodoc
@@ -292,6 +312,8 @@ class __$$YarnModelImplCopyWithImpl<$Res>
     Object? composition = null,
     Object? lengthMeters = null,
     Object? lengthYards = null,
+    Object? ravelryStashId = freezed,
+    Object? ravelryYarnId = freezed,
   }) {
     return _then(_$YarnModelImpl(
       id: null == id
@@ -390,6 +412,14 @@ class __$$YarnModelImplCopyWithImpl<$Res>
           ? _value.lengthYards
           : lengthYards // ignore: cast_nullable_to_non_nullable
               as int,
+      ravelryStashId: freezed == ravelryStashId
+          ? _value.ravelryStashId
+          : ravelryStashId // ignore: cast_nullable_to_non_nullable
+              as int?,
+      ravelryYarnId: freezed == ravelryYarnId
+          ? _value.ravelryYarnId
+          : ravelryYarnId // ignore: cast_nullable_to_non_nullable
+              as int?,
     ));
   }
 }
@@ -421,7 +451,9 @@ class _$YarnModelImpl implements _YarnModel {
       this.quantity = 0,
       this.composition = '',
       this.lengthMeters = 0,
-      this.lengthYards = 0});
+      this.lengthYards = 0,
+      this.ravelryStashId,
+      this.ravelryYarnId});
 
   factory _$YarnModelImpl.fromJson(Map<String, dynamic> json) =>
       _$$YarnModelImplFromJson(json);
@@ -494,9 +526,17 @@ class _$YarnModelImpl implements _YarnModel {
   @JsonKey()
   final int lengthYards;
 
+  /// 이슈 #644 — Ravelry stash entry id (createStash 응답값)
+  @override
+  final int? ravelryStashId;
+
+  /// 이슈 #644 Phase 7 — Ravelry 공식 yarn DB id (검색→매핑)
+  @override
+  final int? ravelryYarnId;
+
   @override
   String toString() {
-    return 'YarnModel(id: $id, uid: $uid, brandName: $brandName, name: $name, color: $color, weight: $weight, amountGrams: $amountGrams, memo: $memo, photoUrl: $photoUrl, purchaseDate: $purchaseDate, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty, material: $material, yarnLength: $yarnLength, lotNumber: $lotNumber, price: $price, purchasePlace: $purchasePlace, colorCode: $colorCode, labelPhotoUrl: $labelPhotoUrl, quantity: $quantity, composition: $composition, lengthMeters: $lengthMeters, lengthYards: $lengthYards)';
+    return 'YarnModel(id: $id, uid: $uid, brandName: $brandName, name: $name, color: $color, weight: $weight, amountGrams: $amountGrams, memo: $memo, photoUrl: $photoUrl, purchaseDate: $purchaseDate, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty, material: $material, yarnLength: $yarnLength, lotNumber: $lotNumber, price: $price, purchasePlace: $purchasePlace, colorCode: $colorCode, labelPhotoUrl: $labelPhotoUrl, quantity: $quantity, composition: $composition, lengthMeters: $lengthMeters, lengthYards: $lengthYards, ravelryStashId: $ravelryStashId, ravelryYarnId: $ravelryYarnId)';
   }
 
   @override
@@ -543,7 +583,11 @@ class _$YarnModelImpl implements _YarnModel {
             (identical(other.lengthMeters, lengthMeters) ||
                 other.lengthMeters == lengthMeters) &&
             (identical(other.lengthYards, lengthYards) ||
-                other.lengthYards == lengthYards));
+                other.lengthYards == lengthYards) &&
+            (identical(other.ravelryStashId, ravelryStashId) ||
+                other.ravelryStashId == ravelryStashId) &&
+            (identical(other.ravelryYarnId, ravelryYarnId) ||
+                other.ravelryYarnId == ravelryYarnId));
   }
 
   @JsonKey(ignore: true)
@@ -573,7 +617,9 @@ class _$YarnModelImpl implements _YarnModel {
         quantity,
         composition,
         lengthMeters,
-        lengthYards
+        lengthYards,
+        ravelryStashId,
+        ravelryYarnId
       ]);
 
   @JsonKey(ignore: true)
@@ -615,7 +661,9 @@ abstract class _YarnModel implements YarnModel {
       final int quantity,
       final String composition,
       final int lengthMeters,
-      final int lengthYards}) = _$YarnModelImpl;
+      final int lengthYards,
+      final int? ravelryStashId,
+      final int? ravelryYarnId}) = _$YarnModelImpl;
 
   factory _YarnModel.fromJson(Map<String, dynamic> json) =
       _$YarnModelImpl.fromJson;
@@ -668,6 +716,14 @@ abstract class _YarnModel implements YarnModel {
   int get lengthMeters;
   @override
   int get lengthYards;
+  @override
+
+  /// 이슈 #644 — Ravelry stash entry id (createStash 응답값)
+  int? get ravelryStashId;
+  @override
+
+  /// 이슈 #644 Phase 7 — Ravelry 공식 yarn DB id (검색→매핑)
+  int? get ravelryYarnId;
   @override
   @JsonKey(ignore: true)
   _$$YarnModelImplCopyWith<_$YarnModelImpl> get copyWith =>

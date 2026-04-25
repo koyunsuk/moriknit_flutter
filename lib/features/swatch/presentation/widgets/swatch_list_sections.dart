@@ -95,7 +95,7 @@ class SwatchCard extends StatelessWidget {
                       child: Image.network(
                         thumbUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Icon(Icons.texture, color: C.lv, size: 28),
+                        errorBuilder: (_, _, _) => Icon(Icons.texture, color: C.lv, size: 28),
                       ),
                     )
                   : Icon(Icons.texture, color: C.lv, size: 28),

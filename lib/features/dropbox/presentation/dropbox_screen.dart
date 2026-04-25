@@ -1,21 +1,27 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/localization/app_language.dart';
+import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/dropbox_provider.dart';
 import '../../pattern_converter/presentation/pattern_converter_screen.dart';
 import '../../pattern_converter/presentation/pattern_translator_screen.dart';
-import '../../pattern_library/data/pattern_file_repository.dart';
-import '../../pattern_library/domain/pattern_file.dart';
+import '../../pattern/data/pattern_repository.dart';
+import '../../pattern/domain/pattern_chart.dart';
+import '../../pattern/presentation/pattern_detail_screen.dart';
 import '../data/dropbox_auth_provider.dart';
+import '../data/dropbox_favorites_repository.dart';
 import '../domain/dropbox_file_entry.dart';
 
 const Color _kDropboxBlue = Color(0xFF0061FF);
@@ -164,7 +170,15 @@ class _DropboxScreenState extends ConsumerState<DropboxScreen> {
     final auth = ref.watch(dropboxAuthProvider);
     final isKorean = ref.watch(appLanguageProvider).isKorean;
 
-    return Scaffold(
+    // 사용자 요청 — 물리 뒤로가기 시 폴더 트리 상위로 이동 (루트면 화면 종료 허용)
+    return PopScope(
+      canPop: _pathStack.length <= 1,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _pathStack.length > 1) {
+          _goUp();
+        }
+      },
+      child: Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
         child: Column(
@@ -195,19 +209,47 @@ class _DropboxScreenState extends ConsumerState<DropboxScreen> {
               child: auth.isLoading
                   ? Center(child: CircularProgressIndicator(color: _kDropboxBlue))
                   : auth.isLoggedIn
-                      ? _FileBrowser(
-                          path: _currentPath,
-                          displayPath: _displayPath(),
-                          canGoUp: _pathStack.length > 1,
-                          onEnterFolder: _enterFolder,
-                          onGoUp: _goUp,
-                          onFileSelected: _importFile,
-                          isKorean: isKorean,
+                      ? DefaultTabController(
+                          length: 2,
+                          child: Column(
+                            children: [
+                              // 탭바 — 일반 / 즐겨찾기
+                              TabBar(
+                                labelColor: _kDropboxBlue,
+                                unselectedLabelColor: C.mu,
+                                indicatorColor: _kDropboxBlue,
+                                tabs: [
+                                  Tab(text: isKorean ? '일반' : 'Browse'),
+                                  Tab(text: isKorean ? '즐겨찾기' : 'Favorites'),
+                                ],
+                              ),
+                              Expanded(
+                                child: TabBarView(
+                                  children: [
+                                    _FileBrowser(
+                                      path: _currentPath,
+                                      displayPath: _displayPath(),
+                                      canGoUp: _pathStack.length > 1,
+                                      onEnterFolder: _enterFolder,
+                                      onGoUp: _goUp,
+                                      onFileSelected: _importFile,
+                                      isKorean: isKorean,
+                                    ),
+                                    _FavoritesTab(
+                                      isKorean: isKorean,
+                                      onEnterFolder: _enterFolder,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         )
                       : _ConnectPrompt(isKorean: isKorean),
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -306,38 +348,7 @@ class _FileBrowser extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 경로 표시줄
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            color: _kDropboxBlue.withValues(alpha: 0.05),
-            border: Border(bottom: BorderSide(color: C.bd)),
-          ),
-          child: Row(
-            children: [
-              if (canGoUp) ...[
-                GestureDetector(
-                  onTap: onGoUp,
-                  child: Icon(Icons.arrow_back_ios_rounded, size: 18, color: _kDropboxBlue),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Expanded(
-                child: Text(
-                  displayPath,
-                  style: T.caption.copyWith(color: C.mu, fontWeight: FontWeight.w600),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.refresh_rounded, size: 18),
-                color: C.mu,
-                onPressed: () => ref.invalidate(_dropboxFolderProvider(path)),
-                tooltip: isKorean ? '새로고침' : 'Refresh',
-              ),
-            ],
-          ),
-        ),
+        // 경로 표시줄 + 새로고침 삭제 (사용자 요청)
         // 파일 목록
         Expanded(
           child: entriesAsync.when(
@@ -386,8 +397,92 @@ class _FileBrowser extends ConsumerWidget {
   }
 }
 
+// ── 즐겨찾기 탭 ─────────────────────────────────────────────────────────────────
+class _FavoritesTab extends ConsumerWidget {
+  const _FavoritesTab({required this.isKorean, required this.onEnterFolder});
+  final bool isKorean;
+  final void Function(String) onEnterFolder;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (FirebaseAuth.instance.currentUser?.uid.isEmpty ?? true) {
+      return Center(child: Text(isKorean ? '로그인이 필요해요.' : 'Login required', style: T.body));
+    }
+    final favStream = FirebaseFirestore.instance
+        .collection('users')
+        .doc(FirebaseAuth.instance.currentUser!.uid)
+        .collection('dropbox_favorites')
+        .orderBy('addedAt', descending: true)
+        .snapshots();
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: favStream,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator(color: _kDropboxBlue));
+        }
+        final docs = snap.data?.docs ?? [];
+        if (docs.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.star_border_rounded, size: 48, color: C.mu),
+                  const SizedBox(height: 12),
+                  Text(
+                    isKorean
+                        ? '즐겨찾기가 비어있어요.\n일반 탭에서 별표(⭐)를 눌러 추가하세요.'
+                        : 'No favorites yet.\nTap the star (⭐) in the Browse tab.',
+                    textAlign: TextAlign.center,
+                    style: T.caption.copyWith(color: C.mu),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        return ListView.separated(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount: docs.length,
+          separatorBuilder: (_, _) => Divider(height: 1, color: C.bd),
+          itemBuilder: (context, i) {
+            final data = docs[i].data();
+            final path = (data['path'] as String?) ?? '';
+            final name = (data['name'] as String?) ?? path;
+            final isFolder = (data['isFolder'] as bool?) ?? false;
+            return ListTile(
+              leading: Icon(
+                isFolder ? Icons.folder_rounded : Icons.insert_drive_file_rounded,
+                color: isFolder ? C.pk : C.mu,
+                size: 28,
+              ),
+              title: Text(name, style: T.body.copyWith(fontSize: 14)),
+              subtitle: Text(path, style: T.caption.copyWith(color: C.mu), maxLines: 1, overflow: TextOverflow.ellipsis),
+              trailing: IconButton(
+                icon: Icon(Icons.star_rounded, color: Colors.amber, size: 22),
+                tooltip: isKorean ? '즐겨찾기 해제' : 'Remove favorite',
+                onPressed: () => ref
+                    .read(dropboxFavoritesRepositoryProvider)
+                    .toggle(dropboxPath: path, name: name, isFolder: isFolder),
+              ),
+              onTap: isFolder
+                  ? () {
+                      onEnterFolder(path);
+                      DefaultTabController.of(context).animateTo(0);
+                    }
+                  : null,
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
 // ── 파일/폴더 행 ─────────────────────────────────────────────────────────────────
-class _FileRow extends StatelessWidget {
+class _FileRow extends ConsumerWidget {
   const _FileRow({
     required this.entry,
     required this.isKorean,
@@ -427,7 +522,10 @@ class _FileRow extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final favPaths = ref.watch(dropboxFavoritePathsProvider).valueOrNull ?? const <String>{};
+    final isFav = favPaths.contains(entry.path);
+
     return ListTile(
       onTap: onTap,
       leading: Icon(_icon(), color: _iconColor(), size: 28),
@@ -442,9 +540,28 @@ class _FileRow extends StatelessWidget {
               ].where((s) => s.isNotEmpty).join('  ·  '),
               style: T.caption.copyWith(color: C.mu),
             ),
-      trailing: entry.isFolder
-          ? Icon(Icons.chevron_right_rounded, color: C.mu)
-          : null,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 즐겨찾기 별표 토글 (폴더/파일 모두)
+          IconButton(
+            icon: Icon(
+              isFav ? Icons.star_rounded : Icons.star_border_rounded,
+              color: isFav ? Colors.amber : C.mu,
+              size: 22,
+            ),
+            tooltip: isKorean ? '즐겨찾기' : 'Favorite',
+            onPressed: () => ref
+                .read(dropboxFavoritesRepositoryProvider)
+                .toggle(
+                  dropboxPath: entry.path,
+                  name: entry.name,
+                  isFolder: entry.isFolder,
+                ),
+          ),
+          if (entry.isFolder) Icon(Icons.chevron_right_rounded, color: C.mu),
+        ],
+      ),
     );
   }
 }
@@ -500,25 +617,66 @@ class _DropboxFileViewerState extends ConsumerState<_DropboxFileViewer> {
     final isKorean = widget.isKorean;
     final messenger = ScaffoldMessenger.of(context);
     try {
+      // 사용자 요청 — 도안 라이브러리 직접 등록과 동일한 흐름:
+      // 이미지/PDF → PatternRepository → pattern_charts (유니버설 뷰어 진입 가능)
+      final ext = widget.fileName.toLowerCase().split('.').last;
+      final isImage = {'jpg', 'jpeg', 'png', 'webp', 'gif'}.contains(ext);
+      final isPdf = ext == 'pdf';
+      if (!isImage && !isPdf) {
+        showSaveErrorSnackBar(messenger,
+            message: isKorean
+                ? '이미지/PDF만 도안 라이브러리에 저장할 수 있어요.'
+                : 'Only image/PDF can be saved to library.');
+        return;
+      }
+
+      // 파일명에서 확장자 제거 → 도안 제목 자동
+      final title = widget.fileName.replaceAll(RegExp(r'\.[^.]+$'), '');
+
+      PatternChart? saved;
       await runWithMoriLoadingDialog<void>(
         context,
-        message: isKorean ? '라이브러리에 저장하는 중입니다.' : 'Saving to library...',
+        message: isKorean ? '도안 라이브러리에 저장하는 중입니다.' : 'Saving to library...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
-        task: () => PatternFileRepository().uploadFile(
-          bytes: widget.bytes,
-          fileName: widget.fileName,
-          mimeType: widget.mimeType,
-          source: PatternFileSource.dropbox,
-          sourceMeta: {'dropboxPath': widget.dropboxPath},
-        ),
+        task: () async {
+          // 임시 파일 생성 (PatternRepository.save*는 File 객체 받음)
+          final tmpDir = await getTemporaryDirectory();
+          final tmpFile = File('${tmpDir.path}/$_kTmpDownloadName.$ext');
+          await tmpFile.writeAsBytes(widget.bytes);
+          final repo = ref.read(patternRepositoryProvider);
+          if (isImage) {
+            saved = await repo.saveImagePattern(title: title, imageFile: tmpFile);
+          } else {
+            // PDF — savePdfPattern (백그라운드 자동 커버 추출 #652 흐름)
+            saved = await repo.savePdfPattern(title: title, pdfFile: tmpFile);
+          }
+        },
       );
       if (!mounted) return;
       setState(() => _done = true);
-      showSavedSnackBar(messenger, message: isKorean ? '라이브러리에 저장됐어요.' : 'Saved to library.');
+      showSavedSnackBar(messenger,
+          message: isKorean ? '도안 라이브러리에 저장됐어요.' : 'Saved to library.');
+      // 저장 완료 후 도안 라이브러리로 이동 (Dropbox 화면 스택 정리).
+      // 라이브러리 진입 후 상세화면 push 하여 사용자가 뒤로가기 시 라이브러리로 복귀.
+      if (saved != null && mounted) {
+        if (!context.mounted) return;
+        context.go(Routes.toolsPatterns);
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        if (!mounted) return;
+        if (!context.mounted) return;
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PatternDetailScreen(chart: saved!),
+          ),
+        );
+      }
     } catch (e) {
       showSaveErrorSnackBar(messenger, message: _cleanError(e));
     }
   }
+
+  static const String _kTmpDownloadName = 'dropbox_dl';
 
   void _convertPattern({required bool translateToKorean}) {
     if (_done) return;
@@ -591,7 +749,7 @@ class _DropboxFileViewerState extends ConsumerState<_DropboxFileViewer> {
                     children: [
                       const Icon(Icons.save_alt_rounded, size: 18),
                       const SizedBox(width: 10),
-                      Text(widget.isKorean ? '바로 저장' : 'Save to Library', style: T.body),
+                      Text(widget.isKorean ? '도안 라이브러리에 저장' : 'Save to Pattern Library', style: T.body),
                     ],
                   ),
                 ),

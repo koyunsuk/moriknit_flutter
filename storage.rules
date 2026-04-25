@@ -1,0 +1,161 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── 공통 함수 ──────────────────────────────────────────────────────────
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return isLoggedIn() && request.auth.uid == uid;
+    }
+    function isAdmin() {
+      return isLoggedIn() && request.auth.token.email == 'koyunsuk@gmail.com';
+    }
+
+    // ── 사용자 프로필·도안 변환 소스 (users/{uid}/**) ──────────────────────
+    // profile.jpg, pattern_sources/, ... 모두 포함
+    match /users/{uid}/{allPaths=**} {
+      allow read: if isLoggedIn();
+      allow write: if isOwner(uid);
+    }
+
+    // ── 실 라이브러리 (yarn/{uid}/**) ─────────────────────────────────────
+    match /yarn/{uid}/{allPaths=**} {
+      allow read: if isLoggedIn();
+      allow write: if isOwner(uid);
+    }
+
+    // ── 코스 자료 (courses/{uid}/**) ──────────────────────────────────────
+    match /courses/{uid}/{allPaths=**} {
+      allow read: if isLoggedIn();
+      allow write: if isOwner(uid);
+    }
+
+    // ── 스와치 사진 (swatches/{filename}) ─────────────────────────────────
+    match /swatches/{file} {
+      allow read: if isLoggedIn();
+      allow write: if isLoggedIn();
+    }
+
+    // ── 프로젝트 커버 (projects/{filename}) ───────────────────────────────
+    match /projects/{file} {
+      allow read: if true;
+      allow write: if isLoggedIn();
+    }
+
+    // ── 도안 (pattern/{filename} 등) ──────────────────────────────────────
+    match /pattern/{allPaths=**} {
+      allow read: if true;
+      allow write: if isLoggedIn();
+    }
+
+    // ── 카운터 사진 ───────────────────────────────────────────────────────
+    match /counters/{allPaths=**} {
+      allow read: if isLoggedIn();
+      allow write: if isLoggedIn();
+    }
+
+    // ── 바늘 사진 ─────────────────────────────────────────────────────────
+    match /needles/{allPaths=**} {
+      allow read: if isLoggedIn();
+      allow write: if isLoggedIn();
+    }
+
+    // ── 악세사리·도서·앨범·기타 my 자산 ───────────────────────────────────
+    match /accessories/{allPaths=**} {
+      allow read: if isLoggedIn();
+      allow write: if isLoggedIn();
+    }
+    match /books/{allPaths=**} {
+      allow read: if isLoggedIn();
+      allow write: if isLoggedIn();
+    }
+    match /photo-album/{allPaths=**} {
+      allow read: if isLoggedIn();
+      allow write: if isLoggedIn();
+    }
+    match /albums/{allPaths=**} {
+      allow read: if isLoggedIn();
+      allow write: if isLoggedIn();
+    }
+    match /my/{allPaths=**} {
+      allow read: if isLoggedIn();
+      allow write: if isLoggedIn();
+    }
+
+    // ── 마켓 도안 자산 ────────────────────────────────────────────────────
+    match /market/{allPaths=**} {
+      allow read: if true;
+      allow write: if isLoggedIn();
+    }
+
+    // ── 커뮤니티 게시글 사진 ──────────────────────────────────────────────
+    match /posts/{allPaths=**} {
+      allow read: if true;
+      allow write: if isLoggedIn();
+    }
+    match /community/{allPaths=**} {
+      allow read: if true;
+      allow write: if isLoggedIn();
+    }
+    match /public_projects/{allPaths=**} {
+      allow read: if true;
+      allow write: if isLoggedIn();
+    }
+
+    // ── 메모 (음성 녹음, 이미지 등) ───────────────────────────────────────
+    match /memos/{allPaths=**} {
+      allow read: if isLoggedIn();
+      allow write: if isLoggedIn();
+    }
+
+    // ── DM 첨부 ──────────────────────────────────────────────────────────
+    match /dm/{allPaths=**} {
+      allow read: if isLoggedIn();
+      allow write: if isLoggedIn();
+    }
+
+    // ── 에디토리얼 첨부 (어드민) ──────────────────────────────────────────
+    match /editorial/{allPaths=**} {
+      allow read: if isLoggedIn();
+      allow write: if isAdmin();
+    }
+
+    // ── 공지사항 (어드민) ─────────────────────────────────────────────────
+    match /announcements/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── 목업 이미지 (어드민) ──────────────────────────────────────────────
+    match /mockup_images/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── 뜨개백과 자산 (어드민) ────────────────────────────────────────────
+    match /encyclopedia/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── 도안 기호 (어드민) ────────────────────────────────────────────────
+    match /knit_symbols/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── 랜딩 자산 (어드민) ────────────────────────────────────────────────
+    match /landing/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── 라글란 체크시트 등 첨부 (어드민) ──────────────────────────────────
+    match /attachments/{allPaths=**} {
+      allow read: if isLoggedIn();
+      allow write: if isAdmin();
+    }
+  }
+}

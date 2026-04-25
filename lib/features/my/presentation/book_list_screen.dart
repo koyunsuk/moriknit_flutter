@@ -29,23 +29,29 @@ class BookListScreen extends ConsumerWidget {
                 subtitle: isKorean ? '참고 도서 라이브러리' : 'Reference book library',
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: LibrarySummaryCard(
+                headers: [isKorean ? '전체' : 'Total'],
+                rows: [
+                  LibrarySummaryRowData(
+                    badge: isKorean ? '도서' : 'Books',
+                    badgeColor: C.lvD,
+                    values: ['${books.length}'],
+                    valueColors: [C.tx],
+                  ),
+                ],
+                addLabel: isKorean ? '추가' : 'Add',
+                onAdd: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const BookInputScreen()),
+                ),
+              ),
+            ),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
                 children: [
-                  WorkspaceSummaryBar(
-                    stats: [
-                      WorkStat('${books.length}', isKorean ? '전체' : 'Total',
-                          color: C.lvD),
-                    ],
-                    addLabel: isKorean ? '추가' : 'Add',
-                    onAdd: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const BookInputScreen()),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
                   GlassCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

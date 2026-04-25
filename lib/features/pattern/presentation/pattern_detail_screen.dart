@@ -15,12 +15,14 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
+import 'pattern_editor_screen.dart';
 import 'pattern_viewer_screen.dart';
 import '../../../providers/counter_provider.dart';
 import '../../counter/domain/counter_model.dart';
 import '../domain/pattern_chart.dart';
 import '../data/pattern_export_service.dart';
 import '../data/pattern_repository.dart';
+import '../data/pattern_session_repository.dart';
 import '../../../providers/project_provider.dart';
 
 
@@ -62,6 +64,11 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
   late final TextEditingController _editNarrativeCtrl;
   ChartMode _editMode = ChartMode.color;
 
+  /// 이슈 #648 — lazy 추출 완료 후 갱신된 imageUrl (widget.chart 대신 우선 사용)
+  String? _refreshedImageUrl;
+  String _currentImageUrl() =>
+      _refreshedImageUrl ?? widget.chart.imageUrl;
+
   @override
   void initState() {
     super.initState();
@@ -70,6 +77,36 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
     _editNarrativeCtrl = TextEditingController();
     if (widget.initialIsEditing) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _enterEditMode());
+    }
+    // 이슈 #651 — 기존 PDF 도안 중 커버 없는 것 lazy 추출 (fire-and-forget)
+    if (widget.chart.type == PatternType.pdf &&
+        widget.chart.imageUrl.isEmpty &&
+        widget.chart.id.isNotEmpty &&
+        widget.chart.pdfUrl.isNotEmpty &&
+        widget.ownerId == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await ref
+            .read(patternRepositoryProvider)
+            .ensureCoverFromPdf(widget.chart.id, widget.chart.pdfUrl);
+        // 추출 완료 후 Firestore에서 갱신된 imageUrl 가져와 화면 새로고침
+        if (!mounted) return;
+        try {
+          final snap = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(_uid ?? ref.read(authStateProvider).asData?.value?.uid ?? '')
+              .collection('pattern_charts')
+              .doc(widget.chart.id)
+              .get()
+              .timeout(const Duration(seconds: 10));
+          final data = snap.data();
+          final url = (data?['imageUrl'] as String?) ?? '';
+          if (url.isNotEmpty && mounted) {
+            setState(() => _refreshedImageUrl = url);
+          }
+        } catch (_) {
+          // 무음 — 다음 진입 시 라이브러리 stream에서 갱신됨
+        }
+      });
     }
   }
 
@@ -103,10 +140,12 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
       if (mounted) setState(() {}); // _uid 업데이트 반영 (메모 저장 버튼 표시)
 
       final snap = await FirebaseFirestore.instance
-          .collection('pattern_memos')
-          .doc('${user.uid}_${widget.chart.id}')
+          .collection('users')
+          .doc(user.uid)
+          .collection('memos')
+          .doc('pattern_${widget.chart.id}')
           .get()
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 8));
       if (snap.exists && mounted) {
         _memoCtrl.text = snap.data()?['memo'] as String? ?? '';
       }
@@ -127,8 +166,10 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
         task: () async {
           await FirebaseFirestore.instance
-              .collection('pattern_memos')
-              .doc('${_uid}_${widget.chart.id}')
+              .collection('users')
+              .doc(_uid)
+              .collection('memos')
+              .doc('pattern_${widget.chart.id}')
               .set({'memo': _memoCtrl.text.trim(), 'updatedAt': FieldValue.serverTimestamp()});
         },
       );
@@ -522,6 +563,31 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
 
   Future<void> _forkPattern() async {
     final isKorean = ref.read(appLanguageProvider).isKorean;
+    // 이슈 #629 — complete 도안만 Fork 허용
+    if (!widget.chart.isComplete) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: C.bg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(isKorean ? 'Fork할 수 없어요' : 'Cannot Fork', style: T.h3),
+          content: Text(
+            isKorean
+                ? '이 도안은 초안 상태라 Fork할 수 없어요. 작성자가 섹션을 완성한 후에 Fork해 주세요.'
+                : 'This pattern is a draft. Fork will be available once the author completes the sections.',
+            style: T.body,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(isKorean ? '확인' : 'OK',
+                  style: TextStyle(color: C.lv, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     try {
       await runWithMoriLoadingDialog<void>(
         context,
@@ -592,8 +658,15 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
     }
   }
 
+  /// 이슈 #648 — 도안 커버 변경 (갤러리 + 카메라 항상 함께 제공)
+  /// type 무관하게 모든 도안의 imageUrl 슬롯을 커버로 사용.
   Future<void> _changeImage() async {
     final isKorean = ref.read(appLanguageProvider).isKorean;
+    if (widget.chart.id.isEmpty) {
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context),
+          message: isKorean ? '저장된 도안만 커버를 바꿀 수 있어요.' : 'Save the pattern first.');
+      return;
+    }
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: C.bg,
@@ -617,10 +690,10 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                 title: Text(isKorean ? '카메라로 찍기' : 'Take a photo', style: T.body),
                 onTap: () async {
                   Navigator.pop(ctx);
-                  final picked =
-                      await ImagePicker().pickImage(source: ImageSource.camera);
+                  final picked = await ImagePicker().pickImage(
+                      source: ImageSource.camera, maxWidth: 1200, imageQuality: 85);
                   if (picked != null && context.mounted) {
-                    await _replaceImage(File(picked.path), isKorean);
+                    await _replaceCover(File(picked.path), isKorean);
                   }
                 },
               ),
@@ -630,10 +703,10 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                     style: T.body),
                 onTap: () async {
                   Navigator.pop(ctx);
-                  final picked =
-                      await ImagePicker().pickImage(source: ImageSource.gallery);
+                  final picked = await ImagePicker().pickImage(
+                      source: ImageSource.gallery, maxWidth: 1200, imageQuality: 85);
                   if (picked != null && context.mounted) {
-                    await _replaceImage(File(picked.path), isKorean);
+                    await _replaceCover(File(picked.path), isKorean);
                   }
                 },
               ),
@@ -644,29 +717,24 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
     );
   }
 
-  Future<void> _replaceImage(File file, bool isKorean) async {
+  /// 새 커버를 Storage에 업로드하고 Firestore의 imageUrl을 갱신.
+  Future<void> _replaceCover(File file, bool isKorean) async {
     try {
       await runWithMoriLoadingDialog<void>(
         context,
-        message: isKorean ? '이미지 교체 중입니다.' : 'Replacing image...',
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
-        task: () => ref.read(patternRepositoryProvider).saveImagePattern(
-              title: widget.chart.title,
-              imageFile: file,
+        task: () => ref.read(patternRepositoryProvider).updateCover(
+              patternId: widget.chart.id,
+              coverFile: file,
             ),
       );
-      if (context.mounted) {
-        // ignore: use_build_context_synchronously
-        showSavedSnackBar(ScaffoldMessenger.of(context),
-            message: isKorean ? '이미지가 교체됐어요.' : 'Image replaced.');
-        // ignore: use_build_context_synchronously
-        Navigator.pop(context);
-      }
+      if (!mounted) return;
+      showSavedSnackBar(ScaffoldMessenger.of(context),
+          message: isKorean ? '커버가 변경됐어요.' : 'Cover updated.');
     } catch (e) {
-      if (context.mounted) {
-        // ignore: use_build_context_synchronously
-        showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
-      }
+      if (!mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
     }
   }
 
@@ -750,8 +818,9 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
   }
 
   Widget _buildThumbnail() {
-    if (widget.chart.type == PatternType.image &&
-        widget.chart.imageUrl.isNotEmpty) {
+    // 이슈 #648 — type 무관, imageUrl이 있으면 커버로 표시 (PDF/chart도 포함).
+    final coverUrl = _currentImageUrl();
+    if (coverUrl.isNotEmpty) {
       return Stack(
         children: [
           Container(
@@ -765,7 +834,7 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: Image.network(
-                widget.chart.imageUrl,
+                coverUrl,
                 width: double.infinity,
                 height: 220,
                 fit: BoxFit.contain,
@@ -773,26 +842,60 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
               ),
             ),
           ),
+          // 본인 도안일 때만 커버 변경 버튼 노출
+          if (!_isOtherUser && widget.chart.id.isNotEmpty)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: GestureDetector(
+                onTap: _changeImage,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.55),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.edit_rounded,
+                      color: Colors.white, size: 18),
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+    // 커버가 없을 때 — 본인 도안이면 추가 버튼 노출
+    return Stack(
+      children: [
+        _placeholderBox(120),
+        if (!_isOtherUser && widget.chart.id.isNotEmpty)
           Positioned(
             top: 8,
             right: 8,
             child: GestureDetector(
               onTap: _changeImage,
               child: Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.55),
-                  shape: BoxShape.circle,
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Icon(Icons.edit_rounded,
-                    color: Colors.white, size: 18),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_a_photo_rounded, color: Colors.white, size: 14),
+                    SizedBox(width: 4),
+                    Text('커버 추가',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700)),
+                  ],
+                ),
               ),
             ),
           ),
-        ],
-      );
-    }
-    return _placeholderBox(120);
+      ],
+    );
   }
 
   Widget _placeholderBox(double height) {
@@ -859,7 +962,7 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
       case PatternType.image:
         return isKorean ? '이미지 보기' : 'View image';
       case PatternType.pdf:
-        return isKorean ? 'PDF 열기' : 'Open PDF';
+        return isKorean ? '도안 열기' : 'Open pattern';
       case PatternType.chart:
         return isKorean ? '도안 보기 (뷰어)' : 'View pattern';
     }
@@ -893,6 +996,7 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
+    debugPrint('[PatternDetailScreen] BUILD id=${widget.chart.id} type=${widget.chart.type.name} title="${widget.chart.title}" isEditing=$_isEditing');
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: _isEditing
@@ -925,6 +1029,7 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                     icon: Icon(Icons.more_vert_rounded, color: C.tx),
                     onSelected: (v) {
                       if (v == 'edit') _enterEditMode();
+                      if (v == 'change_cover') _changeImage();
                       if (v == 'copy') _duplicatePattern(isKorean);
                       if (v == 'link_project') _linkToProject(context, isKorean);
                       if (v == 'export_pdf') _sharePdfMagazine(context, isKorean);
@@ -938,6 +1043,15 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                           Icon(Icons.edit_outlined, size: 18, color: C.lv),
                           const SizedBox(width: 8),
                           Text(isKorean ? '수정' : 'Edit'),
+                        ]),
+                      ),
+                      // 이슈 #648 — 커버 변경 (모든 도안 type)
+                      PopupMenuItem(
+                        value: 'change_cover',
+                        child: Row(children: [
+                          Icon(Icons.image_rounded, size: 18, color: C.lv),
+                          const SizedBox(width: 8),
+                          Text(isKorean ? '커버 변경' : 'Change cover'),
                         ]),
                       ),
                       PopupMenuItem(
@@ -996,6 +1110,80 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 이슈 #626 — draft 도안 안내 배너
+                if (!widget.chart.isComplete) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                    decoration: BoxDecoration(
+                      color: C.og.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: C.og.withValues(alpha: 0.25)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.edit_note_rounded, color: C.og, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isKorean ? '초안 상태' : 'Draft',
+                                style: T.caption.copyWith(
+                                  color: C.og,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                isKorean
+                                    ? '섹션이 있어야 프로젝트 단계로그 연결·Fork·공유가 가능해요. 도안에디터의 "섹션 나누기" 탭에서 완성해 주세요.'
+                                    : 'Add sections to enable project linking, fork, and sharing. Use the "Sections" tab in the pattern editor.',
+                                style: T.caption.copyWith(
+                                  color: C.og,
+                                  height: 1.4,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              // 이슈 #626 (B-4) — "섹션 편집하기" 직접 진입 CTA
+                              ElevatedButton.icon(
+                                onPressed: () {
+                                  // 도안에디터로 진입 — 서술형 시트의 "섹션 나누기" 탭에서 완성 가능
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => PatternEditorScreen(
+                                        patternId: widget.chart.id,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                icon: Icon(Icons.segment_rounded, size: 16),
+                                label: Text(
+                                  isKorean ? '섹션 편집하기' : 'Edit Sections',
+                                  style: const TextStyle(
+                                      fontSize: 13, fontWeight: FontWeight.w700),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: C.og,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8)),
+                                  minimumSize: const Size(0, 32),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 // Thumbnail
                 _buildThumbnail(),
                 const SizedBox(height: 16),
@@ -1187,6 +1375,12 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                     ),
                   ),
                 ],
+                // 이슈 #649 Phase 3 — 도안 작업시간 통계
+                const SizedBox(height: 10),
+                _PatternTimeStatsCard(
+                  chartId: widget.chart.id,
+                  isKorean: isKorean,
+                ),
                 // Counter section
                 const SizedBox(height: 10),
                 Consumer(
@@ -1397,6 +1591,74 @@ class _InfoChip extends StatelessWidget {
           Text(value,
               style: T.bodyBold.copyWith(color: C.lvD, fontSize: 14)),
           Text(label, style: T.caption.copyWith(color: C.mu, fontSize: 10)),
+        ],
+      ),
+    );
+  }
+}
+
+/// 이슈 #649 Phase 3 — 도안 작업시간 통계 카드.
+/// PatternSession.totalSeconds 를 직접 watch 하여 표시.
+class _PatternTimeStatsCard extends ConsumerWidget {
+  final String chartId;
+  final bool isKorean;
+
+  const _PatternTimeStatsCard({required this.chartId, required this.isKorean});
+
+  String _formatHms(int seconds) {
+    final h = seconds ~/ 3600;
+    final m = (seconds % 3600) ~/ 60;
+    final s = seconds % 60;
+    final hh = h.toString().padLeft(2, '0');
+    final mm = m.toString().padLeft(2, '0');
+    final ss = s.toString().padLeft(2, '0');
+    return '$hh:$mm:$ss';
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sessionAsync = ref.watch(patternSessionProvider(chartId));
+    return GlassCard(
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: C.lv.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.timer_outlined, color: C.lvD, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isKorean ? '작업 시간' : 'Work Time',
+                  style: T.caption
+                      .copyWith(color: C.mu, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 2),
+                sessionAsync.when(
+                  loading: () => Text('--:--:--',
+                      style: T.h3.copyWith(fontWeight: FontWeight.w800)),
+                  error: (e, _) => Text(
+                    isKorean ? '불러오기 실패' : 'Failed to load',
+                    style: T.caption.copyWith(color: C.og),
+                  ),
+                  data: (session) => Text(
+                    _formatHms(session?.totalSeconds ?? 0),
+                    style: T.h3.copyWith(
+                      fontWeight: FontWeight.w800,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

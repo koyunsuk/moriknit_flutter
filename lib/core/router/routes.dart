@@ -17,6 +17,9 @@ class Routes {
   static const toolsCourse = '/tools/course';
   static const toolsEncyclopedia = '/tools/encyclopedia';
   static const toolsMemo = '/tools/memo';
+  static const toolsFreeTimer = '/tools/free-timer';
+  static const toolsTimeDashboard = '/tools/time-dashboard';
+  static const swatchTimer = '/swatch/:id/timer';
   static const community = '/community';
   static const market = '/market';
   static const my = '/my';
@@ -39,6 +42,7 @@ class Routes {
   static const ravelry = '/tools/ravelry';
   static const etsy = '/tools/etsy';
   static const dropbox = '/tools/dropbox';
+  static const dropboxExplorer = '/tools/dropbox/explorer';
   static const toolsNeedleSize = '/tools/needle-size';
   static const toolsMeasure = '/tools/measure';
   static const toolsPatternConverter = '/tools/pattern-converter';

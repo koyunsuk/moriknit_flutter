@@ -38,6 +38,8 @@ _$YarnModelImpl _$$YarnModelImplFromJson(Map<String, dynamic> json) =>
       composition: json['composition'] as String? ?? '',
       lengthMeters: (json['lengthMeters'] as num?)?.toInt() ?? 0,
       lengthYards: (json['lengthYards'] as num?)?.toInt() ?? 0,
+      ravelryStashId: (json['ravelryStashId'] as num?)?.toInt(),
+      ravelryYarnId: (json['ravelryYarnId'] as num?)?.toInt(),
     );
 
 Map<String, dynamic> _$$YarnModelImplToJson(_$YarnModelImpl instance) =>
@@ -66,4 +68,6 @@ Map<String, dynamic> _$$YarnModelImplToJson(_$YarnModelImpl instance) =>
       'composition': instance.composition,
       'lengthMeters': instance.lengthMeters,
       'lengthYards': instance.lengthYards,
+      'ravelryStashId': instance.ravelryStashId,
+      'ravelryYarnId': instance.ravelryYarnId,
     };

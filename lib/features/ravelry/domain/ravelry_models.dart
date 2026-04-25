@@ -94,6 +94,8 @@ class RavelryStashEntry {
   final String? thumbnailUrl;
   final String? notes;
   final DateTime? updatedAt;
+  /// Ravelry yarn DB ID — `/yarns/{id}.json` 호출에 사용 (#658 상세 보강).
+  final int? yarnId;
 
   const RavelryStashEntry({
     required this.id,
@@ -107,12 +109,16 @@ class RavelryStashEntry {
     this.thumbnailUrl,
     this.notes,
     this.updatedAt,
+    this.yarnId,
   });
 
   factory RavelryStashEntry.fromJson(Map<String, dynamic> json) {
     final yarn = _readMap(json, ['yarn']);
     final yarnWeight = yarn != null ? _readMap(yarn, ['yarn_weight', 'weight']) : null;
     final company = yarn != null ? _readMap(yarn, ['yarn_company', 'brand']) : null;
+    final resolvedYarnId = yarn != null
+        ? _readInt(yarn, ['id', 'yarn_id'], -1)
+        : _readInt(json, ['yarn_id'], -1);
 
     return RavelryStashEntry(
       id: _readInt(json, ['id', 'stash_id']),
@@ -133,6 +139,7 @@ class RavelryStashEntry {
       updatedAt: DateTime.tryParse(
         _readString(json, ['updated_at', 'updated_on', 'last_updated']) ?? '',
       ),
+      yarnId: resolvedYarnId == -1 ? null : resolvedYarnId,
     );
   }
 }
@@ -425,6 +432,93 @@ class RavelryProjectDetail {
 extension _IntLet on int {
   T let<T>(T Function(int) fn) => fn(this);
 }
+
+// ── 이슈 #644 Phase 7 — Ravelry yarn DB 검색 결과 / 상세 ────────────────────
+/// Ravelry `/yarns/search.json` 항목 또는 `/yarns/{id}.json` 응답을 표현.
+class RavelryYarnSearchItem {
+  final int id;
+  final String name;
+  final String? yarnCompanyName;
+  final String? yarnWeight;
+  final double? gaugeStitches;
+  final double? gaugeRows;
+  final String? fiberContent;
+  final String? recommendedNeedle;
+  final bool? machineWashable;
+  final String? permalink;
+  final String? photoUrl;
+  final double? grams;
+  final double? yardage;
+  final double? ratingAverage;
+  final bool discontinued;
+
+  const RavelryYarnSearchItem({
+    required this.id,
+    required this.name,
+    this.yarnCompanyName,
+    this.yarnWeight,
+    this.gaugeStitches,
+    this.gaugeRows,
+    this.fiberContent,
+    this.recommendedNeedle,
+    this.machineWashable,
+    this.permalink,
+    this.photoUrl,
+    this.grams,
+    this.yardage,
+    this.ratingAverage,
+    this.discontinued = false,
+  });
+
+  factory RavelryYarnSearchItem.fromJson(Map<String, dynamic> json) {
+    final company = _readMap(json, ['yarn_company']);
+    final yarnWeightMap = _readMap(json, ['yarn_weight']);
+    final fibers = _readList(json, ['yarn_fibers']);
+    final fiberStr = (fibers ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map((f) {
+          final fiberType = _readMap(f, ['fiber_type']);
+          final name = _readString(fiberType ?? const {}, ['name']) ??
+              _readString(f, ['name']);
+          final pct = _readDouble(f, ['percentage']);
+          if (name == null) return '';
+          if (pct != null) return '${pct.toStringAsFixed(0)}% $name';
+          return name;
+        })
+        .where((s) => s.isNotEmpty)
+        .join(', ');
+
+    return RavelryYarnSearchItem(
+      id: _readInt(json, ['id', 'yarn_id']),
+      name: _readString(json, ['name', 'yarn_name']) ?? 'Untitled yarn',
+      yarnCompanyName: _readString(company ?? const {}, ['name']) ??
+          _readString(json, ['yarn_company_name', 'brand_name']),
+      yarnWeight: _readString(yarnWeightMap ?? const {}, ['name']) ??
+          _readString(json, ['weight_name', 'yarn_weight']),
+      gaugeStitches: _readDouble(json, ['gauge_stitches', 'gauge']),
+      gaugeRows: _readDouble(json, ['gauge_rows']),
+      fiberContent: fiberStr.isEmpty
+          ? _readString(json, ['fiber_content', 'composition'])
+          : fiberStr,
+      recommendedNeedle: _readString(json, ['knit_needle_size_metric', 'recommended_needle_size']),
+      machineWashable: json['machine_washable'] is bool
+          ? json['machine_washable'] as bool
+          : null,
+      permalink: _readString(json, ['permalink']),
+      photoUrl: _photoUrlFrom(json),
+      grams: _readDouble(json, ['grams']),
+      yardage: _readDouble(json, ['yardage', 'yards']),
+      ratingAverage: _readDouble(json, ['rating_average']),
+      discontinued: json['discontinued'] == true,
+    );
+  }
+
+  String? get ravelryUrl =>
+      permalink != null ? 'https://www.ravelry.com/yarns/library/$permalink' : null;
+}
+
+/// `/yarns/{id}.json` 상세 — 검색 항목과 동일 구조 + 추가 필드.
+typedef RavelryYarnDetail = RavelryYarnSearchItem;
 
 class RavelryYarnResult {
   final int id;

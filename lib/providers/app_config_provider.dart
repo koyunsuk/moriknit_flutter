@@ -56,6 +56,18 @@ class AppConfig {
   });
 }
 
+final mockupImagesProvider = StreamProvider<Map<String, String>>((ref) {
+  return FirebaseFirestore.instance
+      .collection('app_config')
+      .doc('mockup_images')
+      .snapshots()
+      .map((snap) {
+    if (!snap.exists) return <String, String>{};
+    final data = snap.data()!;
+    return {for (final e in data.entries) e.key: (e.value as String? ?? '')};
+  });
+});
+
 final appConfigProvider = StreamProvider<AppConfig>((ref) {
   return FirebaseFirestore.instance
       .collection('app_config')

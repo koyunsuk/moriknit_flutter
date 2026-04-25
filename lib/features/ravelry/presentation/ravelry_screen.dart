@@ -11,6 +11,7 @@ import '../data/ravelry_repository.dart';
 import '../domain/ravelry_models.dart';
 import 'ravelry_pattern_detail_screen.dart';
 import 'ravelry_project_detail_screen.dart';
+import 'ravelry_stash_detail_screen.dart';
 
 class RavelryScreen extends ConsumerStatefulWidget {
   final int initialTab;
@@ -243,6 +244,12 @@ class _StashCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GlassCard(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => RavelryStashDetailScreen(item: item, isKorean: isKorean),
+        ),
+      ),
       child: Row(
         children: [
           ClipRRect(

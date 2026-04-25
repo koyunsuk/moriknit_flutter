@@ -53,7 +53,7 @@ class _YarnListScreenState extends ConsumerState<YarnListScreen> {
                         headers: ['MoriKnit', 'Ravelry'],
                         rows: [
                           LibrarySummaryRowData(
-                            badge: isKorean ? '실' : 'Yarn',
+                            badge: isKorean ? '나의 실' : 'My Yarn',
                             badgeColor: C.pkD,
                             values: [yarnCount, ravelryCount],
                             valueColors: [C.pkD, C.lv],
@@ -127,6 +127,8 @@ class _YarnListScreenState extends ConsumerState<YarnListScreen> {
                                     weight: yarn.weight,
                                     amountGrams: yarn.amountGrams,
                                     photoUrl: yarn.photoUrl,
+                                    // 이슈 #644 — Ravelry 연결 배지
+                                    ravelryLinked: yarn.ravelryStashId != null,
                                     onTap: () => Navigator.push(
                                       context,
                                       MaterialPageRoute(
@@ -557,6 +559,8 @@ class _YarnCard extends StatelessWidget {
   final int amountGrams;
   final String photoUrl;
   final VoidCallback onTap;
+  // 이슈 #644 — Ravelry 연결 여부 배지
+  final bool ravelryLinked;
 
   const _YarnCard({
     required this.brandName,
@@ -566,6 +570,7 @@ class _YarnCard extends StatelessWidget {
     required this.amountGrams,
     required this.onTap,
     this.photoUrl = '',
+    this.ravelryLinked = false,
   });
 
   @override
@@ -605,10 +610,34 @@ class _YarnCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    displayName.isEmpty ? '이름 없음' : displayName,
-                    style: T.bodyBold,
-                    overflow: TextOverflow.ellipsis,
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          displayName.isEmpty ? '이름 없음' : displayName,
+                          style: T.bodyBold,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (ravelryLinked) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: C.lv.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'Ravelry',
+                            style: T.caption.copyWith(
+                              color: C.lvD,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 2),
                   Row(

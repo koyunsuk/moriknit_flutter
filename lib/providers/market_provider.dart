@@ -2,6 +2,7 @@
 
 import '../features/market/data/market_repository.dart';
 import '../features/market/domain/market_item.dart';
+import '../features/market/domain/market_review.dart';
 import 'auth_provider.dart';
 
 final marketRepositoryProvider = Provider<MarketRepository>((ref) {
@@ -60,4 +61,27 @@ final myMarketSalesProvider = StreamProvider<List<MarketPurchase>>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value(const []);
   return ref.watch(marketRepositoryProvider).watchMySales(user.uid);
+});
+
+final sellerItemsProvider = StreamProvider.family<List<MarketItem>, String>((ref, sellerUid) {
+  if (sellerUid.isEmpty) return Stream.value(const []);
+  return ref.watch(marketRepositoryProvider).watchMyItems(sellerUid);
+});
+
+// ── 찜 providers ──────────────────────────────────────────
+final favoritesProvider = StreamProvider<Set<String>>((ref) {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return Stream.value(const <String>{});
+  return ref.watch(marketRepositoryProvider).watchFavorites(user.uid);
+});
+
+final favoriteItemsProvider = StreamProvider<List<MarketItem>>((ref) {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return Stream.value(const []);
+  return ref.watch(marketRepositoryProvider).watchFavoriteItems(user.uid);
+});
+
+// ── 리뷰 ─────────────────────────────────────────────────
+final marketReviewsProvider = StreamProvider.family<List<MarketReview>, String>((ref, itemId) {
+  return ref.watch(marketRepositoryProvider).watchReviews(itemId);
 });

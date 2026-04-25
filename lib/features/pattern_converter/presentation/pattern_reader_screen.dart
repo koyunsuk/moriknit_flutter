@@ -88,6 +88,14 @@ class _PatternReaderView extends StatelessWidget {
             style: T.h3, overflow: TextOverflow.ellipsis),
         backgroundColor: C.bg,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.menu_book_rounded, size: 22),
+            color: C.lv,
+            tooltip: isKorean ? '텍스트 뷰어' : 'Text Viewer',
+            onPressed: () => context.push('/tools/my-parsed-patterns/${pattern.id}/text'),
+          ),
+        ],
       ),
       body: Stack(
         children: [

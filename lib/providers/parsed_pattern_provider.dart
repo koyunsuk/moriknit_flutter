@@ -36,10 +36,18 @@ final myParsedPatternsProvider = StreamProvider<List<ParsedPattern>>((ref) {
   );
 });
 
-/// 단일 AI 변환 도안 스트림 (pattern_charts 기반)
+/// 단일 AI 변환 도안 스트림 (pattern_charts 기반) — 옵션 A: 실시간.
+/// 일부 도안에서 stream emit 안되는 회귀 발견 (#655) → 화면에서는 future 변형 사용.
 final aiPatternDetailProvider =
-    StreamProvider.family<PatternChart?, String>((ref, patternId) {
+    StreamProvider.autoDispose.family<PatternChart?, String>((ref, patternId) {
   return ref.watch(patternConverterRepositoryProvider).watchAiPattern(patternId);
+});
+
+/// #655 무한로딩 fix — 단발 get 기반 future provider.
+/// 텍스트 트래커 등 실시간 변경 추적이 필요 없는 화면에서 사용.
+final aiPatternDetailFutureProvider =
+    FutureProvider.autoDispose.family<PatternChart?, String>((ref, patternId) {
+  return ref.watch(patternConverterRepositoryProvider).getAiPattern(patternId);
 });
 
 /// 구버전 호환: 단일 도안 스트림 (parsed_patterns 기반)

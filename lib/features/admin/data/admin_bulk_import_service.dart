@@ -140,16 +140,16 @@ class AdminBulkImportService {
             {
               final docId = (row['brand_id'] ?? '').trim();
               final docRef = docId.isEmpty
-                  ? _db.collection('yarnBrands').doc()
-                  : _db.collection('yarnBrands').doc(docId);
+                  ? _db.collection('yarn_brands').doc()
+                  : _db.collection('yarn_brands').doc(docId);
               batch.set(docRef, _brandPayload(row), SetOptions(merge: true));
             }
           case AdminImportKind.needleBrand:
             {
               final docId = (row['brand_id'] ?? '').trim();
               final docRef = docId.isEmpty
-                  ? _db.collection('needleBrands').doc()
-                  : _db.collection('needleBrands').doc(docId);
+                  ? _db.collection('needle_brands').doc()
+                  : _db.collection('needle_brands').doc(docId);
               batch.set(docRef, _brandPayload(row), SetOptions(merge: true));
             }
         }

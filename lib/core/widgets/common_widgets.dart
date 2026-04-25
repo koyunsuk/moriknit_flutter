@@ -1338,9 +1338,9 @@ class LibrarySummaryCard extends StatelessWidget {
   final String? addLabel;
   final VoidCallback? onAdd;
 
-  /// 모든 라이브러리 화면 공통 치수 — 균일 고정
-  static const double _lw = 72.0;
-  static const double _cw = 52.0;
+  /// 셀 비율 — badge는 헤더/값보다 살짝 넓게 (1.4x). 사용자 보고 #621 — 좌측 치우침 해소.
+  static const int _badgeFlex = 7;
+  static const int _cellFlex = 5;
 
   const LibrarySummaryCard({
     super.key,
@@ -1350,26 +1350,43 @@ class LibrarySummaryCard extends StatelessWidget {
     this.onAdd,
   });
 
-  Widget _headerCell(String text) => SizedBox(
-        width: _cw,
-        child: Center(child: Text(text, style: T.caption.copyWith(color: C.mu))),
-      );
-
-  Widget _valueCell(String text, Color color) => SizedBox(
-        width: _cw,
-        child: Center(child: Text(text, style: T.bodyBold.copyWith(color: color))),
-      );
-
-  Widget _badgeCell(String text, Color color) => Container(
-        width: _lw,
-        color: color.withValues(alpha: 0.07),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+  Widget _headerCell(String text) => Expanded(
+        flex: _cellFlex,
         child: Center(
           child: Text(
             text,
-            style: T.caption.copyWith(color: color, fontWeight: FontWeight.w700),
+            style: T.caption.copyWith(color: C.mu),
             overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
+            maxLines: 1,
+          ),
+        ),
+      );
+
+  Widget _valueCell(String text, Color color) => Expanded(
+        flex: _cellFlex,
+        child: Center(
+          child: Text(
+            text,
+            style: T.bodyBold.copyWith(color: color),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
+        ),
+      );
+
+  Widget _badgeCell(String text, Color color) => Expanded(
+        flex: _badgeFlex,
+        child: Container(
+          color: color.withValues(alpha: 0.07),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          child: Center(
+            child: Text(
+              text,
+              style: T.caption.copyWith(color: color, fontWeight: FontWeight.w700),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              textAlign: TextAlign.center,
+            ),
           ),
         ),
       );
@@ -1389,7 +1406,7 @@ class LibrarySummaryCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        const SizedBox(width: _lw),
+                        const Spacer(flex: _badgeFlex),
                         ...headers.map(_headerCell),
                       ],
                     ),

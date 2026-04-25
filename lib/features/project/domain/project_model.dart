@@ -110,6 +110,13 @@ class ProjectModel with _$ProjectModel {
     @Default('') String originOwnerName,
     // 참고 도서
     @Default('') String referenceBookId,
+    // 이슈 #644 — Ravelry IDs 매핑 체인
+    /// 이 모리니트 프로젝트와 연결된 Ravelry project id (createProject 응답값)
+    int? ravelryProjectId,
+    /// 이 프로젝트의 도안에 매핑된 Ravelry pattern id (createProject 요청 시 전달)
+    int? ravelryPatternId,
+    /// 이 프로젝트의 실들에 매핑된 Ravelry stash id 목록 (createProject packs 전달)
+    @Default(<int>[]) List<int> ravelryStashIds,
   }) = _ProjectModel;
 
   factory ProjectModel.fromJson(Map<String, dynamic> json) => _$ProjectModelFromJson(json);

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 import 'ai_pattern_section.dart';
 import 'knit_symbols.dart';
+import 'narrative_block.dart';
 
 enum ChartMode { color, symbol, colorChart, narrative }
 
@@ -9,6 +11,9 @@ enum ChartTool { draw, brush, erase, fill, select, move }
 enum PatternType { chart, image, pdf }
 
 enum PatternSourceType { editor, image, external, aiConverted }
+
+/// 이슈 #626 — 도안 완성 상태. Fork/판매/공유/프로젝트 단계 미러링은 complete만 허용.
+enum PatternStatus { draft, complete }
 
 /// RS(겉면)/WS(안면) 독해 방향 — 평면뜨기 vs 원통뜨기
 enum KnittingDirection { flatRows, inTheRound }
@@ -36,38 +41,99 @@ class GaugeInfo {
 }
 
 /// 반복 구간 마커 — 도안에서 * ~ * 반복 표시
+/// 격자 좌표 기반. 서술형 블록과의 연결은 NarrativeBlock.repeatRegionId 로 이루어짐.
 class RepeatRegion {
+  /// 반복구간 식별자 — 서술형 블록 연결용. 비어 있으면 호환 모드(연결 없음).
+  final String id;
   final int startRow;
   final int startCol;
   final int endRow;   // inclusive
   final int endCol;   // inclusive
   final int repeatCount; // 반복 횟수 (표시용)
 
+  /// 반복구간 레이블 — "소매 반복", "케이블 무늬 반복" 등 의미 정보
+  final String? label;
+  final String? labelKo;
+
   const RepeatRegion({
+    this.id = '',
     required this.startRow,
     required this.startCol,
     required this.endRow,
     required this.endCol,
     this.repeatCount = 1,
+    this.label,
+    this.labelKo,
   });
+
+  /// 신규 생성 시 id 자동 부여
+  factory RepeatRegion.create({
+    required int startRow,
+    required int startCol,
+    required int endRow,
+    required int endCol,
+    int repeatCount = 1,
+    String? label,
+    String? labelKo,
+  }) =>
+      RepeatRegion(
+        id: const Uuid().v4(),
+        startRow: startRow,
+        startCol: startCol,
+        endRow: endRow,
+        endCol: endCol,
+        repeatCount: repeatCount,
+        label: label,
+        labelKo: labelKo,
+      );
 
   int get rowSpan => endRow - startRow + 1;
   int get colSpan => endCol - startCol + 1;
 
+  RepeatRegion copyWith({
+    String? id,
+    int? startRow,
+    int? startCol,
+    int? endRow,
+    int? endCol,
+    int? repeatCount,
+    Object? label = _sentinel,
+    Object? labelKo = _sentinel,
+  }) {
+    return RepeatRegion(
+      id: id ?? this.id,
+      startRow: startRow ?? this.startRow,
+      startCol: startCol ?? this.startCol,
+      endRow: endRow ?? this.endRow,
+      endCol: endCol ?? this.endCol,
+      repeatCount: repeatCount ?? this.repeatCount,
+      label: identical(label, _sentinel) ? this.label : label as String?,
+      labelKo: identical(labelKo, _sentinel) ? this.labelKo : labelKo as String?,
+    );
+  }
+
+  static const Object _sentinel = Object();
+
   Map<String, dynamic> toJson() => {
+        if (id.isNotEmpty) 'id': id,
         'startRow': startRow,
         'startCol': startCol,
         'endRow': endRow,
         'endCol': endCol,
         'repeatCount': repeatCount,
+        if (label != null) 'label': label,
+        if (labelKo != null) 'labelKo': labelKo,
       };
 
   factory RepeatRegion.fromJson(Map<String, dynamic> json) => RepeatRegion(
+        id: (json['id'] as String?) ?? const Uuid().v4(),
         startRow: json['startRow'] as int,
         startCol: json['startCol'] as int,
         endRow: json['endRow'] as int,
         endCol: json['endCol'] as int,
         repeatCount: json['repeatCount'] as int? ?? 1,
+        label: json['label'] as String?,
+        labelKo: json['labelKo'] as String?,
       );
 }
 
@@ -192,6 +258,14 @@ class PatternChart {
   /// 반복 구간 마커 목록
   final List<RepeatRegion> repeatRegions;
 
+  /// 서술형 블록 리스트 — 서술형 텍스트의 원자 단위 (줄 단위).
+  /// narrativeText 필드는 하위 호환용으로 유지되며, 저장/로드 시 자동 동기화됨.
+  final List<NarrativeBlock> narrativeBlocks;
+
+  /// 이슈 #644 — Ravelry 도안 ID. Ravelry에서 임포트된 도안일 때만 set.
+  /// 모리니트 자체 도안은 null. 프로젝트 동기화 시 Ravelry createProject의 pattern_id로 전달.
+  final int? ravelryPatternId;
+
   PatternChart({
     required this.id,
     required this.title,
@@ -215,6 +289,8 @@ class PatternChart {
     this.knittingDirection = KnittingDirection.flatRows,
     this.gauge,
     this.repeatRegions = const [],
+    this.narrativeBlocks = const [],
+    this.ravelryPatternId,
   });
 
   PatternChart setCell(int row, int col, CellData cell) {
@@ -443,6 +519,8 @@ class PatternChart {
     KnittingDirection? knittingDirection,
     Object? gauge = _sentinel,
     List<RepeatRegion>? repeatRegions,
+    List<NarrativeBlock>? narrativeBlocks,
+    Object? ravelryPatternId = _sentinel,
   }) => _copyWith(
     id: id, title: title, rows: rows, cols: cols, mode: mode, grid: grid,
     narrativeText: narrativeText, type: type, imageUrl: imageUrl, pdfUrl: pdfUrl,
@@ -451,6 +529,8 @@ class PatternChart {
     createdAt: createdAt, linkedProjectId: linkedProjectId,
     mirrorMode: mirrorMode, category: category,
     knittingDirection: knittingDirection, gauge: gauge, repeatRegions: repeatRegions,
+    narrativeBlocks: narrativeBlocks,
+    ravelryPatternId: ravelryPatternId,
   );
 
   static const Object _sentinel = Object();
@@ -478,6 +558,8 @@ class PatternChart {
     KnittingDirection? knittingDirection,
     Object? gauge = _sentinel,
     List<RepeatRegion>? repeatRegions,
+    List<NarrativeBlock>? narrativeBlocks,
+    Object? ravelryPatternId = _sentinel,
   }) {
     return PatternChart(
       id: id ?? this.id,
@@ -502,6 +584,10 @@ class PatternChart {
       knittingDirection: knittingDirection ?? this.knittingDirection,
       gauge: identical(gauge, _sentinel) ? this.gauge : gauge as GaugeInfo?,
       repeatRegions: repeatRegions ?? this.repeatRegions,
+      narrativeBlocks: narrativeBlocks ?? this.narrativeBlocks,
+      ravelryPatternId: identical(ravelryPatternId, _sentinel)
+          ? this.ravelryPatternId
+          : ravelryPatternId as int?,
     );
   }
 
@@ -529,6 +615,8 @@ class PatternChart {
         'knittingDirection': knittingDirection.name,
         if (gauge != null) 'gauge': gauge!.toJson(),
         if (repeatRegions.isNotEmpty) 'repeatRegions': repeatRegions.map((r) => r.toJson()).toList(),
+        if (narrativeBlocks.isNotEmpty) 'narrativeBlocks': narrativeBlocks.map((b) => b.toMap()).toList(),
+        if (ravelryPatternId != null) 'ravelryPatternId': ravelryPatternId,
       };
 
   factory PatternChart.fromJson(Map<String, dynamic> json) {
@@ -579,8 +667,43 @@ class PatternChart {
       repeatRegions: (json['repeatRegions'] as List?)
           ?.map((r) => RepeatRegion.fromJson(r as Map<String, dynamic>))
           .toList() ?? const [],
+      narrativeBlocks: _parseNarrativeBlocks(json),
+      ravelryPatternId: json['ravelryPatternId'] is int
+          ? json['ravelryPatternId'] as int
+          : (json['ravelryPatternId'] is num
+              ? (json['ravelryPatternId'] as num).toInt()
+              : null),
     );
   }
+
+  /// narrativeBlocks 파싱 + 호환 레이어:
+  /// 신규 필드 없으면 기존 narrativeText에서 줄 단위로 자동 변환.
+  static List<NarrativeBlock> _parseNarrativeBlocks(Map<String, dynamic> json) {
+    final raw = json['narrativeBlocks'] as List?;
+    if (raw != null && raw.isNotEmpty) {
+      return raw
+          .map((b) => NarrativeBlock.fromMap(Map<String, dynamic>.from(b as Map)))
+          .toList();
+    }
+    final text = (json['narrativeText'] as String?) ?? '';
+    return NarrativeBlock.fromText(text);
+  }
+
+  /// 이슈 #626 — 도안 내용 기반 완성 판정 (자동 판정, B안).
+  /// 조건: 섹션 1개 이상 존재 + 섹션 중 하나라도 내용(steps 또는 연결 블록) 보유.
+  /// 빈 섹션만 있는 도안은 draft로 간주.
+  bool get isComplete {
+    final sections = aiSections ?? const [];
+    if (sections.isEmpty) return false;
+    return sections.any((s) {
+      if (s.steps.isNotEmpty) return true;
+      return narrativeBlocks.any((b) => b.sectionId == s.id);
+    });
+  }
+
+  /// UI 배지·필터·게이트용 상태 (isComplete 기반 자동 판정).
+  PatternStatus get status =>
+      isComplete ? PatternStatus.complete : PatternStatus.draft;
 
   factory PatternChart.empty({
     String id = '',

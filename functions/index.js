@@ -611,6 +611,54 @@ exports.ravelryUpdateProject = onRequest(
   },
 );
 
+// ── 이슈 #644 Phase 7 — Ravelry yarn DB 검색/상세 ─────────────────────────────
+// Ravelry 글로벌 yarn DB(10만+ 항목) 검색 → YarnModel.ravelryYarnId 매핑
+// /yarns/search.json + /yarns/{id}.json 프록시
+exports.ravelryYarnsSearch = onRequest(
+  { region: REGION, secrets: [ravelryClientSecret] },
+  async (req, res) => {
+    await withUser(req, res, async (decoded) => {
+      const connection = await getValidConnection(decoded.uid);
+      const query = req.query.query;
+      if (!query || (typeof query === 'string' && !query.trim())) {
+        res.status(400).json({ error: 'query parameter is required.' });
+        return;
+      }
+      const page = req.query.page || '1';
+      const pageSize = req.query.page_size || '25';
+      const data = await fetchRavelryJson(
+        '/yarns/search.json',
+        connection.accessToken,
+        {
+          query: encodeURIComponent(String(query).trim()),
+          page,
+          page_size: pageSize,
+        },
+      );
+      res.json(data);
+    });
+  },
+);
+
+exports.ravelryYarnDetail = onRequest(
+  { region: REGION, secrets: [ravelryClientSecret] },
+  async (req, res) => {
+    await withUser(req, res, async (decoded) => {
+      const connection = await getValidConnection(decoded.uid);
+      const yarnId = req.query.id;
+      if (!yarnId) {
+        res.status(400).json({ error: 'Yarn ID is required.' });
+        return;
+      }
+      const data = await fetchRavelryJson(
+        `/yarns/${yarnId}.json`,
+        connection.accessToken,
+      );
+      res.json(data);
+    });
+  },
+);
+
 // ── 카카오 커스텀 토큰 발급 ─────────────────────────────────
 exports.kakaoCustomToken = onRequest(
   { region: REGION, serviceAccount: 'firebase-adminsdk-fbsvc@moriknit-ceea9.iam.gserviceaccount.com' },

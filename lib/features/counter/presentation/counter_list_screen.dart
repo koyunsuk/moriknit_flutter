@@ -12,6 +12,8 @@ import '../../../providers/project_provider.dart';
 import '../../../features/project/domain/project_model.dart';
 import '../domain/counter_model.dart';
 
+enum _CounterSort { recent, oldest }
+
 class CounterListScreen extends ConsumerWidget {
   const CounterListScreen({super.key});
 
@@ -76,48 +78,33 @@ class CounterListScreen extends ConsumerWidget {
                     );
                   }
 
+                  bool isCounterDone(CounterModel c) {
+                    if (c.hasTargets && c.stitchProgress >= 1.0 && c.rowProgress >= 1.0) return true;
+                    if (c.projectId.isNotEmpty) {
+                      final proj = projects.where((p) => p.id == c.projectId).firstOrNull;
+                      if (proj != null && proj.status == 'finished') return true;
+                    }
+                    return false;
+                  }
+                  final done = counters.where(isCounterDone).length;
+                  final inProgress = counters.where((c) => !isCounterDone(c) && (c.hasTargets || c.projectId.isNotEmpty)).length;
+                  final unset = counters.where((c) => !isCounterDone(c) && !c.hasTargets && c.projectId.isEmpty).length;
+
                   return Stack(
                     children: [
                       const BgOrbs(),
-                      ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
-                        itemCount: counters.length + 1,
-                        separatorBuilder: (_, i) => i == 0 ? const SizedBox(height: 14) : const SizedBox(height: 10),
-                        itemBuilder: (context, index) {
-                          if (index == 0) {
-                            bool isCounterDone(CounterModel c) {
-                              if (c.hasTargets && c.stitchProgress >= 1.0 && c.rowProgress >= 1.0) return true;
-                              if (c.projectId.isNotEmpty) {
-                                final proj = projects.where((p) => p.id == c.projectId).firstOrNull;
-                                if (proj != null && proj.status == 'finished') return true;
-                              }
-                              return false;
-                            }
-                            final done = counters.where(isCounterDone).length;
-                            final inProgress = counters.where((c) => !isCounterDone(c) && (c.hasTargets || c.projectId.isNotEmpty)).length;
-                            final unset = counters.where((c) => !isCounterDone(c) && !c.hasTargets && c.projectId.isEmpty).length;
-                            return WorkspaceSummaryBar(
-                              stats: [
-                                WorkStat('${counters.length}', isKorean ? '전체' : 'Total', color: C.lmD),
-                                WorkStat('$inProgress', isKorean ? '진행' : 'Active', color: C.lv),
-                                WorkStat('$done', isKorean ? '완료' : 'Done', color: C.pkD),
-                                WorkStat('$unset', isKorean ? '미지정' : 'Free', color: C.mu),
-                              ],
-                              addLabel: isKorean ? '추가' : 'Add',
-                              onAdd: () => _showCounterStartSheet(context, ref, isKorean, projects),
-                            );
-                          }
-                          final counter = counters[index - 1];
-                          final linkedProject = counter.projectId.isNotEmpty
-                              ? projects.where((p) => p.id == counter.projectId).firstOrNull
-                              : null;
-                          return _CounterListCard(
-                            counter: counter,
-                            isKorean: isKorean,
-                            projectName: linkedProject?.title,
-                            onTap: () => context.push('/counter/${counter.id}'),
-                          );
-                        },
+                      Positioned.fill(
+                        child: _SortableCounterList(
+                          counters: counters,
+                          projects: projects,
+                          isKorean: isKorean,
+                          done: done,
+                          inProgress: inProgress,
+                          unset: unset,
+                          isCounterDone: isCounterDone,
+                          onAdd: () => _showCounterStartSheet(context, ref, isKorean, projects),
+                          onTap: (id) => context.push('/counter/$id'),
+                        ),
                       ),
                     ],
                   );
@@ -397,6 +384,211 @@ class CounterListScreen extends ConsumerWidget {
   }
 }
 
+// ── 정렬 가능한 카운터 목록 ─────────────────────────────────────────
+class _SortableCounterList extends StatefulWidget {
+  final List<CounterModel> counters;
+  final List<ProjectModel> projects;
+  final bool isKorean;
+  final int done;
+  final int inProgress;
+  final int unset;
+  final bool Function(CounterModel) isCounterDone;
+  final VoidCallback onAdd;
+  final void Function(String id) onTap;
+
+  const _SortableCounterList({
+    required this.counters,
+    required this.projects,
+    required this.isKorean,
+    required this.done,
+    required this.inProgress,
+    required this.unset,
+    required this.isCounterDone,
+    required this.onAdd,
+    required this.onTap,
+  });
+
+  @override
+  State<_SortableCounterList> createState() => _SortableCounterListState();
+}
+
+class _SortableCounterListState extends State<_SortableCounterList> {
+  _CounterSort _sortMode = _CounterSort.recent;
+
+  List<CounterModel> _sorted(List<CounterModel> counters) {
+    final list = [...counters];
+    switch (_sortMode) {
+      case _CounterSort.recent:
+        list.sort((a, b) => (b.updatedAt ?? DateTime(0)).compareTo(a.updatedAt ?? DateTime(0)));
+      case _CounterSort.oldest:
+        list.sort((a, b) => (a.updatedAt ?? DateTime(0)).compareTo(b.updatedAt ?? DateTime(0)));
+    }
+    return list;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sorted = _sorted(widget.counters);
+    final isKorean = widget.isKorean;
+    return Column(
+      children: [
+        // 요약카드 고정
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: LibrarySummaryCard(
+            headers: [
+              isKorean ? '전체' : 'Total',
+              isKorean ? '진행' : 'Active',
+              isKorean ? '완료' : 'Done',
+            ],
+            rows: [
+              LibrarySummaryRowData(
+                badge: isKorean ? '카운터' : 'Counter',
+                badgeColor: C.lmD,
+                values: ['${widget.counters.length}', '${widget.inProgress}', '${widget.done}'],
+                valueColors: [C.tx, C.lv, C.pkD],
+              ),
+            ],
+            addLabel: isKorean ? '추가' : 'Add',
+            onAdd: widget.onAdd,
+          ),
+        ),
+        // 스크롤 목록
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
+            itemCount: sorted.length + 1,
+            separatorBuilder: (_, i) => i == 0 ? const SizedBox(height: 8) : const SizedBox(height: 10),
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return _LibrarySectionHeader(
+                  title: isKorean ? '카운터 목록' : 'Counters',
+                  total: widget.counters.length,
+                  sortLabels: isKorean ? ['최근순', '오래된순'] : ['Recent', 'Oldest'],
+                  selectedIndex: _CounterSort.values.indexOf(_sortMode),
+                  onSort: (i) => setState(() => _sortMode = _CounterSort.values[i]),
+                );
+              }
+              final counter = sorted[index - 1];
+              final linked = counter.projectId.isNotEmpty
+                  ? widget.projects.where((p) => p.id == counter.projectId).firstOrNull
+                  : null;
+              return _NumberedItem(
+                number: index,
+                child: _CounterListCard(
+                  counter: counter,
+                  isKorean: isKorean,
+                  projectName: linked?.title,
+                  onTap: () => widget.onTap(counter.id),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── 섹션 헤더 ─────────────────────────────────────────────────────────
+class _LibrarySectionHeader extends StatelessWidget {
+  final String title;
+  final int total;
+  final List<String> sortLabels;
+  final int selectedIndex;
+  final ValueChanged<int> onSort;
+
+  const _LibrarySectionHeader({
+    required this.title,
+    required this.total,
+    required this.sortLabels,
+    required this.selectedIndex,
+    required this.onSort,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: Row(
+        children: [
+          Text(title, style: T.bodyBold),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              color: C.lmD.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text('$total', style: T.caption.copyWith(color: C.lmD, fontWeight: FontWeight.w700)),
+          ),
+          const Spacer(),
+          PopupMenuButton<int>(
+            onSelected: onSort,
+            color: C.bg,
+            offset: const Offset(0, 32),
+            icon: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.sort_rounded, size: 16, color: C.mu),
+                const SizedBox(width: 2),
+                Text(sortLabels[selectedIndex], style: T.caption.copyWith(color: C.mu)),
+              ],
+            ),
+            itemBuilder: (ctx) => sortLabels
+                .asMap()
+                .entries
+                .map((e) => PopupMenuItem<int>(
+                      value: e.key,
+                      child: Text(
+                        e.value,
+                        style: T.body.copyWith(
+                          color: e.key == selectedIndex ? C.lmD : C.tx,
+                          fontWeight: e.key == selectedIndex ? FontWeight.w700 : FontWeight.w400,
+                        ),
+                      ),
+                    ))
+                .toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── 번호 표시 래퍼 ────────────────────────────────────────────────────
+class _NumberedItem extends StatelessWidget {
+  final int number;
+  final Widget child;
+
+  const _NumberedItem({required this.number, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        child,
+        Positioned(
+          left: 10,
+          top: 10,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              color: C.bd2,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              '$number',
+              style: TextStyle(fontSize: 10, color: C.mu, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── 카운터 목록 카드 ───────────────────────────────────────────────────
 class _CounterListCard extends StatelessWidget {
   final CounterModel counter;
   final bool isKorean;

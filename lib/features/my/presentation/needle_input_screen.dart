@@ -12,6 +12,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/needle_provider.dart';
+import '../../swatch/data/public_brand_repository.dart';
 import '../../swatch/presentation/brand_search_sheet.dart';
 import '../domain/needle_model.dart';
 
@@ -354,6 +355,12 @@ class _NeedleInputScreenState extends ConsumerState<NeedleInputScreen> {
             await repository.updateNeedle(needle, photoUrl: _photoUrl);
           } else {
             await repository.createNeedle(needle, photoUrl: _photoUrl);
+          }
+          // #650 — 사용자 입력 브랜드를 공용 needle_brands에 자동 upsert
+          if (needle.brandName.trim().isNotEmpty) {
+            await ref
+                .read(publicBrandRepositoryProvider)
+                .upsertNeedleBrand(needle.brandName);
           }
         },
       );

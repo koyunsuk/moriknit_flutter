@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../providers/app_config_provider.dart' show mockupImagesProvider;
 import 'package:go_router/go_router.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
@@ -403,29 +404,32 @@ class _LandingHero extends StatelessWidget {
 }
 
 // ── 앱 화면 목업 섹션 ──────────────────────────────────────────────────────────
-class _AppScreensSection extends StatefulWidget {
+class _AppScreensSection extends ConsumerStatefulWidget {
   const _AppScreensSection();
   @override
-  State<_AppScreensSection> createState() => _AppScreensSectionState();
+  ConsumerState<_AppScreensSection> createState() => _AppScreensSectionState();
 }
 
-class _AppScreensSectionState extends State<_AppScreensSection> {
+class _AppScreensSectionState extends ConsumerState<_AppScreensSection> {
   static const _screens = [
-    (label: '홈', emoji: '🏠', highlight: false),
-    (label: '프로젝트 목록', emoji: '📁', highlight: false),
-    (label: '나의 니팅 코치 ★', emoji: '📋', highlight: true),
-    (label: '카운터', emoji: '🔢', highlight: false),
-    (label: '스와치', emoji: '🧶', highlight: false),
-    (label: '도안 에디터', emoji: '✏️', highlight: false),
-    (label: '마켓', emoji: '🛍️', highlight: false),
-    (label: '내 도안 판매', emoji: '💰', highlight: false),
-    (label: '커뮤니티', emoji: '💬', highlight: false),
-    (label: '강의', emoji: '🎬', highlight: false),
-    (label: '뜨개백과', emoji: '📚', highlight: false),
-    (label: 'English', emoji: '🌐', highlight: false),
-    (label: '테마 설정', emoji: '🎨', highlight: false),
-    (label: 'Ravelry 실 검색', emoji: '🔍', highlight: false),
-    (label: 'Ravelry 도안 검색', emoji: '📖', highlight: false),
+    (label: '홈', emoji: '🏠', highlight: false, mockupKey: 'screen-home'),
+    (label: '프로젝트 목록', emoji: '📁', highlight: false, mockupKey: 'project'),
+    (label: '나의 니팅 코치 ★', emoji: '📋', highlight: true, mockupKey: 'screen-coach'),
+    (label: '카운터', emoji: '🔢', highlight: false, mockupKey: 'counter'),
+    (label: '스와치', emoji: '🧶', highlight: false, mockupKey: 'swatch'),
+    (label: '도안 에디터', emoji: '✏️', highlight: false, mockupKey: 'pattern-editor'),
+    (label: '도안에디터 확장 ★', emoji: '📐', highlight: true, mockupKey: 'screen-pattern-editor-ext'),
+    (label: '마켓', emoji: '🛍️', highlight: false, mockupKey: 'market'),
+    (label: '내 도안 판매', emoji: '💰', highlight: false, mockupKey: 'screen-market-sell'),
+    (label: '커뮤니티', emoji: '💬', highlight: false, mockupKey: 'community'),
+    (label: '강의', emoji: '🎬', highlight: false, mockupKey: 'screen-course'),
+    (label: '뜨개백과', emoji: '📚', highlight: false, mockupKey: 'encyclopedia'),
+    (label: 'English', emoji: '🌐', highlight: false, mockupKey: 'screen-english'),
+    (label: '테마 설정', emoji: '🎨', highlight: false, mockupKey: 'screen-theme'),
+    (label: '측정 도구 ★', emoji: '📏', highlight: true, mockupKey: 'measure'),
+    (label: 'Ravelry 동기화 ★', emoji: '🔄', highlight: true, mockupKey: 'ravelry'),
+    (label: 'Ravelry 실 검색', emoji: '🔍', highlight: false, mockupKey: 'screen-ravelry-yarn'),
+    (label: 'Ravelry 도안 검색', emoji: '📖', highlight: false, mockupKey: 'screen-ravelry-pattern'),
   ];
 
   static const _frameW = 200.0;
@@ -495,8 +499,11 @@ class _AppScreensSectionState extends State<_AppScreensSection> {
     super.dispose();
   }
 
+  Map<String, String> _mockupImages = {};
+
   @override
   Widget build(BuildContext context) {
+    _mockupImages = ref.watch(mockupImagesProvider).valueOrNull ?? {};
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -553,13 +560,13 @@ class _AppScreensSectionState extends State<_AppScreensSection> {
                         alignment: WrapAlignment.center,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          _flowChip('📋 니팅 코치', C.lv),
+                          _flowChip('📋 니팅 코치', C.lv, isActive: _activeStep == 0, onTap: () => _onTapDot(2)),
                           _arrow(),
-                          _flowChip('✅ 프로젝트 완성', C.pk),
+                          _flowChip('✅ 프로젝트 완성', C.pk, isActive: _activeStep == 1, onTap: () => _onTapDot(1)),
                           _arrow(),
-                          _flowChip('✏️ 도안 제작', C.lmD),
+                          _flowChip('✏️ 도안 제작', C.lmD, isActive: _activeStep == 2, onTap: () => _onTapDot(5)),
                           _arrow(),
-                          _flowChip('🛒 마켓 판매', C.pkD),
+                          _flowChip('🛒 마켓 판매', C.pkD, isActive: _activeStep == 3, onTap: () => _onTapDot(7)),
                         ],
                       ),
                     ),
@@ -657,30 +664,84 @@ class _AppScreensSectionState extends State<_AppScreensSection> {
   }
 
   Widget _buildScreen(int i) {
+    final key = _screens[i].mockupKey;
+    final url = _mockupImages[key] ?? '';
+    if (url.isNotEmpty) {
+      return Image.network(url, fit: BoxFit.cover, errorBuilder: (_, _, _) => _buildFallbackScreen(i));
+    }
+    return _buildFallbackScreen(i);
+  }
+
+  Widget _buildFallbackScreen(int i) {
     return switch (i) {
-      0 => const _MockHomeScreen(),
-      1 => const _MockProjectListScreen(),
-      2 => const _MockStepLogScreen(),
-      3 => const _MockCounterScreen(),
-      4 => const _MockSwatchScreen(),
-      5 => const _MockPatternEditorScreen(),
-      6 => const _MockMarketScreen(),
-      7 => const _MockSellerScreen(),
-      8 => const _MockCommunityScreen(),
-      9 => const _MockCourseScreen(),
-      10 => const _MockEncyclopediaScreen(),
-      11 => const _MockEnglishScreen(),
-      12 => const _MockThemeScreen(),
-      13 => const _MockRavelryYarnScreen(),
-      _ => const _MockRavelryPatternScreen(),
+      0 => const MockHomeScreen(),
+      1 => const MockProjectListScreen(),
+      2 => const MockStepLogScreen(),
+      3 => const MockCounterScreen(),
+      4 => const MockSwatchScreen(),
+      5 => const MockPatternEditorScreen(),
+      6 => const MockPatternEditorExtendedScreen(),
+      7 => const MockMarketScreen(),
+      8 => const MockSellerScreen(),
+      9 => const MockCommunityScreen(),
+      10 => const MockCourseScreen(),
+      11 => const MockEncyclopediaScreen(),
+      12 => const MockEnglishScreen(),
+      13 => const MockThemeScreen(),
+      14 => const MockMeasureToolScreen(),
+      15 => const MockRavelrySyncScreen(),
+      16 => const MockRavelryYarnScreen(),
+      _ => const MockRavelryPatternScreen(),
     };
   }
 
-  Widget _flowChip(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withValues(alpha: 0.3))),
-      child: Text(label, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600)),
+  // 캐러셀 인덱스 → 플로우 단계 (전체 18개 매핑)
+  // 0=니팅코치, 1=프로젝트완성, 2=도안제작, 3=마켓판매
+  int get _activeStep {
+    const m = {
+      0: 0,   // 홈
+      1: 1,   // 프로젝트 목록
+      2: 0,   // 나의 니팅 코치
+      3: 0,   // 카운터 (뜨는 중 도구)
+      4: 0,   // 스와치 (사전 준비)
+      5: 2,   // 도안 에디터
+      6: 2,   // 도안에디터 확장
+      7: 3,   // 마켓
+      8: 3,   // 내 도안 판매
+      9: 1,   // 커뮤니티 (완성 후 공유)
+      10: 0,  // 강의 (학습)
+      11: 0,  // 뜨개백과 (참고)
+      12: 0,  // English
+      13: 1,  // 테마 설정
+      14: 2,  // 측정 도구 (치수 계산)
+      15: 3,  // Ravelry 동기화
+      16: 1,  // Ravelry 실 검색 (재료 탐색)
+      17: 2,  // Ravelry 도안 검색
+    };
+    return m[_currentIndex] ?? 0;
+  }
+
+  Widget _flowChip(String label, Color color, {bool isActive = false, VoidCallback? onTap}) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+          decoration: BoxDecoration(
+            color: isActive ? color.withValues(alpha: 0.20) : color.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: isActive ? color : color.withValues(alpha: 0.28), width: isActive ? 2.0 : 1.0),
+            boxShadow: isActive ? [BoxShadow(color: color.withValues(alpha: 0.28), blurRadius: 14, offset: const Offset(0, 4))] : [],
+          ),
+          child: AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 300),
+            style: TextStyle(fontSize: isActive ? 13 : 12, color: color, fontWeight: isActive ? FontWeight.w800 : FontWeight.w600),
+            child: Text(label),
+          ),
+        ),
+      ),
     );
   }
 
@@ -785,8 +846,8 @@ Widget _mockBottomNav(int selected) {
 }
 
 // ── 1. 홈 화면 ────────────────────────────────────────────────────────────────
-class _MockHomeScreen extends StatelessWidget {
-  const _MockHomeScreen();
+class MockHomeScreen extends StatelessWidget {
+  const MockHomeScreen();
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -835,8 +896,8 @@ class _MockHomeScreen extends StatelessWidget {
 }
 
 // ── 2. 프로젝트 목록 ──────────────────────────────────────────────────────────
-class _MockProjectListScreen extends StatelessWidget {
-  const _MockProjectListScreen();
+class MockProjectListScreen extends StatelessWidget {
+  const MockProjectListScreen();
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -865,8 +926,8 @@ class _MockProjectListScreen extends StatelessWidget {
 }
 
 // ── 3. 단계로그 (HIGHLIGHT) ───────────────────────────────────────────────────
-class _MockStepLogScreen extends StatelessWidget {
-  const _MockStepLogScreen();
+class MockStepLogScreen extends StatelessWidget {
+  const MockStepLogScreen();
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -930,8 +991,8 @@ class _MockStepLogScreen extends StatelessWidget {
 }
 
 // ── 4. 카운터 ─────────────────────────────────────────────────────────────────
-class _MockCounterScreen extends StatelessWidget {
-  const _MockCounterScreen();
+class MockCounterScreen extends StatelessWidget {
+  const MockCounterScreen();
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1006,8 +1067,8 @@ class _MockCounterScreen extends StatelessWidget {
 }
 
 // ── 5. 스와치 ─────────────────────────────────────────────────────────────────
-class _MockSwatchScreen extends StatelessWidget {
-  const _MockSwatchScreen();
+class MockSwatchScreen extends StatelessWidget {
+  const MockSwatchScreen();
   static const _swatches = [
     (Color(0xFFB39DDB), '170m', '3.5mm'),
     (Color(0xFFF48FB1), '320m', '4.0mm'),
@@ -1065,8 +1126,8 @@ class _MockSwatchScreen extends StatelessWidget {
 }
 
 // ── 6. 도안 에디터 ───────────────────────────────────────────────────────────
-class _MockPatternEditorScreen extends StatelessWidget {
-  const _MockPatternEditorScreen();
+class MockPatternEditorScreen extends StatelessWidget {
+  const MockPatternEditorScreen();
   @override
   Widget build(BuildContext context) {
     const cellSize = 13.0;
@@ -1153,8 +1214,8 @@ class _MockPatternEditorScreen extends StatelessWidget {
 }
 
 // ── 7. 마켓 ──────────────────────────────────────────────────────────────────
-class _MockMarketScreen extends StatelessWidget {
-  const _MockMarketScreen();
+class MockMarketScreen extends StatelessWidget {
+  const MockMarketScreen();
   static const _items = [
     ('탑다운 스웨터', '₩3,500', Color(0xFFB39DDB)),
     ('케이블 목도리', '₩2,000', Color(0xFFF48FB1)),
@@ -1215,8 +1276,8 @@ class _MockMarketScreen extends StatelessWidget {
 }
 
 // ── 8. 내 도안 판매 (셀러) ───────────────────────────────────────────────────
-class _MockSellerScreen extends StatelessWidget {
-  const _MockSellerScreen();
+class MockSellerScreen extends StatelessWidget {
+  const MockSellerScreen();
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1301,8 +1362,8 @@ class _MockSellerScreen extends StatelessWidget {
 }
 
 // ── 9. 커뮤니티 ──────────────────────────────────────────────────────────────
-class _MockCommunityScreen extends StatelessWidget {
-  const _MockCommunityScreen();
+class MockCommunityScreen extends StatelessWidget {
+  const MockCommunityScreen();
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1380,8 +1441,8 @@ class _MockCommunityScreen extends StatelessWidget {
 }
 
 // ── 10. 강의 ─────────────────────────────────────────────────────────────────
-class _MockCourseScreen extends StatelessWidget {
-  const _MockCourseScreen();
+class MockCourseScreen extends StatelessWidget {
+  const MockCourseScreen();
   static const _courses = [
     ('탑다운 스웨터 입문', '뜨개선생님', Color(0xFFB39DDB)),
     ('케이블 뜨기 마스터', '케이블장인', Color(0xFFF48FB1)),
@@ -1434,8 +1495,8 @@ class _MockCourseScreen extends StatelessWidget {
 }
 
 // ── 11. 뜨개백과 ─────────────────────────────────────────────────────────────
-class _MockEncyclopediaScreen extends StatelessWidget {
-  const _MockEncyclopediaScreen();
+class MockEncyclopediaScreen extends StatelessWidget {
+  const MockEncyclopediaScreen();
   static const _entries = [
     ('겉뜨기 (Knit)', '기본 뜨기 기법. 앞에서 뒤로 바늘을 넣어 뜹니다.', '기법'),
     ('안뜨기 (Purl)', '겉뜨기의 반대. 뒤에서 앞으로 바늘을 넣습니다.', '기법'),
@@ -1484,8 +1545,8 @@ class _MockEncyclopediaScreen extends StatelessWidget {
 }
 
 // ── 12. English (다국어) ──────────────────────────────────────────────────────
-class _MockEnglishScreen extends StatelessWidget {
-  const _MockEnglishScreen();
+class MockEnglishScreen extends StatelessWidget {
+  const MockEnglishScreen();
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1539,8 +1600,8 @@ class _MockEnglishScreen extends StatelessWidget {
 }
 
 // ── 13. 테마 설정 ─────────────────────────────────────────────────────────────
-class _MockThemeScreen extends StatelessWidget {
-  const _MockThemeScreen();
+class MockThemeScreen extends StatelessWidget {
+  const MockThemeScreen();
   static const _themes = [
     ('모리냥이', Color(0xFFB39DDB), Color(0xFFF48FB1)),
     ('라벤더', Color(0xFF9C89C5), Color(0xFFC8B8E8)),
@@ -1614,8 +1675,8 @@ class _MockThemeScreen extends StatelessWidget {
 }
 
 // ── Ravelry 실 검색 목업 ──────────────────────────────────────────────────────
-class _MockRavelryYarnScreen extends StatelessWidget {
-  const _MockRavelryYarnScreen();
+class MockRavelryYarnScreen extends StatelessWidget {
+  const MockRavelryYarnScreen();
 
   static const _results = [
     (name: 'Malabrigo Rios', brand: 'Malabrigo', weight: 'Worsted', color: Color(0xFFB39DDB)),
@@ -1702,8 +1763,8 @@ class _MockRavelryYarnScreen extends StatelessWidget {
 }
 
 // ── Ravelry 도안 검색 목업 ─────────────────────────────────────────────────────
-class _MockRavelryPatternScreen extends StatelessWidget {
-  const _MockRavelryPatternScreen();
+class MockRavelryPatternScreen extends StatelessWidget {
+  const MockRavelryPatternScreen();
 
   static const _results = [
     (name: 'Hermione\'s Everyday Socks', designer: 'Hermione Buccleigh', cat: '양말', color: Color(0xFFB39DDB)),
@@ -1789,6 +1850,408 @@ class _MockRavelryPatternScreen extends StatelessWidget {
       ]),
     );
   }
+}
+
+// ── 6-2. 도안에디터 확장 (게이지·반복구간·RS/WS) ─────────────────────────────
+class MockPatternEditorExtendedScreen extends StatelessWidget {
+  const MockPatternEditorExtendedScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    const cellSize = 12.0;
+    const gridW = 12;
+    const gridH = 9;
+    // 색상 팔레트 데이터: 0=흰, 1=라벤더, 2=핑크, 3=민트
+    const colors = [0,0,0,1,1,1,1,1,0,0,0,0];
+    final palette = [C.lv.withValues(alpha: 0.7), C.pk.withValues(alpha: 0.65), const Color(0xFF34D399).withValues(alpha: 0.65)];
+
+    return Container(
+      color: const Color(0xFFF0EDF8),
+      child: Column(children: [
+        // AppBar
+        Container(
+          padding: const EdgeInsets.fromLTRB(10, 9, 10, 8),
+          color: Colors.white,
+          child: Row(children: [
+            Icon(Icons.arrow_back_ios, size: 13, color: C.tx),
+            const SizedBox(width: 4),
+            Text('도안 에디터', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: C.tx)),
+            const Spacer(),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2), decoration: BoxDecoration(color: C.lv, borderRadius: BorderRadius.circular(8)), child: const Text('저장', style: TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.w700))),
+            const SizedBox(width: 6),
+            Icon(Icons.more_vert, size: 14, color: C.mu),
+          ]),
+        ),
+        // 게이지 배지
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          color: C.lv.withValues(alpha: 0.10),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(Icons.straighten_rounded, size: 9, color: C.lv),
+            const SizedBox(width: 3),
+            Text('37.5 × 46.7 cm  (22코/30단 / 10cm)', style: TextStyle(fontSize: 7.5, color: C.lv, fontWeight: FontWeight.w600)),
+          ]),
+        ),
+        // 캔버스 영역
+        Expanded(
+          child: Container(
+            color: const Color(0xFFF8F5FF),
+            child: Center(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                // 단수 헤더 (RS/WS 화살표 포함)
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  const SizedBox(width: 14),
+                  ...List.generate(gridW, (c) => SizedBox(
+                    width: cellSize,
+                    child: Center(child: Text('${gridW - c}', style: TextStyle(fontSize: 5.5, color: C.mu))),
+                  )),
+                  const SizedBox(width: 14),
+                ]),
+                const SizedBox(height: 1),
+                // 그리드 행
+                ...List.generate(gridH, (r) {
+                  final rowLabel = gridH - r;
+                  final isRS = rowLabel.isOdd;
+                  return Row(mainAxisSize: MainAxisSize.min, children: [
+                    // 왼쪽 헤더 (WS 행: → 화살표)
+                    SizedBox(width: 14, child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                      if (!isRS) Icon(Icons.arrow_forward_rounded, size: 5, color: C.mu.withValues(alpha: 0.6)),
+                      const SizedBox(width: 1),
+                      Text('$rowLabel', style: TextStyle(fontSize: 5.5, color: C.mu)),
+                    ])),
+                    // 셀들
+                    ...List.generate(gridW, (c) {
+                      // 반복구간: row 2-5, col 3-8 영역
+                      final inRepeat = r >= 2 && r <= 5 && c >= 3 && c <= 7;
+                      final isRepeatBorder = inRepeat && (r == 2 || r == 5 || c == 3 || c == 7);
+                      final cellColor = r < colors.length
+                          ? (colors[c] == 0 ? Colors.white : palette[colors[c] - 1])
+                          : Colors.white;
+                      return Container(
+                        width: cellSize, height: cellSize,
+                        decoration: BoxDecoration(
+                          color: cellColor,
+                          border: Border(
+                            top: BorderSide(color: isRepeatBorder && r == 2 ? const Color(0xFFEF4444) : C.bd2, width: isRepeatBorder && r == 2 ? 1.5 : 0.4),
+                            bottom: BorderSide(color: isRepeatBorder && r == 5 ? const Color(0xFFEF4444) : C.bd2, width: isRepeatBorder && r == 5 ? 1.5 : 0.4),
+                            left: BorderSide(color: isRepeatBorder && c == 3 ? const Color(0xFFEF4444) : C.bd2, width: isRepeatBorder && c == 3 ? 1.5 : 0.4),
+                            right: BorderSide(color: isRepeatBorder && c == 7 ? const Color(0xFFEF4444) : C.bd2, width: isRepeatBorder && c == 7 ? 1.5 : 0.4),
+                          ),
+                        ),
+                        child: (r == 2 && c == 7)
+                            ? Container(
+                                decoration: BoxDecoration(color: const Color(0xFFEF4444), borderRadius: BorderRadius.circular(2)),
+                                child: const Center(child: Text('×8', style: TextStyle(fontSize: 4.5, color: Colors.white, fontWeight: FontWeight.w800))),
+                              )
+                            : null,
+                      );
+                    }),
+                    // 오른쪽 헤더 (RS 행: ← 화살표)
+                    SizedBox(width: 14, child: Row(children: [
+                      const SizedBox(width: 1),
+                      Text('$rowLabel', style: TextStyle(fontSize: 5.5, color: C.mu)),
+                      if (isRS) ...[const SizedBox(width: 1), Icon(Icons.arrow_back_rounded, size: 5, color: C.lv.withValues(alpha: 0.7))],
+                    ])),
+                  ]);
+                }),
+              ]),
+            ),
+          ),
+        ),
+        // 툴바: 도구 + 색상 칩
+        Container(
+          height: 40,
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(children: [
+            _toolBtn2(Icons.edit_rounded, C.lv, true),
+            _toolBtn2(Icons.brush_rounded, C.pk, false),
+            _toolBtn2(Icons.auto_fix_high_rounded, C.mu, false),
+            _toolBtn2(Icons.format_color_fill_rounded, C.lmD, false),
+            const SizedBox(width: 6),
+            Container(width: 0.5, height: 20, color: C.bd2),
+            const SizedBox(width: 6),
+            ...palette.map((c) => Padding(
+              padding: const EdgeInsets.only(right: 5),
+              child: Container(width: 16, height: 16, decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 1.5), boxShadow: [BoxShadow(color: c.withValues(alpha: 0.4), blurRadius: 3)])),
+            )),
+            const Spacer(),
+            _toolBtn2(Icons.undo_rounded, C.mu, false),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  Widget _toolBtn2(IconData icon, Color color, bool active) => Container(
+    width: 26, height: 26, margin: const EdgeInsets.only(right: 4),
+    decoration: BoxDecoration(color: active ? color.withValues(alpha: 0.15) : Colors.transparent, borderRadius: BorderRadius.circular(7)),
+    child: Icon(icon, size: 14, color: active ? color : C.mu),
+  );
+}
+
+// ── 15. 측정 도구 ─────────────────────────────────────────────────────────────
+class MockMeasureToolScreen extends StatelessWidget {
+  const MockMeasureToolScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFFFF8FB),
+      child: Column(children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+          decoration: BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: C.bd))),
+          child: Row(children: [
+            Icon(Icons.arrow_back_ios, size: 13, color: C.tx),
+            const SizedBox(width: 4),
+            Text('측정 도구', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: C.tx)),
+            const Spacer(),
+            Icon(Icons.more_vert, size: 15, color: C.mu),
+          ]),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(10),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              // 현재 단/코 표시
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [C.lv.withValues(alpha: 0.10), C.pk.withValues(alpha: 0.07)]),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: C.lv.withValues(alpha: 0.2)),
+                ),
+                child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+                  _measureStat('현재 단', '24', C.lv, '단'),
+                  Container(width: 1, height: 32, color: C.bd2),
+                  _measureStat('현재 코', '18', C.pk, '코'),
+                  Container(width: 1, height: 32, color: C.bd2),
+                  _measureStat('진행률', '62', C.lmD, '%'),
+                ]),
+              ),
+              const SizedBox(height: 10),
+              _sectionLabel('구간 측정'),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: C.bd)),
+                child: Column(children: [
+                  Row(children: [
+                    Expanded(child: _rangeField('시작단', '10', C.lv)),
+                    const SizedBox(width: 6),
+                    Icon(Icons.arrow_forward_rounded, size: 12, color: C.mu),
+                    const SizedBox(width: 6),
+                    Expanded(child: _rangeField('끝단', '24', C.pk)),
+                  ]),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Icon(Icons.straighten_rounded, size: 11, color: C.lv),
+                      const SizedBox(width: 4),
+                      Text('14단 = 약 4.7 cm', style: TextStyle(fontSize: 10, color: C.lv, fontWeight: FontWeight.w700)),
+                    ]),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 10),
+              _sectionLabel('목표 길이 보정'),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: C.bd)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Expanded(child: _rangeField('목표 (cm)', '20', C.lmD)),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                      decoration: BoxDecoration(color: C.lmD, borderRadius: BorderRadius.circular(8)),
+                      child: const Text('계산', style: TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.w700)),
+                    ),
+                  ]),
+                  const SizedBox(height: 6),
+                  Text('→ 60단 필요 (현재 24단, 36단 더)', style: TextStyle(fontSize: 8, color: C.tx2)),
+                ]),
+              ),
+              const SizedBox(height: 10),
+              _sectionLabel('측정 기록'),
+              const SizedBox(height: 5),
+              _measureRecord('소매 둘레', '32단', '10.7 cm', C.pk),
+              const SizedBox(height: 4),
+              _measureRecord('몸통 길이', '58단', '19.3 cm', C.lv),
+              const SizedBox(height: 4),
+              _measureRecord('요크 깊이', '24단', '8.0 cm', C.lmD),
+            ]),
+          ),
+        ),
+        _mockBottomNav(3),
+      ]),
+    );
+  }
+
+  Widget _measureStat(String label, String value, Color color, String unit) => Column(children: [
+    Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: color, height: 1.1)),
+    Text(unit, style: TextStyle(fontSize: 7, color: color.withValues(alpha: 0.7))),
+    const SizedBox(height: 1),
+    Text(label, style: TextStyle(fontSize: 7, color: C.mu)),
+  ]);
+
+  Widget _rangeField(String label, String value, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: BoxDecoration(color: color.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(8), border: Border.all(color: color.withValues(alpha: 0.25))),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: TextStyle(fontSize: 7, color: C.mu)),
+      Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
+    ]),
+  );
+
+  Widget _measureRecord(String label, String rows, String cm, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: C.bd)),
+    child: Row(children: [
+      Container(width: 4, height: 24, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+      const SizedBox(width: 7),
+      Expanded(child: Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: C.tx))),
+      Text(rows, style: TextStyle(fontSize: 8, color: C.mu)),
+      const SizedBox(width: 8),
+      Text(cm, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color)),
+    ]),
+  );
+}
+
+// ── 16. Ravelry 동기화 ────────────────────────────────────────────────────────
+class MockRavelrySyncScreen extends StatelessWidget {
+  const MockRavelrySyncScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFFFF8FB),
+      child: Column(children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+          decoration: BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: C.bd))),
+          child: Row(children: [
+            Icon(Icons.arrow_back_ios, size: 13, color: C.tx),
+            const SizedBox(width: 4),
+            Text('새 프로젝트', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: C.tx)),
+            const Spacer(),
+            Text('저장', style: TextStyle(fontSize: 12, color: C.lv, fontWeight: FontWeight.w700)),
+          ]),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(10),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _sectionLabel('프로젝트 이름'),
+              const SizedBox(height: 5),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(color: const Color(0xFFF5F5F5), borderRadius: BorderRadius.circular(10), border: Border.all(color: C.bd)),
+                child: Text('탑다운 스웨터', style: TextStyle(fontSize: 11, color: C.tx)),
+              ),
+              const SizedBox(height: 10),
+              _sectionLabel('상태'),
+              const SizedBox(height: 5),
+              Row(children: [
+                _statusChip('시작 전', false),
+                const SizedBox(width: 6),
+                _statusChip('진행 중', true),
+                const SizedBox(width: 6),
+                _statusChip('완성', false),
+              ]),
+              const SizedBox(height: 10),
+              _sectionLabel('메모'),
+              const SizedBox(height: 5),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(color: const Color(0xFFF5F5F5), borderRadius: BorderRadius.circular(10), border: Border.all(color: C.bd)),
+                child: Text('메리노울 5호 바늘...', style: TextStyle(fontSize: 10, color: C.mu)),
+              ),
+              const SizedBox(height: 14),
+              // Ravelry 동기화 체크박스
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                decoration: BoxDecoration(
+                  color: C.lv.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: C.lv.withValues(alpha: 0.4)),
+                ),
+                child: Row(children: [
+                  Container(
+                    width: 18, height: 18,
+                    decoration: BoxDecoration(color: C.lv, shape: BoxShape.circle),
+                    child: const Icon(Icons.check_rounded, size: 12, color: Colors.white),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('라벨리에도 올리기', style: TextStyle(fontSize: 10, color: C.lv, fontWeight: FontWeight.w700)),
+                    Text('제목·메모가 Ravelry 프로젝트로 동기화돼요', style: TextStyle(fontSize: 7.5, color: C.mu)),
+                  ])),
+                ]),
+              ),
+              const SizedBox(height: 8),
+              // 스태시 동기화 (스와치 예시)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: C.gx,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: C.bd),
+                ),
+                child: Row(children: [
+                  Container(
+                    width: 18, height: 18,
+                    decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: C.mu.withValues(alpha: 0.4))),
+                    child: Icon(Icons.circle_outlined, size: 10, color: C.mu),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('라벨리 스태시에도 올리기', style: TextStyle(fontSize: 10, color: C.tx, fontWeight: FontWeight.w600)),
+                    Text('실 정보가 Ravelry 스태시로 동기화돼요', style: TextStyle(fontSize: 7.5, color: C.mu)),
+                  ])),
+                ]),
+              ),
+              const SizedBox(height: 14),
+              // Ravelry 연결 상태 배지
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8424F).withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE8424F).withValues(alpha: 0.25)),
+                ),
+                child: Row(children: [
+                  Container(width: 14, height: 14, decoration: const BoxDecoration(color: Color(0xFFE8424F), shape: BoxShape.circle), child: const Center(child: Text('R', style: TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.w900)))),
+                  const SizedBox(width: 6),
+                  Text('MoriKnitter 연결됨', style: TextStyle(fontSize: 9, color: const Color(0xFFE8424F), fontWeight: FontWeight.w600)),
+                  const Spacer(),
+                  Icon(Icons.check_circle_rounded, size: 12, color: const Color(0xFFE8424F).withValues(alpha: 0.8)),
+                ]),
+              ),
+            ]),
+          ),
+        ),
+        _mockBottomNav(1),
+      ]),
+    );
+  }
+
+  Widget _statusChip(String label, bool selected) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(
+      color: selected ? C.lv : C.lvL,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: selected ? C.lv : C.lv.withValues(alpha: 0.2)),
+    ),
+    child: Text(label, style: TextStyle(fontSize: 9, color: selected ? Colors.white : C.lvD, fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
+  );
 }
 
 // ── 공통 UI 헬퍼 ──────────────────────────────────────────────────────────────
@@ -2338,6 +2801,12 @@ class _FeatureSection extends StatelessWidget {
       (Icons.search_rounded, 'Ravelry 연동', 'Ravelry 실·도안을 앱 안에서 바로 검색하세요', Color(0xFF60A5FA), 'ravelry'),
       (Icons.shopping_bag_rounded, 'Etsy 연동', 'Etsy 마켓에 내 도안을 손쉽게 등록·판매하세요', Color(0xFFFF8C00), 'etsy'),
       (Icons.camera_alt_rounded, 'AI 게이지 광학판독기', 'AI가 사진을 분석해 게이지를 자동으로 읽어드려요', Color(0xFFE879F9), 'ai-gauge'),
+      (Icons.grid_on_rounded, '도안 에디터', '그리드 도안 제작, 컬러차트/기호 모드, 반복구간·게이지·RS-WS 독해방향', Color(0xFFC084FC), 'pattern-editor'),
+      (Icons.track_changes_rounded, '카운터 & 트래커', '단수 카운터, 도안 위 실시간 행 트래커, 구간 측정 도구', Color(0xFF34D399), 'counter'),
+      (Icons.square_foot_rounded, '측정 도구', '구간 측정, 목표 길이 계산, 게이지 보정을 한 화면에서', Color(0xFFFB923C), 'measure'),
+      (Icons.auto_awesome_rounded, 'AI 도안 변환기', 'PDF·이미지 도안을 AI가 단계별 지시사항으로 자동 변환', Color(0xFF818CF8), 'ai-pattern-converter'),
+      (Icons.translate_rounded, 'AI 영문 도안 번역기', '영문 뜨개 약어(k2tog, ssk 등)를 포함한 도안을 한국어로 전문 번역', Color(0xFF38BDF8), 'ai-translator'),
+      (Icons.cloud_sync_rounded, '클라우드 연결', 'Dropbox·Google Drive 연동으로 도안·파일을 기기 간 자유롭게 공유', Color(0xFF60A5FA), 'cloud-sync'),
     ];
 
     final width = MediaQuery.of(context).size.width;
@@ -2424,3 +2893,291 @@ class _FeatureSection extends StatelessWidget {
   }
 }
 
+
+
+// -- #609 mising 6 mock widgets ----------------------------------------------
+
+class MockGaugeScreen extends StatelessWidget {
+  const MockGaugeScreen();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFF8F6FF),
+      child: Column(children: [
+        _mockHeader('게이지 계산기', '내 게이지로 사이즈 자동 계산'),
+        Expanded(child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(child: _gaugeCard('단/10cm', '20', C.lv)),
+              const SizedBox(width: 6),
+              Expanded(child: _gaugeCard('코/10cm', '28', C.pk)),
+            ]),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: C.bd)),
+              child: Column(children: [
+                _gaugeRow('너비', '40cm', '80코', C.lv),
+                const SizedBox(height: 5),
+                _gaugeRow('길이', '50cm', '140단', C.pk),
+              ]),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+              child: Row(children: [
+                Icon(Icons.calculate_rounded, size: 12, color: C.lv),
+                const SizedBox(width: 5),
+                Text('실시간 계산', style: TextStyle(fontSize: 10, color: C.lvD, fontWeight: FontWeight.w700)),
+              ]),
+            ),
+          ]),
+        )),
+        _mockBottomNav(0),
+      ]),
+    );
+  }
+
+  Widget _gaugeCard(String label, String value, Color color) => Container(
+    padding: const EdgeInsets.all(8),
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: color.withValues(alpha: 0.3))),
+    child: Column(children: [
+      Text(label, style: TextStyle(fontSize: 8, color: C.mu)),
+      Text(value, style: TextStyle(fontSize: 18, color: color, fontWeight: FontWeight.w800)),
+    ]),
+  );
+
+  Widget _gaugeRow(String label, String cm, String stitch, Color color) => Row(children: [
+    Container(width: 4, height: 18, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+    const SizedBox(width: 6),
+    Expanded(child: Text(label, style: TextStyle(fontSize: 9, color: C.tx))),
+    Text(cm, style: TextStyle(fontSize: 9, color: C.mu)),
+    const SizedBox(width: 6),
+    Icon(Icons.arrow_forward_rounded, size: 10, color: C.mu),
+    const SizedBox(width: 6),
+    Text(stitch, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w700)),
+  ]);
+}
+
+class MockEtsyScreen extends StatelessWidget {
+  const MockEtsyScreen();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFFEF7F0),
+      child: Column(children: [
+        _mockHeader('Etsy 판매', '글로벌 마켓 연동'),
+        Expanded(child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(children: [
+            _etsyRow('탑다운 스웨터 PDF', r'$4.50', '12판매', const Color(0xFFE57514)),
+            const SizedBox(height: 6),
+            _etsyRow('손모아 장갑', r'$3.20', '8판매', const Color(0xFFE57514)),
+            const SizedBox(height: 6),
+            _etsyRow('케이블 베레', r'$2.80', '5판매', const Color(0xFFE57514)),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(color: const Color(0xFFE57514).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.storefront_rounded, size: 11, color: const Color(0xFFE57514)),
+                const SizedBox(width: 4),
+                Text(r'이번 달 $104.50', style: TextStyle(fontSize: 10, color: const Color(0xFFE57514), fontWeight: FontWeight.w800)),
+              ]),
+            ),
+          ]),
+        )),
+        _mockBottomNav(2),
+      ]),
+    );
+  }
+
+  Widget _etsyRow(String title, String price, String sales, Color color) => Container(
+    padding: const EdgeInsets.all(8),
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: C.bd)),
+    child: Row(children: [
+      Container(width: 22, height: 22, decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)), child: Icon(Icons.local_offer_rounded, size: 11, color: color)),
+      const SizedBox(width: 7),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: TextStyle(fontSize: 9, color: C.tx, fontWeight: FontWeight.w700)),
+        Text(sales, style: TextStyle(fontSize: 8, color: C.mu)),
+      ])),
+      Text(price, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w800)),
+    ]),
+  );
+}
+
+class MockAiPatternConverterScreen extends StatelessWidget {
+  const MockAiPatternConverterScreen();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFF6F7FF),
+      child: Column(children: [
+        _mockHeader('AI 도안 변환기', 'PDF → 단계로그 자동 생성'),
+        Expanded(child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(gradient: LinearGradient(colors: [C.lv.withValues(alpha: 0.15), C.pk.withValues(alpha: 0.1)]), borderRadius: BorderRadius.circular(10), border: Border.all(color: C.lv.withValues(alpha: 0.3))),
+              child: Column(children: [
+                Icon(Icons.auto_awesome_rounded, size: 22, color: C.lvD),
+                const SizedBox(height: 4),
+                Text('AI 분석 중...', style: TextStyle(fontSize: 10, color: C.lvD, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 6),
+                ClipRRect(borderRadius: BorderRadius.circular(3), child: SizedBox(height: 5, child: LinearProgressIndicator(value: 0.65, backgroundColor: C.lvL, valueColor: AlwaysStoppedAnimation(C.lv)))),
+                const SizedBox(height: 4),
+                Text('65% — 단계 12개 추출 중', style: TextStyle(fontSize: 8, color: C.mu)),
+              ]),
+            ),
+            const SizedBox(height: 8),
+            _convertStep('1. 코잡기', true),
+            _convertStep('2. 넥밴드 (1×1 리브)', true),
+            _convertStep('3. 래글런 증가 셋업', false),
+          ]),
+        )),
+        _mockBottomNav(2),
+      ]),
+    );
+  }
+
+  Widget _convertStep(String text, bool done) => Container(
+    margin: const EdgeInsets.only(bottom: 4),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(7), border: Border.all(color: C.bd)),
+    child: Row(children: [
+      Icon(done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded, size: 12, color: done ? C.lv : C.mu),
+      const SizedBox(width: 5),
+      Expanded(child: Text(text, style: TextStyle(fontSize: 9, color: done ? C.tx : C.mu))),
+    ]),
+  );
+}
+
+class MockAiGaugeScreen extends StatelessWidget {
+  const MockAiGaugeScreen();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFFFF8FA),
+      child: Column(children: [
+        _mockHeader('AI 게이지', '스와치 사진 자동 측정'),
+        Expanded(child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(children: [
+            AspectRatio(
+              aspectRatio: 1.4,
+              child: Container(
+                decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [C.pk.withValues(alpha: 0.3), C.lv.withValues(alpha: 0.2)]), borderRadius: BorderRadius.circular(10)),
+                child: Center(child: Icon(Icons.center_focus_strong_rounded, size: 30, color: Colors.white)),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: C.lv.withValues(alpha: 0.4))),
+              child: Row(children: [
+                Icon(Icons.auto_awesome_rounded, size: 12, color: C.lv),
+                const SizedBox(width: 5),
+                Expanded(child: Text('인식됨: 21단 × 28코 / 10cm', style: TextStyle(fontSize: 9, color: C.lvD, fontWeight: FontWeight.w700))),
+              ]),
+            ),
+          ]),
+        )),
+        _mockBottomNav(0),
+      ]),
+    );
+  }
+}
+
+class MockAiTranslatorScreen extends StatelessWidget {
+  const MockAiTranslatorScreen();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFF8F8FF),
+      child: Column(children: [
+        _mockHeader('AI 도안 번역', 'EN → KO 자동 번역'),
+        Expanded(child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(8)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [Text('EN', style: TextStyle(fontSize: 8, color: C.mu, fontWeight: FontWeight.w700))]),
+                const SizedBox(height: 3),
+                Text('K2tog, sl1, psso, k to end', style: TextStyle(fontSize: 9, color: C.tx)),
+              ]),
+            ),
+            const SizedBox(height: 6),
+            Center(child: Icon(Icons.swap_vert_rounded, size: 18, color: C.lv)),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: const Color(0xFFFCE7F3), borderRadius: BorderRadius.circular(8)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [Text('KO', style: TextStyle(fontSize: 8, color: C.mu, fontWeight: FontWeight.w700))]),
+                const SizedBox(height: 3),
+                Text('두코모아뜨기, 1코걸치기, 덮어씌우기, 끝까지 겉뜨기', style: TextStyle(fontSize: 9, color: C.tx)),
+              ]),
+            ),
+          ]),
+        )),
+        _mockBottomNav(0),
+      ]),
+    );
+  }
+}
+
+class MockCloudSyncScreen extends StatelessWidget {
+  const MockCloudSyncScreen();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFF0F9FF),
+      child: Column(children: [
+        _mockHeader('클라우드 동기화', '모든 기기에서 동일한 데이터'),
+        Expanded(child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(children: [
+            _cloudRow('도안 라이브러리', '32개', Icons.bookmark_rounded, C.lv, true),
+            const SizedBox(height: 5),
+            _cloudRow('프로젝트', '7개 진행중', Icons.folder_special_rounded, C.pk, true),
+            const SizedBox(height: 5),
+            _cloudRow('스와치', '14개', Icons.grid_on_rounded, C.lvD, true),
+            const SizedBox(height: 5),
+            _cloudRow('카운터', '3개 활성', Icons.exposure_plus_1_rounded, C.pkD, true),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(color: const Color(0xFF0EA5E9).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.cloud_done_rounded, size: 11, color: const Color(0xFF0EA5E9)),
+                const SizedBox(width: 4),
+                Text('마지막 동기화 1분 전', style: TextStyle(fontSize: 9, color: const Color(0xFF0EA5E9), fontWeight: FontWeight.w700)),
+              ]),
+            ),
+          ]),
+        )),
+        _mockBottomNav(0),
+      ]),
+    );
+  }
+
+  Widget _cloudRow(String title, String count, IconData icon, Color color, bool synced) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: C.bd)),
+    child: Row(children: [
+      Container(width: 22, height: 22, decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)), child: Icon(icon, size: 11, color: color)),
+      const SizedBox(width: 7),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: TextStyle(fontSize: 9, color: C.tx, fontWeight: FontWeight.w700)),
+        Text(count, style: TextStyle(fontSize: 8, color: C.mu)),
+      ])),
+      if (synced) Icon(Icons.cloud_done_rounded, size: 13, color: const Color(0xFF0EA5E9)),
+    ]),
+  );
+}

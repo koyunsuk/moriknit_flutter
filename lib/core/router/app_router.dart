@@ -40,11 +40,19 @@ import 'package:moriknit_flutter/features/ravelry/data/ravelry_auth_provider.dar
 import 'package:moriknit_flutter/features/swatch/presentation/swatch_detail_screen.dart';
 import 'package:moriknit_flutter/features/swatch/presentation/swatch_input_screen.dart';
 import 'package:moriknit_flutter/features/swatch/presentation/swatch_list_screen.dart';
+import 'package:moriknit_flutter/features/swatch/presentation/swatch_timer_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/tools_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/tool_memo_screen.dart';
+import 'package:moriknit_flutter/features/tools/presentation/free_timer_screen.dart';
+import 'package:moriknit_flutter/features/tools/presentation/time_dashboard_screen.dart';
 import 'package:moriknit_flutter/features/ravelry/presentation/ravelry_screen.dart';
 import 'package:moriknit_flutter/features/etsy/presentation/etsy_screen.dart';
 import 'package:moriknit_flutter/features/dropbox/presentation/dropbox_screen.dart';
+import 'package:moriknit_flutter/features/dropbox/presentation/dropbox_explorer_screen.dart';
+import 'package:moriknit_flutter/features/landing/presentation/landing_feature_page.dart';
+import 'package:moriknit_flutter/features/landing/presentation/landing_classes_screen.dart';
+import 'package:moriknit_flutter/features/home/presentation/editorial_screen.dart';
+import 'package:moriknit_flutter/features/pattern_converter/presentation/pattern_text_tracker_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/needle_size_converter_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/measure_tool_screen.dart';
 import 'package:moriknit_flutter/features/yarn/domain/yarn_model.dart';
@@ -132,6 +140,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(path: 'input', pageBuilder: (_, _) => _fadePage(const SwatchInputScreen())),
               GoRoute(path: ':id', pageBuilder: (_, state) => _fadePage(SwatchDetailScreen(swatchId: state.pathParameters['id']!))),
+              GoRoute(
+                path: ':id/timer',
+                pageBuilder: (_, state) => _fadePage(SwatchTimerScreen(
+                  swatchId: state.pathParameters['id']!,
+                  swatchName: state.uri.queryParameters['name'] ?? '',
+                )),
+              ),
             ],
           ),
           GoRoute(
@@ -165,13 +180,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   ),
                 ],
               ),
-              GoRoute(path: 'gauge', pageBuilder: (_, _) => _fadePage(const GaugeCalculatorScreen())),
+              GoRoute(path: 'gauge', pageBuilder: (_, state) => _fadePage(GaugeCalculatorScreen(
+                preloadMeasurementData: state.extra as Map<String, dynamic>?,
+              ))),
               GoRoute(path: 'course', pageBuilder: (_, _) => _fadePage(const CourseScreen())),
               GoRoute(path: 'encyclopedia', pageBuilder: (_, _) => _fadePage(const EncyclopediaScreen())),
               GoRoute(path: 'memo', pageBuilder: (_, _) => _fadePage(const ToolMemoScreen())),
+              GoRoute(path: 'free-timer', pageBuilder: (_, _) => _fadePage(const FreeTimerScreen())),
+              GoRoute(path: 'time-dashboard', pageBuilder: (_, _) => _fadePage(const TimeDashboardScreen())),
               GoRoute(path: 'ravelry', pageBuilder: (_, _) => _fadePage(const RavelryScreen())),
               GoRoute(path: 'etsy', pageBuilder: (_, _) => _fadePage(const EtsyScreen())),
-              GoRoute(path: 'dropbox', pageBuilder: (_, _) => _fadePage(const DropboxScreen())),
+              GoRoute(
+                path: 'dropbox',
+                pageBuilder: (_, _) => _fadePage(const DropboxScreen()),
+                routes: [
+                  GoRoute(
+                    path: 'explorer',
+                    pageBuilder: (_, _) =>
+                        _fadePage(const DropboxExplorerScreen()),
+                  ),
+                ],
+              ),
               GoRoute(path: 'needle-size', pageBuilder: (_, _) => _fadePage(const NeedleSizeConverterScreen())),
               GoRoute(path: 'measure', pageBuilder: (_, _) => _fadePage(const MeasureToolScreen())),
               GoRoute(path: 'pattern-converter', pageBuilder: (_, _) => _fadePage(const PatternConverterScreen())),
@@ -185,6 +214,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     pageBuilder: (_, state) => _fadePage(
                       PatternReaderScreen(patternId: state.pathParameters['id']!),
                     ),
+                    routes: [
+                      GoRoute(
+                        path: 'text',
+                        pageBuilder: (_, state) => _fadePage(
+                          PatternTextTrackerScreen(patternId: state.pathParameters['id']!),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -241,6 +278,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
       GoRoute(path: '/counter/:id', pageBuilder: (_, state) => _fadePage(CounterScreen(counterId: state.pathParameters['id']!))),
+      GoRoute(path: '/features/:featureId', pageBuilder: (_, state) => _fadePage(LandingGenericFeaturePage(featureId: state.pathParameters['featureId']!))),
+      GoRoute(path: '/classes', pageBuilder: (_, _) => _fadePage(const LandingClassesScreen())),
+      GoRoute(
+        path: '/editorial/:type',
+        pageBuilder: (_, state) {
+          final type = state.pathParameters['type']!;
+          final extra = state.extra as Map<String, dynamic>?;
+          final isKorean = extra?['isKorean'] as bool? ?? true;
+          final title = extra?['title'] as String? ?? type;
+          return _fadePage(EditorialScreen(type: type, title: title, isKorean: isKorean));
+        },
+      ),
       GoRoute(path: '/yarn-detail/:id', pageBuilder: (_, state) => _fadePage(YarnDetailScreen(yarnId: state.pathParameters['id']!))),
       GoRoute(path: '/needle-detail/:id', pageBuilder: (_, state) => _fadePage(NeedleDetailScreen(needleId: state.pathParameters['id']!))),
       GoRoute(path: '/accessory-detail/:id', pageBuilder: (_, state) => _fadePage(AccessoryDetailScreen(itemId: state.pathParameters['id']!))),

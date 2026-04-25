@@ -402,16 +402,19 @@ class _MobileProjectList extends StatelessWidget {
     final ravelryActive = ravelryProjects.where((p) => _isInProgress(p.status)).toList();
     final ravelryDone = ravelryProjects.where((p) => _isDone(p.status)).toList();
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
-      physics: const AlwaysScrollableScrollPhysics(),
+    return Column(
       children: [
-        const SizedBox(height: 8),
-        // ── 요약 카드 ──────────────────────────────────────────────
-        _ProjectSummaryCard(projects: projects, isKorean: isKorean, onAdd: onAddTap),
-        const SizedBox(height: 8),
-        Divider(color: C.bd, thickness: 1, height: 20),
-        const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: _ProjectSummaryCard(projects: projects, isKorean: isKorean, onAdd: onAddTap),
+        ),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              Divider(color: C.bd, thickness: 1, height: 20),
+              const SizedBox(height: 4),
         // ── 진행중 프로젝트 ───────────────────────────────────────
         if (featured != null)
           GestureDetector(
@@ -630,6 +633,9 @@ class _MobileProjectList extends StatelessWidget {
         Divider(color: C.bd, thickness: 1, height: 24),
         // ── 추천 도안 플레이스홀더 ────────────────────────────────
         _RecommendedPatternsPlaceholder(isKorean: isKorean),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -757,34 +763,129 @@ class _ProjectSummaryCard extends ConsumerWidget {
     final ravelryTotal = ravelryProjects.length;
     final ravelryActive = ravelryProjects.where((p) => _isRavelryInProgress(p.status)).length;
     final ravelryDone = ravelryProjects.where((p) => _isRavelryDone(p.status)).length;
+    final connected = auth.isLoggedIn;
 
-    final row1Stats = [
-      WorkStat('${projects.length}', isKorean ? '전체' : 'Total', color: C.pkD),
-      WorkStat('$active', isKorean ? '진행중' : 'Active', color: C.lv),
-      WorkStat('$done', isKorean ? '완료' : 'Done', color: C.lmD),
-    ];
+    const labelWidth = 72.0;
+    const cellWidth = 52.0;
 
-    final row2Stats = auth.isLoggedIn
-        ? [
-            WorkStat('$ravelryTotal', isKorean ? '전체' : 'Total', color: C.pkD),
-            WorkStat('$ravelryActive', isKorean ? '진행중' : 'Active', color: C.lv),
-            WorkStat('$ravelryDone', isKorean ? '완료' : 'Done', color: C.lmD),
-          ]
-        : [
-            WorkStat('-', isKorean ? '전체' : 'Total', color: C.mu),
-            WorkStat('-', isKorean ? '진행중' : 'Active', color: C.mu),
-            WorkStat('-', isKorean ? '완료' : 'Done', color: C.mu),
-          ];
+    Widget headerCell(String text) => SizedBox(
+          width: cellWidth,
+          child: Center(
+            child: Text(text, style: T.caption.copyWith(color: C.mu)),
+          ),
+        );
 
-    return DualSourceSummaryBar(
-      row1Stats: row1Stats,
-      row2Stats: row2Stats,
-      row1Badge: 'MoriKnit',
-      row2Badge: 'Ravelry',
-      row1Color: C.pk,
-      row2Color: C.lv,
-      addLabel: isKorean ? '새 프로젝트' : 'New',
-      onAdd: onAdd,
+    Widget valueCell(String text, Color color) => SizedBox(
+          width: cellWidth,
+          child: Center(
+            child: Text(text, style: T.bodyBold.copyWith(color: color)),
+          ),
+        );
+
+    Widget labelCell(String text, Color color) => Container(
+          width: labelWidth,
+          color: color.withValues(alpha: 0.07),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(text, style: T.caption.copyWith(color: color, fontWeight: FontWeight.w700)),
+          ),
+        );
+
+    Widget dataRow({
+      required String label,
+      required Color labelColor,
+      required String total,
+      required String activeStr,
+      required String doneStr,
+      required Color activeColor,
+      required Color doneColor,
+    }) =>
+        Row(
+          children: [
+            labelCell(label, labelColor),
+            valueCell(total, C.tx),
+            valueCell(activeStr, activeColor),
+            valueCell(doneStr, doneColor),
+          ],
+        );
+
+    return GlassCard(
+      padding: EdgeInsets.zero,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    // 헤더행
+                    Row(
+                      children: [
+                        const SizedBox(width: labelWidth),
+                        headerCell(isKorean ? '전체' : 'Total'),
+                        headerCell(isKorean ? '진행중' : 'Active'),
+                        headerCell(isKorean ? '완료' : 'Done'),
+                      ],
+                    ),
+                    Divider(height: 1, thickness: 0.5, color: C.bd),
+                    // MoriKnit 행
+                    dataRow(
+                      label: 'MoriKnit',
+                      labelColor: C.pkD,
+                      total: '${projects.length}',
+                      activeStr: '$active',
+                      doneStr: '$done',
+                      activeColor: C.lv,
+                      doneColor: C.lmD,
+                    ),
+                    Divider(height: 1, thickness: 0.5, color: C.bd),
+                    // Ravelry 행
+                    dataRow(
+                      label: 'Ravelry',
+                      labelColor: C.lv,
+                      total: connected ? '$ravelryTotal' : '-',
+                      activeStr: connected ? '$ravelryActive' : '-',
+                      doneStr: connected ? '$ravelryDone' : '-',
+                      activeColor: connected ? C.lv : C.mu,
+                      doneColor: connected ? C.lmD : C.mu,
+                    ),
+                  ],
+                ),
+              ),
+              VerticalDivider(width: 1, thickness: 1, color: C.bd),
+              // +추가 버튼 (3행 전체 span)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: onAdd,
+                      icon: const Icon(Icons.add_rounded, size: 15),
+                      label: Text(
+                        isKorean ? '추가' : 'Add',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: C.lv,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        elevation: 0,
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -3,11 +3,11 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_pdfview/flutter_pdfview.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
@@ -79,6 +79,10 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                         valueColors: [auth.isLoggedIn ? C.tx : C.mu],
                       ),
                     ],
+                    // #628 — 도안 등록 단일 진입점: pattern_converter로 직행
+                    // (기존 _showPatternSourceDialog + _showPatternStartSheet 삭제됨)
+                    addLabel: isKorean ? '새 도안' : 'New',
+                    onAdd: () => _showPatternStartSheet(context, ref),
                   ),
                 );
               },
@@ -128,20 +132,11 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        isKorean ? '내 도안 $total개' : '$total items',
-                                        style: T.bodyBold,
-                                      ),
-                                    ),
-                                    ElevatedButton.icon(
-                                      onPressed: () => _showPatternStartSheet(context, ref),
-                                      icon: const Icon(Icons.add_rounded),
-                                      label: Text(isKorean ? '새 도안' : 'New pattern'),
-                                    ),
-                                  ],
+                                // 사용자 보고 (#619 보완) — 모리니트 카드의 '새 도안' 중복 버튼 삭제
+                                // 요약카드 우측의 '+ 새 도안' 사용
+                                Text(
+                                  isKorean ? '내 도안 $total개' : '$total items',
+                                  style: T.bodyBold,
                                 ),
                                 const SizedBox(height: 8),
                                 ...patterns.map((p) => _PatternRow(
@@ -173,8 +168,14 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
     );
   }
 
+  // #645 — 도안 열기 라우팅 단일화
+  // 기존: aiSections 있으면 텍스트뷰어로 강제 점프 → Case A/B 불일치
+  // 현재: 모든 도안이 PatternDetailScreen 경유, 상태는 "초안" 배지로 구분
+  //       서술형 보기는 뷰어 내 AppBar "subject" 아이콘으로 전환 (#612)
   void _openPattern(BuildContext context, PatternChart chart, AsyncValue<List<PatternFile>> filesAsync) {
+    debugPrint('[OpenPattern] id=${chart.id} type=${chart.type.name} imageUrl="${chart.imageUrl}" pdfUrl="${chart.pdfUrl}"');
     if (chart.type == PatternType.chart) {
+      debugPrint('[OpenPattern] → PatternEditorScreen (chart type)');
       Navigator.push(context, MaterialPageRoute(
         builder: (_) => PatternEditorScreen(
           patternId: chart.id,
@@ -182,32 +183,50 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
           returnRoute: Routes.toolsPatterns,
         ),
       ));
-    } else if (chart.aiSections != null && chart.aiSections!.isNotEmpty) {
-      // AI 변환 도안 → 원본 파일(_PatternFileViewerScreen)으로 통합. 텍스트뷰어 아이콘 활성화됨.
-      final relatedFile = filesAsync.valueOrNull
-          ?.where((f) => f.parsedChartId == chart.id)
-          .firstOrNull;
-
-      if (relatedFile != null) {
-        _openFile(context, relatedFile);
-      } else {
-        // fallback: 연관 파일 없을 시 텍스트뷰어 직접
-        context.push('${Routes.toolsMyParsedPatterns}/${chart.id}/text');
-      }
     } else {
+      debugPrint('[OpenPattern] → PatternDetailScreen (image/pdf type)');
       Navigator.push(context, MaterialPageRoute(
         builder: (_) => PatternDetailScreen(chart: chart),
       ));
     }
   }
 
+  /// #659 — pattern_files도 도안 라이브러리에서 다른 도안과 동일 동작.
+  /// PatternFile → PatternChart로 변환해 PatternDetailScreen으로 진입.
+  /// 입수 경로(Dropbox/Ravelry/갤러리 등)는 단지 메타정보일 뿐, 표시·조작 통일.
   void _openFile(BuildContext context, PatternFile f) {
+    debugPrint('[OpenFile] id=${f.id} mime=${f.mimeType} source=${f.source.name} storageUrl="${f.storageUrl}" parsedChartId=${f.parsedChartId}');
+    final isImage = f.mimeType.startsWith('image/');
+    final isPdf = f.mimeType == 'application/pdf';
+    if (!isImage && !isPdf) {
+      // 도안화 불가 형식 — 기존 파일 뷰어 유지
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => _PatternFileViewerScreen(file: f),
+      ));
+      return;
+    }
+    final chart = PatternChart(
+      id: f.id,
+      title: f.fileName.replaceAll(RegExp(r'\.[^.]+$'), ''),
+      rows: 0,
+      cols: 0,
+      mode: ChartMode.color,
+      grid: const <List<CellData>>[],
+      type: isPdf ? PatternType.pdf : PatternType.image,
+      imageUrl: isImage
+          ? f.storageUrl
+          : (f.thumbnailUrl ?? ''),
+      pdfUrl: isPdf ? f.storageUrl : '',
+      sourceType: PatternSourceType.external,
+      createdAt: f.createdAt,
+    );
+    debugPrint('[OpenFile] → PatternDetailScreen via PatternChart bridge');
     Navigator.push(context, MaterialPageRoute(
-      builder: (_) => _PatternFileViewerScreen(file: f),
+      builder: (_) => PatternDetailScreen(chart: chart),
     ));
   }
 
-  Future<void> _showImageSourceDialog(BuildContext context, WidgetRef ref, bool isKorean) async {
+  Future<void> _showImageSourceDialog(BuildContext context, WidgetRef ref, bool isKorean, {bool aiAnalysis = true}) async {
     if (kIsWeb) {
       // 웹: 파일 선택 직접 실행 (카메라 미지원)
       final result = await FilePicker.platform.pickFiles(
@@ -218,7 +237,7 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         final bytes = result.files.first.bytes!;
         final ext = result.files.first.extension?.toLowerCase() ?? 'jpg';
         final tmpFile = await _bytesToTempFile(bytes, 'picked.$ext');
-        if (context.mounted) await _saveImageFile(context, ref, tmpFile, isKorean);
+        if (context.mounted) await _saveImageFile(context, ref, tmpFile, isKorean, aiAnalysis: aiAnalysis);
       }
       return;
     }
@@ -247,7 +266,7 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                   await Future.microtask(() {});
                   final picked = await ImagePicker().pickImage(source: ImageSource.camera, maxWidth: 1200, imageQuality: 85);
                   if (picked != null && context.mounted) {
-                    await _saveImageFile(context, ref, File(picked.path), isKorean);
+                    await _saveImageFile(context, ref, File(picked.path), isKorean, aiAnalysis: aiAnalysis);
                   }
                 },
               ),
@@ -259,7 +278,7 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                   await Future.microtask(() {});
                   final picked = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1200, imageQuality: 85);
                   if (picked != null && context.mounted) {
-                    await _saveImageFile(context, ref, File(picked.path), isKorean);
+                    await _saveImageFile(context, ref, File(picked.path), isKorean, aiAnalysis: aiAnalysis);
                   }
                 },
               ),
@@ -277,7 +296,9 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
     return file;
   }
 
-  Future<void> _saveImageFile(BuildContext context, WidgetRef ref, File file, bool isKorean) async {
+  Future<void> _saveImageFile(BuildContext context, WidgetRef ref, File file, bool isKorean, {bool aiAnalysis = true}) async {
+    // #628 정정 — AI 변환은 블로킹 호출 X. 항상 단순 저장 → PatternDetailScreen.
+    // AI 분석은 PatternDetailScreen 내 별도 버튼으로 사용자 명시적 선택 (향후).
     final repo = ref.read(patternRepositoryProvider);
     final title = await _askPatternTitle(context, isKorean);
     if (title == null || !context.mounted) return;
@@ -326,7 +347,8 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
     }
   }
 
-  Future<void> _savePdfFile(BuildContext context, WidgetRef ref, File file, bool isKorean) async {
+  Future<void> _savePdfFile(BuildContext context, WidgetRef ref, File file, bool isKorean, {bool aiAnalysis = true}) async {
+    // #628 정정 — AI 변환 블로킹 호출 제거. 항상 단순 저장 (PdfThumbnailExtractor로 커버 자동 추출 #648 유지).
     final repo = ref.read(patternRepositoryProvider);
     final title = await _askPatternTitle(context, isKorean);
     if (title == null || !context.mounted) return;
@@ -421,6 +443,9 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
 
   Future<void> _showPatternStartSheet(BuildContext context, WidgetRef ref) async {
     final isKorean = ref.read(appLanguageProvider).isKorean;
+    // #628 — AI 자동 분석 토글 (closure로 시트 세션 내 유지, 기본 ON)
+    // 정책: AI는 유료 기능. 무료 사용자는 OFF 가능. 현재 테스트 기간 모두 사용 가능.
+    bool aiAnalysis = true;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -430,7 +455,8 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
       ),
       builder: (ctx) {
         final scrollCtrl = ScrollController();
-        return Padding(
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) => Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
           child: ListView(
             controller: scrollCtrl,
@@ -448,13 +474,49 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                 ),
               ),
               Text(isKorean ? '도안 만들기' : 'Create Pattern', style: T.h3),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
+              // #628 — AI 자동 분석 토글 (기본 ON, 사용자 OFF 가능)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: aiAnalysis ? C.lvL : C.gx,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: aiAnalysis ? C.lv.withValues(alpha: 0.4) : C.bd),
+                ),
+                child: Row(children: [
+                  Icon(Icons.auto_awesome_rounded, color: aiAnalysis ? C.lvD : C.mu, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isKorean ? 'AI 자동 분석' : 'AI Auto Analysis',
+                          style: T.caption.copyWith(color: aiAnalysis ? C.lvD : C.tx, fontWeight: FontWeight.w700),
+                        ),
+                        Text(
+                          aiAnalysis
+                              ? (isKorean ? '업로드 시 단계로그를 자동 생성해요' : 'Auto-create step log on upload')
+                              : (isKorean ? '단순 저장 — 단계로그는 도안 상세에서 추가' : 'Save only — add steps later'),
+                          style: T.caption.copyWith(color: C.mu, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: aiAnalysis,
+                    onChanged: (v) => setSheetState(() => aiAnalysis = v),
+                    activeThumbColor: C.lv,
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 12),
               // 1. 사진에서 만들기
               GlassCard(
                 onTap: () async {
                   Navigator.pop(ctx);
                   await Future.microtask(() {});
-                  if (context.mounted) _showImageSourceDialog(context, ref, isKorean);
+                  if (context.mounted) _showImageSourceDialog(context, ref, isKorean, aiAnalysis: aiAnalysis);
                 },
                 child: Row(children: [
                   Container(
@@ -501,7 +563,7 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                     allowedExtensions: ['pdf'],
                   );
                   if (result != null && result.files.first.path != null && context.mounted) {
-                    await _savePdfFile(context, ref, File(result.files.first.path!), isKorean);
+                    await _savePdfFile(context, ref, File(result.files.first.path!), isKorean, aiAnalysis: aiAnalysis);
                   }
                 },
                 child: Row(children: [
@@ -663,10 +725,13 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
               ),
             ],
           ),
+          ),
         );
       },
     );
   }
+
+
 
 }
 
@@ -715,7 +780,9 @@ class _PatternRow extends StatelessWidget {
     return MoriLibraryCard(
       title: chart.title,
       subtitle1: _subtitleText(isKorean),
-      thumbnailUrl: chart.type == PatternType.image && chart.imageUrl.isNotEmpty ? chart.imageUrl : null,
+      // 이슈 #648 — 모든 도안 타입에서 imageUrl을 커버로 표시
+      // (image=원본, pdf=첫페이지 추출, chart=사용자 설정/캡처)
+      thumbnailUrl: chart.imageUrl.isNotEmpty ? chart.imageUrl : null,
       fallbackIcon: _typeIcon,
       fallbackIconBg: _iconBgColor.withValues(alpha: 0.12),
       fallbackIconColor: _iconBgColor,
@@ -723,6 +790,26 @@ class _PatternRow extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // 이슈 #626 — draft 배지 (초안)
+          if (!chart.isComplete)
+            Container(
+              margin: const EdgeInsets.only(right: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: C.og.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: C.og.withValues(alpha: 0.4)),
+              ),
+              child: Text(
+                isKorean ? '초안' : 'DRAFT',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: C.og,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ),
           if (_isNew)
             Container(
               margin: const EdgeInsets.only(right: 6),
@@ -738,6 +825,45 @@ class _PatternRow extends StatelessWidget {
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          // #653 — AI 변환도안 (단계로그 보유) 배지
+          if (chart.aiSections != null && chart.aiSections!.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.only(right: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: C.pkD,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                isKorean ? 'AI변환' : 'AI',
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ),
+          // 이슈 #644 — Ravelry 도안 배지 (ravelryPatternId 있을 때)
+          if (chart.ravelryPatternId != null)
+            Container(
+              margin: const EdgeInsets.only(right: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: C.lv.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: C.lv.withValues(alpha: 0.4)),
+              ),
+              child: Text(
+                'Ravelry',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: C.lvD,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
                 ),
               ),
             ),

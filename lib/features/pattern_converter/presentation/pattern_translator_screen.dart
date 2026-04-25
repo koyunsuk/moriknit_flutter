@@ -14,7 +14,6 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../dropbox/data/dropbox_auth_provider.dart';
 import '../../dropbox/domain/dropbox_file_entry.dart';
 import '../../../providers/dropbox_provider.dart';
-import '../../../features/pattern/domain/pattern_chart.dart';
 import '../../../providers/parsed_pattern_provider.dart';
 import '../data/pattern_converter_repository.dart';
 import 'ai_pattern_edit_screen.dart';
@@ -697,7 +696,7 @@ final _dropboxPickerFolderProvider = FutureProvider.family<List<DropboxFileEntry
 
 class DropboxPickerScreen extends ConsumerStatefulWidget {
   final bool isKorean;
-  const DropboxPickerScreen({required this.isKorean});
+  const DropboxPickerScreen({super.key, required this.isKorean});
 
   @override
   ConsumerState<DropboxPickerScreen> createState() => DropboxPickerScreenState();

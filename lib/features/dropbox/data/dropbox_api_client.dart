@@ -6,6 +6,18 @@ import 'package:http/http.dart' as http;
 import '../domain/dropbox_file_entry.dart';
 import 'dropbox_auth_provider.dart';
 
+/// 이슈 #654 — list_folder 페이지 결과 (entries + cursor + has_more)
+class DropboxListPage {
+  final List<DropboxFileEntry> entries;
+  final String? cursor;
+  final bool hasMore;
+  const DropboxListPage({
+    required this.entries,
+    required this.cursor,
+    required this.hasMore,
+  });
+}
+
 class DropboxApiClient {
   final DropboxAuthProvider _auth;
 
@@ -78,6 +90,36 @@ class DropboxApiClient {
         .toList();
     entries.sort(DropboxFileEntry.compare);
     return entries;
+  }
+
+  /// 이슈 #654 — 페이지네이션 정보를 포함한 list_folder.
+  /// 첫 호출 (cursor=null) 시 path 사용, 이후 호출 (cursor 있음) 시 continue 사용.
+  Future<DropboxListPage> listFolderPage({
+    required String path,
+    String? cursor,
+  }) async {
+    final response = cursor == null
+        ? await _post(
+            Uri.parse('https://api.dropboxapi.com/2/files/list_folder'),
+            {'path': path, 'recursive': false, 'include_media_info': false},
+          )
+        : await _post(
+            Uri.parse(
+                'https://api.dropboxapi.com/2/files/list_folder/continue'),
+            {'cursor': cursor},
+          );
+
+    _assertOk(response);
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    final entries = (json['entries'] as List<dynamic>? ?? [])
+        .map((e) => DropboxFileEntry.fromJson(e as Map<String, dynamic>))
+        .toList();
+    entries.sort(DropboxFileEntry.compare);
+    return DropboxListPage(
+      entries: entries,
+      cursor: json['cursor'] as String?,
+      hasMore: json['has_more'] as bool? ?? false,
+    );
   }
 
   // ── 파일 다운로드 ─────────────────────────────────────────────────────────────

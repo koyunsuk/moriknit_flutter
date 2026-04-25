@@ -1,10 +1,14 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 
+import '../../pattern_converter/data/pdf_thumbnail_extractor.dart';
 import '../domain/pattern_chart.dart';
 
 class PatternRepository {
@@ -178,6 +182,24 @@ class PatternRepository {
     return storageRef.getDownloadURL();
   }
 
+  /// 이슈 #648 — PDF 첫 페이지를 추출해 Storage에 업로드하고 다운로드 URL 반환.
+  /// 실패 시 null 반환 (호출자가 fallback 가능).
+  Future<String?> _uploadPdfCover(File pdfFile) async {
+    if (_uid.isEmpty) return null;
+    try {
+      final bytes = await pdfFile.readAsBytes();
+      final thumb = await PdfThumbnailExtractor.extractFirstPageThumbnail(bytes);
+      if (thumb == null || thumb.isEmpty) return null;
+      final ref = FirebaseStorage.instance.ref().child(
+            'users/$_uid/patterns/covers/${DateTime.now().millisecondsSinceEpoch}_cover.jpg',
+          );
+      await ref.putData(thumb, SettableMetadata(contentType: 'image/jpeg'));
+      return await ref.getDownloadURL();
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<PatternChart> saveImagePattern({
     required String title,
     required File imageFile,
@@ -197,6 +219,7 @@ class PatternRepository {
     await docRef.set({
       ...chart.toJson(),
       'updatedAt': FieldValue.serverTimestamp(),
+      'createdAt': FieldValue.serverTimestamp(),
     });
     return chart;
   }
@@ -205,6 +228,9 @@ class PatternRepository {
     required String title,
     required File pdfFile,
   }) async {
+    // #652 — 커버 추출은 백그라운드로 분리. 사용자 흐름 차단 방지.
+    // PDF만 빠르게 업로드 후 즉시 반환 → PatternDetailScreen 진입.
+    // 커버는 PatternDetailScreen lazy 추출 (#651 합류) 또는 호출자가 별도 fire-and-forget.
     final pdfUrl = await _uploadFile(pdfFile, 'pdfs');
     final docRef = _ref.doc();
     final chart = PatternChart(
@@ -216,12 +242,237 @@ class PatternRepository {
       grid: const <List<CellData>>[],
       type: PatternType.pdf,
       pdfUrl: pdfUrl,
+      imageUrl: '', // 커버는 백그라운드 추출 후 updateCover로 채워짐
     );
     await docRef.set({
       ...chart.toJson(),
       'updatedAt': FieldValue.serverTimestamp(),
+      'createdAt': FieldValue.serverTimestamp(),
     });
+    // 백그라운드 fire-and-forget — 사용자 흐름 차단 X
+    _extractAndSetPdfCover(chart.id, pdfFile);
     return chart;
+  }
+
+  /// #652 — PDF 커버 백그라운드 추출 + Firestore 자동 업데이트.
+  /// PatternDetailScreen이 chart stream watch하므로 완료 시 자동 갱신.
+  Future<void> _extractAndSetPdfCover(String patternId, File pdfFile) async {
+    try {
+      final coverUrl = await _uploadPdfCover(pdfFile);
+      if (coverUrl == null || coverUrl.isEmpty) return;
+      await _ref.doc(patternId).update({
+        'imageUrl': coverUrl,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      // 백그라운드 실패는 무음 (사용자 흐름 영향 없음)
+    }
+  }
+
+  /// 이슈 #651 — 기존 PDF 도안 중 커버가 비어있는 것을 lazy 추출.
+  /// PatternDetailScreen 진입 시 fire-and-forget으로 호출.
+  /// - 이미 imageUrl이 있으면 skip (멱등성)
+  /// - PDF URL에서 bytes 다운로드 → PdfThumbnailExtractor → Storage 업로드 → imageUrl 갱신
+  /// - 실패 시 무음 (return)
+  Future<void> ensureCoverFromPdf(String patternId, String pdfUrl) async {
+    debugPrint('[ensureCoverFromPdf] start id=$patternId pdfUrl=$pdfUrl');
+    if (_uid.isEmpty) {
+      debugPrint('[ensureCoverFromPdf] uid empty — abort');
+      return;
+    }
+    if (patternId.isEmpty || pdfUrl.isEmpty) {
+      debugPrint('[ensureCoverFromPdf] id/url empty — abort');
+      return;
+    }
+    try {
+      // 멱등성: 최신 imageUrl 재확인 (race condition 방지)
+      final snap = await _ref.doc(patternId).get();
+      if (!snap.exists) {
+        debugPrint('[ensureCoverFromPdf] doc not exists — abort');
+        return;
+      }
+      final data = snap.data() as Map<String, dynamic>?;
+      final currentImageUrl = (data?['imageUrl'] as String?) ?? '';
+      if (currentImageUrl.isNotEmpty) {
+        debugPrint('[ensureCoverFromPdf] imageUrl already set — skip');
+        return;
+      }
+
+      // pdfUrl이 Storage 상대경로면 다운로드 URL로 해석
+      String resolvedUrl = pdfUrl;
+      if (!pdfUrl.startsWith('http')) {
+        debugPrint('[ensureCoverFromPdf] resolving Storage path: $pdfUrl');
+        resolvedUrl = await FirebaseStorage.instance.ref(pdfUrl).getDownloadURL();
+        debugPrint('[ensureCoverFromPdf] resolved to: $resolvedUrl');
+      }
+
+      // PDF 다운로드
+      debugPrint('[ensureCoverFromPdf] downloading PDF...');
+      final res = await http.get(Uri.parse(resolvedUrl));
+      if (res.statusCode != 200) {
+        debugPrint('[ensureCoverFromPdf] HTTP ${res.statusCode} — abort');
+        return;
+      }
+      final pdfBytes = res.bodyBytes;
+      if (pdfBytes.isEmpty) {
+        debugPrint('[ensureCoverFromPdf] empty bytes — abort');
+        return;
+      }
+      debugPrint('[ensureCoverFromPdf] PDF bytes=${pdfBytes.length}');
+
+      debugPrint('[ensureCoverFromPdf] extracting thumbnail...');
+
+      // 첫 페이지 썸네일 추출
+      final thumb =
+          await PdfThumbnailExtractor.extractFirstPageThumbnail(pdfBytes);
+      if (thumb == null || thumb.isEmpty) {
+        debugPrint('[ensureCoverFromPdf] thumb null/empty — abort');
+        return;
+      }
+      debugPrint('[ensureCoverFromPdf] thumb extracted ${thumb.length} bytes');
+
+      // Storage 업로드
+      debugPrint('[ensureCoverFromPdf] uploading to Storage...');
+      final ref = FirebaseStorage.instance.ref().child(
+            'pattern/$_uid/${patternId}_cover_lazy.jpg',
+          );
+      await ref.putData(thumb, SettableMetadata(contentType: 'image/jpeg'));
+      final url = await ref.getDownloadURL();
+      debugPrint('[ensureCoverFromPdf] uploaded url=$url');
+
+      // Firestore 갱신 (15초 timeout — 네트워크 hang 회피)
+      debugPrint('[ensureCoverFromPdf] updating Firestore...');
+      await _ref.doc(patternId).update({
+        'imageUrl': url,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }).timeout(const Duration(seconds: 15));
+      debugPrint('[ensureCoverFromPdf] Firestore updated — DONE');
+    } catch (e, st) {
+      debugPrint('[ensureCoverFromPdf] EXCEPTION: $e\n$st');
+      return;
+    }
+  }
+
+  /// 이슈 #651 옵션 A — 어드민 일괄 마이그레이션.
+  /// 모든 사용자의 모든 도안 중 type=pdf, imageUrl 비어있는 것만 추출 + 처리.
+  /// - collectionGroup('pattern_charts') 사용 (어드민 권한 필요)
+  /// - 각 PDF 도안에 대해 PdfThumbnailExtractor + Storage 업로드 + Firestore 갱신
+  /// - 실패한 도안은 skip (계속 진행)
+  /// - 이미 imageUrl 있으면 skip (멱등성)
+  /// - [onProgress]: (current, total) 콜백 (진행률 표시용)
+  /// - 처리 성공한 개수 반환
+  Future<int> migrateMissingCoversForAllUsers({
+    void Function(int current, int total)? onProgress,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('로그인이 필요해요.');
+    if (user.email != 'koyunsuk@gmail.com') {
+      throw Exception('어드민만 사용할 수 있어요.');
+    }
+
+    // 모든 pattern_charts 중 PDF 타입 + imageUrl 비어있는 것 추출
+    final snap = await _db.collectionGroup('pattern_charts').get();
+    final candidates = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      final type = (data['type'] as String?) ?? '';
+      final pdfUrl = (data['pdfUrl'] as String?) ?? '';
+      final imageUrl = (data['imageUrl'] as String?) ?? '';
+      // PDF 타입이고, pdfUrl 있고, imageUrl 비어있는 것만
+      if (type == 'pdf' && pdfUrl.isNotEmpty && imageUrl.isEmpty) {
+        candidates.add(doc);
+      }
+    }
+
+    final total = candidates.length;
+    int processed = 0;
+    int success = 0;
+    onProgress?.call(0, total);
+
+    for (final doc in candidates) {
+      processed++;
+      try {
+        final data = doc.data();
+        final pdfUrl = (data['pdfUrl'] as String?) ?? '';
+        if (pdfUrl.isEmpty) {
+          onProgress?.call(processed, total);
+          continue;
+        }
+
+        // doc 경로에서 ownerUid 추출: users/{uid}/pattern_charts/{id}
+        final pathParts = doc.reference.path.split('/');
+        if (pathParts.length < 4) {
+          onProgress?.call(processed, total);
+          continue;
+        }
+        final ownerUid = pathParts[1];
+        final patternId = doc.id;
+
+        // PDF 다운로드
+        final res = await http.get(Uri.parse(pdfUrl));
+        if (res.statusCode != 200) {
+          onProgress?.call(processed, total);
+          continue;
+        }
+        final pdfBytes = res.bodyBytes;
+        if (pdfBytes.isEmpty) {
+          onProgress?.call(processed, total);
+          continue;
+        }
+
+        // 첫 페이지 썸네일 추출
+        final thumb =
+            await PdfThumbnailExtractor.extractFirstPageThumbnail(pdfBytes);
+        if (thumb == null || thumb.isEmpty) {
+          onProgress?.call(processed, total);
+          continue;
+        }
+
+        // Storage 업로드 (소유자 경로)
+        final ref = FirebaseStorage.instance.ref().child(
+              'pattern/$ownerUid/${patternId}_cover_admin_migrate.jpg',
+            );
+        await ref.putData(thumb, SettableMetadata(contentType: 'image/jpeg'));
+        final url = await ref.getDownloadURL();
+
+        // Firestore 갱신 (어드민 권한)
+        await doc.reference.update({
+          'imageUrl': url,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        success++;
+      } catch (_) {
+        // 개별 도안 실패는 skip
+      }
+      onProgress?.call(processed, total);
+    }
+
+    return success;
+  }
+
+  /// 이슈 #648 — 도안 커버 이미지만 업데이트 (사용자가 상세에서 직접 변경).
+  /// 새 커버 파일을 Storage에 업로드 후 imageUrl 필드를 갱신합니다.
+  /// type 무관 (chart/image/pdf 모두 동일하게 imageUrl을 커버 슬롯으로 사용).
+  Future<String> updateCover({
+    required String patternId,
+    required File coverFile,
+  }) async {
+    if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
+    if (patternId.isEmpty) throw Exception('도안 ID가 없어요.');
+    final ext = coverFile.path.split('.').last.toLowerCase();
+    final mime = ext == 'png' ? 'image/png' : 'image/jpeg';
+    final ref = FirebaseStorage.instance.ref().child(
+          'pattern/$_uid/${patternId}_cover_${DateTime.now().millisecondsSinceEpoch}.$ext',
+        );
+    final bytes = await coverFile.readAsBytes();
+    await ref.putData(Uint8List.fromList(bytes),
+        SettableMetadata(contentType: mime));
+    final url = await ref.getDownloadURL();
+    await _ref.doc(patternId).update({
+      'imageUrl': url,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    return url;
   }
 }
 

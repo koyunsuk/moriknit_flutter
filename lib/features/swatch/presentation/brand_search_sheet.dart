@@ -48,7 +48,8 @@ class _BrandSearchSheetState extends ConsumerState<BrandSearchSheet> {
   bool _loading = false;
   int _searchToken = 0;
 
-  String get _collectionName => widget.brandType == BrandType.yarn ? 'yarnBrands' : 'needleBrands';
+  // #650 정정 — 실제 컬렉션 이름은 snake_case (어드민 코드와 일치)
+  String get _collectionName => widget.brandType == BrandType.yarn ? 'yarn_brands' : 'needle_brands';
 
   @override
   void initState() {
@@ -67,30 +68,44 @@ class _BrandSearchSheetState extends ConsumerState<BrandSearchSheet> {
     setState(() => _loading = true);
 
     try {
+      // #650 — 모든 문서 조회 후 클라이언트에서 정렬·필터.
+      // 이전: orderBy('name')은 name 필드가 없는 문서를 자동 제외해서 결과 0건 발생.
       final lower = query.trim().toLowerCase();
-      Query<Map<String, dynamic>> request = FirebaseFirestore.instance.collection(_collectionName);
+      final snapshot = await FirebaseFirestore.instance
+          .collection(_collectionName)
+          .limit(500)
+          .get();
 
-      if (lower.isEmpty) {
-        request = request.orderBy('nameLower').limit(50);
-      } else {
-        request = request.orderBy('nameLower').startAt([lower]).endAt(['$lower\uf8ff']).limit(50);
-      }
-
-      final snapshot = await request.get();
       if (!mounted || currentToken != _searchToken) return;
 
-      final remote = snapshot.docs
+      debugPrint('[BrandSearch] $_collectionName 문서 ${snapshot.docs.length}개 로드됨');
+
+      final all = snapshot.docs
           .where((doc) {
-            // isActive 필드가 없거나 true인 항목만 표시
             final data = doc.data();
             final isActive = data['isActive'];
             return isActive == null || isActive == true;
           })
-          .map((doc) => _BrandItem(
-                id: doc.id,
-                name: (doc.data()['name'] as String?)?.trim().isNotEmpty == true ? (doc.data()['name'] as String).trim() : doc.id,
-              ))
-          .toList();
+          .map((doc) {
+            final data = doc.data();
+            final n = (data['name'] as String?)?.trim() ?? '';
+            // name 없으면 nameKo, nameEn, brandName 등 다른 필드 폴백
+            final fallback = (data['nameKo'] as String?)?.trim()
+                ?? (data['nameEn'] as String?)?.trim()
+                ?? (data['brandName'] as String?)?.trim()
+                ?? '';
+            return _BrandItem(
+              id: doc.id,
+              name: n.isNotEmpty ? n : (fallback.isNotEmpty ? fallback : doc.id),
+            );
+          })
+          .toList()
+        ..sort((a, b) => a.name.compareTo(b.name));
+
+      // 검색어 있으면 클라이언트 contains 필터 (대소문자 무관)
+      final remote = lower.isEmpty
+          ? all
+          : all.where((b) => b.name.toLowerCase().contains(lower)).toList();
 
       setState(() {
         _results = remote;

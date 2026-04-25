@@ -8,11 +8,13 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/constants/subscription_constants.dart';
 import '../../../core/localization/app_language.dart';
+import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -24,6 +26,8 @@ import '../../counter/domain/counter_model.dart';
 import '../../project/domain/project_model.dart';
 import '../../swatch/domain/swatch_model.dart';
 import '../data/pattern_session_repository.dart';
+import '../domain/ai_pattern_section.dart';
+import '../domain/narrative_block.dart';
 import '../domain/pattern_chart.dart';
 import '../domain/pattern_session.dart';
 
@@ -42,8 +46,11 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
   bool _stickyActive = false;
   bool _highlighterActive = false;
 
-  // Ruler
+  // Ruler (가로 트래킹바)
   double _rulerY = 200.0;
+  double _rulerHeight = 34.0; // #643: 사용자 조정 가능
+  double _rulerBaseY = 200.0; // #643: 카운터 rowCount=1 기준 Y
+  bool _rulerFollowCounter = true; // #643: 카운터 연동 on/off
 
   // Highlighter
   final List<_Stroke> _strokes = [];
@@ -73,6 +80,8 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
   int _reminderIntervalMin = 40;
   int _reminderCountdown = 0;
   int _reminderIndex = 0;
+  // 이슈 #649 Phase 1 — 타이머 자동 이름 ("도안: {chart.title}"). 사용자 편집 가능.
+  String _timerName = '';
 
   static const _reminders = [
     '잠시 스트레칭하세요 🙆',
@@ -85,9 +94,10 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
     '목을 좌우로 천천히 돌려보세요 ↔️',
   ];
 
-  // Vertical hairline
+  // Vertical hairline (세로 헤어라인)
   bool _hairlineActive = false;
   double _hairlineX = 0.5;
+  double _hairlineWidth = 20.0; // #643: 사용자 조정 가능
 
   // Measurement tool
   bool _measureActive = false;
@@ -109,6 +119,16 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
   String get _id => widget.chart.id;
   bool get _isDark => widget.chart.type == PatternType.pdf;
 
+  /// 텍스트뷰어 아이콘 — 항상 활성. 클릭 시 데이터 유무에 따라 안내.
+  /// (이전: aiSections만 체크 → 일부 도안에서 비활성화 버그)
+  bool get _hasNarrativeContent => true;
+
+  /// 실제 표시 가능한 컨텐츠가 있는지 (클릭 시 분기용)
+  bool get _hasAnyTextContent =>
+      widget.chart.narrativeText.trim().isNotEmpty ||
+      widget.chart.narrativeBlocks.isNotEmpty ||
+      (widget.chart.aiSections?.isNotEmpty ?? false);
+
   // Firestore 세션 동기화
   PatternSession? _session;
   bool _sessionApplied = false;
@@ -126,6 +146,7 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
   @override
   void initState() {
     super.initState();
+    debugPrint('[PatternViewerScreen] INIT id=${widget.chart.id} type=${widget.chart.type.name} title="${widget.chart.title}"');
     _loadState();
     _bootstrapSession();
     if (widget.chart.type == PatternType.pdf && !kIsWeb) _loadPdf();
@@ -136,11 +157,25 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
     try {
       final repo = ref.read(patternSessionRepositoryProvider);
       final loaded = await repo.getOrCreate(_id);
+
+      // 이슈 #627 (B-11) — 도안이 프로젝트에 연결돼 있으면 PatternSession.projectId 자동 설정.
+      // 프로젝트 작업시간 집계가 자동으로 반영되도록 함.
+      if (loaded.projectId == null &&
+          widget.chart.linkedProjectId != null &&
+          widget.chart.linkedProjectId!.isNotEmpty) {
+        await repo.linkProject(_id, widget.chart.linkedProjectId!);
+      }
+
       if (!mounted) return;
       setState(() {
         _session = loaded;
         _sessionApplied = true;
         _totalSeconds = loaded.totalSeconds;
+        // 이슈 #649 Phase 1 — 타이머 이름 초기화 (저장값 우선, 없으면 "도안: {title}")
+        final stored = loaded.timerName?.trim() ?? '';
+        _timerName = stored.isNotEmpty
+            ? stored
+            : '도안: ${widget.chart.title}';
         // Firestore에 기존 값이 있으면 로컬 상태 override
         if (loaded.rulerY != 200.0 || loaded.hairlineX != null || loaded.strokes.isNotEmpty || loaded.stickyNotes.isNotEmpty) {
           _rulerY = loaded.rulerY;
@@ -219,6 +254,15 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
   // ── 타이머 메서드 ──────────────────────────────────────────────
   void _startTimer() {
     if (_timerRunning) return;
+    // 이슈 #649 Phase 1 — 첫 시작 시 자동 이름 Firestore에 저장 (없을 때만)
+    if (_sessionApplied &&
+        (_session?.timerName == null || _session!.timerName!.trim().isEmpty)) {
+      final auto = _timerName.trim().isEmpty
+          ? '도안: ${widget.chart.title}'
+          : _timerName;
+      _timerName = auto;
+      ref.read(patternSessionRepositoryProvider).updateTimerName(_id, auto);
+    }
     setState(() => _timerRunning = true);
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
@@ -253,6 +297,45 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
         .updateTotalSeconds(_id, _totalSeconds + _sessionSeconds);
   }
 
+  /// 이슈 #649 Phase 1 — 타이머 이름 인라인 편집
+  Future<void> _editTimerName() async {
+    final ctrl = TextEditingController(text: _timerName);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _isDark ? const Color(0xFF1A1A2E) : C.bg,
+        title: Text(
+          '타이머 이름',
+          style: T.h3.copyWith(color: _isDark ? Colors.white : C.tx),
+        ),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          style: TextStyle(color: _isDark ? Colors.white : C.tx),
+          decoration: InputDecoration(
+            hintText: '예: 도안: ${widget.chart.title}',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('취소', style: T.body.copyWith(color: C.mu)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: Text('저장',
+                style: T.body.copyWith(color: C.lvD, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (result == null || result.isEmpty) return;
+    setState(() => _timerName = result);
+    if (_sessionApplied) {
+      ref.read(patternSessionRepositoryProvider).updateTimerName(_id, result);
+    }
+  }
+
   String _formatSession(int seconds) {
     final h = seconds ~/ 3600;
     final m = (seconds % 3600) ~/ 60;
@@ -274,7 +357,11 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
     final b = _box;
     if (b == null) return;
     _rulerY = (b.get('ruler_y_$_id') as double?) ?? 200.0;
+    _rulerHeight = (b.get('ruler_h_$_id') as double?) ?? 34.0; // #643
+    _rulerBaseY = (b.get('ruler_base_y_$_id') as double?) ?? _rulerY; // #643
+    _rulerFollowCounter = (b.get('ruler_follow_$_id') as bool?) ?? true; // #643
     _hairlineX = (b.get('hairline_x_$_id') as double?) ?? 0.5;
+    _hairlineWidth = (b.get('hairline_w_$_id') as double?) ?? 20.0; // #643
     _stickyX = (b.get('sticky_x_$_id') as double?) ?? 20.0;
     _stickyY = (b.get('sticky_y_$_id') as double?) ?? 120.0;
     _stickyCtrl.text = (b.get('sticky_text_$_id') as String?) ?? '';
@@ -297,6 +384,7 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
 
   void _saveHairline() {
     _box?.put('hairline_x_$_id', _hairlineX);
+    _box?.put('hairline_w_$_id', _hairlineWidth); // #643
     if (_sessionApplied) {
       ref.read(patternSessionRepositoryProvider).updateHairline(_id, _hairlineX);
     }
@@ -304,6 +392,9 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
 
   void _saveRuler() {
     _box?.put('ruler_y_$_id', _rulerY);
+    _box?.put('ruler_h_$_id', _rulerHeight); // #643
+    _box?.put('ruler_base_y_$_id', _rulerBaseY); // #643
+    _box?.put('ruler_follow_$_id', _rulerFollowCounter); // #643
     _syncRuler();
   }
 
@@ -508,78 +599,99 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
     final counter = ref.watch(counterByChartIdProvider(_id)).valueOrNull;
 
+    // #643 — 카운터 rowCount 변경 시 트래킹바 Y 자동 이동
+    ref.listen<AsyncValue<CounterModel?>>(counterByChartIdProvider(_id), (prev, next) {
+      final c = next.valueOrNull;
+      if (c == null || !_rulerFollowCounter || !_rulerActive) return;
+      final prevRow = prev?.valueOrNull?.rowCount;
+      if (prevRow == null || prevRow == c.rowCount) return;
+      setState(() {
+        _rulerY = _rulerBaseY + (c.rowCount - 1) * _rulerHeight;
+      });
+      _saveRuler();
+    });
+
     return Scaffold(
       backgroundColor: _isDark ? const Color(0xFF1A1A2E) : null,
       appBar: AppBar(
         backgroundColor: _isDark ? const Color(0xFF1A1A2E) : Colors.transparent,
         foregroundColor: _isDark ? Colors.white : null,
         elevation: 0,
+        titleSpacing: 0, // #643 — 오버플로우 방지 (9개 툴 공간 확보)
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, size: 20),
           onPressed: () => Navigator.pop(context),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
         ),
         title: _isDark && _totalPages > 0
             ? Text('$_currentPage / $_totalPages',
-                style: T.caption.copyWith(color: Colors.white70))
+                style: T.caption.copyWith(color: Colors.white70),
+                overflow: TextOverflow.ellipsis)
             : Text(widget.chart.title,
-                style: T.h3.copyWith(color: _isDark ? Colors.white : null)),
+                style: T.h3.copyWith(color: _isDark ? Colors.white : null),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1),
         actions: [
-          _ToolIcon(
-            icon: Icons.timer_rounded,
-            active: _timerDockVisible,
-            activeColor: C.lv,
-            dimColor: _isDark ? Colors.white38 : C.tx2,
-            onTap: () => setState(() => _timerDockVisible = !_timerDockVisible),
-          ),
-          _ToolIcon(
-            icon: Icons.edit_rounded,
-            active: _highlighterActive,
-            activeColor: C.og,
-            dimColor: _isDark ? Colors.white38 : C.tx2,
-            onTap: () => setState(() => _highlighterActive = !_highlighterActive),
-          ),
-          _ToolIcon(
-            icon: Icons.sticky_note_2_rounded,
-            active: _stickyActive,
-            activeColor: C.lmD,
-            dimColor: _isDark ? Colors.white38 : C.tx2,
-            onTap: () => setState(() => _stickyActive = !_stickyActive),
-          ),
-          // 세로 헤어라인 (straighten 90° 회전)
+          // #643 — 종류별 재정렬: ① 가이드 → ② 카운트 → ③ 주석 → ④ 측정 → ⑤ 읽기 → ⑥ 시간 → ⑦ 이동
+          // ① 가이드 — 세로 헤어라인 (가로 트래킹바 룰러 아이콘 90° 회전)
           Tooltip(
-            message: '세로 헤어라인',
+            message: isKorean ? '세로 헤어라인' : 'Vertical Hairline',
             child: IconButton(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
+              visualDensity: VisualDensity.compact,
               icon: Transform.rotate(
                 angle: pi / 2,
                 child: Icon(
-                  Icons.straighten_rounded,
+                  Icons.horizontal_rule_rounded,
+                  size: 22,
                   color: _hairlineActive
                       ? const Color(0xFFF59E0B)
-                      : (_isDark ? Colors.white38 : C.tx2),
+                      : (_isDark ? Colors.white : C.tx),
                 ),
               ),
               onPressed: () => setState(() => _hairlineActive = !_hairlineActive),
             ),
           ),
+          // ① 가이드 — 가로 트래킹바
+          _ToolIcon(
+            icon: Icons.horizontal_rule_rounded,
+            active: _rulerActive,
+            activeColor: C.lv,
+            dimColor: _isDark ? Colors.white : C.tx,
+            onTap: () => setState(() => _rulerActive = !_rulerActive),
+          ),
+          // ② 카운트 — 카운터
           _ToolIcon(
             icon: Icons.exposure_plus_1_rounded,
             active: _counterActive,
             activeColor: C.pkD,
-            dimColor: _isDark ? Colors.white38 : C.tx2,
+            dimColor: _isDark ? Colors.white : C.tx,
             onTap: () => setState(() => _counterActive = !_counterActive),
           ),
+          // ③ 주석 — 하이라이터
           _ToolIcon(
-            icon: Icons.straighten_rounded,
-            active: _rulerActive,
-            activeColor: C.lv,
-            dimColor: _isDark ? Colors.white38 : C.tx2,
-            onTap: () => setState(() => _rulerActive = !_rulerActive),
+            icon: Icons.edit_rounded,
+            active: _highlighterActive,
+            activeColor: C.og,
+            dimColor: _isDark ? Colors.white : C.tx,
+            onTap: () => setState(() => _highlighterActive = !_highlighterActive),
           ),
+          // ③ 주석 — 스티키노트
+          _ToolIcon(
+            icon: Icons.sticky_note_2_rounded,
+            active: _stickyActive,
+            activeColor: C.lmD,
+            dimColor: _isDark ? Colors.white : C.tx,
+            onTap: () => setState(() => _stickyActive = !_stickyActive),
+          ),
+          // ④ 측정 — 측정도구
           _ToolIcon(
             icon: Icons.square_foot_rounded,
             active: _measureActive,
             activeColor: const Color(0xFF32D74B),
-            dimColor: _isDark ? Colors.white38 : C.tx2,
+            dimColor: _isDark ? Colors.white : C.tx,
             onTap: () => setState(() {
               _measureActive = !_measureActive;
               if (_measureActive) {
@@ -591,33 +703,75 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
               }
             }),
           ),
-          // 서술형 도안 뷰어
+          // ⑤ 읽기 — 서술형 도안 뷰어
+          // #625 이후 narrativeBlocks/aiSections 도입 — 세 필드 중 하나라도 있으면 활성화
           IconButton(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
+            visualDensity: VisualDensity.compact,
             icon: Icon(
               Icons.subject_rounded,
-              color: widget.chart.narrativeText.trim().isNotEmpty
+              size: 22,
+              color: _hasNarrativeContent
                   ? (_isDark ? Colors.white : C.tx2)
                   : (_isDark ? Colors.white24 : C.tx2.withValues(alpha: 0.3)),
             ),
-            tooltip: isKorean ? '서술형 보기' : 'Narrative View',
-            onPressed: widget.chart.narrativeText.trim().isNotEmpty
-                ? () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => _NarrativeViewerScreen(
-                        title: widget.chart.title,
-                        narrativeText: widget.chart.narrativeText,
-                        isKorean: isKorean,
-                      ),
+            tooltip: isKorean ? '텍스트 뷰어' : 'Text Viewer',
+            onPressed: () {
+              // 1. aiSections 있으면 PatternTextTrackerScreen (단계로그 체크리스트)
+              final hasSections = widget.chart.aiSections?.isNotEmpty ?? false;
+              if (hasSections) {
+                context.push(
+                  '${Routes.toolsMyParsedPatterns}/${widget.chart.id}/text',
+                );
+                return;
+              }
+              // 2. 서술형(text/blocks)만 있으면 _NarrativeViewerScreen
+              if (_hasAnyTextContent) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => _NarrativeViewerScreen(
+                      title: widget.chart.title,
+                      narrativeText: widget.chart.narrativeText,
+                      isKorean: isKorean,
+                      blocks: widget.chart.narrativeBlocks,
+                      sections: widget.chart.aiSections ?? const [],
+                      repeatRegions: widget.chart.repeatRegions,
                     ),
-                  )
-                : null,
+                  ),
+                );
+                return;
+              }
+              // 3. 둘 다 없음 — 안내 snackbar (변환기 진입 유도)
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    isKorean
+                        ? '단계로그가 없어요. AI 변환기로 단계로그를 만들어보세요.'
+                        : 'No step log. Try AI converter to generate one.',
+                  ),
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            },
           ),
-          // 연결 메뉴 (프로젝트 / 스와치)
+          // ⑥ 시간 — 타이머
+          _ToolIcon(
+            icon: Icons.timer_rounded,
+            active: _timerDockVisible,
+            activeColor: C.lv,
+            dimColor: _isDark ? Colors.white : C.tx,
+            onTap: () => setState(() => _timerDockVisible = !_timerDockVisible),
+          ),
+          // ⑦ 이동 — 연결 메뉴 (프로젝트 / 스와치)
           PopupMenuButton<String>(
             tooltip: isKorean ? '연결' : 'Link',
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
             icon: Icon(Icons.link_rounded,
-                color: _isDark ? Colors.white70 : C.tx2),
+                size: 22,
+                color: _isDark ? Colors.white : C.tx),
             onSelected: (value) {
               switch (value) {
                 case 'link_project':
@@ -719,10 +873,11 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
                         ),
                       ),
                     ),
-                  // Ruler
-                  if (_rulerActive)
+                  // Ruler (가로 트래킹바) — #643: 높이 사용자 조정 + 카운터 연동
+                  if (_rulerActive) ...[
+                    // 상단 안내 + 중앙 본체
                     Positioned(
-                      top: _rulerY,
+                      top: _rulerY.clamp(0.0, (maxH - _rulerHeight).clamp(0.0, double.infinity)),
                       left: 0,
                       right: 0,
                       child: Column(
@@ -731,23 +886,55 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
                         children: [
                           Padding(
                             padding: const EdgeInsets.only(left: 12, bottom: 2),
-                            child: Text(
-                              isKorean ? '↕ 드래그' : '↕ drag',
-                              style: TextStyle(
-                                color: C.lv.withValues(alpha: 0.9),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                              ),
+                            child: Row(
+                              children: [
+                                Text(
+                                  isKorean ? '↕ 이동 / ⇅ 높이' : '↕ move / ⇅ height',
+                                  style: TextStyle(
+                                    color: C.lv.withValues(alpha: 0.9),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.55),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    '${_rulerHeight.toInt()}px',
+                                    style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                                if (_rulerFollowCounter) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: C.pkD.withValues(alpha: 0.85),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text(
+                                      '↔ 카운터',
+                                      style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
                           GestureDetector(
                             onVerticalDragUpdate: (d) {
-                              setState(() => _rulerY =
-                                  (_rulerY + d.delta.dy).clamp(0, maxH - 60));
+                              setState(() {
+                                _rulerY = (_rulerY + d.delta.dy).clamp(0, maxH - _rulerHeight);
+                                _rulerBaseY = _rulerY; // 사용자 수동 이동 시 새 기준점
+                              });
                               _saveRuler();
                             },
                             child: Container(
-                              height: 34,
+                              height: _rulerHeight,
                               decoration: BoxDecoration(
                                 color: C.lv.withValues(alpha: 0.18),
                                 border: Border(
@@ -758,12 +945,71 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
                               child: Row(children: [
                                 const SizedBox(width: 12),
                                 Icon(Icons.drag_handle_rounded, color: C.lv, size: 18),
+                                const Spacer(),
+                                // 카운터 연동 토글
+                                GestureDetector(
+                                  onTap: () {
+                                    setState(() => _rulerFollowCounter = !_rulerFollowCounter);
+                                    _saveRuler();
+                                  },
+                                  child: Container(
+                                    margin: const EdgeInsets.only(right: 12),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: _rulerFollowCounter ? C.pkD : Colors.black.withValues(alpha: 0.4),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      _rulerFollowCounter ? '🔗' : '⛓️‍💥',
+                                      style: const TextStyle(fontSize: 11),
+                                    ),
+                                  ),
+                                ),
                               ]),
                             ),
                           ),
                         ],
                       ),
                     ),
+                    // 상단 가장자리 드래그 핸들 (높이 조정)
+                    Positioned(
+                      top: (_rulerY + 14 - 10).clamp(0.0, (maxH - 20).clamp(0.0, double.infinity)),
+                      left: 0,
+                      right: 0,
+                      height: 20,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onVerticalDragUpdate: (d) {
+                          setState(() {
+                            final newHeight = (_rulerHeight - d.delta.dy).clamp(14.0, maxH * 0.5);
+                            final diff = _rulerHeight - newHeight;
+                            _rulerHeight = newHeight;
+                            _rulerY = (_rulerY + diff).clamp(0.0, maxH - _rulerHeight);
+                            _rulerBaseY = _rulerY;
+                          });
+                          _saveRuler();
+                        },
+                        child: const MouseRegion(cursor: SystemMouseCursors.resizeUpDown),
+                      ),
+                    ),
+                    // 하단 가장자리 드래그 핸들 (높이 조정)
+                    Positioned(
+                      top: (_rulerY + 14 + _rulerHeight - 10).clamp(0.0, (maxH - 20).clamp(0.0, double.infinity)),
+                      left: 0,
+                      right: 0,
+                      height: 20,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onVerticalDragUpdate: (d) {
+                          setState(() {
+                            _rulerHeight = (_rulerHeight + d.delta.dy).clamp(14.0, maxH * 0.5);
+                          });
+                          _saveRuler();
+                        },
+                        child: const MouseRegion(cursor: SystemMouseCursors.resizeUpDown),
+                      ),
+                    ),
+                  ],
                   // Measurement overlays
                   // Vertical rulers — shown in ALL measure modes
                   if (_measureActive)
@@ -813,39 +1059,98 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
                         ),
                       ),
                     ),
-                  // Vertical hairline
+                  // Vertical hairline — #643: 너비 드래그 조정 가능 반투명 밴드
                   if (_hairlineActive) ...[
+                    // 반투명 밴드 본체
                     Positioned(
-                      left: _hairlineX * maxW - 0.75,
+                      left: (_hairlineX * maxW - _hairlineWidth / 2).clamp(0.0, maxW - _hairlineWidth),
                       top: 0,
                       bottom: 0,
+                      width: _hairlineWidth,
                       child: IgnorePointer(
-                        child: SizedBox(
-                          width: 1.5,
-                          child: Container(color: const Color(0xFFF59E0B).withValues(alpha: 0.85)),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B).withValues(alpha: 0.22),
+                            border: const Border(
+                              left: BorderSide(color: Color(0xFFF59E0B), width: 2),
+                              right: BorderSide(color: Color(0xFFF59E0B), width: 2),
+                            ),
+                          ),
                         ),
                       ),
                     ),
+                    // 좌측 가장자리 — 너비 조정
                     Positioned(
-                      left: _hairlineX * maxW - 18,
-                      top: 4,
+                      left: (_hairlineX * maxW - _hairlineWidth / 2 - 14).clamp(-14.0, maxW - _hairlineWidth),
+                      top: 0,
+                      bottom: 0,
+                      width: 28,
                       child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
                         onHorizontalDragUpdate: (d) {
                           setState(() {
-                            _hairlineX = (_hairlineX + d.delta.dx / maxW).clamp(0.0, 1.0);
+                            _hairlineWidth = (_hairlineWidth - d.delta.dx * 2).clamp(8.0, maxW * 0.6);
                           });
                           _saveHairline();
                         },
-                        child: Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF59E0B),
-                            shape: BoxShape.circle,
-                            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 6, offset: const Offset(0, 2))],
+                        child: const MouseRegion(cursor: SystemMouseCursors.resizeLeftRight),
+                      ),
+                    ),
+                    // 우측 가장자리 — 너비 조정
+                    Positioned(
+                      left: (_hairlineX * maxW + _hairlineWidth / 2 - 14).clamp(0.0, maxW - 14),
+                      top: 0,
+                      bottom: 0,
+                      width: 28,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onHorizontalDragUpdate: (d) {
+                          setState(() {
+                            _hairlineWidth = (_hairlineWidth + d.delta.dx * 2).clamp(8.0, maxW * 0.6);
+                          });
+                          _saveHairline();
+                        },
+                        child: const MouseRegion(cursor: SystemMouseCursors.resizeLeftRight),
+                      ),
+                    ),
+                    // 중앙 핸들 — X 위치 이동 + "↔ 이동 | ←→ 너비" 안내
+                    Positioned(
+                      left: (_hairlineX * maxW - 18).clamp(0.0, maxW - 36),
+                      top: 4,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          GestureDetector(
+                            onHorizontalDragUpdate: (d) {
+                              setState(() {
+                                _hairlineX = (_hairlineX + d.delta.dx / maxW).clamp(0.0, 1.0);
+                              });
+                              _saveHairline();
+                            },
+                            child: Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF59E0B),
+                                shape: BoxShape.circle,
+                                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 6, offset: const Offset(0, 2))],
+                              ),
+                              child: const Icon(Icons.drag_indicator_rounded, color: Colors.white, size: 18),
+                            ),
                           ),
-                          child: const Icon(Icons.drag_indicator_rounded, color: Colors.white, size: 18),
-                        ),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.6),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              '${_hairlineWidth.toInt()}px',
+                              style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -913,6 +1218,8 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
                 isRunning: _timerRunning,
                 reminderIntervalMin: _reminderIntervalMin,
                 isDark: _isDark,
+                timerName: _timerName,
+                onRename: _editTimerName,
                 onStart: _startTimer,
                 onPause: _pauseTimer,
                 onSave: _syncTimerToFirestore,
@@ -1032,7 +1339,11 @@ class _ToolIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => IconButton(
-        icon: Icon(icon, color: active ? activeColor : dimColor),
+        // #643 — 9개 툴 항상 표시 위한 간격 축소 (오버플로우 방지)
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
+        visualDensity: VisualDensity.compact,
+        icon: Icon(icon, color: active ? activeColor : dimColor, size: 22),
         onPressed: onTap,
       );
 }
@@ -1255,6 +1566,9 @@ class _TimerDock extends StatelessWidget {
   final bool isRunning;
   final int reminderIntervalMin;
   final bool isDark;
+  // 이슈 #649 Phase 1 — 타이머 이름 + 편집 콜백
+  final String timerName;
+  final VoidCallback onRename;
   final VoidCallback onStart;
   final VoidCallback onPause;
   final VoidCallback onSave;
@@ -1268,6 +1582,8 @@ class _TimerDock extends StatelessWidget {
     required this.isRunning,
     required this.reminderIntervalMin,
     required this.isDark,
+    required this.timerName,
+    required this.onRename,
     required this.onStart,
     required this.onPause,
     required this.onSave,
@@ -1289,6 +1605,31 @@ class _TimerDock extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // 이슈 #649 Phase 1 — 타이머 이름 (탭하여 편집)
+          GestureDetector(
+            onTap: onRename,
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  Icon(Icons.edit_outlined, size: 13, color: muted),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      timerName.isEmpty ? '타이머 이름' : timerName,
+                      style: TextStyle(
+                        color: textColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
           Row(
             children: [
               Icon(Icons.timer_rounded, color: C.lv, size: 16),
@@ -2553,11 +2894,22 @@ class _NarrativeViewerScreen extends StatelessWidget {
   final String title;
   final String narrativeText;
   final bool isKorean;
+  // 이슈 #625 커밋 4 — 섹션·반복구간 렌더링용 (optional, 비어있으면 기존 통짜 뷰)
+  final List<NarrativeBlock> blocks;
+  final List<AiSection> sections;
+  final List<RepeatRegion> repeatRegions;
+
   const _NarrativeViewerScreen({
     required this.title,
     required this.narrativeText,
     required this.isKorean,
+    this.blocks = const [],
+    this.sections = const [],
+    this.repeatRegions = const [],
   });
+
+  bool get _hasSectionsOrRepeats =>
+      blocks.isNotEmpty && (sections.isNotEmpty || repeatRegions.isNotEmpty);
 
   @override
   Widget build(BuildContext context) {
@@ -2594,13 +2946,204 @@ class _NarrativeViewerScreen extends StatelessWidget {
                 ],
               ),
             )
-          : SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
-              child: SelectableText(
-                narrativeText,
-                style: T.body.copyWith(height: 1.8),
+          : _hasSectionsOrRepeats
+              ? _NarrativeSectionedView(
+                  blocks: blocks,
+                  sections: sections,
+                  repeatRegions: repeatRegions,
+                  isKorean: isKorean,
+                )
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+                  child: SelectableText(
+                    narrativeText,
+                    style: T.body.copyWith(height: 1.8),
+                  ),
+                ),
+    );
+  }
+}
+
+/// 이슈 #625 커밋 4 — 섹션/반복구간 구조가 있을 때의 서술형 뷰어.
+/// 기존 통짜 뷰와 분리된 신규 위젯 — 기존 동작 영향 없음.
+class _NarrativeSectionedView extends StatefulWidget {
+  final List<NarrativeBlock> blocks;
+  final List<AiSection> sections;
+  final List<RepeatRegion> repeatRegions;
+  final bool isKorean;
+
+  const _NarrativeSectionedView({
+    required this.blocks,
+    required this.sections,
+    required this.repeatRegions,
+    required this.isKorean,
+  });
+
+  @override
+  State<_NarrativeSectionedView> createState() =>
+      _NarrativeSectionedViewState();
+}
+
+class _NarrativeSectionedViewState extends State<_NarrativeSectionedView> {
+  final Set<String> _collapsed = {}; // 접힌 섹션 ID
+
+  RepeatRegion? _regionOf(NarrativeBlock b) {
+    if (b.repeatRegionId == null) return null;
+    for (final r in widget.repeatRegions) {
+      if (r.id == b.repeatRegionId) return r;
+    }
+    return null;
+  }
+
+  String _sectionTitle(AiSection? s) {
+    if (s == null) return widget.isKorean ? '미분류' : 'Unassigned';
+    return widget.isKorean ? (s.titleKo ?? s.title) : s.title;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sorted = [...widget.blocks]..sort((a, b) => a.order.compareTo(b.order));
+
+    // 섹션 순서대로 그룹화 (섹션별 블록 + 미분류 마지막)
+    final groups = <String?, List<NarrativeBlock>>{};
+    for (final b in sorted) {
+      groups.putIfAbsent(b.sectionId, () => []).add(b);
+    }
+
+    final orderedSecs = <AiSection?>[
+      ...widget.sections,
+      if (groups.containsKey(null)) null,
+    ];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final sec in orderedSecs)
+            if (groups[sec?.id] != null && groups[sec?.id]!.isNotEmpty)
+              _buildSection(sec, groups[sec?.id]!),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSection(AiSection? sec, List<NarrativeBlock> blocks) {
+    final isCollapsed = sec != null && _collapsed.contains(sec.id);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: C.gx,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: C.bd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: sec == null
+                ? null
+                : () => setState(() {
+                      if (isCollapsed) {
+                        _collapsed.remove(sec.id);
+                      } else {
+                        _collapsed.add(sec.id);
+                      }
+                    }),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 4,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: sec == null ? C.bd2 : C.lv,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _sectionTitle(sec),
+                      style: T.bodyBold.copyWith(
+                        color: sec == null ? C.mu : C.tx,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${blocks.length}',
+                    style: T.caption.copyWith(color: C.mu),
+                  ),
+                  if (sec != null)
+                    Icon(
+                      isCollapsed
+                          ? Icons.expand_more_rounded
+                          : Icons.expand_less_rounded,
+                      color: C.mu,
+                    ),
+                ],
               ),
             ),
+          ),
+          if (!isCollapsed) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final b in blocks) _buildBlockLine(b),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBlockLine(NarrativeBlock b) {
+    final region = _regionOf(b);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: SelectableText(
+              b.text,
+              style: T.body.copyWith(height: 1.6),
+            ),
+          ),
+          if (region != null) ...[
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: C.pkL,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.repeat_rounded, size: 10, color: C.pkD),
+                  const SizedBox(width: 2),
+                  Text(
+                    '×${region.repeatCount}',
+                    style: T.caption.copyWith(
+                      color: C.pkD,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

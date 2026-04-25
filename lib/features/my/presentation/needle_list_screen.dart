@@ -22,8 +22,6 @@ class NeedleListScreen extends ConsumerWidget {
 
     final straightCount = needles.where((n) => n.type == 'straight').length;
     final circularCount = needles.where((n) => n.type == 'circular').length;
-    final dpnCount = needles.where((n) => n.type == 'dpn').length;
-    final cableCount = needles.where((n) => n.type == 'cable').length;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -36,23 +34,32 @@ class NeedleListScreen extends ConsumerWidget {
                 subtitle: t.manageNeedles,
               ),
             ),
+            // 요약카드 틀고정
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: LibrarySummaryCard(
+                headers: [
+                  isKorean ? '전체' : 'Total',
+                  isKorean ? '일반' : 'Straight',
+                  isKorean ? '줄바늘' : 'Circular',
+                ],
+                rows: [
+                  LibrarySummaryRowData(
+                    badge: isKorean ? '바늘' : 'Needle',
+                    badgeColor: C.lvD,
+                    values: ['${needles.length}', '$straightCount', '$circularCount'],
+                    valueColors: [C.tx, C.lv, C.pk],
+                  ),
+                ],
+                addLabel: isKorean ? '추가' : 'Add',
+                onAdd: () => _showNeedleStartSheet(context, ref),
+              ),
+            ),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
                 children: [
-                  // 1단: 통계
-                  WorkspaceSummaryBar(
-                    stats: [
-                      WorkStat('${needles.length}', isKorean ? '전체' : 'Total', color: C.lvD),
-                      WorkStat('$straightCount', isKorean ? '일반' : 'Straight', color: C.lv),
-                      WorkStat('$circularCount', isKorean ? '줄바늘' : 'Circular', color: C.pk),
-                      WorkStat('${dpnCount + cableCount}', isKorean ? '기타' : 'Other', color: C.mu),
-                    ],
-                    addLabel: isKorean ? '추가' : 'Add',
-                    onAdd: () => _showNeedleStartSheet(context, ref),
-                  ),
-                  const SizedBox(height: 16),
-                  // 2단: 리스트 or 빈상태
+                  // 리스트 or 빈상태
                   GlassCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

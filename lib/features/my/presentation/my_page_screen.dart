@@ -22,6 +22,7 @@ import '../../../providers/swatch_provider.dart';
 import '../../../providers/fab_settings_provider.dart';
 import '../../../providers/theme_provider.dart';
 import '../../auth/domain/user_model.dart';
+import '../../tools/presentation/widgets/knit_dashboard_card.dart';
 import 'bug_report_sheet.dart';
 
 class MyPageScreen extends ConsumerWidget {
@@ -347,6 +348,12 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                       SectionTitle(title: isKorean ? '💳 구독 정보' : '💳 Subscription'),
                       const SizedBox(height: 10),
                       _SubscriptionCard(user: user, isKorean: isKorean),
+                      const SizedBox(height: 20),
+
+                      // ── 1-c. 뜨개 대시보드 (이슈 #649 Phase 2) ──────
+                      SectionTitle(title: isKorean ? '🧶 뜨개 대시보드' : '🧶 Knit Dashboard'),
+                      const SizedBox(height: 10),
+                      KnitDashboardCard(isKorean: isKorean),
                       const SizedBox(height: 20),
 
                       // ── 2. 필수정보 ───────────────────────────────

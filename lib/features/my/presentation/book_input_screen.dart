@@ -236,6 +236,7 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
       memo: _memoCtrl.text.trim(),
     );
 
+    final navigator = Navigator.of(context);
     late BookModel savedBook;
     try {
       await runWithMoriLoadingDialog<void>(
@@ -252,7 +253,7 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
           final uploadedUrls = <String>[];
           for (int i = 0; i < _newPhotoFiles.length; i++) {
             final storageRef = FirebaseStorage.instance
-                .ref('books/$uid/$bookId/memo_$i\_${DateTime.now().millisecondsSinceEpoch}.jpg');
+                .ref('books/$uid/$bookId/memo_${i}_${DateTime.now().millisecondsSinceEpoch}.jpg');
             await storageRef.putFile(_newPhotoFiles[i]);
             uploadedUrls.add(await storageRef.getDownloadURL());
           }
@@ -271,7 +272,7 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
       );
       if (!mounted) return;
       showSavedSnackBar(messenger, message: isKorean ? '저장됐어요.' : 'Saved.');
-      Navigator.pop(context, savedBook);
+      navigator.pop(savedBook);
     } catch (e) {
       if (!mounted) return;
       showSaveErrorSnackBar(messenger, message: '$e');

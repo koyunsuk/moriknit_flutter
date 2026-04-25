@@ -99,7 +99,7 @@ class _PatternDetailBody extends ConsumerStatefulWidget {
 }
 
 class _PatternDetailBodyState extends ConsumerState<_PatternDetailBody> {
-  bool _downloading = false;
+  final bool _downloading = false;
 
   Future<void> _downloadToLibrary(String fileUrl, String fileName) async {
     final isKorean = widget.isKorean;

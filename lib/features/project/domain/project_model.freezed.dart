@@ -52,7 +52,16 @@ mixin _$ProjectModel {
   String get originProjectId => throw _privateConstructorUsedError;
   String get originUserId => throw _privateConstructorUsedError;
   String get originOwnerName => throw _privateConstructorUsedError; // 참고 도서
-  String get referenceBookId => throw _privateConstructorUsedError;
+  String get referenceBookId =>
+      throw _privateConstructorUsedError; // 이슈 #644 — Ravelry IDs 매핑 체인
+  /// 이 모리니트 프로젝트와 연결된 Ravelry project id (createProject 응답값)
+  int? get ravelryProjectId => throw _privateConstructorUsedError;
+
+  /// 이 프로젝트의 도안에 매핑된 Ravelry pattern id (createProject 요청 시 전달)
+  int? get ravelryPatternId => throw _privateConstructorUsedError;
+
+  /// 이 프로젝트의 실들에 매핑된 Ravelry stash id 목록 (createProject packs 전달)
+  List<int> get ravelryStashIds => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -99,7 +108,10 @@ abstract class $ProjectModelCopyWith<$Res> {
       String originProjectId,
       String originUserId,
       String originOwnerName,
-      String referenceBookId});
+      String referenceBookId,
+      int? ravelryProjectId,
+      int? ravelryPatternId,
+      List<int> ravelryStashIds});
 }
 
 /// @nodoc
@@ -148,6 +160,9 @@ class _$ProjectModelCopyWithImpl<$Res, $Val extends ProjectModel>
     Object? originUserId = null,
     Object? originOwnerName = null,
     Object? referenceBookId = null,
+    Object? ravelryProjectId = freezed,
+    Object? ravelryPatternId = freezed,
+    Object? ravelryStashIds = null,
   }) {
     return _then(_value.copyWith(
       id: null == id
@@ -282,6 +297,18 @@ class _$ProjectModelCopyWithImpl<$Res, $Val extends ProjectModel>
           ? _value.referenceBookId
           : referenceBookId // ignore: cast_nullable_to_non_nullable
               as String,
+      ravelryProjectId: freezed == ravelryProjectId
+          ? _value.ravelryProjectId
+          : ravelryProjectId // ignore: cast_nullable_to_non_nullable
+              as int?,
+      ravelryPatternId: freezed == ravelryPatternId
+          ? _value.ravelryPatternId
+          : ravelryPatternId // ignore: cast_nullable_to_non_nullable
+              as int?,
+      ravelryStashIds: null == ravelryStashIds
+          ? _value.ravelryStashIds
+          : ravelryStashIds // ignore: cast_nullable_to_non_nullable
+              as List<int>,
     ) as $Val);
   }
 }
@@ -327,7 +354,10 @@ abstract class _$$ProjectModelImplCopyWith<$Res>
       String originProjectId,
       String originUserId,
       String originOwnerName,
-      String referenceBookId});
+      String referenceBookId,
+      int? ravelryProjectId,
+      int? ravelryPatternId,
+      List<int> ravelryStashIds});
 }
 
 /// @nodoc
@@ -374,6 +404,9 @@ class __$$ProjectModelImplCopyWithImpl<$Res>
     Object? originUserId = null,
     Object? originOwnerName = null,
     Object? referenceBookId = null,
+    Object? ravelryProjectId = freezed,
+    Object? ravelryPatternId = freezed,
+    Object? ravelryStashIds = null,
   }) {
     return _then(_$ProjectModelImpl(
       id: null == id
@@ -508,6 +541,18 @@ class __$$ProjectModelImplCopyWithImpl<$Res>
           ? _value.referenceBookId
           : referenceBookId // ignore: cast_nullable_to_non_nullable
               as String,
+      ravelryProjectId: freezed == ravelryProjectId
+          ? _value.ravelryProjectId
+          : ravelryProjectId // ignore: cast_nullable_to_non_nullable
+              as int?,
+      ravelryPatternId: freezed == ravelryPatternId
+          ? _value.ravelryPatternId
+          : ravelryPatternId // ignore: cast_nullable_to_non_nullable
+              as int?,
+      ravelryStashIds: null == ravelryStashIds
+          ? _value._ravelryStashIds
+          : ravelryStashIds // ignore: cast_nullable_to_non_nullable
+              as List<int>,
     ));
   }
 }
@@ -548,11 +593,15 @@ class _$ProjectModelImpl implements _ProjectModel {
       this.originProjectId = '',
       this.originUserId = '',
       this.originOwnerName = '',
-      this.referenceBookId = ''})
+      this.referenceBookId = '',
+      this.ravelryProjectId,
+      this.ravelryPatternId,
+      final List<int> ravelryStashIds = const <int>[]})
       : _counterIds = counterIds,
         _needleIds = needleIds,
         _yarnIds = yarnIds,
-        _photoUrls = photoUrls;
+        _photoUrls = photoUrls,
+        _ravelryStashIds = ravelryStashIds;
 
   factory _$ProjectModelImpl.fromJson(Map<String, dynamic> json) =>
       _$$ProjectModelImplFromJson(json);
@@ -674,10 +723,30 @@ class _$ProjectModelImpl implements _ProjectModel {
   @override
   @JsonKey()
   final String referenceBookId;
+// 이슈 #644 — Ravelry IDs 매핑 체인
+  /// 이 모리니트 프로젝트와 연결된 Ravelry project id (createProject 응답값)
+  @override
+  final int? ravelryProjectId;
+
+  /// 이 프로젝트의 도안에 매핑된 Ravelry pattern id (createProject 요청 시 전달)
+  @override
+  final int? ravelryPatternId;
+
+  /// 이 프로젝트의 실들에 매핑된 Ravelry stash id 목록 (createProject packs 전달)
+  final List<int> _ravelryStashIds;
+
+  /// 이 프로젝트의 실들에 매핑된 Ravelry stash id 목록 (createProject packs 전달)
+  @override
+  @JsonKey()
+  List<int> get ravelryStashIds {
+    if (_ravelryStashIds is EqualUnmodifiableListView) return _ravelryStashIds;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_ravelryStashIds);
+  }
 
   @override
   String toString() {
-    return 'ProjectModel(id: $id, uid: $uid, title: $title, description: $description, status: $status, progressPercent: $progressPercent, yarnBrandId: $yarnBrandId, yarnBrandName: $yarnBrandName, yarnName: $yarnName, yarnColor: $yarnColor, yarnWeight: $yarnWeight, needleSize: $needleSize, needleBrandName: $needleBrandName, swatchId: $swatchId, counterIds: $counterIds, needleIds: $needleIds, yarnIds: $yarnIds, photoUrls: $photoUrls, coverPhotoUrl: $coverPhotoUrl, memo: $memo, startDate: $startDate, targetDate: $targetDate, finishDate: $finishDate, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty, completedStepCount: $completedStepCount, totalStepCount: $totalStepCount, sourcePatternId: $sourcePatternId, originProjectId: $originProjectId, originUserId: $originUserId, originOwnerName: $originOwnerName, referenceBookId: $referenceBookId)';
+    return 'ProjectModel(id: $id, uid: $uid, title: $title, description: $description, status: $status, progressPercent: $progressPercent, yarnBrandId: $yarnBrandId, yarnBrandName: $yarnBrandName, yarnName: $yarnName, yarnColor: $yarnColor, yarnWeight: $yarnWeight, needleSize: $needleSize, needleBrandName: $needleBrandName, swatchId: $swatchId, counterIds: $counterIds, needleIds: $needleIds, yarnIds: $yarnIds, photoUrls: $photoUrls, coverPhotoUrl: $coverPhotoUrl, memo: $memo, startDate: $startDate, targetDate: $targetDate, finishDate: $finishDate, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty, completedStepCount: $completedStepCount, totalStepCount: $totalStepCount, sourcePatternId: $sourcePatternId, originProjectId: $originProjectId, originUserId: $originUserId, originOwnerName: $originOwnerName, referenceBookId: $referenceBookId, ravelryProjectId: $ravelryProjectId, ravelryPatternId: $ravelryPatternId, ravelryStashIds: $ravelryStashIds)';
   }
 
   @override
@@ -743,7 +812,13 @@ class _$ProjectModelImpl implements _ProjectModel {
             (identical(other.originOwnerName, originOwnerName) ||
                 other.originOwnerName == originOwnerName) &&
             (identical(other.referenceBookId, referenceBookId) ||
-                other.referenceBookId == referenceBookId));
+                other.referenceBookId == referenceBookId) &&
+            (identical(other.ravelryProjectId, ravelryProjectId) ||
+                other.ravelryProjectId == ravelryProjectId) &&
+            (identical(other.ravelryPatternId, ravelryPatternId) ||
+                other.ravelryPatternId == ravelryPatternId) &&
+            const DeepCollectionEquality()
+                .equals(other._ravelryStashIds, _ravelryStashIds));
   }
 
   @JsonKey(ignore: true)
@@ -782,7 +857,10 @@ class _$ProjectModelImpl implements _ProjectModel {
         originProjectId,
         originUserId,
         originOwnerName,
-        referenceBookId
+        referenceBookId,
+        ravelryProjectId,
+        ravelryPatternId,
+        const DeepCollectionEquality().hash(_ravelryStashIds)
       ]);
 
   @JsonKey(ignore: true)
@@ -833,7 +911,10 @@ abstract class _ProjectModel implements ProjectModel {
       final String originProjectId,
       final String originUserId,
       final String originOwnerName,
-      final String referenceBookId}) = _$ProjectModelImpl;
+      final String referenceBookId,
+      final int? ravelryProjectId,
+      final int? ravelryPatternId,
+      final List<int> ravelryStashIds}) = _$ProjectModelImpl;
 
   factory _ProjectModel.fromJson(Map<String, dynamic> json) =
       _$ProjectModelImpl.fromJson;
@@ -904,6 +985,17 @@ abstract class _ProjectModel implements ProjectModel {
   String get originOwnerName;
   @override // 참고 도서
   String get referenceBookId;
+  @override // 이슈 #644 — Ravelry IDs 매핑 체인
+  /// 이 모리니트 프로젝트와 연결된 Ravelry project id (createProject 응답값)
+  int? get ravelryProjectId;
+  @override
+
+  /// 이 프로젝트의 도안에 매핑된 Ravelry pattern id (createProject 요청 시 전달)
+  int? get ravelryPatternId;
+  @override
+
+  /// 이 프로젝트의 실들에 매핑된 Ravelry stash id 목록 (createProject packs 전달)
+  List<int> get ravelryStashIds;
   @override
   @JsonKey(ignore: true)
   _$$ProjectModelImplCopyWith<_$ProjectModelImpl> get copyWith =>

@@ -93,6 +93,14 @@ class _FeaturesGrid extends StatelessWidget {
     (Icons.straighten_rounded, '게이지 계산기', '내 게이지에 맞는 콧수를 자동으로 계산해 드려요.'),
     (Icons.menu_book_rounded, '뜨개백과', '뜨개 용어와 기법을 한국어·영어로 검색할 수 있어요.'),
     (Icons.psychology_rounded, 'AI 도안 판독', '도안 이미지를 AI가 분석해 편집 가능한 단계로 변환해요.'),
+    (Icons.grid_on_rounded, '도안 에디터', '그리드 도안을 직접 제작하고 컬러차트·기호 모드로 표현해요.'),
+    (Icons.track_changes_rounded, '카운터 & 트래커', '단수 카운터와 실시간 행 트래커로 진행 상황을 바로 확인해요.'),
+    (Icons.square_foot_rounded, '측정 도구', '구간 측정, 목표 길이 계산, 게이지 보정을 한 화면에서 처리해요.'),
+    (Icons.sync_rounded, 'Ravelry 연동', 'Ravelry 실·도안 검색부터 프로젝트·스태시 동기화까지 지원해요.'),
+    (Icons.auto_fix_high_rounded, 'AI 도안 변환기', '텍스트·이미지 도안을 AI가 자동으로 분석해 편집 가능한 형태로 변환해요.'),
+    (Icons.g_translate_rounded, 'AI 영문 도안 번역기', '영문 뜨개 도안을 AI가 한국어로 자연스럽게 번역해 드려요.'),
+    (Icons.store_rounded, 'Etsy 연동', 'Etsy에서 구매한 도안을 모리니트로 바로 가져와 관리할 수 있어요.'),
+    (Icons.cloud_sync_rounded, '클라우드 연결', 'Dropbox·Google Drive 등 클라우드 저장소의 도안 파일을 직접 불러와요.'),
   ];
 
   @override

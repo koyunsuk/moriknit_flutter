@@ -27,9 +27,9 @@ import '../../community/presentation/gallery_detail_page.dart';
 import '../../landing/data/landing_board_repository.dart';
 import '../../project/data/public_project_service.dart';
 import '../../project/presentation/widgets/project_start_sheet.dart';
+import '../../tools/presentation/widgets/knit_dashboard_card.dart';
 import '../../../providers/template_provider.dart';
 import '../domain/editorial_post.dart';
-import 'editorial_screen.dart';
 
 // 공지사항 Provider
 final landingNoticesProvider = StreamProvider<List<LandingPost>>((ref) {
@@ -144,6 +144,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       itemsAsync: itemsAsync,
                       publicProjectsAsync: publicProjectsAsync,
                     ),
+                    const SizedBox(height: 20),
+                    // 1-b. 뜨개 대시보드 (이슈 #649 Phase 2)
+                    KnitDashboardCard(isKorean: isKorean),
                     const SizedBox(height: 20),
                     // 2. 공지사항
                     _HomeNoticesSection(isKorean: isKorean),
@@ -395,7 +398,7 @@ class _EditorialBoard extends ConsumerWidget {
           title: letterPost?.title ?? (isKorean ? '뜨개 레터' : 'Knitting Letter'),
           caption: letterPost?.content ?? '',
           isEmpty: letterPost == null,
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => EditorialScreen(type: 'letter', title: isKorean ? '뜨개 레터' : 'Knitting Letter', isKorean: isKorean))),
+          onTap: () => context.push('/editorial/letter', extra: {'title': isKorean ? '뜨개 레터' : 'Knitting Letter', 'isKorean': isKorean}),
         ),
         const SizedBox(height: 10),
         _EditorialCard(
@@ -404,7 +407,7 @@ class _EditorialBoard extends ConsumerWidget {
           title: tipsPost?.title ?? t.recommendedInfo,
           caption: tipsPost?.content ?? '',
           isEmpty: tipsPost == null,
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => EditorialScreen(type: 'tips', title: t.recommendedInfo, isKorean: isKorean))),
+          onTap: () => context.push('/editorial/tips', extra: {'title': t.recommendedInfo, 'isKorean': isKorean}),
         ),
         const SizedBox(height: 10),
         _EditorialCard(
@@ -413,7 +416,7 @@ class _EditorialBoard extends ConsumerWidget {
           title: trendingPost?.title ?? (isKorean ? '인기 토픽' : 'Trending Topics'),
           caption: trendingPost?.content ?? '',
           isEmpty: trendingPost == null,
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => EditorialScreen(type: 'trending', title: isKorean ? '인기 토픽' : 'Trending Topics', isKorean: isKorean))),
+          onTap: () => context.push('/editorial/trending', extra: {'title': isKorean ? '인기 토픽' : 'Trending Topics', 'isKorean': isKorean}),
         ),
         const SizedBox(height: 10),
         _YoutubePreviewCard(post: youtubePost, isKorean: isKorean),
@@ -504,7 +507,7 @@ class _YoutubePreviewCard extends StatelessWidget {
     return GestureDetector(
       onTap: hasVideo
           ? () => launchUrl(Uri.parse('https://www.youtube.com/watch?v=$videoId'), mode: LaunchMode.externalApplication)
-          : () => Navigator.push(context, MaterialPageRoute(builder: (_) => EditorialScreen(type: 'youtube', title: 'YouTube', isKorean: isKorean))),
+          : () => context.push('/editorial/youtube', extra: {'title': 'YouTube', 'isKorean': isKorean}),
       child: GlassCard(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1345,7 +1348,7 @@ class _HomeGallerySection extends ConsumerWidget {
                                 ? entry.coverPhotoUrl
                                 : entry.photoUrls.firstWhere((u) => u.isNotEmpty, orElse: () => '');
                             return thumbUrl.isNotEmpty
-                                ? Image.network(thumbUrl, width: 110, height: 80, fit: BoxFit.cover,
+                                ? Image.network(thumbUrl, width: 110, height: 80, fit: BoxFit.cover, cacheWidth: 220, cacheHeight: 160,
                                     errorBuilder: (_, _, _) => Container(width: 110, height: 80, color: C.lvL, child: Icon(Icons.grid_view_rounded, color: C.lv)))
                                 : Container(width: 110, height: 80, color: C.lvL, child: Icon(Icons.grid_view_rounded, color: C.lv));
                           }(),
@@ -1763,7 +1766,7 @@ class _HomeNoticesSectionState extends ConsumerState<_HomeNoticesSection> {
                             imageUrl: url,
                             width: double.infinity,
                             fit: BoxFit.cover,
-                            placeholder: (_, __) => Container(
+                            placeholder: (_, _) => Container(
                               width: double.infinity,
                               height: 180,
                               color: C.bd.withValues(alpha: 0.3),

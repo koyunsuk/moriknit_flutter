@@ -1063,7 +1063,7 @@ class _PostRowState extends ConsumerState<_PostRow> {
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(10),
-                              child: Image.network(e.value, width: 76, height: 76, fit: BoxFit.cover, errorBuilder: (_, _, _) => const SizedBox.shrink()),
+                              child: Image.network(e.value, width: 76, height: 76, fit: BoxFit.cover, cacheWidth: 152, cacheHeight: 152, errorBuilder: (_, _, _) => const SizedBox.shrink()),
                             ),
                             Positioned(
                               top: 0, right: 0,
@@ -1278,7 +1278,7 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(10),
-                              child: Image.network(e.value, width: 76, height: 76, fit: BoxFit.cover, errorBuilder: (_, _, _) => const SizedBox.shrink()),
+                              child: Image.network(e.value, width: 76, height: 76, fit: BoxFit.cover, cacheWidth: 152, cacheHeight: 152, errorBuilder: (_, _, _) => const SizedBox.shrink()),
                             ),
                             Positioned(
                               top: 0, right: 0,
@@ -1485,7 +1485,7 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
                             width: 40,
                             height: 40,
                             child: widget.post.authorPhotoUrl.isNotEmpty
-                                ? Image.network(widget.post.authorPhotoUrl, width: 40, height: 40, fit: BoxFit.cover,
+                                ? Image.network(widget.post.authorPhotoUrl, width: 40, height: 40, fit: BoxFit.cover, cacheWidth: 80, cacheHeight: 80,
                                     errorBuilder: (_, _, _) => Container(color: C.lvL, child: Icon(Icons.person_rounded, color: C.lvD, size: 20)))
                                 : Container(color: C.lvL, child: Icon(Icons.person_rounded, color: C.lvD, size: 20)),
                           ),
@@ -1543,7 +1543,7 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
                             onTap: () => _showFullImage(context, url),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(10),
-                              child: Image.network(url, width: 140, height: 140, fit: BoxFit.cover),
+                              child: Image.network(url, width: 140, height: 140, fit: BoxFit.cover, cacheWidth: 280, cacheHeight: 280),
                             ),
                           ),
                         )

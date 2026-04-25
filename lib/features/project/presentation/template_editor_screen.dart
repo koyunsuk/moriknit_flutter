@@ -258,7 +258,7 @@ class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
                       ? Image.file(File(_localPhotoPath!), width: double.infinity, height: 180, fit: BoxFit.cover)
                       : (_photoUrl != null && _photoUrl!.isNotEmpty)
                         ? Image.network(_photoUrl!, width: double.infinity, height: 180, fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => _coverPlaceholder(isKorean))
+                            errorBuilder: (_, _, _) => _coverPlaceholder(isKorean))
                         : _coverPlaceholder(isKorean),
                   ),
                 ),

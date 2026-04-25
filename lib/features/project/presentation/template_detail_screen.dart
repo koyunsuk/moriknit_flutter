@@ -320,7 +320,7 @@ class _TemplateDetailScreenState extends ConsumerState<TemplateDetailScreen> {
                   widget.template.photoUrl,
                   width: double.infinity,
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
                 ),
               ),
               const SizedBox(height: 14),
@@ -545,7 +545,7 @@ class _TemplatePhotoSection extends StatelessWidget {
                         networkUrl!,
                         width: double.infinity,
                         fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
                       ),
               ),
               Positioned(

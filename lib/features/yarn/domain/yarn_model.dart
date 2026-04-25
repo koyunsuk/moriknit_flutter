@@ -32,6 +32,10 @@ class YarnModel with _$YarnModel {
     @Default('') String composition,
     @Default(0) int lengthMeters,
     @Default(0) int lengthYards,
+    /// 이슈 #644 — Ravelry stash entry id (createStash 응답값)
+    int? ravelryStashId,
+    /// 이슈 #644 Phase 7 — Ravelry 공식 yarn DB id (검색→매핑)
+    int? ravelryYarnId,
   }) = _YarnModel;
 
   factory YarnModel.fromJson(Map<String, dynamic> json) =>

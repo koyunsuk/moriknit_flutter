@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
@@ -22,6 +23,7 @@ import '../../../providers/counter_provider.dart';
 import '../../../providers/market_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../market/domain/market_item.dart';
+import '../../../providers/parsed_pattern_provider.dart';
 import '../../../providers/project_step_provider.dart';
 import '../../../providers/needle_provider.dart';
 import '../../../providers/swatch_provider.dart';
@@ -38,10 +40,12 @@ import '../data/public_project_service.dart';
 import '../domain/project_model.dart';
 import '../domain/project_step.dart';
 import '../../pattern/data/pattern_repository.dart';
+import '../../pattern/data/pattern_session_repository.dart';
 import '../../pattern/domain/pattern_chart.dart';
 import '../../pattern/presentation/pattern_detail_screen.dart';
 import 'widgets/project_progress_section.dart';
 import 'widgets/project_share_card.dart';
+import 'widgets/project_time_summary_card.dart';
 class ProjectDetailScreen extends ConsumerStatefulWidget {
   final String projectId;
 
@@ -106,6 +110,20 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
     );
 
     if (confirm != true || !mounted) return;
+
+    // 이슈 #629 (B-3) — 갤러리 공개 게이트: 단계로그 0개면 차단
+    if (!alreadyPublished) {
+      final stepsList = ref.read(projectStepsProvider(project.id)).valueOrNull ?? [];
+      if (stepsList.isEmpty) {
+        showSaveErrorSnackBar(
+          messenger,
+          message: isKorean
+              ? '단계로그가 있어야 갤러리에 공개할 수 있어요. 단계를 먼저 추가해 주세요.'
+              : 'Project needs step logs to publish. Add steps first.',
+        );
+        return;
+      }
+    }
 
     try {
       // ignore: use_build_context_synchronously
@@ -444,6 +462,17 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
                       final desc = descCtrl.text.trim();
                       final price = int.tryParse(priceCtrl.text.trim()) ?? 0;
                       if (title.isEmpty) return;
+                      // 이슈 #629 (B-3) — 마켓 등록 게이트: 단계로그 0개면 차단
+                      final stepsList = ref.read(projectStepsProvider(project.id)).valueOrNull ?? [];
+                      if (stepsList.isEmpty) {
+                        showSaveErrorSnackBar(
+                          ScaffoldMessenger.of(ctx),
+                          message: isKorean
+                              ? '단계로그가 있어야 마켓에 등록할 수 있어요.'
+                              : 'Project needs step logs to submit to market.',
+                        );
+                        return;
+                      }
                       Navigator.pop(ctx);
                       try {
                         final sellerName = user.displayName ?? (isKorean ? '알 수 없음' : 'Unknown');
@@ -922,6 +951,22 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 6),
+            ],
+            // 이슈 #630 — 작업 시간 집계 카드 (편집 모드 아닐 때만)
+            if (!isEditing) ...[
+              ProjectTimeSummaryCard(
+                projectId: project.id,
+                swatchIds: {
+                  if (project.swatchId.isNotEmpty) project.swatchId,
+                  for (final s in linkedSwatches)
+                    if (s.id.isNotEmpty) s.id,
+                }.toList(),
+                isKorean: isKorean,
+              ),
+              const SizedBox(height: 10),
+              // 이슈 #649 Phase 3 — 평균 일일 작업시간
+              _ProjectAvgDailyCard(project: project, isKorean: isKorean),
+              const SizedBox(height: 10),
             ],
             GlassCard(
               child: Column(
@@ -1576,6 +1621,43 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
                 ),
               ),
             ],
+            // 이슈 #644 — Ravelry 프로젝트 링크 (ravelryProjectId 있을 때)
+            if (project.ravelryProjectId != null) ...[
+              const SizedBox(height: 12),
+              GlassCard(
+                onTap: () async {
+                  final url = 'https://www.ravelry.com/projects/-/${project.ravelryProjectId}';
+                  await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                },
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40, height: 40,
+                      decoration: BoxDecoration(
+                        color: C.lv.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.link_rounded, color: C.lvD, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(isKorean ? 'Ravelry에서 보기' : 'View on Ravelry', style: T.bodyBold),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Project #${project.ravelryProjectId}',
+                            style: T.caption.copyWith(color: C.mu),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.open_in_new_rounded, color: C.mu, size: 18),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             _ProjectPhotosSection(project: project, isCardEditMode: isCardEditMode),
           ],
@@ -2155,6 +2237,25 @@ class _StepsSection extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 10),
+                    // 이슈 #627 (B-2) — 도안에서 단계 불러오기 (단계 비어있을 때만)
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _loadStepsFromPatternFlow(
+                            context, ref, project.id, isKorean),
+                        icon: Icon(Icons.auto_awesome_rounded, size: 16, color: C.pkD),
+                        label: Text(
+                          isKorean ? '도안에서 단계 불러오기' : 'Load Steps from Pattern',
+                          style: TextStyle(color: C.pkD, fontWeight: FontWeight.w600),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: C.pk),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     _CardEditActions(
                       isKorean: isKorean,
                       onLinkFromWork: () => _showTemplateSheet(context, ref),
@@ -2243,6 +2344,158 @@ class _StepsSection extends ConsumerWidget {
     );
   }
 
+  /// 이슈 #627 (B-2) — AI 변환 도안의 섹션을 현재 프로젝트 단계로그로 미러링.
+  /// complete 도안만 표시. 단계가 비어있을 때만 활성화.
+  Future<void> _loadStepsFromPatternFlow(
+    BuildContext context,
+    WidgetRef ref,
+    String projectId,
+    bool isKorean,
+  ) async {
+    final allPatterns = ref.read(aiPatternsProvider).valueOrNull ?? [];
+    final completes = allPatterns.where((p) => p.isComplete).toList();
+
+    if (completes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isKorean
+                ? '섹션이 완성된 도안이 없어요. 도안에디터에서 섹션을 먼저 만들어 주세요.'
+                : 'No patterns with completed sections. Build sections in the pattern editor first.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final picked = await showModalBottomSheet<PatternChart>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        maxChildSize: 0.9,
+        minChildSize: 0.4,
+        builder: (_, scrollCtrl) => Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: C.bd2, borderRadius: BorderRadius.circular(2)),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Text(
+                isKorean ? '도안 선택' : 'Select Pattern',
+                style: T.h3,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Text(
+                isKorean
+                    ? '선택한 도안의 섹션이 단계로그로 자동 추가됩니다.'
+                    : 'Sections from the selected pattern will be added as step logs.',
+                style: T.caption.copyWith(color: C.mu, height: 1.4),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                itemCount: completes.length,
+                itemBuilder: (_, i) {
+                  final chart = completes[i];
+                  final sectionCount = chart.aiSections?.length ?? 0;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: GlassCard(
+                      onTap: () => Navigator.pop(ctx, chart),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: C.pk.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Icon(Icons.auto_awesome_rounded, color: C.pkD),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(chart.title,
+                                    style: T.bodyBold,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis),
+                                const SizedBox(height: 4),
+                                Text(
+                                  isKorean
+                                      ? '$sectionCount개 섹션'
+                                      : '$sectionCount sections',
+                                  style: T.caption.copyWith(color: C.mu),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.chevron_right_rounded, color: C.mu),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (picked == null || !context.mounted) return;
+
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '단계 추가 중...' : 'Adding steps...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () async {
+          // B-1 통합 — 단계 + 카운터 함께 미러링
+          await ref
+              .read(projectStepRepositoryProvider)
+              .addPatternSectionStepsWithCounters(
+                projectId,
+                picked,
+                isKorean,
+                ref.read(counterRepositoryProvider),
+              );
+        },
+      );
+      if (!context.mounted) return;
+      showSavedSnackBar(
+        ScaffoldMessenger.of(context),
+        message: isKorean
+            ? '${picked.aiSections?.length ?? 0}개 단계가 추가됐어요.'
+            : '${picked.aiSections?.length ?? 0} steps added.',
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+
   Future<void> _saveAsMyTemplate(BuildContext context, WidgetRef ref, List<ProjectStep> steps, bool isKorean) async {
     final ctrl = TextEditingController(text: project.title);
     final name = await showDialog<String>(
@@ -2296,6 +2549,8 @@ class _StepsSection extends ConsumerWidget {
     final isKorean = ref.read(appLanguageProvider).isKorean;
     final builtins = [
       ('topdown', isKorean ? '탑다운 스웨터' : 'Top-down Sweater', Icons.dry_cleaning_rounded),
+      // 이슈 #637 — 래글런 탑다운 (Banul 메리노블렌드 DK 크롭 레글런 기반)
+      ('crop_raglan_topdown', isKorean ? '크롭 레글런 탑다운' : 'Crop Raglan Top-down', Icons.checkroom_rounded),
       ('socks', isKorean ? '양말' : 'Socks', Icons.hiking_rounded),
       ('scarf', isKorean ? '목도리' : 'Scarf', Icons.ac_unit_rounded),
       ('gloves', isKorean ? '장갑' : 'Gloves', Icons.back_hand_rounded),
@@ -3715,6 +3970,104 @@ class _CardEditActions extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// 이슈 #649 Phase 3 — 프로젝트 평균 일일 작업시간 카드.
+/// (도안세션 totalSeconds + 스와치타이머 totalSeconds) / 진행일수.
+/// 진행일수 = max(1, today - (startDate ?? createdAt))
+class _ProjectAvgDailyCard extends ConsumerWidget {
+  final ProjectModel project;
+  final bool isKorean;
+  const _ProjectAvgDailyCard({required this.project, required this.isKorean});
+
+  String _formatHms(int seconds) {
+    if (seconds <= 0) return '0m';
+    final h = seconds ~/ 3600;
+    final m = (seconds % 3600) ~/ 60;
+    if (h > 0) return '${h}h ${m}m';
+    if (m > 0) return '${m}m';
+    return '${seconds}s';
+  }
+
+  int _daysSpan(DateTime? start) {
+    if (start == null) return 1;
+    final diff = DateTime.now().difference(start).inDays + 1;
+    return diff < 1 ? 1 : diff;
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final aggAsync = ref.watch(patternTimeByProjectProvider);
+    return GlassCard(
+      child: aggAsync.when(
+        loading: () => const SizedBox(
+          height: 56,
+          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        ),
+        error: (e, _) => SizedBox(
+          height: 56,
+          child: Center(
+            child: Text(
+              isKorean ? '평균시간 불러오기 실패' : 'Failed to load average',
+              style: T.caption.copyWith(color: C.og),
+            ),
+          ),
+        ),
+        data: (aggMap) {
+          final agg = aggMap[project.id];
+          final total = agg?.totalSeconds ?? 0;
+          final start = project.startDate ?? project.createdAt;
+          final days = _daysSpan(start);
+          final avg = total ~/ days;
+          return Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: C.pkD.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.trending_up_rounded, color: C.pkD, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isKorean ? '평균 일일 작업' : 'Avg Daily',
+                      style: T.caption
+                          .copyWith(color: C.mu, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _formatHms(avg),
+                      style: T.h3.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    isKorean ? '진행 $days일' : '$days days',
+                    style: T.caption.copyWith(color: C.mu),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    isKorean ? '세션 ${agg?.sessionCount ?? 0}회' : '${agg?.sessionCount ?? 0} sessions',
+                    style: T.caption.copyWith(color: C.mu),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }

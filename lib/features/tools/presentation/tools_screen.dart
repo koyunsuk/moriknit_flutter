@@ -200,20 +200,6 @@ class ToolsScreen extends ConsumerWidget {
                     SectionTitle(title: isKorean ? '나의 작업관리' : 'My Work Management'),
                     const SizedBox(height: 10),
                     _ToolCard(
-                      icon: Icons.timer_rounded,
-                      color: C.lv,
-                      title: isKorean ? '뜨개 타이머' : 'Knitting Timer',
-                      description: isKorean ? '도안별 작업시간 추적' : 'Track time per pattern',
-                      onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(isKorean ? '도안 뷰어에서 ⏱️ 아이콘을 탭해서 사용하세요' : 'Tap the ⏱️ icon in the pattern viewer'),
-                          behavior: SnackBarBehavior.floating,
-                          duration: const Duration(seconds: 3),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
                       icon: Icons.grid_view_rounded,
                       color: C.lmD,
                       title: isKorean ? '스와치 라이브러리' : 'Swatch Library',
@@ -332,6 +318,23 @@ class ToolsScreen extends ConsumerWidget {
 
                     // 7. 모든 도구
                     SectionTitle(title: isKorean ? '모든 도구' : 'All Tools'),
+                    const SizedBox(height: 10),
+                    // 사용자 요청 — 작업관리에서 모든 도구로 이동
+                    _ToolCard(
+                      icon: Icons.timer_rounded,
+                      color: C.lv,
+                      title: isKorean ? '뜨개 타이머' : 'Knitting Timer',
+                      description: isKorean ? '전체 뜨개 시간 누적 기록' : 'Accumulate total knitting time',
+                      onTap: () => context.push(Routes.toolsFreeTimer),
+                    ),
+                    const SizedBox(height: 10),
+                    _ToolCard(
+                      icon: Icons.dashboard_rounded,
+                      color: C.lvD,
+                      title: isKorean ? '뜨개시간 대시보드' : 'Time Dashboard',
+                      description: isKorean ? '자유·도안·스와치 누적시간 통합' : 'Free + pattern + swatch totals',
+                      onTap: () => context.push(Routes.toolsTimeDashboard),
+                    ),
                     const SizedBox(height: 10),
                     _ToolCard(
                       icon: Icons.calculate_rounded,

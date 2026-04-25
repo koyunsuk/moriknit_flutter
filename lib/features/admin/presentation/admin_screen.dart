@@ -28,6 +28,7 @@ import '../../project/domain/builtin_template.dart';
 import '../data/admin_bulk_import_service.dart';
 import '../domain/admin_import_models.dart';
 import '../../landing/data/landing_board_repository.dart';
+import '../../pattern/data/pattern_repository.dart';
 
 final _adminUsersProvider = StreamProvider<List<UserModel>>((ref) {
   return FirebaseFirestore.instance
@@ -287,6 +288,9 @@ class _AdminConsoleState extends State<_AdminConsole> {
     _AdminNavItem.tab(index: 12, icon: Icons.newspaper_rounded, label: '에디토리얼', color: Color(0xFF38BDF8)),
     _AdminNavItem.tab(index: 23, icon: Icons.campaign_outlined, label: '팝업 설정', color: Color(0xFF94A3B8)),
 
+    _AdminNavItem.group(label: '랜딩 사이트', color: Color(0xFF6EE7B7), groupIcon: Icons.web_rounded),
+    _AdminNavItem.tab(index: 24, icon: Icons.smartphone_rounded, label: '목업 이미지', color: Color(0xFF6EE7B7)),
+
     _AdminNavItem.group(label: '설정', color: Color(0xFF64748B), groupIcon: Icons.tune_rounded),
     _AdminNavItem.tab(index: 14, icon: Icons.settings_rounded, label: '설정', color: Color(0xFF64748B)),
   ];
@@ -366,6 +370,7 @@ class _AdminConsoleState extends State<_AdminConsole> {
       case 21: return const _UserStatsAdminTab();
       case 22: return const _AdminTemplatesTab();
       case 23: return _SupportSettingsTab(isKorean: widget.isKorean);
+      case 24: return const _MockupImagesAdminTab();
       default: return _DashboardTab(isKorean: widget.isKorean, onTabChange: (i) => setState(() => _selectedIndex = i));
     }
   }
@@ -2786,6 +2791,7 @@ class _MemberDetailDialogState extends ConsumerState<_MemberDetailDialog> {
                               },
                               SetOptions(merge: true),
                             );
+                            if (!mounted) return;
                             setState(() => _isSaving = false);
                             if (context.mounted) Navigator.pop(context);
                           },
@@ -3039,6 +3045,7 @@ class _UserSubcollectionListState extends State<_UserSubcollectionList> {
                         ),
                       );
                       if (confirmed != true) return;
+                      if (!ctx.mounted) return;
                       try {
                         await runWithMoriLoadingDialog<void>(
                           ctx,
@@ -5618,6 +5625,20 @@ class _EditorialAdminTabState extends ConsumerState<_EditorialAdminTab> {
                 );
               }),
               const Spacer(),
+              // 샘플 초기화 버튼
+              GestureDetector(
+                onTap: () => _insertSamplePosts(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: Colors.purple.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.purple.withValues(alpha: 0.5)),
+                  ),
+                  child: const Text('샘플 초기화', style: TextStyle(color: Colors.purple, fontSize: 12, fontWeight: FontWeight.w700)),
+                ),
+              ),
+              const SizedBox(width: 8),
               // 새 글 추가 버튼
               GestureDetector(
                 onTap: () => _showEditDialog(context, null),
@@ -5628,14 +5649,7 @@ class _EditorialAdminTabState extends ConsumerState<_EditorialAdminTab> {
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: const Color(0xFF38BDF8)),
                   ),
-                  child: const Text(
-                    '+ 새 글',
-                    style: TextStyle(
-                      color: Color(0xFF38BDF8),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                  child: const Text('+ 새 글', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.w700)),
                 ),
               ),
             ],
@@ -5697,14 +5711,24 @@ class _EditorialAdminTabState extends ConsumerState<_EditorialAdminTab> {
                                   const SizedBox(width: 6),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: Colors.red.withValues(alpha: 0.18),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: const Text(
-                                      'YouTube',
-                                      style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.w600),
-                                    ),
+                                    decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(6)),
+                                    child: const Text('YouTube', style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.w600)),
+                                  ),
+                                ],
+                                if (post.imageUrl.isNotEmpty) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(6)),
+                                    child: const Text('이미지', style: TextStyle(color: Colors.blue, fontSize: 10, fontWeight: FontWeight.w600)),
+                                  ),
+                                ],
+                                if (post.attachmentUrl.isNotEmpty) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(6)),
+                                    child: const Text('첨부', style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.w600)),
                                   ),
                                 ],
                               ]),
@@ -5755,6 +5779,102 @@ class _EditorialAdminTabState extends ConsumerState<_EditorialAdminTab> {
     );
   }
 
+  Future<String?> _uploadEditorialFile(PlatformFile file) async {
+    final ext = file.name.split('.').last;
+    final path = 'editorial_attachments/${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+    final ref = FirebaseStorage.instance.ref(path);
+    await ref.putData(
+      file.bytes!,
+      SettableMetadata(contentType: _mimeFromExt(ext)),
+    );
+    return await ref.getDownloadURL();
+  }
+
+  Future<String?> _uploadEditorialImage(PlatformFile file) async {
+    final path = 'editorial_images/${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+    final ref = FirebaseStorage.instance.ref(path);
+    await ref.putData(file.bytes!, SettableMetadata(contentType: 'image/${file.extension ?? 'jpeg'}'));
+    return await ref.getDownloadURL();
+  }
+
+  String _mimeFromExt(String ext) {
+    switch (ext.toLowerCase()) {
+      case 'pdf':  return 'application/pdf';
+      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      case 'zip':  return 'application/zip';
+      case 'png':  return 'image/png';
+      case 'jpg':
+      case 'jpeg': return 'image/jpeg';
+      default:     return 'application/octet-stream';
+    }
+  }
+
+  Future<void> _insertSamplePosts(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: C.gx,
+        title: Text('샘플 데이터 추가', style: TextStyle(color: C.tx, fontSize: 15, fontWeight: FontWeight.w700)),
+        content: Text('각 게시판에 샘플 글 1개씩 추가합니다.\n(기존 글은 삭제되지 않습니다)', style: TextStyle(color: C.mu, fontSize: 13)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('취소', style: TextStyle(color: C.mu))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('추가', style: TextStyle(color: Colors.purple, fontWeight: FontWeight.w700))),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final repo = ref.read(editorialRepositoryProvider);
+    final samples = [
+      EditorialPost(
+        id: '', type: 'letter', isPublished: true,
+        title: '🧶 이번 주 뜨개 레터 — 입문자가 꼭 알아야 할 코잡기 3가지',
+        content: '처음 뜨개를 시작할 때 가장 헷갈리는 것이 바로 코잡기입니다. 마법의코, 사슬코, 일반코 세 가지 방법을 사진과 함께 쉽게 설명합니다. 각 상황에 맞는 코잡기를 선택하는 것이 완성도를 높이는 첫 번째 비결이에요.',
+        imageUrl: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80',
+        attachmentUrl: 'https://www.w3.org/WAI/WCAG21/Techniques/pdf/PDF1',
+        attachmentName: '코잡기_가이드.pdf',
+        youtubeVideoId: 'dQw4w9WgXcQ',
+        authorName: '모리니트 에디터',
+      ),
+      EditorialPost(
+        id: '', type: 'tips', isPublished: true,
+        title: '💡 게이지 스와치, 이렇게 하면 절대 실패 없어요',
+        content: '게이지 스와치를 뜨는 올바른 방법과 세탁 후 치수 변화를 예측하는 팁을 공유합니다. 스와치 없이 바로 작품을 시작하면 사이즈가 맞지 않는 경우가 많아요. 정확한 게이지 측정이 완성도를 결정합니다.',
+        imageUrl: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=800&q=80',
+        attachmentUrl: 'https://www.w3.org/WAI/WCAG21/Techniques/pdf/PDF1',
+        attachmentName: '게이지_체크리스트.pdf',
+        youtubeVideoId: 'dQw4w9WgXcQ',
+        authorName: '모리니트 에디터',
+      ),
+      EditorialPost(
+        id: '', type: 'trending', isPublished: true,
+        title: '🔥 지금 가장 핫한 뜨개 트렌드 — 버블 텍스처 스웨터',
+        content: '2024 가을겨울 시즌 최대 트렌드는 버블 텍스처입니다. 팝콘 스티치와 보블 스티치를 활용한 입체 패턴이 SNS를 가득 채우고 있어요. 모리니트 커뮤니티에서 가장 많이 공유된 패턴 3가지를 소개합니다.',
+        imageUrl: 'https://images.unsplash.com/photo-1616627561950-9f746e330187?w=800&q=80',
+        attachmentUrl: 'https://www.w3.org/WAI/WCAG21/Techniques/pdf/PDF1',
+        attachmentName: '버블텍스처_패턴.pdf',
+        youtubeVideoId: 'dQw4w9WgXcQ',
+        authorName: '모리니트 에디터',
+      ),
+      EditorialPost(
+        id: '', type: 'youtube', isPublished: true,
+        title: '초보자도 따라하는 대바늘 메리야스 뜨기',
+        content: '대바늘 뜨개의 기본 중 기본, 메리야스 뜨기를 처음부터 차근차근 설명합니다. 겉뜨기와 안뜨기를 번갈아가며 평평한 천을 만드는 방법을 영상으로 확인하세요.',
+        imageUrl: '',
+        youtubeVideoId: 'dQw4w9WgXcQ',
+        authorName: '모리니트 에디터',
+      ),
+    ];
+    for (final post in samples) {
+      await repo.createPost(post);
+    }
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('샘플 글 4개가 추가되었습니다.'), backgroundColor: Colors.purple),
+      );
+    }
+  }
+
   Future<void> _confirmDelete(BuildContext context, String id) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -5781,6 +5901,9 @@ class _EditorialAdminTabState extends ConsumerState<_EditorialAdminTab> {
     final titleCtrl = TextEditingController(text: existing?.title ?? '');
     final contentCtrl = TextEditingController(text: existing?.content ?? '');
     final ytCtrl = TextEditingController(text: existing?.youtubeVideoId ?? '');
+    final imageUrlCtrl = TextEditingController(text: existing?.imageUrl ?? '');
+    final attachUrlCtrl = TextEditingController(text: existing?.attachmentUrl ?? '');
+    final attachNameCtrl = TextEditingController(text: existing?.attachmentName ?? '');
     var isPublished = existing?.isPublished ?? true;
     var editType = existing?.type ?? _selectedType;
 
@@ -5874,6 +5997,144 @@ class _EditorialAdminTabState extends ConsumerState<_EditorialAdminTab> {
                     ),
                     const SizedBox(height: 12),
                   ],
+                  // 이미지 URL + 업로드
+                  StatefulBuilder(builder: (_, setImg) {
+                    bool isUploadingImg = false;
+                    return StatefulBuilder(builder: (_, setUpImg) => Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          Text('이미지 (선택)', style: TextStyle(color: C.mu, fontSize: 12)),
+                          const Spacer(),
+                          if (isUploadingImg)
+                            const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                          else
+                            TextButton.icon(
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                foregroundColor: const Color(0xFF38BDF8),
+                              ),
+                              icon: const Icon(Icons.upload_rounded, size: 14),
+                              label: const Text('이미지 업로드', style: TextStyle(fontSize: 11)),
+                              onPressed: () async {
+                                final result = await FilePicker.platform.pickFiles(
+                                  type: FileType.image,
+                                  withData: true,
+                                );
+                                if (result == null) return;
+                                setUpImg(() => isUploadingImg = true);
+                                try {
+                                  final url = await _uploadEditorialImage(result.files.first);
+                                  if (url != null) {
+                                    imageUrlCtrl.text = url;
+                                    setImg(() {});
+                                  }
+                                } finally {
+                                  setUpImg(() => isUploadingImg = false);
+                                }
+                              },
+                            ),
+                        ]),
+                        const SizedBox(height: 4),
+                        TextField(
+                          controller: imageUrlCtrl,
+                          style: TextStyle(color: C.tx, fontSize: 12),
+                          decoration: InputDecoration(
+                            hintText: 'https://example.com/image.jpg',
+                            hintStyle: TextStyle(color: C.mu, fontSize: 12),
+                            filled: true, fillColor: C.bg,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: C.bd2)),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: C.bd2)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            suffixIcon: IconButton(icon: const Icon(Icons.refresh, size: 16), onPressed: () => setImg(() {})),
+                          ),
+                          onChanged: (_) => setImg(() {}),
+                        ),
+                        if (imageUrlCtrl.text.trim().isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(imageUrlCtrl.text.trim(), height: 80, fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => Container(height: 40, color: C.bd2, child: Center(child: Text('이미지 로드 실패', style: TextStyle(color: C.mu, fontSize: 11))))),
+                          ),
+                        ],
+                      ],
+                    ));
+                  }),
+                  const SizedBox(height: 12),
+                  // 첨부파일 업로드
+                  StatefulBuilder(builder: (_, setAtt) {
+                    bool isUploadingAttach = false;
+                    return StatefulBuilder(builder: (_, setUpAtt) => Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          Text('첨부파일 (선택)', style: TextStyle(color: C.mu, fontSize: 12)),
+                          const Spacer(),
+                          if (isUploadingAttach)
+                            const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                          else
+                            TextButton.icon(
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                foregroundColor: const Color(0xFFF59E0B),
+                              ),
+                              icon: const Icon(Icons.attach_file_rounded, size: 14),
+                              label: const Text('파일 업로드', style: TextStyle(fontSize: 11)),
+                              onPressed: () async {
+                                final result = await FilePicker.platform.pickFiles(
+                                  withData: true,
+                                  allowedExtensions: ['pdf', 'docx', 'xlsx', 'zip', 'png', 'jpg'],
+                                  type: FileType.custom,
+                                );
+                                if (result == null) return;
+                                setUpAtt(() => isUploadingAttach = true);
+                                try {
+                                  final file = result.files.first;
+                                  final url = await _uploadEditorialFile(file);
+                                  if (url != null) {
+                                    attachUrlCtrl.text = url;
+                                    if (attachNameCtrl.text.isEmpty) {
+                                      attachNameCtrl.text = file.name;
+                                    }
+                                    setAtt(() {});
+                                  }
+                                } finally {
+                                  setUpAtt(() => isUploadingAttach = false);
+                                }
+                              },
+                            ),
+                        ]),
+                        const SizedBox(height: 4),
+                        TextField(
+                          controller: attachNameCtrl,
+                          style: TextStyle(color: C.tx, fontSize: 12),
+                          decoration: InputDecoration(
+                            hintText: '첨부파일 표시 이름 (예: 코바늘기법_가이드.pdf)',
+                            hintStyle: TextStyle(color: C.mu, fontSize: 12),
+                            filled: true, fillColor: C.bg,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: C.bd2)),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: C.bd2)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          ),
+                        ),
+                        if (attachUrlCtrl.text.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Row(children: [
+                            const Icon(Icons.check_circle, size: 13, color: Colors.green),
+                            const SizedBox(width: 4),
+                            Expanded(child: Text(attachUrlCtrl.text, style: TextStyle(color: C.mu, fontSize: 10), overflow: TextOverflow.ellipsis)),
+                            IconButton(
+                              icon: Icon(Icons.close, size: 13, color: C.mu),
+                              padding: EdgeInsets.zero, constraints: const BoxConstraints(),
+                              onPressed: () { attachUrlCtrl.text = ''; attachNameCtrl.text = ''; setAtt(() {}); },
+                            ),
+                          ]),
+                        ],
+                      ],
+                    ));
+                  }),
+                  const SizedBox(height: 12),
                   // 공개 여부
                   Row(children: [
                     Switch(
@@ -5893,6 +6154,16 @@ class _EditorialAdminTabState extends ConsumerState<_EditorialAdminTab> {
             TextButton(
               onPressed: () async {
                 final repo = ref.read(editorialRepositoryProvider);
+                final data = {
+                  'type': editType,
+                  'title': titleCtrl.text.trim(),
+                  'content': contentCtrl.text.trim(),
+                  'youtubeVideoId': ytCtrl.text.trim(),
+                  'imageUrl': imageUrlCtrl.text.trim(),
+                  'attachmentUrl': attachUrlCtrl.text.trim(),
+                  'attachmentName': attachNameCtrl.text.trim(),
+                  'isPublished': isPublished,
+                };
                 if (existing == null) {
                   await repo.createPost(EditorialPost(
                     id: '',
@@ -5900,16 +6171,13 @@ class _EditorialAdminTabState extends ConsumerState<_EditorialAdminTab> {
                     title: titleCtrl.text.trim(),
                     content: contentCtrl.text.trim(),
                     youtubeVideoId: ytCtrl.text.trim(),
+                    imageUrl: imageUrlCtrl.text.trim(),
+                    attachmentUrl: attachUrlCtrl.text.trim(),
+                    attachmentName: attachNameCtrl.text.trim(),
                     isPublished: isPublished,
                   ));
                 } else {
-                  await repo.updatePost(existing.id, {
-                    'type': editType,
-                    'title': titleCtrl.text.trim(),
-                    'content': contentCtrl.text.trim(),
-                    'youtubeVideoId': ytCtrl.text.trim(),
-                    'isPublished': isPublished,
-                  });
+                  await repo.updatePost(existing.id, data);
                 }
                 if (ctx.mounted) Navigator.pop(ctx);
               },
@@ -6383,6 +6651,7 @@ class _CommunityAdminTabState extends State<_CommunityAdminTab> {
                                   icon: Icon(Icons.delete_outline_rounded, color: C.og, size: 18),
                                   tooltip: '게시글 삭제',
                                   onPressed: () async {
+                                    final sm = ScaffoldMessenger.of(context);
                                     final confirm = await showDialog<bool>(
                                       context: context,
                                       builder: (ctx) => AlertDialog(
@@ -6395,6 +6664,7 @@ class _CommunityAdminTabState extends State<_CommunityAdminTab> {
                                       ),
                                     );
                                     if (confirm != true) return;
+                                    if (!mounted) return;
                                     try {
                                       await runWithMoriLoadingDialog<void>(
                                         context,
@@ -6408,9 +6678,9 @@ class _CommunityAdminTabState extends State<_CommunityAdminTab> {
                                           await FirebaseFirestore.instance.collection('posts').doc(postId).delete();
                                         },
                                       );
-                                      if (mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: '삭제됐어요.');
+                                      if (mounted) showSavedSnackBar(sm, message: '삭제됐어요.');
                                     } catch (e) {
-                                      if (mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+                                      if (mounted) showSaveErrorSnackBar(sm, message: '$e');
                                     }
                                   },
                                 ),
@@ -7651,6 +7921,7 @@ class _BoardPostList extends StatelessWidget {
                           ),
                         );
                         if (confirm != true) return;
+                        if (!ctx.mounted) return;
                         try {
                           await runWithMoriLoadingDialog<void>(
                             ctx,
@@ -7700,6 +7971,69 @@ class _AdminPatternsTab extends ConsumerStatefulWidget {
 
 class _AdminPatternsTabState extends ConsumerState<_AdminPatternsTab> {
   String _search = '';
+  bool _migrating = false;
+  int _migrateCurrent = 0;
+  int _migrateTotal = 0;
+
+  Future<void> _runCoverMigration() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('PDF 커버 일괄 추출'),
+        content: const Text(
+          '모든 사용자의 PDF 도안 중 커버 이미지가 없는 항목을 검색해 첫 페이지를 추출합니다.\n\n'
+          '- 이미 커버가 있는 도안은 건너뜁니다.\n'
+          '- 실패한 도안은 건너뛰고 계속 진행합니다.\n'
+          '- 도안이 많으면 시간이 오래 걸릴 수 있어요.\n\n'
+          '진행하시겠어요?',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('진행')),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    if (!mounted) return;
+
+    setState(() {
+      _migrating = true;
+      _migrateCurrent = 0;
+      _migrateTotal = 0;
+    });
+
+    final repo = ref.read(patternRepositoryProvider);
+    try {
+      final processed = await runWithMoriLoadingDialog<int>(
+        context,
+        message: 'PDF 커버를 추출하고 있어요.',
+        subtitle: '잠시만 기다려 주세요.',
+        task: () async {
+          return repo.migrateMissingCoversForAllUsers(
+            onProgress: (cur, total) {
+              if (!mounted) return;
+              setState(() {
+                _migrateCurrent = cur;
+                _migrateTotal = total;
+              });
+            },
+          );
+        },
+      );
+      if (!mounted) return;
+      showSavedSnackBar(
+        ScaffoldMessenger.of(context),
+        message: '$processed개 처리됐어요.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    } finally {
+      if (mounted) {
+        setState(() => _migrating = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -7733,6 +8067,35 @@ class _AdminPatternsTabState extends ConsumerState<_AdminPatternsTab> {
             ],
           ),
         ),
+        // 이슈 #651 옵션 A — 어드민 일괄 마이그레이션 버튼
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Row(
+            children: [
+              ElevatedButton.icon(
+                onPressed: _migrating ? null : _runCoverMigration,
+                icon: const Icon(Icons.download_for_offline_rounded, size: 18),
+                label: const Text('기존 PDF 도안 커버 일괄 추출'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFB47EEB),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                ),
+              ),
+              const SizedBox(width: 12),
+              if (_migrating && _migrateTotal > 0)
+                Text(
+                  '진행: $_migrateCurrent / $_migrateTotal',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              if (_migrating && _migrateTotal == 0)
+                const Text(
+                  '대상 검색 중...',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+            ],
+          ),
+        ),
         const Divider(height: 1),
         Expanded(
           child: async.when(
@@ -7763,6 +8126,23 @@ class _AdminPatternsTabState extends ConsumerState<_AdminPatternsTab> {
                   if (createdAt is Timestamp) {
                     dateStr = DateFormat('yyyy-MM-dd').format(createdAt.toDate());
                   }
+                  // 추가 메타 — 도안 종류, 생성자, 단계로그 유무
+                  final typeStr = (data['type'] as String?) ?? 'unknown';
+                  final typeLabel = switch (typeStr) {
+                    'pdf' => 'PDF',
+                    'image' => '이미지',
+                    'chart' => '차트',
+                    _ => typeStr,
+                  };
+                  final typeColor = switch (typeStr) {
+                    'pdf' => const Color(0xFFFF8C42),
+                    'image' => const Color(0xFF34C759),
+                    'chart' => const Color(0xFFB47EEB),
+                    _ => Colors.grey,
+                  };
+                  final sourceOwnerName = data['sourceOwnerName'] as String?;
+                  final aiSections = data['aiSections'] as List?;
+                  final hasSteps = aiSections != null && aiSections.isNotEmpty;
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
@@ -7772,18 +8152,52 @@ class _AdminPatternsTabState extends ConsumerState<_AdminPatternsTab> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.grid_on_rounded, size: 28, color: Color(0xFFB47EEB)),
+                        Icon(Icons.grid_on_rounded, size: 28, color: typeColor),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(title,
-                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis),
-                              Text('UID: $ownerUid',
-                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                              Row(
+                                children: [
+                                  // 도안종류 배지
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: typeColor.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(typeLabel, style: TextStyle(fontSize: 10, color: typeColor, fontWeight: FontWeight.w700)),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  // 단계로그 유무 배지
+                                  if (hasSteps)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEC4899).withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text('🤖 단계로그', style: TextStyle(fontSize: 10, color: Color(0xFFEC4899), fontWeight: FontWeight.w700)),
+                                    ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(title,
+                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                sourceOwnerName != null && sourceOwnerName.isNotEmpty
+                                    ? '생성자: $sourceOwnerName · UID: $ownerUid'
+                                    : 'UID: $ownerUid',
+                                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ],
                           ),
                         ),
@@ -8276,6 +8690,268 @@ class _UserStatsRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── 목업 이미지 관리 탭 ───────────────────────────────────────────────────────
+final _mockupImagesDocProvider = StreamProvider<Map<String, String>>((ref) {
+  return FirebaseFirestore.instance
+      .collection('app_config')
+      .doc('mockup_images')
+      .snapshots()
+      .map((snap) {
+    if (!snap.exists) return <String, String>{};
+    final data = snap.data()!;
+    return {for (final e in data.entries) e.key: (e.value as String? ?? '')};
+  });
+});
+
+class _MockupImagesAdminTab extends ConsumerStatefulWidget {
+  const _MockupImagesAdminTab();
+  @override
+  ConsumerState<_MockupImagesAdminTab> createState() => _MockupImagesAdminTabState();
+}
+
+class _MockupImagesAdminTabState extends ConsumerState<_MockupImagesAdminTab> {
+  bool _uploading = false;
+  String? _uploadingKey;
+
+  static const _featureItems = [
+    ('project', '프로젝트 기록'),
+    ('swatch', '스와치 보관함'),
+    ('market', '도안 마켓'),
+    ('community', '커뮤니티'),
+    ('encyclopedia', '뜨개백과사전'),
+    ('gauge', '게이지 계산기'),
+    ('ravelry', 'Ravelry 연동'),
+    ('etsy', 'Etsy 연동'),
+    ('ai-pattern-converter', 'AI 도안 변환기'),
+    ('ai-gauge', 'AI 게이지 판독기'),
+    ('pattern-editor', '도안 에디터'),
+    ('counter', '카운터 & 트래커'),
+    ('measure', '측정 도구'),
+    ('ai-translator', 'AI 영문 도안 번역기'),
+    ('cloud-sync', '클라우드 연결'),
+  ];
+
+  static const _carouselItems = [
+    ('screen-home', '홈'),
+    ('screen-coach', '나의 니팅 코치'),
+    ('screen-pattern-editor-ext', '도안에디터 확장'),
+    ('screen-market-sell', '내 도안 판매'),
+    ('screen-course', '강의'),
+    ('screen-english', 'English'),
+    ('screen-theme', '테마 설정'),
+    ('screen-ravelry-yarn', 'Ravelry 실 검색'),
+    ('screen-ravelry-pattern', 'Ravelry 도안 검색'),
+  ];
+
+  Future<void> _uploadImage(String mockupKey) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    if (file.bytes == null) return;
+
+    setState(() { _uploading = true; _uploadingKey = mockupKey; });
+    try {
+      final ext = file.extension ?? 'jpg';
+      final storageRef = FirebaseStorage.instance.ref('mockup_images/$mockupKey.$ext');
+      await storageRef.putData(file.bytes!, SettableMetadata(contentType: 'image/$ext'));
+      final url = await storageRef.getDownloadURL();
+      await FirebaseFirestore.instance
+          .collection('app_config')
+          .doc('mockup_images')
+          .set({mockupKey: url}, SetOptions(merge: true));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('업로드 완료'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('업로드 실패: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() { _uploading = false; _uploadingKey = null; });
+    }
+  }
+
+  Future<void> _deleteImage(String mockupKey) async {
+    await FirebaseFirestore.instance
+        .collection('app_config')
+        .doc('mockup_images')
+        .update({mockupKey: FieldValue.delete()});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final images = ref.watch(_mockupImagesDocProvider).valueOrNull ?? {};
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('목업 이미지 관리', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
+          const SizedBox(height: 6),
+          Text(
+            '기능 상세페이지 및 홈 캐러셀에 표시되는 스크린샷 이미지를 관리합니다.\n이미지가 없으면 코드 렌더링 화면이 표시됩니다.',
+            style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.6), height: 1.5),
+          ),
+          const SizedBox(height: 32),
+          _buildSectionHeader('기능 상세페이지 목업', icon: Icons.web_asset_rounded),
+          const SizedBox(height: 16),
+          _buildGrid(_featureItems, images),
+          const SizedBox(height: 32),
+          _buildSectionHeader('홈 캐러셀 전용 화면', icon: Icons.view_carousel_rounded),
+          const SizedBox(height: 16),
+          _buildGrid(_carouselItems, images),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGrid(List<(String, String)> items, Map<String, String> images) {
+    return Wrap(
+      spacing: 16,
+      runSpacing: 16,
+      children: items.map((item) {
+        final (key, label) = item;
+        final url = images[key] ?? '';
+        return _MockupImageCard(
+          mockupKey: key,
+          label: label,
+          imageUrl: url,
+          isUploading: _uploading && _uploadingKey == key,
+          onUpload: () => _uploadImage(key),
+          onDelete: url.isNotEmpty ? () => _deleteImage(key) : null,
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, {required IconData icon}) {
+    return Row(
+      children: [
+        Icon(icon, color: const Color(0xFF6EE7B7), size: 18),
+        const SizedBox(width: 8),
+        Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+      ],
+    );
+  }
+}
+
+class _MockupImageCard extends StatelessWidget {
+  final String mockupKey;
+  final String label;
+  final String imageUrl;
+  final bool isUploading;
+  final VoidCallback onUpload;
+  final VoidCallback? onDelete;
+
+  const _MockupImageCard({
+    required this.mockupKey,
+    required this.label,
+    required this.imageUrl,
+    required this.isUploading,
+    required this.onUpload,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 200,
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: imageUrl.isNotEmpty
+              ? const Color(0xFF6EE7B7).withValues(alpha: 0.4)
+              : Colors.white.withValues(alpha: 0.08),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+            child: SizedBox(
+              height: 140,
+              width: double.infinity,
+              child: imageUrl.isNotEmpty
+                  ? Image.network(imageUrl, fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => _MockupPlaceholder())
+                  : _MockupPlaceholder(),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 2),
+                Text(mockupKey, style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.4)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 30,
+                        child: ElevatedButton(
+                          onPressed: isUploading ? null : onUpload,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6EE7B7),
+                            foregroundColor: const Color(0xFF0F172A),
+                            padding: EdgeInsets.zero,
+                            textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                          ),
+                          child: isUploading
+                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0F172A)))
+                              : const Text('업로드'),
+                        ),
+                      ),
+                    ),
+                    if (onDelete != null) ...[
+                      const SizedBox(width: 6),
+                      SizedBox(
+                        height: 30,
+                        width: 30,
+                        child: IconButton(
+                          onPressed: onDelete,
+                          icon: const Icon(Icons.delete_outline_rounded, size: 16),
+                          color: Colors.red,
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MockupPlaceholder extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFF0F172A),
+      child: Center(
+        child: Icon(Icons.smartphone_rounded, color: Colors.white.withValues(alpha: 0.15), size: 36),
       ),
     );
   }

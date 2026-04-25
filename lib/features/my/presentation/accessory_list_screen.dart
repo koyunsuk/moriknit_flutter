@@ -29,21 +29,30 @@ class AccessoryListScreen extends ConsumerWidget {
                 subtitle: isKorean ? '니팅 도구를 관리해요' : 'Manage your knitting tools',
               ),
             ),
+            // 요약카드 틀고정
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: LibrarySummaryCard(
+                headers: [isKorean ? '전체' : 'Total'],
+                rows: [
+                  LibrarySummaryRowData(
+                    badge: isKorean ? '악세사리' : 'Accessories',
+                    badgeColor: C.pkD,
+                    values: ['${items.length}'],
+                    valueColors: [C.tx],
+                  ),
+                ],
+                addLabel: isKorean ? '추가' : 'Add',
+                onAdd: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AccessoryInputScreen()),
+                ),
+              ),
+            ),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
                 children: [
-                  WorkspaceSummaryBar(
-                    stats: [
-                      WorkStat('${items.length}', isKorean ? '전체' : 'Total', color: C.pkD),
-                    ],
-                    addLabel: isKorean ? '추가' : 'Add',
-                    onAdd: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const AccessoryInputScreen()),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
                   GlassCard(
                     child: listAsync.isLoading
                         ? Center(child: Padding(

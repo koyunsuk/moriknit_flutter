@@ -63,6 +63,12 @@ _$ProjectModelImpl _$$ProjectModelImplFromJson(Map<String, dynamic> json) =>
       originUserId: json['originUserId'] as String? ?? '',
       originOwnerName: json['originOwnerName'] as String? ?? '',
       referenceBookId: json['referenceBookId'] as String? ?? '',
+      ravelryProjectId: (json['ravelryProjectId'] as num?)?.toInt(),
+      ravelryPatternId: (json['ravelryPatternId'] as num?)?.toInt(),
+      ravelryStashIds: (json['ravelryStashIds'] as List<dynamic>?)
+              ?.map((e) => (e as num).toInt())
+              .toList() ??
+          const <int>[],
     );
 
 Map<String, dynamic> _$$ProjectModelImplToJson(_$ProjectModelImpl instance) =>
@@ -100,4 +106,7 @@ Map<String, dynamic> _$$ProjectModelImplToJson(_$ProjectModelImpl instance) =>
       'originUserId': instance.originUserId,
       'originOwnerName': instance.originOwnerName,
       'referenceBookId': instance.referenceBookId,
+      'ravelryProjectId': instance.ravelryProjectId,
+      'ravelryPatternId': instance.ravelryPatternId,
+      'ravelryStashIds': instance.ravelryStashIds,
     };

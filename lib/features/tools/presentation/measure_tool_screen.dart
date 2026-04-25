@@ -905,10 +905,13 @@ class _CalcOverlay extends StatelessWidget {
     }
   }
 
+  static final _trimTrailingZeros = RegExp(r'0+$');
+  static final _trimTrailingDot = RegExp(r'\.$');
+
   String _fmt(double v) {
     if (v.isNaN) return 'Error';
     if (v == v.truncateToDouble() && v.abs() < 1e10) return v.toInt().toString();
-    return v.toStringAsFixed(6).replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+    return v.toStringAsFixed(6).replaceAll(_trimTrailingZeros, '').replaceAll(_trimTrailingDot, '');
   }
 
   @override

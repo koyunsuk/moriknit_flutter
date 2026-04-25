@@ -24,12 +24,60 @@ import '../../pattern/domain/pattern_chart.dart';
 import '../../project/domain/project_model.dart';
 import '../../project/domain/user_template.dart';
 import '../domain/market_item.dart';
+import '../domain/market_review.dart';
+import 'pdf_viewer_screen.dart';
+import 'seller_items_screen.dart';
+import 'my_market_dashboard_screen.dart';
 
-class MarketScreen extends ConsumerWidget {
+class MarketScreen extends ConsumerStatefulWidget {
   const MarketScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MarketScreen> createState() => _MarketScreenState();
+}
+
+class _MarketScreenState extends ConsumerState<MarketScreen> {
+  String _searchQuery = '';
+  String _categoryFilter = 'all';
+  String _sortMode = 'recommended';
+  final _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  List<MarketItem> _applyFilters(List<MarketItem> items) {
+    var filtered = items;
+    if (_categoryFilter != 'all') {
+      filtered = filtered.where((i) => i.category == _categoryFilter).toList();
+    }
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      filtered = filtered.where((i) =>
+        i.title.toLowerCase().contains(q) ||
+        i.description.toLowerCase().contains(q) ||
+        i.sellerName.toLowerCase().contains(q) ||
+        i.tags.any((t) => t.toLowerCase().contains(q))
+      ).toList();
+    }
+    switch (_sortMode) {
+      case 'popular':
+        filtered.sort((a, b) => b.viewCount.compareTo(a.viewCount));
+      case 'latest':
+        filtered.sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+      case 'free':
+        filtered = filtered.where((i) => i.price == 0).toList();
+        filtered.sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+      default:
+        break;
+    }
+    return filtered;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final t = ref.watch(appStringsProvider);
     final language = ref.watch(appLanguageProvider);
     final isKorean = language.isKorean;
@@ -52,9 +100,7 @@ class MarketScreen extends ConsumerWidget {
                 MoriPageHeaderShell(
                   maxWidth: isWide ? 1380 : 920,
                   padding: EdgeInsets.zero,
-                  child: MoriBrandHeader(
-                    subtitle: subtitle,
-                  ),
+                  child: MoriBrandHeader(subtitle: subtitle),
                 ),
                 Expanded(
                   child: Align(
@@ -71,12 +117,54 @@ class MarketScreen extends ConsumerWidget {
                           isAdmin: isAdmin,
                           canCreate: canCreate,
                           onCreate: canCreate ? () => _showCreateItemSheet(context, ref, user.uid, user.displayName ?? user.email ?? '') : null,
+                          onDashboard: user != null ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyMarketDashboardScreen())) : null,
                         ),
                       const SizedBox(height: 16),
-                      SectionTitle(title: isKorean ? '⭐ 추천 상품' : '⭐ Recommended items'),
+                      // ── 검색바 ───────────────────────────────────────
+                      TextField(
+                        controller: _searchCtrl,
+                        onChanged: (v) => setState(() => _searchQuery = v.trim()),
+                        decoration: InputDecoration(
+                          hintText: isKorean ? '상품명, 판매자, 태그 검색' : 'Search items, sellers, tags',
+                          prefixIcon: Icon(Icons.search_rounded, color: C.mu, size: 20),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(icon: Icon(Icons.clear_rounded, size: 18, color: C.mu), onPressed: () { _searchCtrl.clear(); setState(() => _searchQuery = ''); })
+                              : null,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                      ),
                       const SizedBox(height: 10),
+                      // ── 카테고리 필터 ────────────────────────────────
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            for (final e in [('all', isKorean ? '전체' : 'All'), ('pattern', isKorean ? '도안' : 'Pattern'), ('yarn', isKorean ? '실' : 'Yarn'), ('tool', isKorean ? '도구' : 'Tool')])
+                              Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: _FilterChip(label: e.$2, selected: _categoryFilter == e.$1, onTap: () => setState(() => _categoryFilter = e.$1)),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // ── 정렬 탭 ─────────────────────────────────────
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            for (final e in [('recommended', isKorean ? '⭐ 추천' : '⭐ Rec'), ('popular', isKorean ? '🔥 인기' : '🔥 Popular'), ('latest', isKorean ? '🆕 최신' : '🆕 Latest'), ('free', isKorean ? '🎁 무료' : '🎁 Free')])
+                              Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: _FilterChip(label: e.$2, selected: _sortMode == e.$1, onTap: () => setState(() => _sortMode = e.$1), small: true),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                       itemsAsync.when(
-                    data: (items) {
+                    data: (allItems) {
+                      final items = _applyFilters(allItems);
                       if (items.isEmpty) {
                         return Center(
                           child: Padding(
@@ -86,10 +174,10 @@ class MarketScreen extends ConsumerWidget {
                               children: [
                                 Container(width: 72, height: 72, decoration: BoxDecoration(color: C.pkL, borderRadius: BorderRadius.circular(20)), child: Icon(Icons.shopping_bag_rounded, color: C.pkD, size: 36)),
                                 const SizedBox(height: 16),
-                                Text(isKorean ? '등록된 상품이 없어요' : 'No items yet', style: T.bodyBold),
+                                Text(_searchQuery.isNotEmpty ? (isKorean ? '검색 결과가 없어요' : 'No results') : (isKorean ? '등록된 상품이 없어요' : 'No items yet'), style: T.bodyBold),
                                 const SizedBox(height: 6),
-                                Text(isKorean ? '첫 번째 상품을 등록해보세요.' : 'Be the first to add an item.', style: T.caption.copyWith(color: C.mu)),
-                                if (canCreate) ...[
+                                Text(isKorean ? '다른 검색어나 필터를 사용해보세요.' : 'Try different filters.', style: T.caption.copyWith(color: C.mu)),
+                                if (canCreate && _searchQuery.isEmpty) ...[
                                   const SizedBox(height: 16),
                                   ElevatedButton.icon(
                                     onPressed: () => _showCreateItemSheet(context, ref, user.uid, user.displayName ?? user.email ?? ''),
@@ -155,6 +243,8 @@ class MarketScreen extends ConsumerWidget {
     String sourceType = 'file';
 
     final accentHex = ['#FA5BB4', '#B47EEB', '#A3E635', '#F472B6', '#60A5FA', '#34D399', '#FB923C', '#F9A8D4'][Random().nextInt(8)];
+    final tagsCtrl = TextEditingController();
+    List<String> tags = [];
     bool saving = false;
 
     await showModalBottomSheet<void>(
@@ -248,6 +338,51 @@ class MarketScreen extends ConsumerWidget {
                     ],
                     onChanged: (value) => setState(() => category = value ?? 'pattern'),
                   ),
+                  const SizedBox(height: 10),
+                  // ── 태그 입력 ────────────────────────────────────
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: tagsCtrl,
+                          decoration: InputDecoration(
+                            labelText: isKorean ? '태그 (쉼표로 구분)' : 'Tags (comma separated)',
+                            hintText: isKorean ? '예: 코바늘, 초보, 강아지' : 'e.g. crochet, beginner',
+                          ),
+                          onSubmitted: (v) {
+                            final newTags = v.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+                            setState(() { tags = {...tags, ...newTags}.take(10).toList(); tagsCtrl.clear(); });
+                          },
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.add_circle_rounded, color: C.lv),
+                        onPressed: () {
+                          final newTags = tagsCtrl.text.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+                          setState(() { tags = {...tags, ...newTags}.take(10).toList(); tagsCtrl.clear(); });
+                        },
+                      ),
+                    ],
+                  ),
+                  if (tags.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: tags.map((t) => GestureDetector(
+                        onTap: () => setState(() => tags.remove(t)),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(12), border: Border.all(color: C.lv.withValues(alpha: 0.3))),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Text('#$t', style: T.caption.copyWith(color: C.lvD)),
+                            const SizedBox(width: 4),
+                            Icon(Icons.close_rounded, size: 12, color: C.mu),
+                          ]),
+                        ),
+                      )).toList(),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   // ── 소스별 파일 선택 UI ─────────────────────────
                   if (sourceType == 'file') ...[
@@ -384,6 +519,7 @@ class MarketScreen extends ConsumerWidget {
                                 pdfUrl: '',
                                 createdAt: DateTime.now(),
                                 status: (!isFree && price > 0) ? 'pending' : 'approved',
+                                tags: tags,
                               );
                               // 소스 타입에 따라 업로드
                               if (sourceType == 'myPattern') {
@@ -425,6 +561,35 @@ class MarketScreen extends ConsumerWidget {
     );
   }
 
+}
+
+class _FavoriteButton extends ConsumerWidget {
+  final String itemId;
+  const _FavoriteButton({required this.itemId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authStateProvider).valueOrNull;
+    if (user == null) return const SizedBox.shrink();
+    final favorites = ref.watch(favoritesProvider).valueOrNull ?? const {};
+    final isFav = favorites.contains(itemId);
+    return GestureDetector(
+      onTap: () => ref.read(marketRepositoryProvider).toggleFavorite(user.uid, itemId, isFav),
+      child: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.35),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          size: 16,
+          color: isFav ? Colors.red.shade400 : Colors.white,
+        ),
+      ),
+    );
+  }
 }
 
 class _MarketCard extends ConsumerStatefulWidget {
@@ -573,6 +738,7 @@ class _MarketCardState extends ConsumerState<_MarketCard> {
                     Image.network(
                       widget.item.imageUrl,
                       fit: BoxFit.cover,
+                      cacheWidth: 320,
                       errorBuilder: (_, _, _) => Center(child: Icon(_icon(widget.item.imageType), color: accent, size: 42)),
                     )
                   else
@@ -583,6 +749,11 @@ class _MarketCardState extends ConsumerState<_MarketCard> {
                       left: 10,
                       child: MoriChip(label: isKorean ? '기본 상품' : 'Official', type: ChipType.white),
                     ),
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: _FavoriteButton(itemId: widget.item.id),
+                  ),
                 ],
               ),
             ),
@@ -592,9 +763,16 @@ class _MarketCardState extends ConsumerState<_MarketCard> {
           const SizedBox(height: 4),
           Text(widget.item.description, style: T.caption.copyWith(color: C.mu), maxLines: 2, overflow: TextOverflow.ellipsis),
           const SizedBox(height: 8),
-          Text(widget.item.sellerName, style: T.caption.copyWith(color: accent)),
+          GestureDetector(
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SellerItemsScreen(sellerUid: widget.item.sellerUid, sellerName: widget.item.sellerName))),
+            child: Text(widget.item.sellerName, style: T.caption.copyWith(color: accent, decoration: TextDecoration.underline)),
+          ),
           const SizedBox(height: 4),
           Text(widget.item.price == 0 ? (isKorean ? '무료 도안' : 'Free') : (isKorean ? '${widget.item.price}원' : '${widget.item.price} KRW'), style: T.captionBold.copyWith(color: accent)),
+          if (widget.item.tags.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Wrap(spacing: 4, runSpacing: 4, children: widget.item.tags.take(3).map((t) => Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: accent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)), child: Text('#$t', style: T.caption.copyWith(color: accent, fontSize: 10)))).toList()),
+          ],
           const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
@@ -935,7 +1113,33 @@ class _ItemDetailSheetState extends ConsumerState<_ItemDetailSheet> {
             const SizedBox(height: 10),
             Text(item.title, style: T.h2),
             const SizedBox(height: 6),
-            Text(item.sellerName, style: T.caption.copyWith(color: accent)),
+            GestureDetector(
+              onTap: () => Navigator.push(ctx, MaterialPageRoute(builder: (_) => SellerItemsScreen(sellerUid: item.sellerUid, sellerName: item.sellerName))),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.storefront_rounded, size: 13, color: accent),
+                  const SizedBox(width: 4),
+                  Text(item.sellerName, style: T.caption.copyWith(color: accent, decoration: TextDecoration.underline)),
+                ],
+              ),
+            ),
+            if (item.tags.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(spacing: 6, runSpacing: 4, children: item.tags.map((t) => Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: accent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)), child: Text('#$t', style: T.caption.copyWith(color: accent, fontSize: 11)))).toList()),
+            ],
+            if (item.reviewCount > 0) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.star_rounded, size: 14, color: Colors.amber),
+                  const SizedBox(width: 3),
+                  Text(item.averageRating.toStringAsFixed(1), style: T.captionBold),
+                  const SizedBox(width: 4),
+                  Text('(${item.reviewCount})', style: T.caption.copyWith(color: C.mu)),
+                ],
+              ),
+            ],
             const SizedBox(height: 12),
             Text(item.description, style: T.body.copyWith(color: C.tx2, height: 1.5)),
             const SizedBox(height: 16),
@@ -972,6 +1176,11 @@ class _ItemDetailSheetState extends ConsumerState<_ItemDetailSheet> {
                 style: OutlinedButton.styleFrom(foregroundColor: accent, side: BorderSide(color: accent.withValues(alpha: 0.4)), padding: const EdgeInsets.symmetric(vertical: 14)),
               ),
             ),
+            // ── PDF 열기 버튼 (구매 완료 시) ────────────────────
+            if (item.pdfUrl.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              _PdfAccessButton(item: item, isKorean: isKorean, accent: accent),
+            ],
             if (isAdmin) ...[
               const SizedBox(height: 16),
               const Divider(),
@@ -1008,7 +1217,263 @@ class _ItemDetailSheetState extends ConsumerState<_ItemDetailSheet> {
                 ],
               ),
             ],
+            // ── 리뷰 섹션 ────────────────────────────────────────
+            const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 8),
+            _ReviewSection(item: item, isKorean: isKorean, accent: accent, user: widget.user),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── PDF 접근 버튼 ─────────────────────────────────────────────
+class _PdfAccessButton extends ConsumerWidget {
+  final MarketItem item;
+  final bool isKorean;
+  final Color accent;
+  const _PdfAccessButton({required this.item, required this.isKorean, required this.accent});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authStateProvider).valueOrNull;
+    if (user == null) return const SizedBox.shrink();
+    final purchases = ref.watch(myPurchasesProvider).valueOrNull ?? [];
+    final isAdmin = ref.watch(isAdminProvider).valueOrNull == true;
+    final owned = isAdmin || item.price == 0 || purchases.any((p) => p.itemId == item.id);
+    if (!owned) return const SizedBox.shrink();
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(url: item.pdfUrl, title: item.title))),
+        icon: Icon(Icons.picture_as_pdf_rounded, size: 16, color: accent),
+        label: Text(isKorean ? 'PDF 열기' : 'Open PDF'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: accent,
+          side: BorderSide(color: accent.withValues(alpha: 0.4)),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+      ),
+    );
+  }
+}
+
+// ── 리뷰 섹션 ────────────────────────────────────────────────
+class _ReviewSection extends ConsumerStatefulWidget {
+  final MarketItem item;
+  final bool isKorean;
+  final Color accent;
+  final dynamic user;
+  const _ReviewSection({required this.item, required this.isKorean, required this.accent, required this.user});
+
+  @override
+  ConsumerState<_ReviewSection> createState() => _ReviewSectionState();
+}
+
+class _ReviewSectionState extends ConsumerState<_ReviewSection> {
+  double _myRating = 5.0;
+  final _commentCtrl = TextEditingController();
+  bool _submitting = false;
+  bool _showForm = false;
+
+  @override
+  void dispose() {
+    _commentCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_submitting || widget.user == null) return;
+    setState(() => _submitting = true);
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: widget.isKorean ? '저장하는 중입니다.' : 'Saving...',
+        task: () async {
+          final review = MarketReview(
+            id: '',
+            itemId: widget.item.id,
+            reviewerUid: widget.user.uid as String,
+            reviewerName: widget.user.displayName as String? ?? widget.user.email as String? ?? '',
+            rating: _myRating,
+            comment: _commentCtrl.text.trim(),
+            createdAt: DateTime.now(),
+          );
+          await ref.read(marketRepositoryProvider).submitReview(itemId: widget.item.id, review: review);
+        },
+      );
+      if (!mounted) return;
+      setState(() { _showForm = false; _commentCtrl.clear(); _myRating = 5.0; });
+      showSavedSnackBar(context, message: widget.isKorean ? '리뷰가 등록되었습니다.' : 'Review submitted.');
+    } catch (_) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(context, message: widget.isKorean ? '리뷰 등록에 실패했습니다.' : 'Review failed.');
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isKorean = widget.isKorean;
+    final accent = widget.accent;
+    final reviewsAsync = ref.watch(marketReviewsProvider(widget.item.id));
+    final purchases = ref.watch(myPurchasesProvider).valueOrNull ?? [];
+    final isAdmin = ref.watch(isAdminProvider).valueOrNull == true;
+    final canReview = widget.user != null && (isAdmin || widget.item.price == 0 || purchases.any((p) => p.itemId == widget.item.id));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(isKorean ? '리뷰' : 'Reviews', style: T.bodyBold),
+            if (widget.item.reviewCount > 0) ...[
+              const SizedBox(width: 6),
+              Icon(Icons.star_rounded, size: 14, color: Colors.amber),
+              const SizedBox(width: 2),
+              Text('${widget.item.averageRating.toStringAsFixed(1)} (${widget.item.reviewCount})', style: T.caption.copyWith(color: C.mu)),
+            ],
+            const Spacer(),
+            if (canReview && !_showForm)
+              TextButton.icon(
+                onPressed: () async {
+                  final sm = ScaffoldMessenger.of(context);
+                  final already = await ref.read(marketRepositoryProvider).hasUserReviewed(widget.item.id, widget.user.uid as String);
+                  if (!mounted) return;
+                  if (already) {
+                    showSavedSnackBar(sm, message: isKorean ? '이미 리뷰를 작성했어요.' : 'Already reviewed.');
+                    return;
+                  }
+                  setState(() => _showForm = true);
+                },
+                icon: Icon(Icons.rate_review_rounded, size: 14, color: accent),
+                label: Text(isKorean ? '리뷰 작성' : 'Write review', style: T.caption.copyWith(color: accent)),
+              ),
+          ],
+        ),
+        if (_showForm) ...[
+          const SizedBox(height: 10),
+          GlassCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(isKorean ? '별점' : 'Rating', style: T.captionBold),
+                const SizedBox(height: 6),
+                Row(
+                  children: List.generate(5, (i) {
+                    final star = (i + 1).toDouble();
+                    return GestureDetector(
+                      onTap: () => setState(() => _myRating = star),
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: Icon(
+                          _myRating >= star ? Icons.star_rounded : Icons.star_border_rounded,
+                          color: Colors.amber,
+                          size: 28,
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _commentCtrl,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: isKorean ? '사용 후기를 작성해주세요.' : 'Write your review...',
+                    contentPadding: const EdgeInsets.all(12),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(onPressed: () => setState(() { _showForm = false; _commentCtrl.clear(); }), child: Text(isKorean ? '취소' : 'Cancel', style: TextStyle(color: C.mu))),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: _submitting ? null : _submit,
+                      style: ElevatedButton.styleFrom(backgroundColor: accent, foregroundColor: Colors.white),
+                      child: Text(isKorean ? '등록' : 'Submit'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 10),
+        reviewsAsync.when(
+          data: (reviews) {
+            if (reviews.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(isKorean ? '아직 리뷰가 없어요. 첫 번째 리뷰를 남겨보세요!' : 'No reviews yet. Be the first!', style: T.caption.copyWith(color: C.mu)),
+              );
+            }
+            return Column(
+              children: reviews.take(10).map((r) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: GlassCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Row(children: List.generate(5, (i) => Icon((i + 1) <= r.rating ? Icons.star_rounded : Icons.star_border_rounded, size: 13, color: Colors.amber))),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(r.reviewerName, style: T.caption.copyWith(color: C.mu), overflow: TextOverflow.ellipsis)),
+                          if (r.createdAt != null)
+                            Text('${r.createdAt!.year}.${r.createdAt!.month.toString().padLeft(2, '0')}.${r.createdAt!.day.toString().padLeft(2, '0')}', style: T.caption.copyWith(color: C.mu, fontSize: 10)),
+                        ],
+                      ),
+                      if (r.comment.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(r.comment, style: T.body.copyWith(height: 1.5)),
+                      ],
+                    ],
+                  ),
+                ),
+              )).toList(),
+            );
+          },
+          loading: () => Padding(padding: const EdgeInsets.all(12), child: Center(child: CircularProgressIndicator(color: accent, strokeWidth: 2))),
+          error: (_, _) => const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final bool small;
+
+  const _FilterChip({required this.label, required this.selected, required this.onTap, this.small = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: EdgeInsets.symmetric(horizontal: small ? 10 : 14, vertical: small ? 5 : 7),
+        decoration: BoxDecoration(
+          color: selected ? C.lv : C.lvL,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? C.lv : C.lv.withValues(alpha: 0.20)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: small ? 12 : 13,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            color: selected ? Colors.white : C.lvD,
+          ),
         ),
       ),
     );
@@ -1020,7 +1485,8 @@ class _MarketIntroCard extends StatelessWidget {
   final bool isAdmin;
   final bool canCreate;
   final VoidCallback? onCreate;
-  const _MarketIntroCard({required this.isKorean, required this.isAdmin, required this.canCreate, this.onCreate});
+  final VoidCallback? onDashboard;
+  const _MarketIntroCard({required this.isKorean, required this.isAdmin, required this.canCreate, this.onCreate, this.onDashboard});
 
   @override
   Widget build(BuildContext context) {
@@ -1059,17 +1525,29 @@ class _MarketIntroCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: onCreate,
-              icon: const Icon(Icons.add_business_rounded),
-              label: Text(isKorean ? '상품 추가' : 'Add item'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: canCreate ? C.lv : C.bd,
-                foregroundColor: canCreate ? Colors.white : C.mu,
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: onCreate,
+                  icon: const Icon(Icons.add_business_rounded),
+                  label: Text(isKorean ? '상품 추가' : 'Add item'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: canCreate ? C.lv : C.bd,
+                    foregroundColor: canCreate ? Colors.white : C.mu,
+                  ),
+                ),
               ),
-            ),
+              if (onDashboard != null) ...[
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: onDashboard,
+                  icon: const Icon(Icons.bar_chart_rounded, size: 16),
+                  label: Text(isKorean ? '내 마켓' : 'My Market'),
+                  style: OutlinedButton.styleFrom(foregroundColor: C.lv, side: BorderSide(color: C.lv.withValues(alpha: 0.4))),
+                ),
+              ],
+            ],
           ),
         ],
       ),
@@ -1219,8 +1697,8 @@ class _PatternPickerScreen extends ConsumerWidget {
                       chart.imageUrl.isNotEmpty
                           ? ClipRRect(
                               borderRadius: BorderRadius.circular(8),
-                              child: Image.network(chart.imageUrl, width: 48, height: 48, fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(width: 48, height: 48, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(8)), child: Icon(Icons.grid_on_rounded, color: C.lv))),
+                              child: Image.network(chart.imageUrl, width: 48, height: 48, fit: BoxFit.cover, cacheWidth: 96, cacheHeight: 96,
+                                  errorBuilder: (_, _, _) => Container(width: 48, height: 48, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(8)), child: Icon(Icons.grid_on_rounded, color: C.lv))),
                             )
                           : Container(width: 48, height: 48, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(8)), child: Icon(Icons.grid_on_rounded, color: C.lv)),
                       const SizedBox(width: 12),

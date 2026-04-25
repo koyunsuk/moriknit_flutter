@@ -7,6 +7,8 @@ class EditorialPost {
   final String content;
   final String youtubeVideoId; // empty if not youtube
   final String imageUrl; // optional
+  final String attachmentUrl; // optional file attachment
+  final String attachmentName; // display name for attachment
   final bool isPublished;
   final DateTime? createdAt;
   final String authorName;
@@ -18,6 +20,8 @@ class EditorialPost {
     required this.content,
     this.youtubeVideoId = '',
     this.imageUrl = '',
+    this.attachmentUrl = '',
+    this.attachmentName = '',
     required this.isPublished,
     this.createdAt,
     this.authorName = '',
@@ -33,6 +37,8 @@ class EditorialPost {
       content: data['content'] as String? ?? '',
       youtubeVideoId: data['youtubeVideoId'] as String? ?? '',
       imageUrl: data['imageUrl'] as String? ?? '',
+      attachmentUrl: data['attachmentUrl'] as String? ?? '',
+      attachmentName: data['attachmentName'] as String? ?? '',
       isPublished: data['isPublished'] as bool? ?? true,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       authorName: data['authorName'] as String? ?? '',
@@ -45,6 +51,8 @@ class EditorialPost {
         'content': content,
         'youtubeVideoId': youtubeVideoId,
         'imageUrl': imageUrl,
+        'attachmentUrl': attachmentUrl,
+        'attachmentName': attachmentName,
         'isPublished': isPublished,
         'createdAt': FieldValue.serverTimestamp(),
         'authorName': authorName,

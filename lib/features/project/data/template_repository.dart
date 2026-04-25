@@ -329,6 +329,194 @@ class TemplateRepository {
         ],
         'stepTargetRows': [0, 20, 30, 16, 0],
       },
+      // #637 — 크롭 레글런 탑다운 (Banul 메리노블렌드 DK 기반 12단계)
+      {
+        'titleKo': '크롭 레글런 탑다운',
+        'titleEn': 'Crop Raglan Top-Down',
+        'descKo': 'Banul 도안 기반 · 12단계 · 7사이즈 지원 (XS~3XL)',
+        'descEn': 'Banul-based · 12 steps · 7 sizes (XS~3XL)',
+        'iconName': 'checkroom',
+        'colorHex': '#DB2777',
+        'order': 6,
+        'isActive': true,
+        'stepsKo': [
+          '목둘레 코잡기',
+          '목 고무단 (6cm)',
+          '앞목 쉐이핑 & 래글런 늘림 1 (11단)',
+          '래글런 늘림 2 (반복)',
+          'XL+ 몸통 추가단',
+          '소매 분리 & 겨드랑이 감아코',
+          '몸통 메리야스 뜨기',
+          '몸통 코줄임 (1단)',
+          '몸통 고무단 (7cm)',
+          '소매 뜨기',
+          '소매 길이 완성',
+          '소매 고무단 & 마무리',
+        ],
+        'stepsEn': [
+          'Cast-on (Neck)',
+          'Neck Ribbing (6cm)',
+          'Front Shaping & Raglan Increase 1 (11 rnds)',
+          'Raglan Increase 2 (Repeat)',
+          'XL+ Body Extra Rounds',
+          'Sleeve Separation & Underarm CO',
+          'Body Stockinette',
+          'Body Decrease (1 rnd)',
+          'Body Ribbing (7cm)',
+          'Sleeve Knitting',
+          'Sleeve Length Complete',
+          'Sleeve Ribbing & Finishing',
+        ],
+        'stepNotesKo': [
+          '3.5mm 바늘 + 40cm 케이블. 사이즈별 원통 코잡기 — XS:92, S:96, M:104, L:108, XL/2XL/3XL:112코. 시작 마커 설치.',
+          '1코 고무뜨기로 약 17단. 겹단 처리 후 4mm로 바늘 교체.',
+          '셋업단: 마커 9개 배치. 독일식 짧은단 턴(German short row) 포함. 모든 사이즈 동일하게 11단.',
+          '1단 늘림단(M1R×4, M1L×4 = +8코) + 2단 유지 반복. 사이즈별 반복: XS 23 · S 25 · M 26 · L 28 · XL 29 · 2XL 30 · 3XL 32회.',
+          '몸통쪽 앞뒤판에만 +4코. XL 1회, 2XL·3XL 2회 반복. (XS/S/M/L은 건너뜀)',
+          '소매 코를 자투리 실로 옮겨 쉬게 함. 겨드랑이 감아코 — XS/S:4, M/L:6, XL:8, 2XL:10, 3XL:12코.',
+          '원통 메리야스. 단수표시링부터 사이즈별 — XS:35, S:37, M:39, L:41, XL:42, 2XL:43, 3XL:44cm까지.',
+          '[k2tog, 겉뜨기 N코] × M번 + k2tog. 사이즈별 — XS:[K2tog,9]×17, S:[K2tog,10]×17, M:[K2tog,9]×19, L:[K2tog,10]×19.',
+          '3.5mm로 바꿔 1코 고무뜨기. 다 뜨면 돗바늘 코막음으로 마무리.',
+          '쉬어둔 소매 코 + 겨드랑이 감아코 절반씩 줍기. 원통 메리야스. 사이즈별 간격 k2tog/ssk 코줄임.',
+          '소매 분리 지점부터 사이즈별 — XS:38, S/M:39, L/XL:40, 2XL:39, 3XL:38cm까지 뜨기.',
+          '3.5mm 1코 고무뜨기 7cm + 돗바늘 코막음. 꼬리실 정리 + 겨드랑이 구멍 봉합.',
+        ],
+        'stepNotesEn': [
+          '3.5mm needle + 40cm cable. Cast on by size — XS:92, S:96, M:104, L:108, XL+/2XL/3XL:112 sts. Place start marker.',
+          '1x1 rib ~17 rnds. After hem fold, switch to 4mm needles.',
+          'Setup round: 9 markers, German short rows included. 11 rnds for all sizes.',
+          '1 increase rnd (M1R×4, M1L×4 = +8) + 2 plain rnds. Reps by size: XS 23 · S 25 · M 26 · L 28 · XL 29 · 2XL 30 · 3XL 32.',
+          'Body front/back only +4 sts. XL ×1, 2XL·3XL ×2. (Skip for XS/S/M/L)',
+          'Transfer sleeve sts to scrap yarn. Underarm CO — XS/S:4, M/L:6, XL:8, 2XL:10, 3XL:12 sts.',
+          'Stockinette in round. From marker — XS:35, S:37, M:39, L:41, XL:42, 2XL:43, 3XL:44cm.',
+          '[k2tog, knit N] × M + k2tog. By size — XS:[K2tog,9]×17, S:[K2tog,10]×17, M:[K2tog,9]×19, L:[K2tog,10]×19.',
+          'Switch to 3.5mm, 1x1 rib. Bind off with tapestry needle.',
+          'Pick up sleeve sts + half underarm CO. Stockinette in round. K2tog/ssk decreases at size-specific intervals.',
+          'From sleeve separation — XS:38, S/M:39, L/XL:40, 2XL:39, 3XL:38cm.',
+          '3.5mm 1x1 rib 7cm + tapestry bind off. Weave in ends + close underarm holes.',
+        ],
+        'stepTargetRows': [0, 17, 11, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      },
+    ];
+  }
+
+  /// #637 — 크롭 레글런 탑다운이 Firestore에 누락된 경우 자동 추가
+  /// 기존 seed된 환경에서도 자동으로 새 프리셋 노출되도록 보장
+  Future<void> ensureCropRaglanSeeded() async {
+    final existing = await _builtinCol
+        .where('titleKo', isEqualTo: '크롭 레글런 탑다운')
+        .limit(1)
+        .get();
+    if (existing.docs.isNotEmpty) return;
+    final cropRaglan = _builtinSeedData().lastWhere(
+      (t) => t['titleKo'] == '크롭 레글런 탑다운',
+    );
+    await _builtinCol.add(cropRaglan);
+  }
+
+  /// #639 — 인형 치수 프리셋을 BuiltinTemplate(kind=bodyMeasurement)으로 통합
+  /// 사용자 철학: 프리셋=템플릿=동일한 자원.
+  /// 기존 환경에서도 자동 노출되도록 누락 시 seed.
+  Future<void> ensureDollPresetsSeeded() async {
+    final existing = await _builtinCol
+        .where('kind', isEqualTo: 'body_measurement')
+        .limit(1)
+        .get();
+    if (existing.docs.isNotEmpty) return;
+    final batch = _db.batch();
+    for (final doll in _dollPresetSeedData()) {
+      batch.set(_builtinCol.doc(), doll);
+    }
+    await batch.commit();
+  }
+
+  /// 인형 치수 프리셋 seed 데이터 (doll_presets.dart 값 기반)
+  static List<Map<String, dynamic>> _dollPresetSeedData() {
+    return [
+      {
+        'kind': 'body_measurement',
+        'titleKo': '바비 인형',
+        'titleEn': 'Barbie',
+        'descKo': '29.21cm · 패션 인형 대표 (가슴 13.46cm)',
+        'descEn': '29.21cm · Classic fashion doll (chest 13.46cm)',
+        'iconName': 'face_retouching_natural',
+        'colorHex': '#EC4899',
+        'order': 100,
+        'isActive': true,
+        'stepsKo': ['가슴둘레', '목둘레', '상체 길이', '소매 길이', '상완', '손목', '어깨', '진동 깊이'],
+        'stepsEn': ['Chest', 'Neck', 'Body Length', 'Sleeve Length', 'Upper Arm', 'Wrist', 'Shoulder', 'Armhole Depth'],
+        'stepNotesKo': ['13.46cm', '6.0cm', '10cm', '7cm', '4cm', '2.5cm', '6cm', '2.5cm'],
+        'stepNotesEn': ['13.46cm', '6.0cm', '10cm', '7cm', '4cm', '2.5cm', '6cm', '2.5cm'],
+        'stepTargetRows': [0, 0, 0, 0, 0, 0, 0, 0],
+        'measurementData': {
+          'dollId': 'barbie',
+          'heightCm': 29.21,
+          'measurement': {
+            'chestCm': 13.46, 'neckCm': 6.0, 'bodyLengthCm': 10, 'sleeveLengthCm': 7,
+            'upperArmCm': 4, 'wristCm': 2.5, 'shoulderCm': 6, 'armholeDepthCm': 2.5,
+          },
+          'suggestedGauge': {'stitchesPer10cm': 36, 'rowsPer10cm': 44},
+          'suggestedEase': 'doll',
+          'suggestedYarn': '3ply 코튼 또는 아크릴 레이스사',
+          'suggestedNeedle': '2.0~2.5mm',
+        },
+      },
+      {
+        'kind': 'body_measurement',
+        'titleKo': '태미의 작은 동생 (1963)',
+        'titleEn': "Tammy's Little Sister",
+        'descKo': '29.2cm (11.5") · 빈티지 비율 · 가슴 13.5cm',
+        'descEn': '29.2cm (11.5") · Vintage proportion · chest 13.5cm',
+        'iconName': 'child_care',
+        'colorHex': '#DB2777',
+        'order': 101,
+        'isActive': true,
+        'stepsKo': ['가슴둘레', '목둘레', '상체 길이', '소매 길이', '상완', '손목', '어깨', '진동 깊이'],
+        'stepsEn': ['Chest', 'Neck', 'Body Length', 'Sleeve Length', 'Upper Arm', 'Wrist', 'Shoulder', 'Armhole Depth'],
+        'stepNotesKo': ['13.5cm', '6.5cm', '8cm', '7.7cm', '4.8cm', '3cm', '2.5cm', '2.9cm'],
+        'stepNotesEn': ['13.5cm', '6.5cm', '8cm', '7.7cm', '4.8cm', '3cm', '2.5cm', '2.9cm'],
+        'stepTargetRows': [0, 0, 0, 0, 0, 0, 0, 0],
+        'measurementData': {
+          'dollId': 'tammy',
+          'heightCm': 29.2,
+          'measurement': {
+            'chestCm': 13.5, 'neckCm': 6.5, 'bodyLengthCm': 8, 'sleeveLengthCm': 7.7,
+            'upperArmCm': 4.8, 'wristCm': 3, 'shoulderCm': 2.5, 'armholeDepthCm': 2.9,
+          },
+          'suggestedGauge': {'stitchesPer10cm': 40, 'rowsPer10cm': 50},
+          'suggestedEase': 'doll',
+          'suggestedYarn': 'vincent 3ply 또는 유사한 초극세사',
+          'suggestedNeedle': 'US0 (2.0mm) 4개 DPN',
+        },
+      },
+      {
+        'kind': 'body_measurement',
+        'titleKo': '파올라 레이나',
+        'titleEn': 'Paola Reina',
+        'descKo': '33.7cm · 아동 체형 초심자용 (가슴 15.5cm)',
+        'descEn': '33.7cm · Child proportion for beginners (chest 15.5cm)',
+        'iconName': 'child_friendly',
+        'colorHex': '#F472B6',
+        'order': 102,
+        'isActive': true,
+        'stepsKo': ['가슴둘레', '목둘레', '상체 길이', '소매 길이', '상완', '손목', '어깨', '진동 깊이'],
+        'stepsEn': ['Chest', 'Neck', 'Body Length', 'Sleeve Length', 'Upper Arm', 'Wrist', 'Shoulder', 'Armhole Depth'],
+        'stepNotesKo': ['15.5cm', '8cm', '15cm', '8.5cm', '5.5cm', '3.5cm', '7cm', '3.5cm'],
+        'stepNotesEn': ['15.5cm', '8cm', '15cm', '8.5cm', '5.5cm', '3.5cm', '7cm', '3.5cm'],
+        'stepTargetRows': [0, 0, 0, 0, 0, 0, 0, 0],
+        'measurementData': {
+          'dollId': 'paola_reina',
+          'heightCm': 33.7,
+          'measurement': {
+            'chestCm': 15.5, 'neckCm': 8, 'bodyLengthCm': 15, 'sleeveLengthCm': 8.5,
+            'upperArmCm': 5.5, 'wristCm': 3.5, 'shoulderCm': 7, 'armholeDepthCm': 3.5,
+          },
+          'suggestedGauge': {'stitchesPer10cm': 32, 'rowsPer10cm': 40},
+          'suggestedEase': 'doll',
+          'suggestedYarn': '3~4ply 코튼 · 메리노 블렌드',
+          'suggestedNeedle': '2.5~3.0mm',
+        },
+      },
     ];
   }
 

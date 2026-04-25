@@ -69,23 +69,57 @@ class _EditorialPostCard extends StatelessWidget {
       return _YoutubeCard(post: post, isKorean: isKorean);
     }
     return GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(post.title, style: T.bodyBold),
-          const SizedBox(height: 8),
-          Text(
-            post.content,
-            style: T.body.copyWith(color: C.tx2, height: 1.6),
-          ),
-          if (post.createdAt != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              '${post.createdAt!.year}.${post.createdAt!.month.toString().padLeft(2, '0')}.${post.createdAt!.day.toString().padLeft(2, '0')}',
-              style: T.caption.copyWith(color: C.mu),
+      padding: EdgeInsets.zero,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (post.imageUrl.isNotEmpty)
+              Image.network(
+                post.imageUrl,
+                width: double.infinity,
+                height: 160,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(post.title, style: T.bodyBold),
+                  const SizedBox(height: 8),
+                  Text(post.content, style: T.body.copyWith(color: C.tx2, height: 1.6)),
+                  if (post.attachmentUrl.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    GestureDetector(
+                      onTap: () => launchUrl(Uri.parse(post.attachmentUrl), mode: LaunchMode.externalApplication),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.attach_file_rounded, size: 15, color: C.lv),
+                          const SizedBox(width: 4),
+                          Text(
+                            post.attachmentName.isNotEmpty ? post.attachmentName : '첨부파일 다운로드',
+                            style: T.caption.copyWith(color: C.lv, decoration: TextDecoration.underline),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (post.createdAt != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '${post.createdAt!.year}.${post.createdAt!.month.toString().padLeft(2, '0')}.${post.createdAt!.day.toString().padLeft(2, '0')}',
+                      style: T.caption.copyWith(color: C.mu),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ],
-        ],
+        ),
       ),
     );
   }

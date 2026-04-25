@@ -39,6 +39,9 @@ class YarnInputNotifier extends StateNotifier<YarnModel> {
   void updatePurchasePlace(String v) => state = state.copyWith(purchasePlace: v);
   void updateQuantity(int v) => state = state.copyWith(quantity: v);
   void updateLengthMeters(int v) => state = state.copyWith(lengthMeters: v);
+  void updateComposition(String v) => state = state.copyWith(composition: v);
+  /// 이슈 #644 Phase 7 — Ravelry yarn DB 매핑
+  void updateRavelryYarnId(int? v) => state = state.copyWith(ravelryYarnId: v);
   void loadYarn(YarnModel yarn) => state = yarn;
   void reset(String uid) => state = YarnModel.empty(uid: uid);
 }

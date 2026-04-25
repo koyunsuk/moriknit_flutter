@@ -140,16 +140,8 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
                   return ListView(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
                     children: [
-                      // 통계 카드
-                      GlassCard(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: Text(
-                          isKorean
-                              ? '전체 ${courses.length}개 클라스 · 카테고리 ${courses.map((c) => c.category).toSet().length}개'
-                              : 'Total ${courses.length} classes · ${courses.map((c) => c.category).toSet().length} categories',
-                          style: T.bodyBold.copyWith(color: C.lvD),
-                        ),
-                      ),
+                      // 사용자 보고 (#622) — 요약카드와 중복 정보로 삭제됨
+                      // ('전체 N개 클라스 · 카테고리 M개' 통계 카드 제거)
                       // 검색창
                       Padding(
                         padding: const EdgeInsets.only(bottom: 16),

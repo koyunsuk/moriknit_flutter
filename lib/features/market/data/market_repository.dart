@@ -5,7 +5,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../core/utils/firestore_json.dart';
 import '../domain/market_item.dart';
+import '../domain/market_review.dart';
 
 class MarketRepository {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -215,6 +217,106 @@ class MarketRepository {
 
   Future<void> toggleOfficial(String id, bool isOfficial) async {
     await _items.doc(id).update({'isOfficial': isOfficial});
+  }
+
+  // ── 찜(즐겨찾기) ──────────────────────────────────────────
+  Stream<Set<String>> watchFavorites(String uid) {
+    return _db.collection('users').doc(uid).collection('market_favorites')
+        .snapshots()
+        .map((s) => s.docs.map((d) => d.id).toSet());
+  }
+
+  Future<void> toggleFavorite(String uid, String itemId, bool currentlyFavorited) async {
+    final ref = _db.collection('users').doc(uid).collection('market_favorites').doc(itemId);
+    if (currentlyFavorited) {
+      await ref.delete();
+    } else {
+      await ref.set({'addedAt': FieldValue.serverTimestamp()});
+    }
+  }
+
+  Stream<List<MarketItem>> watchFavoriteItems(String uid) {
+    return _db.collection('users').doc(uid).collection('market_favorites')
+        .snapshots()
+        .asyncMap((s) async {
+      final ids = s.docs.map((d) => d.id).toList();
+      if (ids.isEmpty) return <MarketItem>[];
+      final results = await Future.wait(ids.map((id) => _items.doc(id).get()));
+      return results
+          .where((doc) => doc.exists)
+          .map((doc) => MarketItem.fromFirestore(doc))
+          .where(_isVisible)
+          .toList();
+    });
+  }
+
+  // ── 판매자별 상품 ─────────────────────────────────────────
+  Stream<List<MarketItem>> watchItemsBySeller(String sellerUid) {
+    return _items.where('sellerUid', isEqualTo: sellerUid).snapshots().map((s) {
+      final items = s.docs.map(MarketItem.fromFirestore).where(_isVisible).toList();
+      items.sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+      return items;
+    });
+  }
+
+  // ── 태그 기반 검색 ────────────────────────────────────────
+  Stream<List<MarketItem>> watchItemsByTag(String tag) {
+    return _items.where('tags', arrayContains: tag).snapshots().map((s) {
+      final items = s.docs.map(MarketItem.fromFirestore).where(_isVisible).toList();
+      items.sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+      return items;
+    });
+  }
+
+  // ── 리뷰 ─────────────────────────────────────────────────
+  Stream<List<MarketReview>> watchReviews(String itemId) {
+    return _items.doc(itemId).collection('reviews')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((s) => s.docs.map((d) {
+          final data = normalizeFirestoreMap(d.data());
+          return MarketReview(
+            id: d.id,
+            itemId: itemId,
+            reviewerUid: data['reviewerUid'] as String? ?? '',
+            reviewerName: data['reviewerName'] as String? ?? '',
+            rating: (data['rating'] as num?)?.toDouble() ?? 0.0,
+            comment: data['comment'] as String? ?? '',
+            createdAt: DateTime.tryParse(data['createdAt'] as String? ?? ''),
+          );
+        }).toList());
+  }
+
+  Future<bool> hasUserReviewed(String itemId, String uid) async {
+    final snap = await _items.doc(itemId).collection('reviews')
+        .where('reviewerUid', isEqualTo: uid)
+        .limit(1)
+        .get();
+    return snap.docs.isNotEmpty;
+  }
+
+  Future<void> submitReview({required String itemId, required MarketReview review}) async {
+    final batch = _db.batch();
+    final reviewRef = _items.doc(itemId).collection('reviews').doc();
+    batch.set(reviewRef, {
+      ...review.toJson(),
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    batch.update(_items.doc(itemId), {
+      'reviewCount': FieldValue.increment(1),
+    });
+    await batch.commit();
+    await _recalcAverageRating(itemId);
+  }
+
+  Future<void> _recalcAverageRating(String itemId) async {
+    try {
+      final snap = await _items.doc(itemId).collection('reviews').get();
+      if (snap.docs.isEmpty) return;
+      final ratings = snap.docs.map((d) => (d.data()['rating'] as num?)?.toDouble() ?? 0.0).toList();
+      final avg = ratings.reduce((a, b) => a + b) / ratings.length;
+      await _items.doc(itemId).update({'averageRating': avg});
+    } catch (_) {}
   }
 
   Stream<List<MarketItem>> watchAllItemsAdmin() {

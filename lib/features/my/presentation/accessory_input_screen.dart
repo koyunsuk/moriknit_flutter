@@ -115,6 +115,8 @@ class _AccessoryInputScreenState extends ConsumerState<AccessoryInputScreen> {
 
     final updated = ref.read(accessoryInputProvider);
 
+    final sm = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
     try {
       await runWithMoriLoadingDialog<void>(
         context,
@@ -130,11 +132,11 @@ class _AccessoryInputScreenState extends ConsumerState<AccessoryInputScreen> {
         },
       );
       if (!mounted) return;
-      showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '저장됐어요.' : 'Saved.');
-      Navigator.pop(context);
+      showSavedSnackBar(sm, message: isKorean ? '저장됐어요.' : 'Saved.');
+      navigator.pop();
     } catch (e) {
       if (!mounted) return;
-      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+      showSaveErrorSnackBar(sm, message: '$e');
     }
   }
 
@@ -332,15 +334,16 @@ class _AccessoryTypeDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       decoration: InputDecoration(
         labelText: isKorean ? '도구 종류' : 'Tool type',
         fillColor: C.gx,
       ),
+      style: T.body.copyWith(color: C.tx),
       items: AccessoryType.values.map((t) {
         return DropdownMenuItem(
           value: t.name,
-          child: Text(t.localizedLabel(isKorean)),
+          child: Text(t.localizedLabel(isKorean), style: T.body),
         );
       }).toList(),
       onChanged: (v) { if (v != null) onChanged(v); },

@@ -4,6 +4,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/localization/app_language.dart';
@@ -18,6 +19,7 @@ import '../../../providers/yarn_provider.dart';
 import '../../my/domain/needle_model.dart';
 import '../../project/domain/project_model.dart';
 import '../../project/presentation/project_input_screen.dart';
+import '../data/swatch_timer_repository.dart';
 import '../domain/swatch_model.dart';
 import 'brand_search_sheet.dart';
 
@@ -235,7 +237,7 @@ class _SwatchDetailScreenState extends ConsumerState<SwatchDetailScreen> {
                                     borderRadius: BorderRadius.circular(8),
                                     child: Image.network(yarn.photoUrl,
                                         width: 44, height: 44, fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) => Container(
+                                        errorBuilder: (_, _, _) => Container(
                                           width: 44, height: 44,
                                           decoration: BoxDecoration(
                                             color: C.lv.withValues(alpha: 0.12),
@@ -373,6 +375,11 @@ class _SwatchDetailScreenState extends ConsumerState<SwatchDetailScreen> {
                                     if (v == 'edit') _enterEditMode(swatch);
                                     if (v == 'copy') _duplicateSwatch(context, ref, swatch);
                                     if (v == 'link_project') _linkToProject(context, ref, swatch.id, isKorean);
+                                    if (v == 'timer') {
+                                      context.push(
+                                        '/swatch/${swatch.id}/timer?name=${Uri.encodeQueryComponent(swatch.swatchName)}',
+                                      );
+                                    }
                                     if (v == 'delete') _confirmDelete(context, ref, swatch);
                                   },
                                   itemBuilder: (_) => [
@@ -403,6 +410,16 @@ class _SwatchDetailScreenState extends ConsumerState<SwatchDetailScreen> {
                                           Icon(Icons.folder_outlined, size: 18, color: C.lv),
                                           const SizedBox(width: 8),
                                           Text(isKorean ? '프로젝트에 연결' : 'Link to project'),
+                                        ],
+                                      ),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'timer',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.timer_rounded, size: 18, color: C.lv),
+                                          const SizedBox(width: 8),
+                                          Text(isKorean ? '작업 타이머' : 'Work Timer'),
                                         ],
                                       ),
                                     ),
@@ -919,6 +936,9 @@ class _SwatchDetailBody extends ConsumerWidget {
           children: [
             _PhotoHeader(beforePhotoUrl: swatch.beforePhotoUrl, afterPhotoUrl: swatch.afterPhotoUrl, swatchId: swatch.id),
             const SizedBox(height: 12),
+            // 이슈 #630 (B-5) — 작업 시간 카드 (⋮ 메뉴 의존도 낮추기)
+            _SwatchTimerSummaryCard(swatch: swatch, isKorean: isKorean),
+            const SizedBox(height: 12),
             GlassCard(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -1369,7 +1389,7 @@ class _PhotoEditTile extends StatelessWidget {
                         height: 160,
                         width: double.infinity,
                         fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                        errorBuilder: (_, _, _) => const SizedBox.shrink()),
               ),
               Positioned(
                 top: 8,
@@ -1401,6 +1421,120 @@ class _PhotoEditTile extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 이슈 #630 (B-5) — 스와치 상세에 노출되는 작업시간 요약 카드.
+/// ⋮ 메뉴 의존도 낮춤 — 본문에서 즉시 누적시간 확인 + 타이머 진입.
+class _SwatchTimerSummaryCard extends ConsumerWidget {
+  final SwatchModel swatch;
+  final bool isKorean;
+
+  const _SwatchTimerSummaryCard({required this.swatch, required this.isKorean});
+
+  String _formatHms(int seconds) {
+    final h = seconds ~/ 3600;
+    final m = (seconds % 3600) ~/ 60;
+    if (h > 0) return '${h}h ${m}m';
+    if (m > 0) return '${m}m';
+    return '${seconds}s';
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(swatchTimerStreamProvider(swatch.id));
+
+    return GlassCard(
+      padding: const EdgeInsets.all(14),
+      onTap: () {
+        context.push(
+          '/swatch/${swatch.id}/timer?name=${Uri.encodeQueryComponent(swatch.swatchName)}',
+        );
+      },
+      child: async.when(
+        loading: () => SizedBox(
+          height: 48,
+          child: Center(
+            child: CircularProgressIndicator(color: C.lv, strokeWidth: 2),
+          ),
+        ),
+        error: (e, _) => Text(
+          isKorean ? '시간 불러오기 실패' : 'Failed to load time',
+          style: T.caption.copyWith(color: C.og),
+        ),
+        data: (state) {
+          final running = state.isRunning;
+          int sessionSeconds = 0;
+          if (running && state.currentSessionStart != null) {
+            sessionSeconds = DateTime.now()
+                .difference(state.currentSessionStart!)
+                .inSeconds
+                .clamp(0, 1 << 30);
+          }
+          final total = state.totalSeconds + sessionSeconds;
+          return Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: running
+                      ? C.lv.withValues(alpha: 0.18)
+                      : C.lv.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  running ? Icons.timer_rounded : Icons.timer_outlined,
+                  color: C.lvD,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isKorean ? '작업 시간' : 'Work Time',
+                      style: T.caption.copyWith(color: C.mu, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          _formatHms(total),
+                          style: T.h3.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(width: 8),
+                        if (running)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: C.lv,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              isKorean ? '진행 중' : 'RUNNING',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: C.mu),
+            ],
+          );
+        },
+      ),
     );
   }
 }

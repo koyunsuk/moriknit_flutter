@@ -101,6 +101,18 @@ service cloud.firestore {
       match /pattern_sessions/{sessionId} {
         allow read, write: if isOwner(uid);
       }
+      // 이슈 #624 — 도구함 자유 타이머 (단일 문서 'doc')
+      match /free_timer/{docId} {
+        allow read, write: if isOwner(uid);
+      }
+      // 이슈 #630 — 스와치별 작업시간 타이머
+      match /swatch_timers/{swatchId} {
+        allow read, write: if isOwner(uid);
+      }
+      // 이슈 #654 — Dropbox 즐겨찾기 (path/name/addedAt)
+      match /dropbox_favorites/{fileId} {
+        allow read, write: if isOwner(uid);
+      }
     }
 
     // ── 마켓 아이템 (공개 읽기, 로그인 후 생성/수정) ────────────────────────────
@@ -155,6 +167,19 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── 실/바늘 브랜드 마스터 (로그인 읽기, 사용자도 추가 가능, 어드민만 수정/삭제) ──
+    // 사용자가 새 브랜드 입력 시 자동 누적 (한국 브랜드 자체 DB 성장)
+    match /yarn_brands/{brandId} {
+      allow read: if isLoggedIn();
+      allow create: if isLoggedIn();
+      allow update, delete: if isAdmin();
+    }
+    match /needle_brands/{brandId} {
+      allow read: if isLoggedIn();
+      allow create: if isLoggedIn();
+      allow update, delete: if isAdmin();
+    }
+
     // ── 뜨개백과 (공개 읽기, 관리자만 쓰기) ────────────────────────────────────
     match /encyclopedia/{entryId} {
       allow read: if true;
@@ -200,6 +225,8 @@ service cloud.firestore {
     }
     match /{path=**}/pattern_charts/{docId} {
       allow read: if isAdmin();
+      // 어드민 일괄 마이그레이션 (#651 옵션 A): imageUrl 채우기 등
+      allow update: if isAdmin();
     }
     match /{path=**}/templates/{docId} {
       allow read: if isAdmin();

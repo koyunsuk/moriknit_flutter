@@ -20,6 +20,9 @@ class MarketItem {
   final String status;
   final DateTime? createdAt;
   final int viewCount;
+  final List<String> tags;
+  final int reviewCount;
+  final double averageRating;
 
   const MarketItem({
     required this.id,
@@ -38,6 +41,9 @@ class MarketItem {
     this.status = 'approved',
     this.createdAt,
     this.viewCount = 0,
+    this.tags = const [],
+    this.reviewCount = 0,
+    this.averageRating = 0.0,
   });
 
   factory MarketItem.fromFirestore(DocumentSnapshot doc) {
@@ -59,6 +65,9 @@ class MarketItem {
       status: data['status'] as String? ?? 'approved',
       createdAt: DateTime.tryParse(data['createdAt'] as String? ?? ''),
       viewCount: (data['viewCount'] as num?)?.toInt() ?? 0,
+      tags: (data['tags'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
+      reviewCount: (data['reviewCount'] as num?)?.toInt() ?? 0,
+      averageRating: (data['averageRating'] as num?)?.toDouble() ?? 0.0,
     );
   }
 
@@ -79,6 +88,9 @@ class MarketItem {
       'status': status,
       'createdAt': createdAt?.toIso8601String(),
       'viewCount': viewCount,
+      'tags': tags,
+      'reviewCount': reviewCount,
+      'averageRating': averageRating,
     };
   }
 }

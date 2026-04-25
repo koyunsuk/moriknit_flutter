@@ -8,11 +8,11 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/swatch_provider.dart';
-import '../../ravelry/data/ravelry_auth_provider.dart';
-import '../../ravelry/data/ravelry_repository.dart';
 import 'swatch_detail_screen.dart';
 import 'swatch_input_screen.dart';
 import 'widgets/swatch_list_sections.dart';
+
+enum _SwatchSort { recent, oldest, needleSize }
 
 class SwatchListScreen extends ConsumerStatefulWidget {
   const SwatchListScreen({super.key});
@@ -22,6 +22,21 @@ class SwatchListScreen extends ConsumerStatefulWidget {
 }
 
 class _SwatchListScreenState extends ConsumerState<SwatchListScreen> {
+  _SwatchSort _sortMode = _SwatchSort.recent;
+
+  List _sorted(List swatches) {
+    final list = [...swatches];
+    switch (_sortMode) {
+      case _SwatchSort.recent:
+        list.sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+      case _SwatchSort.oldest:
+        list.sort((a, b) => (a.createdAt ?? DateTime(0)).compareTo(b.createdAt ?? DateTime(0)));
+      case _SwatchSort.needleSize:
+        list.sort((a, b) => a.needleSize.compareTo(b.needleSize));
+    }
+    return list;
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = ref.watch(appStringsProvider);
@@ -91,80 +106,100 @@ class _SwatchListScreenState extends ConsumerState<SwatchListScreen> {
                     );
                   }
 
+                  final sorted = _sorted(swatches);
+                  final projects = projectListAsync.valueOrNull ?? [];
+                  bool isSwatchDone(s) {
+                    if (s.hasAfterWash) return true;
+                    if (s.projectId.isNotEmpty) {
+                      final proj = projects.where((p) => p.id == s.projectId).firstOrNull;
+                      if (proj != null && proj.status == 'finished') return true;
+                    }
+                    return false;
+                  }
+                  final done = swatches.where(isSwatchDone).length;
+                  final unset = swatches.where((s) => !isSwatchDone(s) && s.beforeStitchCount == 0).length;
                   return Stack(
                     children: [
                       const BgOrbs(),
-                      ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
-                        itemCount: swatches.length + 1,
-                        separatorBuilder: (_, i) => i == 0 ? const SizedBox(height: 14) : const SizedBox(height: 10),
-                        itemBuilder: (context, index) {
-                          if (index == 0) {
-                            final projects = projectListAsync.valueOrNull ?? [];
-                            bool isSwatchDone(s) {
-                              if (s.hasAfterWash) return true;
-                              if (s.projectId.isNotEmpty) {
-                                final proj = projects.where((p) => p.id == s.projectId).firstOrNull;
-                                if (proj != null && proj.status == 'finished') return true;
-                              }
-                              return false;
-                            }
-                            final done = swatches.where(isSwatchDone).length;
-                            final inProgress = swatches.where((s) => !isSwatchDone(s) && s.beforeStitchCount > 0).length;
-                            final unset = swatches.where((s) => !isSwatchDone(s) && s.beforeStitchCount == 0).length;
-                            final auth = ref.watch(ravelryAuthProvider);
-                            final stashAsync = auth.isLoggedIn ? ref.watch(ravelryStashProvider) : null;
-                            final stashCount = stashAsync?.maybeWhen(data: (s) => '${s.length}', orElse: () => '-') ?? '-';
-                            return Column(
-                              children: [
-                                DualSourceSummaryBar(
-                                  row1Stats: [
-                                    WorkStat('${swatches.length}', isKorean ? '전체' : 'Total', color: C.pkD),
-                                    WorkStat('$inProgress', isKorean ? '진행' : 'Active', color: C.lv),
-                                    WorkStat('$done', isKorean ? '완료' : 'Done', color: C.lmD),
-                                    WorkStat('$unset', isKorean ? '미지정' : 'Free', color: C.mu),
-                                  ],
-                                  row2Stats: [
-                                    WorkStat(stashCount, isKorean ? '전체' : 'Total', color: C.lv),
-                                  ],
-                                  row1Badge: 'MoriKnit',
-                                  row2Badge: 'Ravelry',
-                                  row1Color: C.pkD,
-                                  row2Color: C.lv,
-                                  addLabel: isKorean ? '실 추가' : 'Add Yarn',
-                                  onAdd: isLimitReached
-                                      ? () => _showLimitDialog(isKorean)
-                                      : () => _showSwatchStartSheet(context),
+                      Column(
+                        children: [
+                          // 요약카드 고정
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                            child: LibrarySummaryCard(
+                              headers: [
+                                isKorean ? '전체' : 'Total',
+                                isKorean ? '완료' : 'Done',
+                                isKorean ? '미지정' : 'Free',
+                              ],
+                              rows: [
+                                LibrarySummaryRowData(
+                                  badge: 'MoriKnit',
+                                  badgeColor: C.pkD,
+                                  values: ['${swatches.length}', '$done', '$unset'],
+                                  valueColors: [C.tx, C.lmD, C.mu],
                                 ),
-                                if (gates.isFree) ...[
-                                  const SizedBox(height: 8),
-                                  GlassCard(
-                                    child: SwatchLimitBar(
-                                      current: count,
-                                      max: 5,
-                                      progress: progress,
-                                      isReached: isLimitReached,
-                                      onUpgrade: () {},
+                              ],
+                              addLabel: isKorean ? '추가' : 'Add',
+                              onAdd: isLimitReached
+                                  ? () => _showLimitDialog(isKorean)
+                                  : () => _showSwatchStartSheet(context),
+                            ),
+                          ),
+                          // 스크롤 목록
+                          Expanded(
+                            child: ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
+                              itemCount: sorted.length + 1,
+                              separatorBuilder: (_, i) => i == 0 ? const SizedBox(height: 8) : const SizedBox(height: 10),
+                              itemBuilder: (context, index) {
+                                if (index == 0) {
+                                  return Column(
+                                    children: [
+                                      if (gates.isFree) ...[
+                                        GlassCard(
+                                          child: SwatchLimitBar(
+                                            current: count,
+                                            max: 5,
+                                            progress: progress,
+                                            isReached: isLimitReached,
+                                            onUpgrade: () {},
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                      ],
+                                      _LibrarySectionHeader(
+                                        title: isKorean ? '스와치 목록' : 'Swatches',
+                                        total: swatches.length,
+                                        sortLabels: isKorean
+                                            ? ['최근순', '오래된순', '바늘크기순']
+                                            : ['Recent', 'Oldest', 'Needle size'],
+                                        selectedIndex: _SwatchSort.values.indexOf(_sortMode),
+                                        onSort: (i) => setState(() => _sortMode = _SwatchSort.values[i]),
+                                      ),
+                                    ],
+                                  );
+                                }
+                                final swatch = sorted[index - 1];
+                                final linkedProjects = projectListAsync.valueOrNull ?? [];
+                                final linked = linkedProjects.where((p) => p.id == swatch.projectId).firstOrNull;
+                                return _NumberedItem(
+                                  number: index,
+                                  child: SwatchCard(
+                                    swatch: swatch,
+                                    projectName: linked?.title,
+                                    onTap: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => SwatchDetailScreen(swatchId: swatch.id),
+                                      ),
                                     ),
                                   ),
-                                ],
-                              ],
-                            );
-                          }
-                          final swatch = swatches[index - 1];
-                          final projects = projectListAsync.valueOrNull ?? [];
-                          final linked = projects.where((p) => p.id == swatch.projectId).firstOrNull;
-                          return SwatchCard(
-                            swatch: swatch,
-                            projectName: linked?.title,
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => SwatchDetailScreen(swatchId: swatch.id),
-                              ),
+                                );
+                              },
                             ),
-                          );
-                        },
+                          ),
+                        ],
                       ),
                     ],
                   );
@@ -340,6 +375,104 @@ class _SwatchListScreenState extends ConsumerState<SwatchListScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── 섹션 헤더 (목록 제목 + 개수 + 정렬) ──────────────────────────────
+class _LibrarySectionHeader extends StatelessWidget {
+  final String title;
+  final int total;
+  final List<String> sortLabels;
+  final int selectedIndex;
+  final ValueChanged<int> onSort;
+
+  const _LibrarySectionHeader({
+    required this.title,
+    required this.total,
+    required this.sortLabels,
+    required this.selectedIndex,
+    required this.onSort,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: Row(
+        children: [
+          Text(title, style: T.bodyBold),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              color: C.pkD.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text('$total', style: T.caption.copyWith(color: C.pkD, fontWeight: FontWeight.w700)),
+          ),
+          const Spacer(),
+          PopupMenuButton<int>(
+            onSelected: onSort,
+            color: C.bg,
+            offset: const Offset(0, 32),
+            icon: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.sort_rounded, size: 16, color: C.mu),
+                const SizedBox(width: 2),
+                Text(sortLabels[selectedIndex], style: T.caption.copyWith(color: C.mu)),
+              ],
+            ),
+            itemBuilder: (ctx) => sortLabels
+                .asMap()
+                .entries
+                .map((e) => PopupMenuItem<int>(
+                      value: e.key,
+                      child: Text(
+                        e.value,
+                        style: T.body.copyWith(
+                          color: e.key == selectedIndex ? C.lv : C.tx,
+                          fontWeight: e.key == selectedIndex ? FontWeight.w700 : FontWeight.w400,
+                        ),
+                      ),
+                    ))
+                .toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── 번호 표시 래퍼 ──────────────────────────────────────────────────
+class _NumberedItem extends StatelessWidget {
+  final int number;
+  final Widget child;
+
+  const _NumberedItem({required this.number, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        child,
+        Positioned(
+          left: 10,
+          top: 10,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              color: C.bd2,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              '$number',
+              style: TextStyle(fontSize: 10, color: C.mu, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -97,20 +97,22 @@ class RavelryRepository {
   }
 
   // ── 프로젝트 생성 ─────────────────────────────────────────────────────────────
+  /// 이슈 #644 — packs 파라미터 추가. 모리니트 yarn → Ravelry stash 매핑 전달.
   Future<RavelryProject> createProject({
     required String name,
     int? patternId,
     String? notes,
     int statusTypeId = 1,
+    List<Map<String, dynamic>>? packs,
   }) async {
-    final data = await _post('/ravelryCreateProject', {
-      'project': {
-        'name': name,
-        if (patternId != null) 'pattern_id': patternId,
-        if (notes != null && notes.isNotEmpty) 'notes': notes,
-        'status_type_id': statusTypeId,
-      },
-    });
+    final projectBody = <String, dynamic>{
+      'name': name,
+      if (patternId != null) 'pattern_id': patternId,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+      'status_type_id': statusTypeId,
+      if (packs != null && packs.isNotEmpty) 'packs': packs,
+    };
+    final data = await _post('/ravelryCreateProject', {'project': projectBody});
     final project = (data['project'] as Map<String, dynamic>?) ?? data;
     return RavelryProject.fromJson(project);
   }
@@ -123,6 +125,7 @@ class RavelryRepository {
     int? statusTypeId,
     String? started,
     String? completed,
+    List<Map<String, dynamic>>? packs,
   }) async {
     final body = <String, dynamic>{
       if (name != null) 'name': name,
@@ -130,6 +133,7 @@ class RavelryRepository {
       if (statusTypeId != null) 'status_type_id': statusTypeId,
       if (started != null) 'started': started,
       if (completed != null) 'completed': completed,
+      if (packs != null && packs.isNotEmpty) 'packs': packs,
     };
     final data = await _post('/ravelryUpdateProject', {'project': body},
         queryParams: {'id': '$projectId'});
@@ -138,20 +142,56 @@ class RavelryRepository {
   }
 
   // ── 스태시 생성 ───────────────────────────────────────────────────────────────
-  Future<void> createStash({
+  /// 이슈 #644 — 생성된 stash entry를 반환하도록 변경. id 캡처 후 YarnModel.ravelryStashId에 저장.
+  /// Phase 7: yarnId 추가 — Ravelry 공식 yarn DB 매핑을 위한 yarn_id 전달.
+  Future<RavelryStashEntry> createStash({
     required String name,
     String? colorwayName,
     String? notes,
     int stashStatusId = 1,
+    int? yarnId,
   }) async {
-    await _post('/ravelryCreateStash', {
+    final data = await _post('/ravelryCreateStash', {
       'stash': {
         'name': name,
         if (colorwayName != null && colorwayName.isNotEmpty) 'colorway_name': colorwayName,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
         'stash_status_id': stashStatusId,
+        if (yarnId != null && yarnId > 0) 'yarn_id': yarnId,
       },
     });
+    final stashJson = (data['stash'] as Map<String, dynamic>?) ?? data;
+    return RavelryStashEntry.fromJson(stashJson);
+  }
+
+  // ── 이슈 #644 Phase 7 — Ravelry yarn DB 검색/상세 ───────────────────────────
+  /// Ravelry 글로벌 yarn DB(10만+ 항목) 검색.
+  Future<List<RavelryYarnSearchItem>> searchYarns(
+    String query, {
+    int page = 1,
+    int pageSize = 25,
+  }) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return const [];
+    final data = await _get('/ravelryYarnsSearch', queryParams: {
+      'query': trimmed,
+      'page': '$page',
+      'page_size': '$pageSize',
+    });
+    final yarns = (data['yarns'] as List<dynamic>?) ??
+        (data['results'] as List<dynamic>?) ??
+        const [];
+    return yarns
+        .whereType<Map<String, dynamic>>()
+        .map(RavelryYarnSearchItem.fromJson)
+        .toList();
+  }
+
+  /// Ravelry yarn 상세 조회.
+  Future<RavelryYarnDetail> getYarn(int yarnId) async {
+    final data = await _get('/ravelryYarnDetail', queryParams: {'id': '$yarnId'});
+    final yarn = (data['yarn'] as Map<String, dynamic>?) ?? data;
+    return RavelryYarnSearchItem.fromJson(yarn);
   }
 
   // ── HTTP 헬퍼 ─────────────────────────────────────────────────────────────────

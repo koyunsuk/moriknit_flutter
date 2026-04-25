@@ -480,68 +480,77 @@ class _ToolMemoScreenState extends ConsumerState<ToolMemoScreen> {
         const SizedBox(height: 12),
 
         // ── 메모 목록 ────────────────────────────────────────
+        // 사용자 보고 (#618) — 빈 상태에서도 음성 녹음 버튼 노출되어야 함.
+        // 헤더(녹음+새 메모)를 항상 표시하고 본문만 빈 상태/리스트로 분기.
         GlassCard(
-          child: filtered.isEmpty
-              ? MoriEmptyState(
-                  icon: Icons.edit_note_rounded,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(child: Text('메모 목록', style: T.bodyBold)),
+                  // 음성 녹음 버튼 (모바일 전용) — 빈 상태에서도 항상 표시
+                  if (!kIsWeb)
+                    IconButton(
+                      icon: Icon(
+                        _isRecording
+                            ? Icons.stop_circle_rounded
+                            : Icons.mic_rounded,
+                        color: _isRecording ? C.og : C.lv,
+                      ),
+                      onPressed: _toggleRecording,
+                      tooltip: _isRecording ? '녹음 중지' : '음성 녹음',
+                    ),
+                  TextButton.icon(
+                    onPressed: () => _openEditor(),
+                    icon: const Icon(Icons.add_circle_outline_rounded,
+                        size: 18),
+                    label: const Text('새 메모'),
+                  ),
+                ],
+              ),
+              if (_isRecording)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.fiber_manual_record, color: C.og, size: 12),
+                      const SizedBox(width: 6),
+                      Text('녹음 중...', style: T.caption.copyWith(color: C.og)),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 8),
+              if (filtered.isEmpty)
+                MoriEmptyState(
+                  icon: _tabIndex == 2
+                      ? Icons.mic_outlined
+                      : Icons.edit_note_rounded,
                   iconColor: C.pk,
-                  title: _tabIndex == 0 ? '아직 메모가 없어요' : '해당 메모가 없어요',
-                  subtitle: _tabIndex == 0
-                      ? '생각을 자유롭게 기록해보세요.'
-                      : '다른 탭을 확인해보세요.',
+                  title: _tabIndex == 0
+                      ? '아직 메모가 없어요'
+                      : (_tabIndex == 2
+                          ? '음성 메모가 없어요'
+                          : '해당 메모가 없어요'),
+                  subtitle: _tabIndex == 2 && !kIsWeb
+                      ? '위 🎤 버튼을 눌러서 음성을 녹음할 수 있어요.'
+                      : (_tabIndex == 0
+                          ? '생각을 자유롭게 기록해보세요.'
+                          : '다른 탭을 확인해보세요.'),
                   buttonLabel: _tabIndex == 0 ? '첫 메모 작성하기' : null,
                   onAction: _tabIndex == 0 ? () => _openEditor() : null,
                 )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(child: Text('메모 목록', style: T.bodyBold)),
-                        // 음성 녹음 버튼 (모바일 전용)
-                        if (!kIsWeb)
-                          IconButton(
-                            icon: Icon(
-                              _isRecording
-                                  ? Icons.stop_circle_rounded
-                                  : Icons.mic_rounded,
-                              color: _isRecording ? C.og : C.lv,
-                            ),
-                            onPressed: _toggleRecording,
-                            tooltip: _isRecording ? '녹음 중지' : '음성 녹음',
-                          ),
-                        TextButton.icon(
-                          onPressed: () => _openEditor(),
-                          icon: const Icon(Icons.add_circle_outline_rounded,
-                              size: 18),
-                          label: const Text('새 메모'),
-                        ),
-                      ],
-                    ),
-                    if (_isRecording)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          children: [
-                            Icon(Icons.fiber_manual_record,
-                                color: C.og, size: 12),
-                            const SizedBox(width: 6),
-                            Text('녹음 중...',
-                                style: T.caption.copyWith(color: C.og)),
-                          ],
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    ...filtered.map((memo) => _MemoListTile(
-                          memo: memo,
-                          isPlaying: _currentPlayingUrl == memo.voiceUrl,
-                          onTap: () => _openEditor(existing: memo),
-                          onPlayVoice: memo.voiceUrl != null
-                              ? () => _togglePlayback(memo.voiceUrl!)
-                              : null,
-                        )),
-                  ],
-                ),
+              else
+                ...filtered.map((memo) => _MemoListTile(
+                      memo: memo,
+                      isPlaying: _currentPlayingUrl == memo.voiceUrl,
+                      onTap: () => _openEditor(existing: memo),
+                      onPlayVoice: memo.voiceUrl != null
+                          ? () => _togglePlayback(memo.voiceUrl!)
+                          : null,
+                    )),
+            ],
+          ),
         ),
       ],
     );
@@ -604,7 +613,7 @@ class _MemoListTile extends StatelessWidget {
                             width: 52,
                             height: 52,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => _noImageBox(),
+                            errorBuilder: (_, _, _) => _noImageBox(),
                           )
                         : _noImageBox(),
                   ),

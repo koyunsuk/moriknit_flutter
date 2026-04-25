@@ -20,6 +20,8 @@ class PatternSession {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final int totalSeconds;
+  // 이슈 #649 Phase 1 — 타이머 자동 이름 (도안: {chart.title} 등). 사용자 편집 가능.
+  final String? timerName;
 
   const PatternSession({
     required this.id,
@@ -34,6 +36,7 @@ class PatternSession {
     this.createdAt,
     this.updatedAt,
     this.totalSeconds = 0,
+    this.timerName,
   });
 
   PatternSession copyWith({
@@ -52,6 +55,8 @@ class PatternSession {
     bool clearProjectId = false,
     bool clearSwatchId = false,
     int? totalSeconds,
+    String? timerName,
+    bool clearTimerName = false,
   }) {
     return PatternSession(
       id: id ?? this.id,
@@ -66,6 +71,7 @@ class PatternSession {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       totalSeconds: totalSeconds ?? this.totalSeconds,
+      timerName: clearTimerName ? null : (timerName ?? this.timerName),
     );
   }
 
@@ -82,6 +88,7 @@ class PatternSession {
         'createdAt': createdAt?.toIso8601String(),
         'updatedAt': updatedAt?.toIso8601String(),
         'totalSeconds': totalSeconds,
+        'timerName': timerName,
       };
 
   factory PatternSession.fromJson(Map<String, dynamic> json) {
@@ -104,6 +111,7 @@ class PatternSession {
       createdAt: _parseDate(json['createdAt']),
       updatedAt: _parseDate(json['updatedAt']),
       totalSeconds: (json['totalSeconds'] as num?)?.toInt() ?? 0,
+      timerName: json['timerName'] as String?,
     );
   }
 

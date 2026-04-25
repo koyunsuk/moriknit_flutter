@@ -121,6 +121,15 @@ class PatternSessionRepository {
     }, SetOptions(merge: true));
   }
 
+  // ── UPDATE: TIMER NAME (이슈 #649 Phase 1) ─────────────────────
+  Future<void> updateTimerName(String sessionId, String name) async {
+    if (_uid.isEmpty) return;
+    await _sessionsRef.doc(sessionId).set({
+      'timerName': name,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
   // ── UPDATE: TOTAL SECONDS (타이머 누적시간) ─────────────────────
   Future<void> updateTotalSeconds(String sessionId, int seconds) async {
     if (_uid.isEmpty) return;
@@ -128,6 +137,76 @@ class PatternSessionRepository {
       'totalSeconds': seconds,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+  }
+
+  /// 이슈 #630 — 특정 프로젝트에 연결된 도안 세션의 누적시간 합계.
+  Future<int> totalSecondsForProject(String projectId) async {
+    if (_uid.isEmpty || projectId.isEmpty) return 0;
+    final snap = await _sessionsRef.where('projectId', isEqualTo: projectId).get();
+    int sum = 0;
+    for (final doc in snap.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      sum += (data['totalSeconds'] as num?)?.toInt() ?? 0;
+    }
+    return sum;
+  }
+
+  /// 이슈 #630 (B-6) — 모든 도안 세션의 누적시간 합계 (통합 대시보드용).
+  Future<int> totalSecondsAll() async {
+    if (_uid.isEmpty) return 0;
+    final snap = await _sessionsRef.get();
+    int sum = 0;
+    for (final doc in snap.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      sum += (data['totalSeconds'] as num?)?.toInt() ?? 0;
+    }
+    return sum;
+  }
+
+  /// 이슈 #649 Phase 2 — 모든 PatternSession을 projectId 기준으로 그룹화.
+  /// 반환: projectId → ProjectTimeAggregate (총 시간, 마지막 작업일, 세션 개수)
+  /// projectId가 비어있는 세션은 제외 (프로젝트 미연결 세션은 집계 대상 아님).
+  Future<Map<String, ProjectTimeAggregate>> aggregateByProject() async {
+    if (_uid.isEmpty) return {};
+    final snap = await _sessionsRef.get();
+    final result = <String, ProjectTimeAggregate>{};
+    for (final doc in snap.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final pid = (data['projectId'] as String?)?.trim();
+      if (pid == null || pid.isEmpty) continue;
+      final seconds = (data['totalSeconds'] as num?)?.toInt() ?? 0;
+      final updatedRaw = data['updatedAt'];
+      DateTime? updatedAt;
+      if (updatedRaw is Timestamp) {
+        updatedAt = updatedRaw.toDate();
+      } else if (updatedRaw is String) {
+        updatedAt = DateTime.tryParse(updatedRaw);
+      }
+
+      final existing = result[pid];
+      if (existing == null) {
+        result[pid] = ProjectTimeAggregate(
+          projectId: pid,
+          totalSeconds: seconds,
+          lastWorkedAt: updatedAt,
+          sessionCount: 1,
+        );
+      } else {
+        result[pid] = ProjectTimeAggregate(
+          projectId: pid,
+          totalSeconds: existing.totalSeconds + seconds,
+          lastWorkedAt: _laterOf(existing.lastWorkedAt, updatedAt),
+          sessionCount: existing.sessionCount + 1,
+        );
+      }
+    }
+    return result;
+  }
+
+  static DateTime? _laterOf(DateTime? a, DateTime? b) {
+    if (a == null) return b;
+    if (b == null) return a;
+    return a.isAfter(b) ? a : b;
   }
 
   // ── LINK PROJECT / SWATCH ──────────────────────────────────
@@ -164,9 +243,31 @@ class PatternSessionRepository {
   }
 }
 
+/// 이슈 #649 Phase 2 — 프로젝트별 작업 시간 집계 결과.
+class ProjectTimeAggregate {
+  final String projectId;
+  final int totalSeconds;
+  final DateTime? lastWorkedAt;
+  final int sessionCount;
+
+  const ProjectTimeAggregate({
+    required this.projectId,
+    required this.totalSeconds,
+    this.lastWorkedAt,
+    this.sessionCount = 0,
+  });
+}
+
 // ── Riverpod Providers ───────────────────────────────────────
 final patternSessionRepositoryProvider =
     Provider<PatternSessionRepository>((ref) => PatternSessionRepository());
+
+/// 이슈 #649 Phase 2 — 프로젝트별 작업 시간 집계 Provider.
+final patternTimeByProjectProvider =
+    FutureProvider.autoDispose<Map<String, ProjectTimeAggregate>>((ref) async {
+  final repo = ref.watch(patternSessionRepositoryProvider);
+  return repo.aggregateByProject();
+});
 
 /// 특정 도안(chartId)의 세션을 스트림으로 구독.
 final patternSessionProvider =

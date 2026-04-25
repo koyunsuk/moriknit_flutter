@@ -12,7 +12,6 @@ import 'core/localization/app_language.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/login_screen.dart';
-import 'features/landing/presentation/feature_detail_screen.dart';
 import 'features/landing/presentation/landing_board_screen.dart';
 import 'features/landing/presentation/landing_notice_screen.dart';
 import 'features/landing/presentation/landing_pricing_screen.dart';
@@ -20,6 +19,7 @@ import 'features/landing/presentation/landing_screen.dart';
 import 'features/landing/presentation/landing_class_screen.dart';
 import 'features/landing/presentation/landing_encyclopedia_screen.dart';
 import 'features/landing/presentation/landing_service_screen.dart';
+import 'features/landing/presentation/landing_feature_page.dart';
 import 'features/landing/presentation/landing_signup_screen.dart';
 import 'firebase_options.dart';
 import 'providers/theme_provider.dart';
@@ -64,7 +64,7 @@ final _landingRouter = GoRouter(
       builder: (_, s) {
         final id = s.pathParameters['feature']!;
         if (id == 'encyclopedia') return const LandingEncyclopediaScreen();
-        return FeatureDetailScreen(featureId: id);
+        return LandingGenericFeaturePage(featureId: id);
       },
     ),
     GoRoute(path: '/encyclopedia', builder: (_, _) => const LandingEncyclopediaScreen()),

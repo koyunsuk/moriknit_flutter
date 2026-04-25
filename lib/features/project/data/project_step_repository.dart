@@ -1,6 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../counter/data/counter_repository.dart';
+import '../../counter/domain/counter_model.dart';
+import '../../pattern/domain/narrative_block.dart';
+import '../../pattern/domain/pattern_chart.dart';
 import '../domain/builtin_template.dart';
 import '../domain/project_step.dart';
 
@@ -156,6 +160,178 @@ class ProjectStepRepository {
     }
   }
 
+  /// 이슈 #627 + #626 — 도안의 sections(=단계 그룹)을 프로젝트 단계로그로 미러링.
+  /// 각 섹션 1개 = ProjectStep 1개. 섹션에 속한 서술형 블록은 note에 불릿으로 합침.
+  ///
+  /// 게이트 (#626):
+  /// - 도안이 draft이면(isComplete == false) 아무 것도 하지 않음 (no-op).
+  /// - 내용이 비어있는(블록·steps 모두 없는) 개별 섹션은 skip.
+  Future<void> addPatternSectionSteps(
+    String projectId,
+    PatternChart chart,
+    bool isKorean,
+  ) async {
+    // 이슈 #626 — draft 도안은 미러링 차단
+    if (!chart.isComplete) return;
+
+    final sections = chart.aiSections ?? const [];
+    if (sections.isEmpty) return;
+
+    final blocks = chart.narrativeBlocks;
+    int order = 0;
+    for (final sec in sections) {
+      final title = isKorean ? (sec.titleKo ?? sec.title) : sec.title;
+
+      // 섹션에 속한 서술형 블록 우선, 없으면 AiStep 사용
+      final sectionBlocks =
+          blocks.where((b) => b.sectionId == sec.id).toList()
+            ..sort((a, b) => a.order.compareTo(b.order));
+
+      final noteLines = <String>[];
+      if (sectionBlocks.isNotEmpty) {
+        for (final b in sectionBlocks) {
+          noteLines.add('• ${b.text}');
+        }
+      } else {
+        for (final s in sec.steps) {
+          final text = isKorean ? (s.instructionKo ?? s.instruction) : s.instruction;
+          if (text.trim().isNotEmpty) noteLines.add('• $text');
+        }
+      }
+
+      // 이슈 #626 — 내용 없는 섹션(제목만 있는 껍데기) skip
+      if (noteLines.isEmpty && title.trim().isEmpty) continue;
+      if (noteLines.isEmpty && sectionBlocks.isEmpty && sec.steps.isEmpty) {
+        continue;
+      }
+
+      await _stepsRef(projectId).add({
+        'name': title.isEmpty ? (isKorean ? '섹션 ${order + 1}' : 'Section ${order + 1}') : title,
+        'description': '',
+        'isDone': false,
+        'note': noteLines.join('\n'),
+        'order': order,
+        'photoUrl': null,
+        'targetRow': 0,
+        'blockType': StepBlockType.text.name,
+        'createdAt': DateTime.now().toIso8601String(),
+        'doneAt': null,
+        'sourceSectionId': sec.id,
+        'sourcePatternChartId': chart.id,
+      });
+      order++;
+    }
+    await _updateProgressCounts(projectId);
+  }
+
+  /// 이슈 #627 (B-1) — 단계 미러링 + 각 단계 대응 카운터 자동 생성.
+  /// `addPatternSectionSteps`의 확장판. 도안 라이브러리 핵심 흐름.
+  ///
+  /// 각 step 생성 후 같은 이름 + sourceStepId 연결된 카운터를 즉시 생성.
+  /// targetRowCount는 섹션 텍스트에서 "N단"/"Row N" 패턴으로 추정.
+  Future<void> addPatternSectionStepsWithCounters(
+    String projectId,
+    PatternChart chart,
+    bool isKorean,
+    CounterRepository counterRepo,
+  ) async {
+    if (!chart.isComplete) return;
+    final sections = chart.aiSections ?? const [];
+    if (sections.isEmpty) return;
+
+    final uid = _auth.currentUser?.uid ?? '';
+    if (uid.isEmpty) return;
+
+    final blocks = chart.narrativeBlocks;
+    int order = 0;
+    for (final sec in sections) {
+      final title = isKorean ? (sec.titleKo ?? sec.title) : sec.title;
+
+      final sectionBlocks = blocks.where((b) => b.sectionId == sec.id).toList()
+        ..sort((a, b) => a.order.compareTo(b.order));
+
+      final noteLines = <String>[];
+      if (sectionBlocks.isNotEmpty) {
+        for (final b in sectionBlocks) {
+          noteLines.add('• ${b.text}');
+        }
+      } else {
+        for (final s in sec.steps) {
+          final text = isKorean ? (s.instructionKo ?? s.instruction) : s.instruction;
+          if (text.trim().isNotEmpty) noteLines.add('• $text');
+        }
+      }
+      if (noteLines.isEmpty && sectionBlocks.isEmpty && sec.steps.isEmpty) {
+        continue;
+      }
+
+      final estimatedRows = _estimateRowCount(sec, sectionBlocks);
+      final stepName = title.isEmpty
+          ? (isKorean ? '섹션 ${order + 1}' : 'Section ${order + 1}')
+          : title;
+
+      final stepDocRef = await _stepsRef(projectId).add({
+        'name': stepName,
+        'description': '',
+        'isDone': false,
+        'note': noteLines.join('\n'),
+        'order': order,
+        'photoUrl': null,
+        'targetRow': estimatedRows ?? 0,
+        'blockType': StepBlockType.text.name,
+        'createdAt': DateTime.now().toIso8601String(),
+        'doneAt': null,
+        'sourceSectionId': sec.id,
+        'sourcePatternChartId': chart.id,
+      });
+
+      // 카운터 자동 생성
+      final counter = CounterModel(
+        id: '',
+        uid: uid,
+        name: stepName,
+        projectId: projectId,
+        projectStepId: stepDocRef.id,
+        patternChartId: chart.id,
+        targetRowCount: estimatedRows ?? 0,
+      );
+      await counterRepo.createCounter(counter);
+
+      order++;
+    }
+    await _updateProgressCounts(projectId);
+  }
+
+  /// 섹션의 블록·steps 텍스트에서 "N단" / "Row N" 패턴 추출하여 가장 큰 N 반환.
+  /// 카운터 targetRow 추정용. 매칭 없으면 null.
+  int? _estimateRowCount(
+    dynamic sec,
+    List<NarrativeBlock> sectionBlocks,
+  ) {
+    final regex = RegExp(r'(\d+)\s*(단|Row|row|행)', caseSensitive: false);
+    int maxRow = 0;
+    for (final b in sectionBlocks) {
+      for (final m in regex.allMatches(b.text)) {
+        final n = int.tryParse(m.group(1) ?? '');
+        if (n != null && n > maxRow) maxRow = n;
+      }
+    }
+    final steps = sec.steps as List;
+    for (final s in steps) {
+      final txt = (s.instruction as String?) ?? '';
+      for (final m in regex.allMatches(txt)) {
+        final n = int.tryParse(m.group(1) ?? '');
+        if (n != null && n > maxRow) maxRow = n;
+      }
+      final txtKo = (s.instructionKo as String?) ?? '';
+      for (final m in regex.allMatches(txtKo)) {
+        final n = int.tryParse(m.group(1) ?? '');
+        if (n != null && n > maxRow) maxRow = n;
+      }
+    }
+    return maxRow > 0 ? maxRow : null;
+  }
+
   Future<void> addTemplateSteps(String projectId, String templateType) async {
     // Each entry: (name, note, targetRow)
     final templates = <String, List<(String, String, int)>>{
@@ -201,6 +377,21 @@ class ProjectStepRepository {
         ('크라운 뜨기', '메리야스뜨기로 원하는 높이까지. 총 높이에서 리브 빼고 나머지.', 30),
         ('크라운 감소', '6~8군데 균등 감소. 매 2단마다 감소. 16~12코 남을 때까지.', 16),
         ('마무리', '실 꿰어 남은 코 모아 닫기. 실 정리 후 블로킹.', 0),
+      ],
+      // 이슈 #637 — 래글런 탑다운 (Banul 메리노블렌드 DK 크롭 레글런 기반)
+      'crop_raglan_topdown': [
+        ('목둘레 코잡기', '3.5mm 바늘 + 40cm 케이블. 사이즈별 원통 코잡기 — XS:92, S:96, M:104, L:108, XL/2XL/3XL:112코. 시작 마커 설치.', 0),
+        ('목 고무단 (6cm)', '1코 고무뜨기로 약 17단. 겹단 처리 후 4mm로 바늘 교체.', 17),
+        ('앞목 쉐이핑 & 래글런 늘림 1 (11단)', '셋업단: 마커 9개 배치 (오른쪽뒷판/레글런/오른쪽소매/레글런/앞판/레글런/왼쪽소매/레글런/왼쪽뒷판). 독일식 짧은단 턴(german short row) 포함. 모든 사이즈 동일하게 11단.', 11),
+        ('래글런 늘림 2 (반복)', '1단 늘림단(M1R×4, M1L×4 = +8코) + 2단 유지 반복. 사이즈별 반복: XS 23회 · S 25회 · M 26회 · L 28회 · XL 29회 · 2XL 30회 · 3XL 32회.', 0),
+        ('XL+ 몸통 추가단', '몸통쪽 앞뒤판에만 +4코. XL 1회, 2XL·3XL 2회 반복. (XS/S/M/L은 건너뜀)', 0),
+        ('소매 분리 & 겨드랑이 감아코', '소매 코를 자투리 실로 옮겨 쉬게 함. 겨드랑이 감아코 — XS/S:4, M/L:6, XL:8, 2XL:10, 3XL:12코.', 0),
+        ('몸통 메리야스 뜨기', '원통 메리야스. 단수표시링부터 사이즈별 — XS:35, S:37, M:39, L:41, XL:42, 2XL:43, 3XL:44cm까지.', 0),
+        ('몸통 코줄임 (1단)', '[k2tog, 겉뜨기 N코] × M번 + k2tog. 사이즈별 — XS:[K2tog,9]×17, S:[K2tog,10]×17, M:[K2tog,9]×19, L:[K2tog,10]×19, XL:[K2tog,9]×21, 2XL:[K2tog,10]×21, 3XL:[K2tog,9]×23.', 0),
+        ('몸통 고무단 (7cm)', '3.5mm로 바꿔 1코 고무뜨기. 다 뜨면 돗바늘 코막음으로 마무리.', 0),
+        ('소매 뜨기', '쉬어둔 소매 코 + 겨드랑이 감아코 절반씩 줍기. 원통 메리야스. 2코 남을 때까지 겉뜨기 k2tog/ssk 코줄임을 사이즈별 간격으로 반복.', 0),
+        ('소매 길이 완성', '소매 분리 지점부터 사이즈별 — XS:38, S/M:39, L/XL:40, 2XL:39, 3XL:38cm까지 뜨기.', 0),
+        ('소매 고무단 & 마무리', '3.5mm 1코 고무뜨기 7cm + 돗바늘 코막음. 꼬리실 정리 + 겨드랑이 구멍 봉합.', 0),
       ],
     };
     final steps = templates[templateType] ?? templates['topdown']!;

@@ -12,6 +12,9 @@ class ProjectStep {
   final String? photoUrl;
   final int targetRow; // 0 = 미설정
   final StepBlockType blockType;
+  // 이슈 #627 — 도안 섹션에서 미러링된 단계 추적용 (선택 필드)
+  final String? sourceSectionId;
+  final String? sourcePatternChartId;
 
   const ProjectStep({
     required this.id,
@@ -25,6 +28,8 @@ class ProjectStep {
     this.photoUrl,
     this.targetRow = 0,
     this.blockType = StepBlockType.text,
+    this.sourceSectionId,
+    this.sourcePatternChartId,
   });
 
   factory ProjectStep.fromMap(Map<String, dynamic> data, String id) {
@@ -43,6 +48,8 @@ class ProjectStep {
         (e) => e.name == (data['blockType'] as String?),
         orElse: () => StepBlockType.text,
       ),
+      sourceSectionId: data['sourceSectionId'] as String?,
+      sourcePatternChartId: data['sourcePatternChartId'] as String?,
     );
   }
 
@@ -57,6 +64,8 @@ class ProjectStep {
         'photoUrl': photoUrl,
         'targetRow': targetRow,
         'blockType': blockType.name,
+        if (sourceSectionId != null) 'sourceSectionId': sourceSectionId,
+        if (sourcePatternChartId != null) 'sourcePatternChartId': sourcePatternChartId,
       };
 
   ProjectStep copyWith({
@@ -80,6 +89,8 @@ class ProjectStep {
       photoUrl: photoUrl == _sentinel ? this.photoUrl : photoUrl as String?,
       targetRow: targetRow ?? this.targetRow,
       blockType: blockType ?? this.blockType,
+      sourceSectionId: sourceSectionId,
+      sourcePatternChartId: sourcePatternChartId,
     );
   }
 }
