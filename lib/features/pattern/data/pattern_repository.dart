@@ -8,14 +8,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
 import '../../blueprint/data/step_blueprint_repository.dart';
-import '../../blueprint/domain/step_blueprint.dart';
 import '../../blueprint/domain/step_blueprint_unit.dart';
 import '../../pattern_converter/data/pdf_thumbnail_extractor.dart';
+import '../domain/ai_pattern_section.dart';
 import '../domain/pattern_chart.dart';
 import '../domain/round_chart.dart';
 import 'round_chart_thumbnail.dart';
 
 class PatternRepository {
+  /// #687 — StepBlueprintRepository를 선택적 주입 받아 모든 저장 시
+  /// step_blueprints + units에도 동일 id로 청사진을 기록한다.
+  /// 영역 분리: pattern_charts는 시각/메타, step_blueprints는 단계.
+  PatternRepository({StepBlueprintRepository? blueprintRepo})
+      : _blueprintRepo = blueprintRepo ?? StepBlueprintRepository();
+
+  final StepBlueprintRepository _blueprintRepo;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
@@ -46,16 +53,59 @@ class PatternRepository {
       imageUrl: resolvedImageUrl,
     );
     final isNew = chart.id.isEmpty;
+
+    // 1) pattern_charts 저장 (시각/메타 — 기존 그대로)
     await docRef.set({
       ...saved.toJson(),
       'updatedAt': FieldValue.serverTimestamp(),
       if (isNew) 'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+
+    // 2) step_blueprints + units 동시 저장 (#687 — 단계 영역 분리).
+    //    동일 id로 짝 — 호출자는 PatternChart.id로 양쪽 모두 조회 가능.
+    await _mirrorToBlueprint(saved);
+
     return saved;
   }
 
+  /// #687 — PatternChart를 step_blueprints + units에 미러링.
+  /// blueprint.id == chart.id 보장. aiSections는 units로 전개.
+  Future<void> _mirrorToBlueprint(PatternChart chart) async {
+    final blueprint = StepBlueprintRepository.adaptFromPatternChart(
+      chart,
+      ownerUid: _uid,
+    );
+    await _blueprintRepo.save(blueprint);
+
+    final aiSections = chart.aiSections ?? const <AiSection>[];
+    if (aiSections.isEmpty) return;
+
+    final units = <StepBlueprintUnit>[];
+    int order = 0;
+    final now = DateTime.now();
+    for (final section in aiSections) {
+      for (final step in section.steps) {
+        units.add(StepBlueprintUnit(
+          id: step.id,
+          blueprintId: blueprint.id,
+          order: order++,
+          title: '',
+          instruction: step.instruction,
+          instructionKo: step.instructionKo,
+          createdAt: now,
+        ));
+      }
+    }
+    if (units.isNotEmpty) {
+      await _blueprintRepo.saveUnits(blueprint.id, units);
+    }
+  }
+
   Future<void> delete(String id) async {
+    // pattern_charts 삭제
     await _ref.doc(id).delete();
+    // step_blueprints + units subcollection 일괄 삭제 (#687)
+    await _blueprintRepo.delete(id);
   }
 
   Future<void> linkToProject(String chartId, String? projectId) async {
@@ -244,6 +294,7 @@ class PatternRepository {
     required String title,
     required File imageFile,
   }) async {
+    if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
     final imageUrl = await _uploadFile(imageFile, 'images');
     final docRef = _ref.doc();
     final chart = PatternChart(
@@ -256,11 +307,14 @@ class PatternRepository {
       type: PatternType.image,
       imageUrl: imageUrl,
     );
+    // 1) pattern_charts 저장 (시각/메타)
     await docRef.set({
       ...chart.toJson(),
       'updatedAt': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
     });
+    // 2) step_blueprints 미러 (#687) — units 없음 (단계 미생성 상태)
+    await _mirrorToBlueprint(chart);
     return chart;
   }
 
@@ -268,9 +322,9 @@ class PatternRepository {
     required String title,
     required File pdfFile,
   }) async {
+    if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
     // #652 — 커버 추출은 백그라운드로 분리. 사용자 흐름 차단 방지.
     // PDF만 빠르게 업로드 후 즉시 반환 → PatternDetailScreen 진입.
-    // 커버는 PatternDetailScreen lazy 추출 (#651 합류) 또는 호출자가 별도 fire-and-forget.
     final pdfUrl = await _uploadFile(pdfFile, 'pdfs');
     final docRef = _ref.doc();
     final chart = PatternChart(
@@ -284,11 +338,14 @@ class PatternRepository {
       pdfUrl: pdfUrl,
       imageUrl: '', // 커버는 백그라운드 추출 후 updateCover로 채워짐
     );
+    // 1) pattern_charts 저장
     await docRef.set({
       ...chart.toJson(),
       'updatedAt': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
     });
+    // 2) step_blueprints 미러 (#687) — units 없음
+    await _mirrorToBlueprint(chart);
     // 백그라운드 fire-and-forget — 사용자 흐름 차단 X
     _extractAndSetPdfCover(chart.id, pdfFile);
     return chart;
@@ -296,6 +353,7 @@ class PatternRepository {
 
   /// #652 — PDF 커버 백그라운드 추출 + Firestore 자동 업데이트.
   /// PatternDetailScreen이 chart stream watch하므로 완료 시 자동 갱신.
+  /// #687 — step_blueprints.attachedImageUrls도 동기 업데이트.
   Future<void> _extractAndSetPdfCover(String patternId, File pdfFile) async {
     try {
       final coverUrl = await _uploadPdfCover(pdfFile);
@@ -304,8 +362,24 @@ class PatternRepository {
         'imageUrl': coverUrl,
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      await _syncBlueprintCover(patternId, coverUrl);
     } catch (e) {
       // 백그라운드 실패는 무음 (사용자 흐름 영향 없음)
+    }
+  }
+
+  /// #687 — step_blueprints.attachedImageUrls 동기. 커버 prepend.
+  Future<void> _syncBlueprintCover(String patternId, String coverUrl) async {
+    try {
+      final current = await _blueprintRepo.get(patternId);
+      if (current == null) return;
+      final existing = current.attachedImageUrls ?? const <String>[];
+      // 이미 같은 URL이 있으면 skip (멱등성).
+      if (existing.contains(coverUrl)) return;
+      final next = <String>[coverUrl, ...existing];
+      await _blueprintRepo.update(patternId, {'attachedImageUrls': next});
+    } catch (_) {
+      // 백그라운드 무음
     }
   }
 
@@ -316,6 +390,7 @@ class PatternRepository {
     required Uint8List bytes,
     required String fileName,
   }) async {
+    if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
     final imageUrl = await _uploadBytes(bytes, 'images', fileName);
     final docRef = _ref.doc();
     final chart = PatternChart(
@@ -328,11 +403,14 @@ class PatternRepository {
       type: PatternType.image,
       imageUrl: imageUrl,
     );
+    // 1) pattern_charts 저장
     await docRef.set({
       ...chart.toJson(),
       'updatedAt': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
     });
+    // 2) step_blueprints 미러 (#687)
+    await _mirrorToBlueprint(chart);
     return chart;
   }
 
@@ -343,6 +421,7 @@ class PatternRepository {
     required Uint8List bytes,
     required String fileName,
   }) async {
+    if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
     final pdfUrl = await _uploadBytes(bytes, 'pdfs', fileName);
     final docRef = _ref.doc();
     final chart = PatternChart(
@@ -356,11 +435,14 @@ class PatternRepository {
       pdfUrl: pdfUrl,
       imageUrl: '', // 커버는 백그라운드 추출 후 채워짐
     );
+    // 1) pattern_charts 저장
     await docRef.set({
       ...chart.toJson(),
       'updatedAt': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
     });
+    // 2) step_blueprints 미러 (#687)
+    await _mirrorToBlueprint(chart);
     // 백그라운드 fire-and-forget — 사용자 흐름 차단 X
     _extractAndSetPdfCoverFromBytes(chart.id, bytes);
     return chart;
@@ -368,6 +450,7 @@ class PatternRepository {
 
   /// 이슈 #683 — PDF 커버 백그라운드 추출 (bytes 버전).
   /// 기존 _extractAndSetPdfCover(File)와 동일 흐름, readAsBytes 단계 생략.
+  /// #687 — step_blueprints.attachedImageUrls도 동기 업데이트.
   Future<void> _extractAndSetPdfCoverFromBytes(
     String patternId,
     Uint8List pdfBytes,
@@ -386,6 +469,7 @@ class PatternRepository {
         'imageUrl': coverUrl,
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      await _syncBlueprintCover(patternId, coverUrl);
     } catch (_) {
       // 백그라운드 실패 무음
     }
@@ -572,226 +656,6 @@ class PatternRepository {
     return success;
   }
 
-  // ── Phase H (#687) — 신규 컬렉션 step_blueprints 직저장 메서드 ───────────────
-  //
-  // 신규 도안 생성은 더 이상 pattern_charts에 저장하지 않는다.
-  // 아래 *AsBlueprint 메서드들은 step_blueprints/{bid} + units subcollection에만
-  // 데이터를 기록한다. 호출자(pattern_list_screen)는 메모리 합성 PatternChart를
-  // PatternDetailScreen으로 전달해 기존 화면을 무손상으로 재사용.
-  //
-  // 옛 saveImagePattern / savePdfPattern / *FromBytes 메서드는 회귀 방지용으로
-  // 시그니처만 유지 (호출 0건이라 죽은 코드).
-
-  /// PatternChart 객체를 받아 step_blueprints + units에 저장.
-  /// AI 변환 결과 등 이미 PatternChart 형태로 만들어진 데이터를 신규 컬렉션에
-  /// 그대로 옮길 때 사용.
-  Future<StepBlueprint> saveAsBlueprint(
-    PatternChart chart, {
-    required StepBlueprintRepository blueprintRepo,
-  }) async {
-    if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
-    final base = StepBlueprintRepository.adaptFromPatternChart(
-      chart,
-      ownerUid: _uid,
-    );
-    // adapter는 chart.id 그대로 사용 — 동일 id로 저장.
-    final saved = await blueprintRepo.save(base);
-
-    final sections = chart.aiSections ?? const [];
-    final units = <StepBlueprintUnit>[];
-    var order = 0;
-    final now = DateTime.now();
-    for (final section in sections) {
-      for (final step in section.steps) {
-        units.add(StepBlueprintUnit(
-          id: step.id,
-          blueprintId: saved.id,
-          order: order++,
-          title: '',
-          instruction: step.instruction,
-          instructionKo: step.instructionKo,
-          createdAt: now,
-        ));
-      }
-    }
-    if (units.isNotEmpty) {
-      await blueprintRepo.saveUnits(saved.id, units);
-    }
-    return saved;
-  }
-
-  /// 이미지 도안 → step_blueprints 저장.
-  /// 반환값의 `chart`는 메모리 전용 합성 객체 (PatternDetailScreen 호환용).
-  /// blueprint.id == chart.id 보장.
-  Future<({StepBlueprint blueprint, PatternChart chart})> saveImageAsBlueprint({
-    required String title,
-    required File imageFile,
-    required StepBlueprintRepository blueprintRepo,
-  }) async {
-    if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
-    final imageUrl = await _uploadFile(imageFile, 'images');
-    return _persistBlueprintForAsset(
-      title: title,
-      type: PatternType.image,
-      imageUrl: imageUrl,
-      pdfUrl: '',
-      blueprintRepo: blueprintRepo,
-    );
-  }
-
-  /// 이미지 도안(bytes) → step_blueprints 저장. 웹 호환.
-  Future<({StepBlueprint blueprint, PatternChart chart})>
-      saveImageBytesAsBlueprint({
-    required String title,
-    required Uint8List bytes,
-    required String fileName,
-    required StepBlueprintRepository blueprintRepo,
-  }) async {
-    if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
-    final imageUrl = await _uploadBytes(bytes, 'images', fileName);
-    return _persistBlueprintForAsset(
-      title: title,
-      type: PatternType.image,
-      imageUrl: imageUrl,
-      pdfUrl: '',
-      blueprintRepo: blueprintRepo,
-    );
-  }
-
-  /// PDF 도안 → step_blueprints 저장. 커버는 백그라운드 추출.
-  Future<({StepBlueprint blueprint, PatternChart chart})> savePdfAsBlueprint({
-    required String title,
-    required File pdfFile,
-    required StepBlueprintRepository blueprintRepo,
-  }) async {
-    if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
-    final pdfUrl = await _uploadFile(pdfFile, 'pdfs');
-    final result = await _persistBlueprintForAsset(
-      title: title,
-      type: PatternType.pdf,
-      imageUrl: '',
-      pdfUrl: pdfUrl,
-      blueprintRepo: blueprintRepo,
-    );
-    // 백그라운드 커버 추출 — 실패 무음.
-    final bytes = await pdfFile.readAsBytes();
-    _extractAndSetBlueprintPdfCoverFromBytes(
-      result.blueprint.id,
-      bytes,
-      blueprintRepo: blueprintRepo,
-    );
-    return result;
-  }
-
-  /// PDF 도안(bytes) → step_blueprints 저장. 웹 호환.
-  Future<({StepBlueprint blueprint, PatternChart chart})>
-      savePdfBytesAsBlueprint({
-    required String title,
-    required Uint8List bytes,
-    required String fileName,
-    required StepBlueprintRepository blueprintRepo,
-  }) async {
-    if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
-    final pdfUrl = await _uploadBytes(bytes, 'pdfs', fileName);
-    final result = await _persistBlueprintForAsset(
-      title: title,
-      type: PatternType.pdf,
-      imageUrl: '',
-      pdfUrl: pdfUrl,
-      blueprintRepo: blueprintRepo,
-    );
-    _extractAndSetBlueprintPdfCoverFromBytes(
-      result.blueprint.id,
-      bytes,
-      blueprintRepo: blueprintRepo,
-    );
-    return result;
-  }
-
-  /// 신규 step_blueprints 문서를 생성하고 동일 id로 합성 PatternChart를 빌드한다.
-  /// units 없음 (도안 import 시점에는 단계 데이터가 없으므로). 이후 AI 분석/편집에서 채워짐.
-  Future<({StepBlueprint blueprint, PatternChart chart})>
-      _persistBlueprintForAsset({
-    required String title,
-    required PatternType type,
-    required String imageUrl,
-    required String pdfUrl,
-    required StepBlueprintRepository blueprintRepo,
-  }) async {
-    final now = DateTime.now();
-    final draft = StepBlueprint(
-      id: '', // repo가 새 id 발급
-      ownerUid: _uid,
-      title: title,
-      kind: BlueprintKind.pattern,
-      visibility: BlueprintVisibility.draft,
-      license: const BlueprintLicense(),
-      provider: BlueprintProvider.user,
-      attachedImageUrls: imageUrl.isNotEmpty ? <String>[imageUrl] : null,
-      attachedPdfUrls: pdfUrl.isNotEmpty ? <String>[pdfUrl] : null,
-      version: '1.0.0',
-      publishedVersions: const [],
-      autoSyncOwnerRuns: true,
-      members: const {},
-      discoverability: BlueprintDiscoverability.hidden,
-      tags: type == PatternType.pdf
-          ? const <String>['source:pdf']
-          : type == PatternType.image
-              ? const <String>['source:image']
-              : const <String>[],
-      groups: const [],
-      createdAt: now,
-      updatedAt: now,
-    );
-    final saved = await blueprintRepo.create(draft);
-
-    // PatternDetailScreen 호환용 합성 chart (메모리 전용).
-    final chart = PatternChart(
-      id: saved.id,
-      title: title,
-      rows: 0,
-      cols: 0,
-      mode: ChartMode.color,
-      grid: const <List<CellData>>[],
-      type: type,
-      imageUrl: imageUrl,
-      pdfUrl: pdfUrl,
-      createdAt: now,
-    );
-    return (blueprint: saved, chart: chart);
-  }
-
-  /// PDF 커버 백그라운드 추출 → step_blueprints 문서에 attachedImageUrls 추가.
-  /// 기존 _extractAndSetPdfCoverFromBytes의 step_blueprints 버전.
-  Future<void> _extractAndSetBlueprintPdfCoverFromBytes(
-    String blueprintId,
-    Uint8List pdfBytes, {
-    required StepBlueprintRepository blueprintRepo,
-  }) async {
-    try {
-      if (_uid.isEmpty) return;
-      final thumb =
-          await PdfThumbnailExtractor.extractFirstPageThumbnail(pdfBytes);
-      if (thumb == null || thumb.isEmpty) return;
-      final ref = FirebaseStorage.instance.ref().child(
-            'users/$_uid/patterns/covers/${DateTime.now().millisecondsSinceEpoch}_cover.jpg',
-          );
-      await ref.putData(thumb, SettableMetadata(contentType: 'image/jpeg'));
-      final coverUrl = await ref.getDownloadURL();
-      if (coverUrl.isEmpty) return;
-      // 기존 attachedImageUrls 보존 후 커버 prepend.
-      final current = await blueprintRepo.get(blueprintId);
-      if (current == null) return;
-      final next = <String>[
-        coverUrl,
-        ...(current.attachedImageUrls ?? const <String>[]),
-      ];
-      await blueprintRepo.update(blueprintId, {'attachedImageUrls': next});
-    } catch (_) {
-      // 백그라운드 실패 무음.
-    }
-  }
-
   /// 이슈 #648 — 도안 커버 이미지만 업데이트 (사용자가 상세에서 직접 변경).
   /// 새 커버 파일을 Storage에 업로드 후 imageUrl 필드를 갱신합니다.
   /// type 무관 (chart/image/pdf 모두 동일하게 imageUrl을 커버 슬롯으로 사용).
@@ -814,11 +678,18 @@ class PatternRepository {
       'imageUrl': url,
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    // #687 — step_blueprints attachedImageUrls 동기.
+    await _syncBlueprintCover(patternId, url);
     return url;
   }
 }
 
-final patternRepositoryProvider = Provider<PatternRepository>((ref) => PatternRepository());
+final patternRepositoryProvider = Provider<PatternRepository>((ref) {
+  // #687 — StepBlueprintRepository 주입으로 양쪽 컬렉션 동시 저장 보장.
+  return PatternRepository(
+    blueprintRepo: StepBlueprintRepository(),
+  );
+});
 
 final patternListProvider = StreamProvider<List<PatternChart>>((ref) {
   ref.keepAlive();

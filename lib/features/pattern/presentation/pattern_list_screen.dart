@@ -346,10 +346,8 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
   }
 
   Future<void> _saveImageFile(BuildContext context, WidgetRef ref, File file, bool isKorean, {bool aiAnalysis = true}) async {
-    // #687 — 신규 컬렉션 step_blueprints에 직저장. 옛 pattern_charts 호출 X.
-    // 합성 PatternChart로 PatternDetailScreen 진입 (id == blueprint.id).
+    // #687 — PatternRepository.saveImagePattern이 내부에서 step_blueprints 동시 미러.
     final repo = ref.read(patternRepositoryProvider);
-    final blueprintRepo = ref.read(stepBlueprintRepositoryProvider);
     final title = await _askPatternTitle(context, isKorean);
     if (title == null || !context.mounted) return;
 
@@ -360,12 +358,7 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         message: isKorean ? '저장하는 중입니다.' : 'Saving...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
         task: () async {
-          final res = await repo.saveImageAsBlueprint(
-            title: title,
-            imageFile: file,
-            blueprintRepo: blueprintRepo,
-          );
-          saved = res.chart;
+          saved = await repo.saveImagePattern(title: title, imageFile: file);
         },
       );
       if (!context.mounted || saved == null) return;
@@ -403,9 +396,8 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
   }
 
   Future<void> _savePdfFile(BuildContext context, WidgetRef ref, File file, bool isKorean, {bool aiAnalysis = true}) async {
-    // #687 — 신규 컬렉션 step_blueprints에 직저장. PDF 커버는 백그라운드 추출.
+    // #687 — PatternRepository.savePdfPattern이 내부에서 step_blueprints 미러 + 커버 백그라운드 추출.
     final repo = ref.read(patternRepositoryProvider);
-    final blueprintRepo = ref.read(stepBlueprintRepositoryProvider);
     final title = await _askPatternTitle(context, isKorean);
     if (title == null || !context.mounted) return;
 
@@ -416,12 +408,7 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         message: isKorean ? '저장하는 중입니다.' : 'Saving...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
         task: () async {
-          final res = await repo.savePdfAsBlueprint(
-            title: title,
-            pdfFile: file,
-            blueprintRepo: blueprintRepo,
-          );
-          saved = res.chart;
+          saved = await repo.savePdfPattern(title: title, pdfFile: file);
         },
       );
       if (!context.mounted || saved == null) return;
@@ -432,7 +419,7 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
   }
 
   /// 이슈 #683 + #687 — 웹 호환 PDF 저장 (bytes 진입점).
-  /// step_blueprints에 직저장. 합성 PatternChart로 상세 진입.
+  /// PatternRepository.savePdfPatternFromBytes가 내부에서 step_blueprints 미러.
   Future<void> _savePdfBytes(
     BuildContext context,
     WidgetRef ref,
@@ -442,7 +429,6 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
     bool aiAnalysis = true,
   }) async {
     final repo = ref.read(patternRepositoryProvider);
-    final blueprintRepo = ref.read(stepBlueprintRepositoryProvider);
     final title = await _askPatternTitle(context, isKorean);
     if (title == null || !context.mounted) return;
 
@@ -453,13 +439,11 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         message: isKorean ? '저장하는 중입니다.' : 'Saving...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
         task: () async {
-          final res = await repo.savePdfBytesAsBlueprint(
+          saved = await repo.savePdfPatternFromBytes(
             title: title,
             bytes: bytes,
             fileName: fileName,
-            blueprintRepo: blueprintRepo,
           );
-          saved = res.chart;
         },
       );
       if (!context.mounted || saved == null) return;
@@ -470,7 +454,7 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
   }
 
   /// 이슈 #683 + #687 — 웹 호환 이미지 저장 (bytes 진입점).
-  /// step_blueprints에 직저장. 합성 PatternChart로 상세 진입.
+  /// PatternRepository.saveImagePatternFromBytes가 내부에서 step_blueprints 미러.
   Future<void> _saveImageBytes(
     BuildContext context,
     WidgetRef ref,
@@ -480,7 +464,6 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
     bool aiAnalysis = true,
   }) async {
     final repo = ref.read(patternRepositoryProvider);
-    final blueprintRepo = ref.read(stepBlueprintRepositoryProvider);
     final title = await _askPatternTitle(context, isKorean);
     if (title == null || !context.mounted) return;
 
@@ -491,13 +474,11 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         message: isKorean ? '저장하는 중입니다.' : 'Saving...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
         task: () async {
-          final res = await repo.saveImageBytesAsBlueprint(
+          saved = await repo.saveImagePatternFromBytes(
             title: title,
             bytes: bytes,
             fileName: fileName,
-            blueprintRepo: blueprintRepo,
           );
-          saved = res.chart;
         },
       );
       if (!context.mounted || saved == null) return;

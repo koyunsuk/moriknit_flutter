@@ -109,8 +109,18 @@ class StepBlueprintRepository {
   Stream<StepBlueprint?> watch(String id) =>
       _doc(id).snapshots().map((s) => s.exists ? _readBlueprint(s) : null);
 
-  /// 단순 삭제 (units subcollection은 Cloud Functions / 별도 sweep에 위임).
-  Future<void> delete(String id) async => _doc(id).delete();
+  /// 청사진 + units subcollection 일괄 삭제 (#687 본문 교체).
+  /// units가 많을 경우에도 batch로 안전하게 처리.
+  Future<void> delete(String id) async {
+    // units subcollection 먼저 삭제 (batch).
+    final unitsSnap = await _unitsCol(id).get();
+    final batch = _db.batch();
+    for (final doc in unitsSnap.docs) {
+      batch.delete(doc.reference);
+    }
+    batch.delete(_doc(id));
+    await batch.commit();
+  }
 
   // ── units subcollection ────────────────────────────────────────────────────
 
