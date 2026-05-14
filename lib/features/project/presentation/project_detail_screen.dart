@@ -25,6 +25,7 @@ import '../../../providers/project_provider.dart';
 import '../../market/domain/market_item.dart';
 import '../../../providers/parsed_pattern_provider.dart';
 import '../../../providers/project_step_provider.dart';
+import '../../../providers/step_unit_provider.dart';
 import '../../../providers/needle_provider.dart';
 import '../../../providers/swatch_provider.dart';
 import '../../../providers/template_provider.dart';
@@ -2473,13 +2474,11 @@ class _StepsSection extends ConsumerWidget {
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
         task: () async {
           // B-1 통합 — 단계 + 카운터 함께 미러링
-          await ref
-              .read(projectStepRepositoryProvider)
-              .addPatternSectionStepsWithCounters(
-                projectId,
-                picked,
-                isKorean,
-                ref.read(counterRepositoryProvider),
+          // 이슈 #687 (Phase E1) — 단일 진입점 StepUnitRepository.mirrorGroupsToProject로 통합
+          await ref.read(stepUnitRepositoryProvider).mirrorGroupsToProject(
+                projectId: projectId,
+                chart: picked,
+                isKorean: isKorean,
               );
         },
       );

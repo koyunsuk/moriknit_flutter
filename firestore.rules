@@ -144,6 +144,10 @@ service cloud.firestore {
       match /dropbox_favorites/{fileId} {
         allow read, write: if isOwner(uid);
       }
+      // 이슈 #687 — 청사진 마이그레이션 완료 플래그 (MigrationGuard)
+      match /migration_meta/{docId} {
+        allow read, write: if isOwner(uid);
+      }
     }
 
     // ── 마켓 아이템 (공개 읽기, 로그인 후 생성/수정) ────────────────────────────

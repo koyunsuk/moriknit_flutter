@@ -16,8 +16,11 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/blueprint_provider.dart';
 import 'pattern_viewer_screen.dart';
 import '../../../providers/counter_provider.dart';
+import '../../blueprint/domain/step_blueprint.dart';
+import '../../blueprint/domain/step_blueprint_unit.dart';
 import '../../counter/domain/counter_model.dart';
 import '../domain/pattern_chart.dart';
 import '../data/pattern_export_service.dart';
@@ -1558,6 +1561,20 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                     ),
                   ),
                 ],
+                // 이슈 #687 (Phase I-B) — 신규 청사진(StepBlueprint) 메타·단계 카드.
+                // 옛 데이터(pattern_charts)는 어댑터로 즉시 표시. blueprint == null 이면 숨김.
+                if (widget.chart.id.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _BlueprintMetaCard(
+                    chartId: widget.chart.id,
+                    isKorean: isKorean,
+                  ),
+                  const SizedBox(height: 10),
+                  _BlueprintStepsCard(
+                    chartId: widget.chart.id,
+                    isKorean: isKorean,
+                  ),
+                ],
                 // 이슈 #649 Phase 3 — 도안 작업시간 통계
                 const SizedBox(height: 10),
                 _PatternTimeStatsCard(
@@ -1776,6 +1793,275 @@ class _InfoChip extends StatelessWidget {
           Text(label, style: T.caption.copyWith(color: C.mu, fontSize: 10)),
         ],
       ),
+    );
+  }
+}
+
+/// 이슈 #687 (Phase I-B) — 신규 청사진 메타 카드.
+///
+/// blueprintByIdWithLegacyProvider 로 신규 step_blueprints 컬렉션 우선 조회.
+/// 없으면 PatternChart → StepBlueprint 어댑터(메모리 변환)로 표시.
+/// 마이그레이션 안 한 데이터도 정상 표시되며, blueprint == null 이면 빈 위젯.
+class _BlueprintMetaCard extends ConsumerWidget {
+  final String chartId;
+  final bool isKorean;
+
+  const _BlueprintMetaCard({required this.chartId, required this.isKorean});
+
+  String _visibilityLabel(BlueprintVisibility v, bool ko) {
+    switch (v) {
+      case BlueprintVisibility.draft:
+        return ko ? '초안' : 'Draft';
+      case BlueprintVisibility.private:
+        return ko ? '비공개' : 'Private';
+      case BlueprintVisibility.team:
+        return ko ? '팀 공개' : 'Team';
+      case BlueprintVisibility.friends:
+        return ko ? '친구 공개' : 'Friends';
+      case BlueprintVisibility.unlisted:
+        return ko ? '링크 공개' : 'Unlisted';
+      case BlueprintVisibility.public:
+        return ko ? '공개' : 'Public';
+      case BlueprintVisibility.marketplace:
+        return ko ? '마켓' : 'Marketplace';
+      case BlueprintVisibility.community_showcase:
+        return ko ? '쇼케이스' : 'Showcase';
+    }
+  }
+
+  String _licenseLabel(LicenseType t, bool ko) {
+    switch (t) {
+      case LicenseType.reserved:
+        return ko ? '모든 권리 보유' : 'All rights reserved';
+      case LicenseType.cc0:
+        return 'CC0';
+      case LicenseType.cc_by:
+        return 'CC BY';
+      case LicenseType.cc_by_nc:
+        return 'CC BY-NC';
+      case LicenseType.cc_by_sa:
+        return 'CC BY-SA';
+      case LicenseType.moriknit_official:
+        return ko ? '모리니트 공식' : 'MoriKnit Official';
+      case LicenseType.custom:
+        return ko ? '사용자 정의' : 'Custom';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final blueprintAsync = ref.watch(blueprintByIdWithLegacyProvider(chartId));
+    return blueprintAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (bp) {
+        if (bp == null) return const SizedBox.shrink();
+        return GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.layers_rounded, size: 16, color: C.lvD),
+                  const SizedBox(width: 6),
+                  Text(
+                    isKorean ? '청사진' : 'Blueprint',
+                    style:
+                        T.caption.copyWith(color: C.lvD, fontWeight: FontWeight.w700),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: C.lv.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      _visibilityLabel(bp.visibility, isKorean),
+                      style: T.caption.copyWith(color: C.lvD, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.verified_user_rounded, size: 14, color: C.mu),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      _licenseLabel(bp.license.type, isKorean),
+                      style: T.caption.copyWith(color: C.tx),
+                    ),
+                  ),
+                ],
+              ),
+              if (bp.tags.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: bp.tags
+                      .where((t) => !t.startsWith('adapter:'))
+                      .take(4)
+                      .map((t) => Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: C.gx,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: C.bd),
+                            ),
+                            child: Text('#$t', style: T.caption.copyWith(color: C.mu)),
+                          ))
+                      .toList(),
+                ),
+              ],
+              if (bp.tags.contains('adapter:legacy_pattern_chart')) ...[
+                const SizedBox(height: 6),
+                Text(
+                  isKorean
+                      ? '※ 옛 도안 자동 변환 — 청사진을 저장하면 신규 컬렉션에 기록돼요'
+                      : '※ Adapted from legacy data — save to migrate',
+                  style: T.caption.copyWith(color: C.mu, fontSize: 11),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// 이슈 #687 (Phase I-B) — 신규 청사진 단계 리스트 카드.
+///
+/// blueprintByIdWithLegacyProvider + blueprintUnitsProvider 조합.
+/// units subcollection 이 비어 있으면(=신규 미저장), groups 내 unitIds 만 표시(이름은 placeholder).
+/// 옛 aiSections 표시는 본 화면 위쪽 _AiSectionsSummary 가 담당 — 본 카드는 신규 데이터 전용.
+class _BlueprintStepsCard extends ConsumerWidget {
+  final String chartId;
+  final bool isKorean;
+
+  const _BlueprintStepsCard({required this.chartId, required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final blueprintAsync = ref.watch(blueprintByIdWithLegacyProvider(chartId));
+    return blueprintAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (bp) {
+        if (bp == null || bp.groups.isEmpty) return const SizedBox.shrink();
+        // units subcollection 도 함께 — 신규 컬렉션 저장된 경우에만 채워짐.
+        final unitsAsync = ref.watch(blueprintUnitsProvider(bp.id));
+        return GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.checklist_rtl_rounded, size: 16, color: C.lv),
+                  const SizedBox(width: 6),
+                  Text(
+                    isKorean ? '단계 (청사진)' : 'Steps (Blueprint)',
+                    style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w700),
+                  ),
+                  const Spacer(),
+                  Text(
+                    isKorean ? '${bp.groups.length}개 섹션' : '${bp.groups.length} sections',
+                    style: T.caption.copyWith(color: C.tx2),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              unitsAsync.when(
+                loading: () => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: SizedBox(
+                    height: 14,
+                    width: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: C.lv),
+                  ),
+                ),
+                error: (_, _) => _GroupsList(bp: bp, units: const [], isKorean: isKorean),
+                data: (units) =>
+                    _GroupsList(bp: bp, units: units, isKorean: isKorean),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _GroupsList extends StatelessWidget {
+  final StepBlueprint bp;
+  final List<StepBlueprintUnit> units;
+  final bool isKorean;
+
+  const _GroupsList({
+    required this.bp,
+    required this.units,
+    required this.isKorean,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final unitById = {for (final u in units) u.id: u};
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var gi = 0; gi < bp.groups.length && gi < 3; gi++) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(
+              children: [
+                Icon(Icons.subdirectory_arrow_right_rounded,
+                    size: 14, color: C.tx2),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    bp.groups[gi].localizedTitle(isKorean),
+                    style: T.sm.copyWith(color: C.tx),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Text(
+                  isKorean
+                      ? '${bp.groups[gi].unitIds.length}단계'
+                      : '${bp.groups[gi].unitIds.length} steps',
+                  style: T.caption.copyWith(color: C.tx2),
+                ),
+              ],
+            ),
+          ),
+          // units 가 있을 때만 첫 단계 미리보기 (없으면 unitIds 만 카운트 위에 표시됨).
+          if (units.isNotEmpty)
+            for (final unitId in bp.groups[gi].unitIds.take(2))
+              if (unitById[unitId] != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 20, bottom: 2),
+                  child: Text(
+                    '· ${unitById[unitId]!.localizedTitle(isKorean)}',
+                    style: T.caption.copyWith(color: C.mu),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+        ],
+        if (bp.groups.length > 3)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              isKorean
+                  ? '외 ${bp.groups.length - 3}개 섹션...'
+                  : '+${bp.groups.length - 3} more...',
+              style: T.caption.copyWith(color: C.tx2),
+            ),
+          ),
+      ],
     );
   }
 }

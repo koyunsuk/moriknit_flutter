@@ -15,6 +15,7 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/admin_config_provider.dart';
 import '../../../providers/app_config_provider.dart';
 import '../../../providers/auth_provider.dart';
+import '../../blueprint/data/migration_guard.dart';
 import '../../../providers/editorial_provider.dart';
 import '../../../providers/guestbook_provider.dart';
 import '../../../providers/market_provider.dart';
@@ -46,6 +47,24 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _bannerDismissed = false;
   bool _popupShown = false;
+  bool _migrationKicked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // 이슈 #687 — 로그인 완료 후 첫 홈 진입 시 자동 마이그레이션 1회 실행 (백그라운드).
+    WidgetsBinding.instance.addPostFrameCallback((_) => _kickOffMigration());
+  }
+
+  void _kickOffMigration() {
+    if (_migrationKicked) return;
+    final uid = ref.read(authStateProvider).valueOrNull?.uid;
+    if (uid == null || uid.isEmpty) return;
+    _migrationKicked = true;
+    // UI 차단 없이 fire-and-forget. 결과는 디버그 로그로만 노출됨.
+    // ignore: discarded_futures
+    ref.read(migrationGuardProvider).runIfNeeded(uid);
+  }
 
   @override
   void didChangeDependencies() {

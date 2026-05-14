@@ -13,9 +13,9 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/book_provider.dart';
-import '../../../providers/counter_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/project_step_provider.dart';
+import '../../../providers/step_unit_provider.dart';
 import '../../../providers/swatch_provider.dart';
 import '../../pattern/data/pattern_repository.dart';
 import '../../pattern/domain/pattern_chart.dart';
@@ -535,15 +535,13 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
               }
             }
             // 이슈 #627 (B-1) — AI 변환 도안에서 섹션 + 카운터 자동 미러링
+            // 이슈 #687 (Phase E1) — 단일 진입점 StepUnitRepository.mirrorGroupsToProject로 통합
             if (widget.sourcePatternChart != null) {
               final isKorean = ref.read(appLanguageProvider).isKorean;
-              await ref
-                  .read(projectStepRepositoryProvider)
-                  .addPatternSectionStepsWithCounters(
-                    saved.id,
-                    widget.sourcePatternChart!,
-                    isKorean,
-                    ref.read(counterRepositoryProvider),
+              await ref.read(stepUnitRepositoryProvider).mirrorGroupsToProject(
+                    projectId: saved.id,
+                    chart: widget.sourcePatternChart!,
+                    isKorean: isKorean,
                   );
             }
           }

@@ -14,9 +14,11 @@ import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../providers/blueprint_provider.dart';
 import '../../../providers/pattern_library_provider.dart';
 import '../../../providers/project_provider.dart';
 
+import '../../blueprint/domain/step_blueprint.dart';
 import '../../pattern_library/domain/pattern_file.dart';
 import 'widgets/chart_shape_picker.dart';
 import '../../ravelry/data/ravelry_auth_provider.dart';
@@ -40,6 +42,12 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
   @override
   Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
+    // 이슈 #687 (Phase I-B) — 신규 step_blueprints 컬렉션 우선 + legacy pattern_charts fallback.
+    // myBlueprintsWithLegacyProvider 는 두 stream 을 합성해 단일 List<StepBlueprint> 로 노출.
+    // 옛 pattern_charts 어댑터(메모리 전용)도 동일하게 표시되어 마이그레이션 안 한 데이터까지 보여줌.
+    final blueprintsAsync = ref.watch(myBlueprintsWithLegacyProvider);
+    // PatternChart 보존 — 카드 onTap 시 PatternDetailScreen 으로 전달하기 위해 유지.
+    // (PatternDetailScreen 인자는 PatternChart 형식 그대로 둠 → 회귀 최소화.)
     final patternsAsync = ref.watch(patternListProvider);
     final filesAsync = ref.watch(patternFilesProvider);
 
@@ -57,7 +65,8 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
             // 도안 요약카드 틀고정
             Consumer(
               builder: (_, ref2, _) {
-                final pc = patternsAsync.valueOrNull?.length ?? 0;
+                // 도안 카운트는 신규 컬렉션 + legacy 합산 기반.
+                final pc = blueprintsAsync.valueOrNull?.length ?? 0;
                 final fc = filesAsync.valueOrNull?.length ?? 0;
                 final total = pc + fc;
                 final auth = ref2.watch(ravelryAuthProvider);
@@ -71,7 +80,7 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                       LibrarySummaryRowData(
                         badge: 'MoriKnit',
                         badgeColor: C.pkD,
-                        values: [patternsAsync.isLoading ? '-' : '$total'],
+                        values: [blueprintsAsync.isLoading ? '-' : '$total'],
                         valueColors: [C.tx],
                       ),
                       LibrarySummaryRowData(
@@ -110,7 +119,7 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        patternsAsync.when(
+                        blueprintsAsync.when(
                           loading: () => Center(
                             child: Padding(
                               padding: const EdgeInsets.symmetric(vertical: 20),
@@ -118,9 +127,14 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                             ),
                           ),
                           error: (e, _) => Text('$e', style: T.caption.copyWith(color: C.og)),
-                          data: (patterns) {
+                          // 이슈 #687 (Phase I-B) — 신규 청사진 + legacy 어댑터 합산 데이터.
+                          // 카드 표시는 PatternChart 기반 _PatternRow 그대로 사용하기 위해
+                          // patternListProvider 의 PatternChart 로 lookup, 없으면 어댑터로 합성.
+                          data: (blueprints) {
                             final files = filesAsync.valueOrNull ?? [];
-                            final total = patterns.length + files.length;
+                            final legacyCharts = patternsAsync.valueOrNull ?? const <PatternChart>[];
+                            final chartById = {for (final c in legacyCharts) c.id: c};
+                            final total = blueprints.length + files.length;
                             if (total == 0) {
                               return MoriEmptyState(
                                 icon: Icons.grid_on_rounded,
@@ -141,11 +155,19 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                                   style: T.bodyBold,
                                 ),
                                 const SizedBox(height: 8),
-                                ...patterns.map((p) => _PatternRow(
-                                  chart: p,
-                                  isKorean: isKorean,
-                                  onTap: () => _openPattern(context, p, filesAsync),
-                                )),
+                                ...blueprints.map((bp) {
+                                  // PatternChart lookup (id 또는 sourcePatternChartId/chartAssetId).
+                                  // 없으면 _blueprintToChart() 어댑터로 합성 — 표시에는 충분.
+                                  final chart = chartById[bp.id]
+                                      ?? (bp.sourcePatternChartId != null ? chartById[bp.sourcePatternChartId!] : null)
+                                      ?? (bp.chartAssetId != null ? chartById[bp.chartAssetId!] : null)
+                                      ?? _blueprintToChart(bp);
+                                  return _PatternRow(
+                                    chart: chart,
+                                    isKorean: isKorean,
+                                    onTap: () => _openPattern(context, chart, filesAsync),
+                                  );
+                                }),
                                 ...files.map((f) => _FileRow(
                                   file: f,
                                   isKorean: isKorean,
@@ -167,6 +189,31 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  /// 이슈 #687 (Phase I-B) — StepBlueprint → PatternChart 어댑터(합성).
+  ///
+  /// myBlueprintsWithLegacyProvider 가 반환한 청사진이 legacy pattern_charts 에 매칭되지
+  /// 않을 때 표시·진입용으로 사용. 차트 그리드는 비어 있으나(rows=0, cols=0) 카드 표시와
+  /// PatternDetailScreen 진입에는 충분. id/title/createdAt 등 표시 핵심 필드는 보존.
+  PatternChart _blueprintToChart(StepBlueprint bp) {
+    final imageUrls = bp.attachedImageUrls ?? const <String>[];
+    final pdfUrls = bp.attachedPdfUrls ?? const <String>[];
+    return PatternChart(
+      id: bp.sourcePatternChartId ?? bp.chartAssetId ?? bp.id,
+      title: bp.title,
+      rows: 0,
+      cols: 0,
+      mode: ChartMode.color,
+      grid: const <List<CellData>>[],
+      type: pdfUrls.isNotEmpty
+          ? PatternType.pdf
+          : (imageUrls.isNotEmpty ? PatternType.image : PatternType.chart),
+      imageUrl: imageUrls.isNotEmpty ? imageUrls.first : '',
+      pdfUrl: pdfUrls.isNotEmpty ? pdfUrls.first : '',
+      sourceType: PatternSourceType.external,
+      createdAt: bp.createdAt,
     );
   }
 
@@ -299,9 +346,10 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
   }
 
   Future<void> _saveImageFile(BuildContext context, WidgetRef ref, File file, bool isKorean, {bool aiAnalysis = true}) async {
-    // #628 정정 — AI 변환은 블로킹 호출 X. 항상 단순 저장 → PatternDetailScreen.
-    // AI 분석은 PatternDetailScreen 내 별도 버튼으로 사용자 명시적 선택 (향후).
+    // #687 — 신규 컬렉션 step_blueprints에 직저장. 옛 pattern_charts 호출 X.
+    // 합성 PatternChart로 PatternDetailScreen 진입 (id == blueprint.id).
     final repo = ref.read(patternRepositoryProvider);
+    final blueprintRepo = ref.read(stepBlueprintRepositoryProvider);
     final title = await _askPatternTitle(context, isKorean);
     if (title == null || !context.mounted) return;
 
@@ -312,7 +360,12 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         message: isKorean ? '저장하는 중입니다.' : 'Saving...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
         task: () async {
-          saved = await repo.saveImagePattern(title: title, imageFile: file);
+          final res = await repo.saveImageAsBlueprint(
+            title: title,
+            imageFile: file,
+            blueprintRepo: blueprintRepo,
+          );
+          saved = res.chart;
         },
       );
       if (!context.mounted || saved == null) return;
@@ -350,8 +403,9 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
   }
 
   Future<void> _savePdfFile(BuildContext context, WidgetRef ref, File file, bool isKorean, {bool aiAnalysis = true}) async {
-    // #628 정정 — AI 변환 블로킹 호출 제거. 항상 단순 저장 (PdfThumbnailExtractor로 커버 자동 추출 #648 유지).
+    // #687 — 신규 컬렉션 step_blueprints에 직저장. PDF 커버는 백그라운드 추출.
     final repo = ref.read(patternRepositoryProvider);
+    final blueprintRepo = ref.read(stepBlueprintRepositoryProvider);
     final title = await _askPatternTitle(context, isKorean);
     if (title == null || !context.mounted) return;
 
@@ -362,7 +416,12 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         message: isKorean ? '저장하는 중입니다.' : 'Saving...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
         task: () async {
-          saved = await repo.savePdfPattern(title: title, pdfFile: file);
+          final res = await repo.savePdfAsBlueprint(
+            title: title,
+            pdfFile: file,
+            blueprintRepo: blueprintRepo,
+          );
+          saved = res.chart;
         },
       );
       if (!context.mounted || saved == null) return;
@@ -372,8 +431,8 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
     }
   }
 
-  /// 이슈 #683 — 웹 호환 PDF 저장 (bytes 진입점).
-  /// 기존 _savePdfFile(File)과 동일한 흐름. repo.savePdfPatternFromBytes 호출.
+  /// 이슈 #683 + #687 — 웹 호환 PDF 저장 (bytes 진입점).
+  /// step_blueprints에 직저장. 합성 PatternChart로 상세 진입.
   Future<void> _savePdfBytes(
     BuildContext context,
     WidgetRef ref,
@@ -383,6 +442,7 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
     bool aiAnalysis = true,
   }) async {
     final repo = ref.read(patternRepositoryProvider);
+    final blueprintRepo = ref.read(stepBlueprintRepositoryProvider);
     final title = await _askPatternTitle(context, isKorean);
     if (title == null || !context.mounted) return;
 
@@ -393,11 +453,13 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         message: isKorean ? '저장하는 중입니다.' : 'Saving...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
         task: () async {
-          saved = await repo.savePdfPatternFromBytes(
+          final res = await repo.savePdfBytesAsBlueprint(
             title: title,
             bytes: bytes,
             fileName: fileName,
+            blueprintRepo: blueprintRepo,
           );
+          saved = res.chart;
         },
       );
       if (!context.mounted || saved == null) return;
@@ -407,8 +469,8 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
     }
   }
 
-  /// 이슈 #683 — 웹 호환 이미지 저장 (bytes 진입점).
-  /// 기존 _saveImageFile(File)과 동일한 흐름. repo.saveImagePatternFromBytes 호출.
+  /// 이슈 #683 + #687 — 웹 호환 이미지 저장 (bytes 진입점).
+  /// step_blueprints에 직저장. 합성 PatternChart로 상세 진입.
   Future<void> _saveImageBytes(
     BuildContext context,
     WidgetRef ref,
@@ -418,6 +480,7 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
     bool aiAnalysis = true,
   }) async {
     final repo = ref.read(patternRepositoryProvider);
+    final blueprintRepo = ref.read(stepBlueprintRepositoryProvider);
     final title = await _askPatternTitle(context, isKorean);
     if (title == null || !context.mounted) return;
 
@@ -428,11 +491,13 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         message: isKorean ? '저장하는 중입니다.' : 'Saving...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
         task: () async {
-          saved = await repo.saveImagePatternFromBytes(
+          final res = await repo.saveImageBytesAsBlueprint(
             title: title,
             bytes: bytes,
             fileName: fileName,
+            blueprintRepo: blueprintRepo,
           );
+          saved = res.chart;
         },
       );
       if (!context.mounted || saved == null) return;
