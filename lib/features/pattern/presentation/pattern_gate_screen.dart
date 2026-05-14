@@ -10,6 +10,7 @@ import '../../../core/widgets/common_widgets.dart';
 import '../data/pattern_repository.dart';
 import '../domain/pattern_chart.dart';
 import 'pattern_editor_screen.dart';
+import 'widgets/chart_shape_picker.dart';
 
 class PatternGateScreen extends ConsumerStatefulWidget {
   const PatternGateScreen({super.key});
@@ -60,7 +61,16 @@ class _PatternGateScreenState extends ConsumerState<PatternGateScreen> {
                                 ),
                               ],
                               addLabel: isKorean ? '새 도안' : 'New',
-                              onAdd: () => context.push(Routes.toolsPattern),
+                              // 이슈 #665/#668 — 사각/원형/자유 path 선택 모달
+                              onAdd: () async {
+                                final shape = await showChartShapePicker(context, isKorean);
+                                if (shape == null || !context.mounted) return;
+                                if (shape == 'rect') {
+                                  context.push(Routes.toolsPattern);
+                                } else {
+                                  context.push('${Routes.toolsPattern}?chartType=$shape');
+                                }
+                              },
                             );
                           }
                           return _PatternCard(

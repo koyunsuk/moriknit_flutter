@@ -77,16 +77,21 @@ void showSavedSnackBar(Object contextOrMessenger, {String? message}) {
       duration: const Duration(seconds: 2),
       backgroundColor: C.lvD,
       behavior: SnackBarBehavior.floating,
-      width: 260,
+      // 이슈 #666 — 긴 메시지 픽셀 오버플로우 방지: width 제거 + Flexible + maxLines.
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       content: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
           const SizedBox(width: 10),
-          Text(
-            message ?? '저장되었습니다.',
-            style: T.sm.copyWith(color: Colors.white),
+          Flexible(
+            child: Text(
+              message ?? '저장되었습니다.',
+              style: T.sm.copyWith(color: Colors.white),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),

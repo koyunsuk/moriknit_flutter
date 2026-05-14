@@ -3,10 +3,9 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../../../core/widgets/mori_symbol_view.dart';
 import '../../../../providers/knit_symbol_provider.dart';
-import '../../domain/knit_symbols.dart';
 import '../../domain/pattern_chart.dart';
 
 /// 도안 모드에서 현재 작업 중인 레이어 (색상 / 기호)
@@ -51,6 +50,9 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
   TransformationController get _transformCtrl =>
       widget.transformationController ?? (_ownedCtrl ??= TransformationController());
   bool _isPainting = false;
+
+  /// #680 — multi-touch 카운트 (두 손가락 이상이면 그리기 취소, InteractiveViewer가 핀치).
+  final Set<int> _activePointers = {};
 
   @override
   void initState() {
@@ -255,67 +257,38 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
     }
   }
 
+  /// move 도구 또는 readOnly 시 InteractiveViewer가 단일 터치 panning까지 처리.
   bool get _interactiveEnabled => widget.readOnly || widget.tool == ChartTool.move;
-
-  /// symbolId → SVG URL 변환 (abbreviation 우선, id fallback)
-  String? _svgUrl(String symbolId, Map<String, String> svgUrls) {
-    final sym = KnitSymbolLibrary.byId(symbolId);
-    if (sym != null) {
-      final abbrKey = sym.abbr.toLowerCase().replaceAll(' ', '_');
-      if (svgUrls.containsKey(abbrKey)) return svgUrls[abbrKey];
-    }
-    final idKey = symbolId.toLowerCase().replaceAll(' ', '_');
-    return svgUrls[idKey];
-  }
 
   @override
   Widget build(BuildContext context) {
-    final svgUrls = ref.watch(knitSymbolSvgUrlProvider);
     final canvasWidth = _headerW + widget.chart.cols * _cellW + _headerW; // 좌우 단수 헤더
     final canvasHeight = _headerH + widget.chart.rows * _cellH;
 
     // narrative 제외 항상 SVG 오버레이 표시 — 앵커 셀만 렌더링, span 크기 적용
+    // #672 — MoriSymbolView 단일 소스 사용 (이전: 직접 SvgPicture.network)
     final overlays = <Widget>[];
     if (widget.chart.mode != ChartMode.narrative) {
       for (int r = 0; r < widget.chart.rows; r++) {
         for (int c = 0; c < widget.chart.cols; c++) {
           final cell = widget.chart.grid[r][c];
-          // 점유 셀(occupied)은 앵커에서 이미 그리므로 건너뜀
           if (!cell.isAnchor) continue;
-          final url = _svgUrl(cell.symbolId!, svgUrls);
+          final symId = cell.symbolId;
+          if (symId == null) continue;
           final sw = cell.spanW ?? 1;
           final sh = cell.spanH ?? 1;
           final symColor = cell.symbolColor ?? Colors.black87;
-          if (url != null) {
-            overlays.add(Positioned(
-              left: _headerW + c * _cellW + 2,
-              top: _headerH + r * _cellH + 2,
-              width: _cellW * sw - 4,
-              height: _cellH * sh - 4,
-              child: SvgPicture.network(
-                url,
-                fit: BoxFit.contain,
-                colorFilter: ColorFilter.mode(symColor, BlendMode.srcIn),
-              ),
-            ));
-          } else {
-            // SVG 없으면 정적 라이브러리 유니코드 폴백
-            final sym = KnitSymbolLibrary.byId(cell.symbolId!);
-            if (sym != null) {
-              overlays.add(Positioned(
-                left: _headerW + c * _cellW,
-                top: _headerH + r * _cellH,
-                width: _cellW * sw,
-                height: _cellH * sh,
-                child: Center(
-                  child: Text(
-                    sym.unicode,
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: symColor),
-                  ),
-                ),
-              ));
-            }
-          }
+          overlays.add(Positioned(
+            left: _headerW + c * _cellW + 2,
+            top: _headerH + r * _cellH + 2,
+            width: _cellW * sw - 4,
+            height: _cellH * sh - 4,
+            child: MoriSymbolView(
+              symbolId: symId,
+              size: _cellW * sw - 4,
+              color: symColor,
+            ),
+          ));
         }
       }
     }
@@ -336,16 +309,33 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
     );
 
     if (!_interactiveEnabled) {
-      canvas = GestureDetector(
-        onTapDown: (d) => _handleTap(d.localPosition),
-        onPanStart: (d) {
-          _isPainting = true;
-          _handleDragUpdate(d.localPosition);
+      // #680 — Listener 사용 (gesture arena 참가 X) → InteractiveViewer가 핀치 자유.
+      // multi-touch 시 그리기 자동 취소.
+      canvas = Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: (e) {
+          _activePointers.add(e.pointer);
+          if (_activePointers.length == 1) {
+            _isPainting = true;
+            _handleTap(e.localPosition);
+          } else {
+            // 두 손가락 이상 → 그리기 취소, InteractiveViewer가 핀치 처리.
+            _isPainting = false;
+          }
         },
-        onPanUpdate: (d) {
-          if (_isPainting) _handleDragUpdate(d.localPosition);
+        onPointerMove: (e) {
+          if (_isPainting && _activePointers.length == 1) {
+            _handleDragUpdate(e.localPosition);
+          }
         },
-        onPanEnd: (_) => _isPainting = false,
+        onPointerUp: (e) {
+          _activePointers.remove(e.pointer);
+          if (_activePointers.isEmpty) _isPainting = false;
+        },
+        onPointerCancel: (e) {
+          _activePointers.remove(e.pointer);
+          if (_activePointers.isEmpty) _isPainting = false;
+        },
         child: canvas,
       );
     }
@@ -353,7 +343,7 @@ class _ChartCanvasState extends ConsumerState<ChartCanvas> {
     return InteractiveViewer(
       transformationController: _transformCtrl,
       panEnabled: _interactiveEnabled,
-      scaleEnabled: true,   // 항상 핀치줌 허용 (전체화면 후 줌아웃 가능)
+      scaleEnabled: true, // 항상 핀치줌 (도구 무관 — 모바일 표준).
       minScale: 0.1,
       maxScale: 5.0,
       constrained: false,

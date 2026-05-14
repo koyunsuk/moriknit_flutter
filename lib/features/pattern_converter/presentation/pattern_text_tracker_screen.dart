@@ -32,7 +32,10 @@ class PatternTextTrackerScreen extends ConsumerWidget {
       },
       error: (e, _) {
         debugPrint('[TextTracker] ERROR: $e');
-        return Scaffold(body: Center(child: Text('$e')));
+        return _PatternLoadErrorScreen(
+          isKorean: isKorean,
+          onRetry: () => ref.invalidate(aiPatternDetailFutureProvider(patternId)),
+        );
       },
       data: (pattern) {
         debugPrint('[TextTracker] DATA pattern=${pattern?.id} sections=${pattern?.aiSections?.length}');
@@ -742,6 +745,61 @@ class _NavBtn extends StatelessWidget {
             children: isNext
                 ? [Text(label, style: TextStyle(color: enabled ? C.lv : Colors.white38, fontSize: 13, fontWeight: FontWeight.w600)), const SizedBox(width: 2), Icon(icon, color: enabled ? C.lv : Colors.white38, size: 20)]
                 : [Icon(icon, color: enabled ? C.lv : Colors.white38, size: 20), const SizedBox(width: 2), Text(label, style: TextStyle(color: enabled ? C.lv : Colors.white38, fontSize: 13, fontWeight: FontWeight.w600))],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── #684 로드 실패 플레이스홀더 (친화 메시지 + 재시도) ───────────────────────
+class _PatternLoadErrorScreen extends StatelessWidget {
+  final bool isKorean;
+  final VoidCallback onRetry;
+  const _PatternLoadErrorScreen({required this.isKorean, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F0F1A),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF0F0F1A),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, size: 20, color: Colors.white70),
+          onPressed: () => context.pop(),
+        ),
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.cloud_off_rounded, size: 56, color: Colors.white38),
+              const SizedBox(height: 16),
+              Text(
+                isKorean ? '도안 데이터를 불러오지 못했어요' : 'Failed to load pattern data.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: Text(isKorean ? '다시 시도' : 'Retry'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: C.lv,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
           ),
         ),
       ),

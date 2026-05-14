@@ -18,6 +18,8 @@
 //   이 수식은 Banul과 정확히 일치하지 않음 — Banul은 XL+에서 추가 보정.
 //   본 생성기는 "일반 래글런 단순 모델"로 근사. 복잡한 쉐이핑은 사용자 수정에 맡김.
 
+import 'dart:math' as math;
+
 import 'body_measurement.dart';
 import 'raglan_generated_pattern.dart';
 
@@ -107,15 +109,29 @@ class RaglanPatternGenerator {
     int underarmCastOn = gauge.roundToEven((initSleeveEach * 0.25).round());
     if (underarmCastOn < 2) underarmCastOn = 2;
 
-    // ── 5. 래글런 반복 N 계산 ──────────────────
-    // 소매 분리 후 몸통 = front_final + 2×back_each_final + 2×underarm
-    //                = (initFront + 2N) + 2(initBackEach + N) + 2×underarm
-    //                = initFront + 2×initBackEach + 4N + 2×underarm
-    final raglanNumerator = targetChestStitches -
-        initFront -
-        initBackEach * 2 -
-        underarmCastOn * 2;
-    int raglanRepeat = (raglanNumerator / 4).round();
+    // ── 5. 래글런 반복 N 계산 (사이즈별 분기) ──────────────────
+    // 인형/소형 (옷길이 < 20cm): 옵션 C — N을 상완 기준으로 (가슴 부족분은 짧은단)
+    // 성인 (옷길이 >= 20cm): 옵션 B — N을 가슴 기준으로 (소매 과대분은 분리 직후 줄임)
+    final isSmallSize = measurements.bodyLengthCm < 20;
+    final targetArmStitches = gauge.roundToEven(
+      gauge.stitchesFromCm(measurements.effectiveUpperArmCm + ease.upperArmEaseCm),
+    );
+    int raglanRepeat;
+    if (isSmallSize) {
+      // 옵션 C: 한쪽 소매 한 바퀴 = (initSleeveEach + 2N) + 2 + underarm
+      // → N = (targetArm − initSleeveEach − 2 − underarm) / 2
+      final num = targetArmStitches - initSleeveEach - 2 - underarmCastOn;
+      raglanRepeat = (num / 2).round();
+    } else {
+      // 옵션 B: 몸통 = (initFront + 2N) + 2(initBack + N) + 4 + 2×underarm
+      // → N = (targetChest − initFront − 2×initBack − 4 − 2×underarm) / 4
+      final num = targetChestStitches -
+          initFront -
+          initBackEach * 2 -
+          4 -
+          underarmCastOn * 2;
+      raglanRepeat = (num / 4).round();
+    }
     if (raglanRepeat < minRaglanRepeat) {
       warnings.add(
           '래글런 반복이 $raglanRepeat → $minRaglanRepeat로 보정 (너무 작음).');
@@ -127,20 +143,55 @@ class RaglanPatternGenerator {
     final finalBackEach = initBackEach + raglanRepeat;
     final finalSleeveEach = initSleeveEach + 2 * raglanRepeat;
 
-    // 실제 몸통 총코.
+    // 실제 몸통 총코 (사용자 정정 — 라글런 8코는 1코씩 양옆 분배).
+    // 4 라인 × 몸통쪽 1코 = 4코. 양옆 감아코 2개.
     final bodyTotalStitches =
-        finalFront + finalBackEach * 2 + underarmCastOn * 2;
+        finalFront + finalBackEach * 2 + 4 + underarmCastOn * 2;
 
-    // 가슴 오차 검증.
+    // 가슴/소매 보정 — 사이즈별 분기.
     final actualChestCm = bodyTotalStitches * 10 / gauge.stitchesPer10cm;
-    final chestDiff = (actualChestCm - targetChestCm).abs();
-    if (chestDiff > 1) {
-      warnings.add(
-          '목표 가슴 ${targetChestCm.toStringAsFixed(1)}cm vs 실제 ${actualChestCm.toStringAsFixed(1)}cm (차이 ${chestDiff.toStringAsFixed(1)}cm).');
+    final chestDiff = actualChestCm - targetChestCm;
+    int chestDeficitStitches = 0;
+    int chestShortRows = 0;
+    int sleeveAdjustDecrease = 0;
+
+    if (isSmallSize) {
+      // 인형/소형 — 가슴 부족 시 짧은단 보정.
+      chestDeficitStitches =
+          (targetChestStitches - bodyTotalStitches).clamp(0, 99999);
+      // 짧은단 1세트(왕복 2단) = 양쪽 1코씩 = +2코
+      chestShortRows = chestDeficitStitches > 0
+          ? ((chestDeficitStitches / 2).ceil() * 2)
+          : 0;
+      if (chestDeficitStitches > 0) {
+        final shortRowsCm = (chestShortRows * 10 / gauge.rowsPer10cm).toStringAsFixed(1);
+        warnings.add(
+            '⚠️ 가슴 ${(-chestDiff).toStringAsFixed(1)}cm 부족 — '
+            '래글런 직후 짧은단 $chestShortRows단 (약 ${shortRowsCm}cm) 추가로 보정.');
+      }
+    } else {
+      // 성인 — 소매 과대 시 분리 직후 즉시 줄임.
+      final actualSleeveStitches = finalSleeveEach + 2 + underarmCastOn;
+      sleeveAdjustDecrease =
+          (actualSleeveStitches - targetArmStitches).clamp(0, 99999);
+      if (sleeveAdjustDecrease > 0) {
+        final actualArmCm = actualSleeveStitches * 10 / gauge.stitchesPer10cm;
+        final targetArmCm = targetArmStitches * 10 / gauge.stitchesPer10cm;
+        warnings.add(
+            '⚠️ 소매 ${(actualArmCm - targetArmCm).toStringAsFixed(1)}cm 과대 — '
+            '분리 직후 한쪽 소매에서 $sleeveAdjustDecrease코 즉시 줄임으로 보정.');
+      }
+      if (chestDiff.abs() > 1) {
+        warnings.add(
+            '목표 가슴 ${targetChestCm.toStringAsFixed(1)}cm vs 실제 ${actualChestCm.toStringAsFixed(1)}cm (차이 ${chestDiff.toStringAsFixed(1)}cm).');
+      }
     }
 
     // ── 7. 소매 상완 둘레 검증 ──────────────────
-    final sleeveTotalStitches = finalSleeveEach * 2 + underarmCastOn;
+    // 사용자 정정 #2 — 한쪽 소매 한 바퀴 코수 (작업 시작 시점):
+    //   = finalSleeveEach (영역) + 2 (라글런 양옆 흡수) + underarmCastOn (한쪽 감아코)
+    // 자투리실 분리 시는 finalSleeveEach + 2 = 10코 (감아코는 몸통 작업 후 줍기).
+    final sleeveTotalStitches = finalSleeveEach + 2 + underarmCastOn;
     final actualUpperArmCm =
         sleeveTotalStitches * 10 / gauge.stitchesPer10cm;
     final targetUpperArmCm =
@@ -161,37 +212,60 @@ class RaglanPatternGenerator {
 
     // ── 8. 몸통 단수 ────────────────────────────
     // 전체 옷길이에서 고무단(6cm 목) + 앞목 쉐이핑(약 11단) + 래글런 2 단수(2×N) 제외.
-    final neckRibRows = gauge.rowsFromCm(6);
-    const frontNeckShapingRows = 11; // Banul 고정
+    // 인형/소형 사이즈 대응 — 옷길이가 짧으면 고무단·쉐이핑을 비례 축소.
+    // (이슈 #661 — 인형 프리셋 적용 시 "몸통 메리야스 0단" 버그 보정)
+    final neckRibCm = math.min(6.0, measurements.bodyLengthCm * 0.18);
+    final bodyRibCm = math.min(7.0, measurements.bodyLengthCm * 0.20);
+    final neckRibRows = gauge.rowsFromCm(neckRibCm);
+    final bodyRibRows = gauge.rowsFromCm(bodyRibCm);
+    final frontNeckShapingRows = measurements.bodyLengthCm < 20 ? 5 : 11;
     final raglan2Rows = raglanRepeat * 2;
 
     final totalRows = gauge.rowsFromCm(measurements.bodyLengthCm);
-    final bodyRibRows = gauge.rowsFromCm(7); // 몸통 고무단
-    final bodyRows = totalRows -
+    final bodyRowsCalc = totalRows -
         neckRibRows -
         frontNeckShapingRows -
         raglan2Rows -
         bodyRibRows;
+    // 음수/극소면 최소 5단 보장 + 경고
+    final bodyRows = bodyRowsCalc < 5 ? 5 : bodyRowsCalc;
+    if (bodyRowsCalc < 5) {
+      warnings.add(
+          '⚠️ 옷길이 ${measurements.bodyLengthCm}cm 가 짧아 몸통이 5단으로 보정됐어요. 옷길이를 늘려보세요.');
+    }
 
     // ── 9. 소매 단수 ────────────────────────────
-    final sleeveRibRows = gauge.rowsFromCm(7);
-    final sleeveRows = gauge.rowsFromCm(measurements.sleeveLengthCm) - sleeveRibRows;
+    // #670 — 인형/소형 사이즈 보정: 7cm 고정 고무단은 인형 소매(7~12cm)에 너무 큼.
+    //         성인은 7cm 클램프 유지, 인형은 소매 길이의 20%로 비례 축소 (최소 1cm).
+    final sleeveRibCm = math.min(7.0,
+        math.max(1.0, measurements.sleeveLengthCm * 0.20));
+    final sleeveRibRows = gauge.rowsFromCm(sleeveRibCm);
+    final sleeveRows =
+        gauge.rowsFromCm(measurements.sleeveLengthCm) - sleeveRibRows;
 
     // ── 10. 소매 코줄임 계산 ─────────────────────
     // 목표 손목 코수 = wrist_cm × gauge/10 (2의 배수, 최소 6).
     final wristStitchesTarget = gauge.roundToEven(
       gauge.stitchesFromCm(measurements.effectiveWristCm),
     );
-    final sleeveDecreaseTotal =
+    int sleeveDecreaseCount =
         ((sleeveTotalStitches - wristStitchesTarget) / 2).round().clamp(0, 1000);
-    // k2tog + ssk = 2코 줄임 / 1회 줄임단.
-    final sleeveDecreaseCount = sleeveDecreaseTotal;
+    // #670 — 줄임 횟수가 (가용 단수 / 2)을 초과하면 자동 축소 (간격 ≥ 2단 보장).
+    final maxDecreasesByRows = sleeveRows ~/ 2;
+    if (sleeveDecreaseCount > maxDecreasesByRows && maxDecreasesByRows >= 0) {
+      final original = sleeveDecreaseCount;
+      sleeveDecreaseCount = maxDecreasesByRows;
+      if (original != sleeveDecreaseCount) {
+        warnings.add(
+            '소매 단수가 짧아 코줄임 횟수를 $original → $sleeveDecreaseCount회로 축소했어요. '
+            '실제 손목 코수가 목표($wristStitchesTarget 코)보다 클 수 있어요.');
+      }
+    }
     int sleeveDecreaseIntervalRows = sleeveDecreaseCount > 0
         ? (sleeveRows / sleeveDecreaseCount).floor()
         : 0;
     if (sleeveDecreaseIntervalRows < 2 && sleeveDecreaseCount > 0) {
       sleeveDecreaseIntervalRows = 2;
-      warnings.add('소매 코줄임 간격이 너무 짧음 — 2단으로 보정.');
     }
 
     return RaglanGeneratedPattern(
@@ -205,6 +279,9 @@ class RaglanPatternGenerator {
       raglanStitches: 8,
       raglanRepeat: raglanRepeat,
       frontNeckShapingRows: frontNeckShapingRows,
+      chestShortRows: chestShortRows,
+      chestDeficitStitches: chestDeficitStitches,
+      sleeveAdjustDecrease: sleeveAdjustDecrease,
       finalFront: finalFront,
       finalBackEach: finalBackEach,
       finalSleeveEach: finalSleeveEach,

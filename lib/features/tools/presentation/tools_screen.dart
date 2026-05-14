@@ -354,6 +354,28 @@ class ToolsScreen extends ConsumerWidget {
                       onTap: () => context.push(Routes.toolsPatternConverter),
                     ),
                     const SizedBox(height: 10),
+                    // 이슈 #660 Phase 2 — 파일 탐색기 (외부 PDF/이미지 다중 임포트)
+                    _ToolCard(
+                      icon: Icons.folder_open_rounded,
+                      color: C.pkD,
+                      title: isKorean ? '파일 탐색기' : 'File Explorer',
+                      description: isKorean
+                          ? '폰의 PDF·이미지 파일을 한번에 도안 라이브러리로'
+                          : 'Bulk import PDFs/images from your phone',
+                      onTap: () => context.push(Routes.toolsFileExplorer),
+                    ),
+                    const SizedBox(height: 10),
+                    // 이슈 #664 — 패턴 생성기 (래글런 + 단계별 도식 + 출판용 PDF)
+                    _ToolCard(
+                      icon: Icons.auto_stories_rounded,
+                      color: C.lvD,
+                      title: isKorean ? '패턴 생성기' : 'Pattern Generator',
+                      description: isKorean
+                          ? '치수+게이지로 도안 자동 생성, 단계별 도식, 출판용 PDF'
+                          : 'Auto-build patterns with diagrams + print-ready PDF',
+                      onTap: () => context.push(Routes.toolsPatternGenerator),
+                    ),
+                    const SizedBox(height: 10),
                     _ToolCard(
                       icon: Icons.translate_rounded,
                       color: C.lv,
@@ -364,11 +386,14 @@ class ToolsScreen extends ConsumerWidget {
                       onTap: () => context.push(Routes.toolsPatternTranslator),
                     ),
                     const SizedBox(height: 10),
+                    // 이슈 #665/#668 — 도안 에디터 (Gate 화면 진입 → 도안 목록 + 사각/원형/자유 path 모달)
                     _ToolCard(
-                      icon: Icons.grid_on_rounded,
-                      color: C.lvD,
+                      icon: Icons.edit_note_rounded,
+                      color: C.pk,
                       title: isKorean ? '도안 에디터' : 'Pattern Editor',
-                      description: isKorean ? '나의 도안 목록 및 새 도안 만들기' : 'My patterns & create new',
+                      description: isKorean
+                          ? '내 도안 목록 + 사각/원형/자유 path 새 도안'
+                          : 'My charts + new (rect/round/path)',
                       onTap: () => context.push(Routes.toolsPatternGate),
                     ),
                     const SizedBox(height: 10),

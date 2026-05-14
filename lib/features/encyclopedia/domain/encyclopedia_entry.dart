@@ -69,6 +69,7 @@ class EncyclopediaEntry {
   }
 
   Map<String, dynamic> toJson() => {
+        'id': id,
         'term': term,
         'termEn': termEn,
         'termJa': termJa,
@@ -85,6 +86,44 @@ class EncyclopediaEntry {
         'createdBy': createdBy,
         'approvedBy': approvedBy,
         'order': order,
+        'createdAt': createdAt.toIso8601String(),
         'craftType': craftType,
       };
+
+  /// 로컬 캐시(Hive 등) 복원용 — Firestore Timestamp 의존성 없음.
+  /// id는 json['id'] 우선, 없으면 빈 문자열.
+  factory EncyclopediaEntry.fromJson(Map<String, dynamic> json) {
+    final createdAtRaw = json['createdAt'];
+    DateTime parsedCreatedAt;
+    if (createdAtRaw is String) {
+      parsedCreatedAt = DateTime.tryParse(createdAtRaw) ?? DateTime.now();
+    } else if (createdAtRaw is int) {
+      parsedCreatedAt = DateTime.fromMillisecondsSinceEpoch(createdAtRaw);
+    } else if (createdAtRaw is DateTime) {
+      parsedCreatedAt = createdAtRaw;
+    } else {
+      parsedCreatedAt = DateTime.now();
+    }
+    return EncyclopediaEntry(
+      id: json['id'] as String? ?? '',
+      term: json['term'] as String? ?? '',
+      termEn: json['termEn'] as String? ?? '',
+      termJa: json['termJa'] as String? ?? '',
+      abbreviation: json['abbreviation'] as String? ?? '',
+      category: json['category'] as String? ?? 'term',
+      description: json['description'] as String? ?? '',
+      descriptionEn: json['descriptionEn'] as String? ?? '',
+      descriptionJa: json['descriptionJa'] as String? ?? '',
+      aliases: List<String>.from(json['aliases'] as List? ?? const <String>[]),
+      symbol: json['symbol'] as String? ?? '',
+      referenceUrl: json['referenceUrl'] as String? ?? '',
+      videoUrl: json['videoUrl'] as String? ?? '',
+      status: json['status'] as String? ?? 'approved',
+      createdBy: json['createdBy'] as String? ?? '',
+      approvedBy: json['approvedBy'] as String? ?? '',
+      order: (json['order'] as num?)?.toInt() ?? 0,
+      createdAt: parsedCreatedAt,
+      craftType: json['craftType'] as String? ?? 'knitting',
+    );
+  }
 }

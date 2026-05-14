@@ -3,12 +3,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/mori_symbol_view.dart';
 import '../../../../providers/knit_symbol_provider.dart';
+import '../../domain/crochet_symbols.dart';
 import '../../domain/knit_symbol_entry.dart';
 import '../../domain/knit_symbols.dart';
 import '../../domain/pattern_chart.dart';
 import 'chart_canvas.dart' show DrawLayer;
 import 'chart_canvas.dart';
+
+/// 도안에디터 팔레트 craftType — 대바늘/코바늘 라이브러리 토글
+/// (사각 도안의 데이터 모델은 유지: CellData.symbolId는 String, 양쪽 ID 자동 수용)
+enum CraftType { knit, crochet }
+
+extension CraftTypeLabel on CraftType {
+  String get labelKo => this == CraftType.knit ? '대바늘' : '코바늘';
+  String get labelEn => this == CraftType.knit ? 'Knit' : 'Crochet';
+  String get badge => this == CraftType.knit ? 'K' : 'C';
+}
 
 
 class ChartToolbar extends StatefulWidget {
@@ -56,8 +68,15 @@ class ChartToolbar extends StatefulWidget {
 }
 
 class _ChartToolbarState extends State<ChartToolbar> {
-  SymbolCategory _selectedCategory = SymbolCategory.basic;
+  // craftType별 카테고리 선택 상태 (전환 시 각자 마지막 선택 기억)
+  CraftType _craftType = CraftType.knit;
+  SymbolCategory _selectedKnitCategory = SymbolCategory.basic;
+  CrochetCategory _selectedCrochetCategory = CrochetCategory.basic;
   final _topBarScrollCtrl = ScrollController();
+
+  /// #680 — 팔레트(색상/심볼) 펼침 토글. 기본 펼침.
+  /// 접으면 도구 행만 표시 → 그리드 비율 ↑ (기능은 보존, 사용자가 펼치면 다시 표시).
+  bool _panelExpanded = true;
 
   @override
   void dispose() {
@@ -90,18 +109,31 @@ class _ChartToolbarState extends State<ChartToolbar> {
               onFitScreen: widget.onFitScreen,
               onGridResize: widget.onGridResize,
               scrollController: _topBarScrollCtrl,
+              // #680 — 팔레트 토글 (그리드 영역 확보).
+              panelExpanded: _panelExpanded,
+              onTogglePanel: () =>
+                  setState(() => _panelExpanded = !_panelExpanded),
             ),
-            const Divider(height: 1),
-            _UnifiedPanel(
-              activeLayer: widget.activeLayer,
-              activeColor: widget.activeColor,
-              activeSymbolId: widget.activeSymbolId,
-              selectedCategory: _selectedCategory,
-              onLayerChanged: widget.onLayerChanged,
-              onCategoryChanged: (cat) => setState(() => _selectedCategory = cat),
-              onColorChanged: widget.onColorChanged,
-              onSymbolChanged: widget.onSymbolChanged,
-            ),
+            // #680 — 팔레트는 토글 ON 시에만 표시 (기능 보존, 비율만 조정).
+            if (_panelExpanded) ...[
+              const Divider(height: 1),
+              _UnifiedPanel(
+                activeLayer: widget.activeLayer,
+                activeColor: widget.activeColor,
+                activeSymbolId: widget.activeSymbolId,
+                craftType: _craftType,
+                selectedKnitCategory: _selectedKnitCategory,
+                selectedCrochetCategory: _selectedCrochetCategory,
+                onLayerChanged: widget.onLayerChanged,
+                onCraftTypeChanged: (c) => setState(() => _craftType = c),
+                onKnitCategoryChanged: (cat) =>
+                    setState(() => _selectedKnitCategory = cat),
+                onCrochetCategoryChanged: (cat) =>
+                    setState(() => _selectedCrochetCategory = cat),
+                onColorChanged: widget.onColorChanged,
+                onSymbolChanged: widget.onSymbolChanged,
+              ),
+            ],
           ],
         ),
       ),
@@ -122,6 +154,9 @@ class _TopBar extends StatelessWidget {
   final VoidCallback? onFitScreen;
   final VoidCallback? onGridResize;
   final ScrollController? scrollController;
+  // #680 — 팔레트 토글 (그리드 영역 확보).
+  final bool panelExpanded;
+  final VoidCallback? onTogglePanel;
 
   const _TopBar({
     required this.activeTool,
@@ -136,6 +171,8 @@ class _TopBar extends StatelessWidget {
     this.onFitScreen,
     this.onGridResize,
     this.scrollController,
+    this.panelExpanded = true,
+    this.onTogglePanel,
   });
 
   @override
@@ -171,6 +208,16 @@ class _TopBar extends StatelessWidget {
           _IconBtn(icon: Icons.redo_rounded, enabled: canRedo, onTap: onRedo),
           _IconBtn(icon: Icons.ios_share_rounded, enabled: true, onTap: onExport),
           _IconBtn(icon: Icons.delete_outline_rounded, enabled: true, onTap: onClear, color: Colors.red.shade300),
+          // #680 — 팔레트 펼치기/접기 토글 (그리드 영역 확보).
+          if (onTogglePanel != null)
+            _IconBtn(
+              icon: panelExpanded
+                  ? Icons.keyboard_arrow_down_rounded
+                  : Icons.keyboard_arrow_up_rounded,
+              enabled: true,
+              onTap: onTogglePanel!,
+              tooltip: panelExpanded ? '팔레트 접기' : '팔레트 펼치기',
+            ),
         ],
       ),
       ),
@@ -451,15 +498,23 @@ class _SimpleColorPickerState extends State<_SimpleColorPicker> {
 }
 
 class _SymbolPanel extends ConsumerWidget {
-  final SymbolCategory selectedCategory;
+  final CraftType craftType;
+  final SymbolCategory selectedKnitCategory;
+  final CrochetCategory selectedCrochetCategory;
   final String? activeSymbolId;
-  final ValueChanged<SymbolCategory> onCategoryChanged;
+  final ValueChanged<CraftType> onCraftTypeChanged;
+  final ValueChanged<SymbolCategory> onKnitCategoryChanged;
+  final ValueChanged<CrochetCategory> onCrochetCategoryChanged;
   final ValueChanged<String> onSymbolChanged;
 
   const _SymbolPanel({
-    required this.selectedCategory,
+    required this.craftType,
+    required this.selectedKnitCategory,
+    required this.selectedCrochetCategory,
     required this.activeSymbolId,
-    required this.onCategoryChanged,
+    required this.onCraftTypeChanged,
+    required this.onKnitCategoryChanged,
+    required this.onCrochetCategoryChanged,
     required this.onSymbolChanged,
   });
 
@@ -479,7 +534,9 @@ class _SymbolPanel extends ConsumerWidget {
         snap: true,
         snapSizes: const [0.55, 0.92],
         builder: (_, scrollCtrl) => _ExpandedSymbolSheet(
-          initialCategory: selectedCategory,
+          initialCraftType: craftType,
+          initialKnitCategory: selectedKnitCategory,
+          initialCrochetCategory: selectedCrochetCategory,
           activeSymbolId: activeSymbolId,
           onSymbolChanged: (id) {
             onSymbolChanged(id);
@@ -493,24 +550,6 @@ class _SymbolPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final allEntries = ref.watch(knitSymbolsProvider).valueOrNull ?? [];
-    // Firestore 심볼이 없으면 정적 라이브러리 폴백
-    final useStatic = allEntries.isEmpty;
-
-    // basic(전체) 탭: 모든 심볼, 나머지: 카테고리 필터
-    final firestoreSymbols = useStatic
-        ? <KnitSymbolEntry>[]
-        : (selectedCategory == SymbolCategory.basic
-            ? allEntries
-            : allEntries.where((e) => e.symbolCategory == selectedCategory).toList());
-    final staticSymbols = !useStatic
-        ? <KnitSymbol>[]
-        : (selectedCategory == SymbolCategory.basic
-            ? KnitSymbolLibrary.all
-            : KnitSymbolLibrary.byCategory(selectedCategory));
-
-    final hasSymbols = useStatic ? staticSymbols.isNotEmpty : firestoreSymbols.isNotEmpty;
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -535,7 +574,82 @@ class _SymbolPanel extends ConsumerWidget {
             ),
           ),
         ),
-        // ── 카테고리 탭 ─────────────────────────────────────
+        // ── craftType 토글 (대바늘/코바늘) ──────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+          child: Row(
+            children: [
+              _CraftTypeChip(
+                craft: CraftType.knit,
+                active: craftType == CraftType.knit,
+                onTap: () => onCraftTypeChanged(CraftType.knit),
+              ),
+              const SizedBox(width: 6),
+              _CraftTypeChip(
+                craft: CraftType.crochet,
+                active: craftType == CraftType.crochet,
+                onTap: () => onCraftTypeChanged(CraftType.crochet),
+              ),
+            ],
+          ),
+        ),
+        // ── 카테고리 탭 + 심볼 가로 스크롤 ──────────────────
+        if (craftType == CraftType.knit)
+          _KnitSymbolRow(
+            selectedCategory: selectedKnitCategory,
+            activeSymbolId: activeSymbolId,
+            onCategoryChanged: onKnitCategoryChanged,
+            onSymbolChanged: onSymbolChanged,
+          )
+        else
+          _CrochetSymbolRow(
+            selectedCategory: selectedCrochetCategory,
+            activeSymbolId: activeSymbolId,
+            onCategoryChanged: onCrochetCategoryChanged,
+            onSymbolChanged: onSymbolChanged,
+          ),
+      ],
+    );
+  }
+}
+
+/// 대바늘 카테고리 탭 + 심볼 가로 스크롤 (기존 동작 그대로 — Firestore/정적 폴백 유지)
+class _KnitSymbolRow extends ConsumerWidget {
+  final SymbolCategory selectedCategory;
+  final String? activeSymbolId;
+  final ValueChanged<SymbolCategory> onCategoryChanged;
+  final ValueChanged<String> onSymbolChanged;
+
+  const _KnitSymbolRow({
+    required this.selectedCategory,
+    required this.activeSymbolId,
+    required this.onCategoryChanged,
+    required this.onSymbolChanged,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final allEntries = ref.watch(knitSymbolsProvider).valueOrNull ?? [];
+    // Firestore 심볼이 없으면 정적 라이브러리 폴백
+    final useStatic = allEntries.isEmpty;
+
+    // basic(전체) 탭: 모든 심볼, 나머지: 카테고리 필터
+    final firestoreSymbols = useStatic
+        ? <KnitSymbolEntry>[]
+        : (selectedCategory == SymbolCategory.basic
+            ? allEntries
+            : allEntries.where((e) => e.symbolCategory == selectedCategory).toList());
+    final staticSymbols = !useStatic
+        ? <KnitSymbol>[]
+        : (selectedCategory == SymbolCategory.basic
+            ? KnitSymbolLibrary.all
+            : KnitSymbolLibrary.byCategory(selectedCategory));
+
+    final hasSymbols = useStatic ? staticSymbols.isNotEmpty : firestoreSymbols.isNotEmpty;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
         SizedBox(
           height: 32,
           child: ListView(
@@ -544,7 +658,7 @@ class _SymbolPanel extends ConsumerWidget {
             children: [
               for (final cat in SymbolCategory.values)
                 _CategoryTab(
-                  label: _catLabel(cat),
+                  label: _knitCatLabel(cat),
                   active: selectedCategory == cat,
                   onTap: () => onCategoryChanged(cat),
                 ),
@@ -552,7 +666,6 @@ class _SymbolPanel extends ConsumerWidget {
           ),
         ),
         const Divider(height: 1),
-        // ── 기호 가로 스크롤 ────────────────────────────────
         SizedBox(
           height: 68,
           child: !hasSymbols
@@ -584,28 +697,216 @@ class _SymbolPanel extends ConsumerWidget {
       ],
     );
   }
+}
 
-  String _catLabel(SymbolCategory cat) {
-    switch (cat) {
-      case SymbolCategory.basic:    return '전체';
-      case SymbolCategory.decrease: return '줄이기';
-      case SymbolCategory.increase: return '늘리기';
-      case SymbolCategory.cable:    return '케이블';
-      case SymbolCategory.special:  return '특수';
-      case SymbolCategory.lace:     return '레이스';
-    }
+/// 코바늘 카테고리 탭 + 심볼 가로 스크롤 (CrochetSymbolLibrary 직접 사용)
+class _CrochetSymbolRow extends StatelessWidget {
+  final CrochetCategory selectedCategory;
+  final String? activeSymbolId;
+  final ValueChanged<CrochetCategory> onCategoryChanged;
+  final ValueChanged<String> onSymbolChanged;
+
+  const _CrochetSymbolRow({
+    required this.selectedCategory,
+    required this.activeSymbolId,
+    required this.onCategoryChanged,
+    required this.onSymbolChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final symbols = CrochetSymbolLibrary.byCategory(selectedCategory);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: 32,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            children: [
+              for (final cat in CrochetCategory.values)
+                _CategoryTab(
+                  label: CrochetSymbolLibrary.categoryLabelKo(cat),
+                  active: selectedCategory == cat,
+                  onTap: () => onCategoryChanged(cat),
+                ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        SizedBox(
+          height: 68,
+          child: symbols.isEmpty
+              ? Center(
+                  child: Text('해당 카테고리에 심볼이 없습니다.', style: TextStyle(fontSize: 11, color: C.tx2)),
+                )
+              : ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  children: [
+                    for (final s in symbols)
+                      _CrochetSymbolCell(
+                        symbol: s,
+                        active: activeSymbolId == s.id,
+                        onTap: () => onSymbolChanged(s.id),
+                      ),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+String _knitCatLabel(SymbolCategory cat) {
+  switch (cat) {
+    case SymbolCategory.basic:    return '전체';
+    case SymbolCategory.decrease: return '줄이기';
+    case SymbolCategory.increase: return '늘리기';
+    case SymbolCategory.cable:    return '케이블';
+    case SymbolCategory.special:  return '특수';
+    case SymbolCategory.lace:     return '레이스';
+  }
+}
+
+/// 대바늘/코바늘 토글 칩 — 표준 칩 스타일
+class _CraftTypeChip extends StatelessWidget {
+  final CraftType craft;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _CraftTypeChip({required this.craft, required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: active ? C.lv : C.lvL,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: active ? C.lv : C.lv.withValues(alpha: 0.20),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 18,
+              height: 18,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: active ? Colors.white.withValues(alpha: 0.22) : C.lv.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                craft.badge,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: active ? Colors.white : C.lvD,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              craft.labelKo,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                color: active ? Colors.white : C.lvD,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 코바늘 심볼 셀 — Firebase Storage SVG (network) 또는 약어 텍스트 폴백
+class _CrochetSymbolCell extends StatelessWidget {
+  final CrochetSymbol symbol;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _CrochetSymbolCell({required this.symbol, required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = symbol.abbreviation;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Tooltip(
+        message: '${symbol.labelKo} ($label)',
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          width: 44,
+          height: 56,
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          decoration: BoxDecoration(
+            color: active ? C.lvL : Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: active ? C.lv : Colors.grey.shade300,
+              width: active ? 2 : 1,
+            ),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // 코바늘은 직접 firebaseUrl 사용 — Firestore 매핑 충돌 회피.
+              if (symbol.hasSvg)
+                SvgPicture.network(
+                  symbol.firebaseUrl,
+                  width: 22,
+                  height: 22,
+                  fit: BoxFit.contain,
+                  placeholderBuilder: (_) => Text(
+                    label.length > 4 ? label.substring(0, 4) : label,
+                    style: TextStyle(fontSize: 9, color: C.tx2, fontWeight: FontWeight.w600),
+                  ),
+                )
+              else
+                Text(
+                  label.length > 5 ? label.substring(0, 5) : label,
+                  style: TextStyle(fontSize: 11, color: C.tx, fontWeight: FontWeight.w700),
+                ),
+              const SizedBox(height: 3),
+              Text(
+                label.length > 6 ? label.substring(0, 6) : label,
+                style: TextStyle(fontSize: 8, color: C.tx2, fontWeight: FontWeight.w600),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
 // ── 확장 기호 바텀시트 ──────────────────────────────────────────────
 class _ExpandedSymbolSheet extends ConsumerStatefulWidget {
-  final SymbolCategory initialCategory;
+  final CraftType initialCraftType;
+  final SymbolCategory initialKnitCategory;
+  final CrochetCategory initialCrochetCategory;
   final String? activeSymbolId;
   final ValueChanged<String> onSymbolChanged;
   final ScrollController scrollController;
 
   const _ExpandedSymbolSheet({
-    required this.initialCategory,
+    required this.initialCraftType,
+    required this.initialKnitCategory,
+    required this.initialCrochetCategory,
     required this.activeSymbolId,
     required this.onSymbolChanged,
     required this.scrollController,
@@ -616,43 +917,20 @@ class _ExpandedSymbolSheet extends ConsumerStatefulWidget {
 }
 
 class _ExpandedSymbolSheetState extends ConsumerState<_ExpandedSymbolSheet> {
-  late SymbolCategory _cat;
+  late CraftType _craft;
+  late SymbolCategory _knitCat;
+  late CrochetCategory _crochetCat;
 
   @override
   void initState() {
     super.initState();
-    _cat = widget.initialCategory;
-  }
-
-  String _catLabel(SymbolCategory cat) {
-    switch (cat) {
-      case SymbolCategory.basic:    return '전체';
-      case SymbolCategory.decrease: return '줄이기';
-      case SymbolCategory.increase: return '늘리기';
-      case SymbolCategory.cable:    return '케이블';
-      case SymbolCategory.special:  return '특수';
-      case SymbolCategory.lace:     return '레이스';
-    }
+    _craft = widget.initialCraftType;
+    _knitCat = widget.initialKnitCategory;
+    _crochetCat = widget.initialCrochetCategory;
   }
 
   @override
   Widget build(BuildContext context) {
-    final allEntries = ref.watch(knitSymbolsProvider).valueOrNull ?? [];
-    final useStatic = allEntries.isEmpty;
-
-    final firestoreSymbols = useStatic
-        ? <KnitSymbolEntry>[]
-        : (_cat == SymbolCategory.basic
-            ? allEntries
-            : allEntries.where((e) => e.symbolCategory == _cat).toList());
-    final staticSymbols = !useStatic
-        ? <KnitSymbol>[]
-        : (_cat == SymbolCategory.basic
-            ? KnitSymbolLibrary.all
-            : KnitSymbolLibrary.byCategory(_cat));
-
-    final count = useStatic ? staticSymbols.length : firestoreSymbols.length;
-
     return Column(
       children: [
         // 드래그 인디케이터
@@ -665,58 +943,140 @@ class _ExpandedSymbolSheetState extends ConsumerState<_ExpandedSymbolSheet> {
             borderRadius: BorderRadius.circular(2),
           ),
         ),
+        // craftType 토글
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+          child: Row(
+            children: [
+              _CraftTypeChip(
+                craft: CraftType.knit,
+                active: _craft == CraftType.knit,
+                onTap: () => setState(() => _craft = CraftType.knit),
+              ),
+              const SizedBox(width: 6),
+              _CraftTypeChip(
+                craft: CraftType.crochet,
+                active: _craft == CraftType.crochet,
+                onTap: () => setState(() => _craft = CraftType.crochet),
+              ),
+            ],
+          ),
+        ),
         // 카테고리 탭
         SizedBox(
           height: 36,
           child: ListView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-            children: [
-              for (final cat in SymbolCategory.values)
-                _CategoryTab(
-                  label: _catLabel(cat),
-                  active: _cat == cat,
-                  onTap: () => setState(() => _cat = cat),
-                ),
-            ],
+            children: _craft == CraftType.knit
+                ? [
+                    for (final cat in SymbolCategory.values)
+                      _CategoryTab(
+                        label: _knitCatLabel(cat),
+                        active: _knitCat == cat,
+                        onTap: () => setState(() => _knitCat = cat),
+                      ),
+                  ]
+                : [
+                    for (final cat in CrochetCategory.values)
+                      _CategoryTab(
+                        label: CrochetSymbolLibrary.categoryLabelKo(cat),
+                        active: _crochetCat == cat,
+                        onTap: () => setState(() => _crochetCat = cat),
+                      ),
+                  ],
           ),
         ),
         const Divider(height: 1),
         // 기호 그리드
         Expanded(
-          child: count == 0
-              ? Center(
-                  child: Text('더 많은 심볼이 계속 추가됩니다.', style: TextStyle(fontSize: 13, color: C.tx2)),
-                )
-              : GridView.builder(
-                  controller: widget.scrollController,
-                  padding: const EdgeInsets.all(12),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 6,
-                    childAspectRatio: 0.82,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                  ),
-                  itemCount: count,
-                  itemBuilder: (_, i) {
-                    if (useStatic) {
-                      final s = staticSymbols[i];
-                      return _StaticSymbolCell(
-                        symbol: s,
-                        active: widget.activeSymbolId == s.id,
-                        onTap: () => widget.onSymbolChanged(s.id),
-                      );
-                    }
-                    final e = firestoreSymbols[i];
-                    return _SymbolCell(
-                      entry: e,
-                      active: widget.activeSymbolId == e.symbolId,
-                      onTap: () => widget.onSymbolChanged(e.symbolId),
-                    );
-                  },
-                ),
+          child: _craft == CraftType.knit
+              ? _buildKnitGrid()
+              : _buildCrochetGrid(),
         ),
       ],
+    );
+  }
+
+  Widget _buildKnitGrid() {
+    final allEntries = ref.watch(knitSymbolsProvider).valueOrNull ?? [];
+    final useStatic = allEntries.isEmpty;
+
+    final firestoreSymbols = useStatic
+        ? <KnitSymbolEntry>[]
+        : (_knitCat == SymbolCategory.basic
+            ? allEntries
+            : allEntries.where((e) => e.symbolCategory == _knitCat).toList());
+    final staticSymbols = !useStatic
+        ? <KnitSymbol>[]
+        : (_knitCat == SymbolCategory.basic
+            ? KnitSymbolLibrary.all
+            : KnitSymbolLibrary.byCategory(_knitCat));
+
+    final count = useStatic ? staticSymbols.length : firestoreSymbols.length;
+
+    if (count == 0) {
+      return Center(
+        child: Text('더 많은 심볼이 계속 추가됩니다.', style: TextStyle(fontSize: 13, color: C.tx2)),
+      );
+    }
+
+    return GridView.builder(
+      controller: widget.scrollController,
+      padding: const EdgeInsets.all(12),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 6,
+        childAspectRatio: 0.82,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+      ),
+      itemCount: count,
+      itemBuilder: (_, i) {
+        if (useStatic) {
+          final s = staticSymbols[i];
+          return _StaticSymbolCell(
+            symbol: s,
+            active: widget.activeSymbolId == s.id,
+            onTap: () => widget.onSymbolChanged(s.id),
+          );
+        }
+        final e = firestoreSymbols[i];
+        return _SymbolCell(
+          entry: e,
+          active: widget.activeSymbolId == e.symbolId,
+          onTap: () => widget.onSymbolChanged(e.symbolId),
+        );
+      },
+    );
+  }
+
+  Widget _buildCrochetGrid() {
+    final symbols = CrochetSymbolLibrary.byCategory(_crochetCat);
+
+    if (symbols.isEmpty) {
+      return Center(
+        child: Text('해당 카테고리에 심볼이 없습니다.', style: TextStyle(fontSize: 13, color: C.tx2)),
+      );
+    }
+
+    return GridView.builder(
+      controller: widget.scrollController,
+      padding: const EdgeInsets.all(12),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 6,
+        childAspectRatio: 0.82,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+      ),
+      itemCount: symbols.length,
+      itemBuilder: (_, i) {
+        final s = symbols[i];
+        return _CrochetSymbolCell(
+          symbol: s,
+          active: widget.activeSymbolId == s.id,
+          onTap: () => widget.onSymbolChanged(s.id),
+        );
+      },
     );
   }
 }
@@ -758,9 +1118,13 @@ class _UnifiedPanel extends StatelessWidget {
   final DrawLayer activeLayer;
   final Color activeColor;
   final String? activeSymbolId;
-  final SymbolCategory selectedCategory;
+  final CraftType craftType;
+  final SymbolCategory selectedKnitCategory;
+  final CrochetCategory selectedCrochetCategory;
   final ValueChanged<DrawLayer> onLayerChanged;
-  final ValueChanged<SymbolCategory> onCategoryChanged;
+  final ValueChanged<CraftType> onCraftTypeChanged;
+  final ValueChanged<SymbolCategory> onKnitCategoryChanged;
+  final ValueChanged<CrochetCategory> onCrochetCategoryChanged;
   final ValueChanged<Color> onColorChanged;
   final ValueChanged<String> onSymbolChanged;
 
@@ -768,9 +1132,13 @@ class _UnifiedPanel extends StatelessWidget {
     required this.activeLayer,
     required this.activeColor,
     required this.activeSymbolId,
-    required this.selectedCategory,
+    required this.craftType,
+    required this.selectedKnitCategory,
+    required this.selectedCrochetCategory,
     required this.onLayerChanged,
-    required this.onCategoryChanged,
+    required this.onCraftTypeChanged,
+    required this.onKnitCategoryChanged,
+    required this.onCrochetCategoryChanged,
     required this.onColorChanged,
     required this.onSymbolChanged,
   });
@@ -778,15 +1146,20 @@ class _UnifiedPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 색상/기호 탭 삭제 — 색상 팔레트 항상 고정 표시 + 기호 패널 항상 표시
+    // craftType 토글 (대바늘/코바늘) → 카테고리 탭 → 심볼 가로 스크롤
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         _ColorPanel(activeColor: activeColor, onColorChanged: onColorChanged),
         const Divider(height: 1),
         _SymbolPanel(
-          selectedCategory: selectedCategory,
+          craftType: craftType,
+          selectedKnitCategory: selectedKnitCategory,
+          selectedCrochetCategory: selectedCrochetCategory,
           activeSymbolId: activeSymbolId,
-          onCategoryChanged: onCategoryChanged,
+          onCraftTypeChanged: onCraftTypeChanged,
+          onKnitCategoryChanged: onKnitCategoryChanged,
+          onCrochetCategoryChanged: onCrochetCategoryChanged,
           onSymbolChanged: onSymbolChanged,
         ),
       ],
@@ -876,15 +1249,11 @@ class _SymbolCell extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              SvgPicture.network(
-                entry.svgUrl,
-                width: 22,
-                height: 22,
-                fit: BoxFit.contain,
-                placeholderBuilder: (_) => Text(
-                  label.length > 4 ? label.substring(0, 4) : label,
-                  style: TextStyle(fontSize: 9, color: C.tx2, fontWeight: FontWeight.w600),
-                ),
+              // #672 — 단일 소스 (MoriSymbolView)
+              MoriSymbolView(
+                symbolId: entry.symbolId,
+                size: 22,
+                fallbackText: label,
               ),
               const SizedBox(height: 3),
               Text(

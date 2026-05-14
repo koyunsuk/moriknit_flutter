@@ -112,6 +112,16 @@ class _NeedleInputScreenState extends ConsumerState<NeedleInputScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 이슈 #693 — 사진 영역 최상단 배치 (3개 화면 통일)
+                SectionTitle(title: t.needlePhoto),
+                const SizedBox(height: 8),
+                _NeedlePhotoSection(
+                  t: t,
+                  localPhotoPath: _localPhotoPath,
+                  existingPhotoUrl: _photoUrl,
+                  onTap: _pickNeedlePhoto,
+                ),
+                const SizedBox(height: 20),
                 SectionTitle(title: isKorean ? '바늘 사이즈 *' : 'Needle size *'),
                 const SizedBox(height: 10),
                 _NeedleSizeSelector(
@@ -216,15 +226,6 @@ class _NeedleInputScreenState extends ConsumerState<NeedleInputScreen> {
                   decoration: InputDecoration(
                     labelText: isKorean ? '예: 뜨개나라, 네이버쇼핑' : 'e.g. Yarn store, Online',
                   ),
-                ),
-                const SizedBox(height: 20),
-                SectionTitle(title: t.needlePhoto),
-                const SizedBox(height: 8),
-                _NeedlePhotoSection(
-                  t: t,
-                  localPhotoPath: _localPhotoPath,
-                  existingPhotoUrl: _photoUrl,
-                  onTap: _pickNeedlePhoto,
                 ),
                 const SizedBox(height: 20),
                 SectionTitle(title: isKorean ? '메모 (선택)' : 'Memo (optional)'),

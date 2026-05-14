@@ -60,7 +60,7 @@ class _YarnListScreenState extends ConsumerState<YarnListScreen> {
                           ),
                         ],
                         addLabel: isKorean ? '추가' : 'Add',
-                        onAdd: () => Navigator.push(ctx, MaterialPageRoute(builder: (_) => const YarnInputScreen())),
+                        onAdd: () => _showYarnStartSheet(context),
                       ),
                     );
                   },

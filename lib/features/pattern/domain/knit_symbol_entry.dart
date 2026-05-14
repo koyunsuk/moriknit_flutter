@@ -39,6 +39,34 @@ class KnitSymbolEntry {
     );
   }
 
+  /// #685 — Hive 영속 캐시 직렬화 (Timestamp 의존성 X, 일반 Map only)
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+        'name': name,
+        'nameEn': nameEn,
+        'abbreviation': abbreviation,
+        'svgUrl': svgUrl,
+        'category': category,
+        'order': order,
+        'spanWidth': spanWidth,
+        'spanHeight': spanHeight,
+      };
+
+  /// #685 — Hive 캐시 복원용. Firestore Timestamp 없이 일반 Map 입력.
+  factory KnitSymbolEntry.fromJson(Map<String, dynamic> json) {
+    return KnitSymbolEntry(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      nameEn: json['nameEn'] as String? ?? '',
+      abbreviation: json['abbreviation'] as String? ?? '',
+      svgUrl: json['svgUrl'] as String? ?? '',
+      category: json['category'] as String? ?? 'basic',
+      order: (json['order'] as num?)?.toInt() ?? 0,
+      spanWidth: (json['spanWidth'] as num?)?.toInt() ?? 1,
+      spanHeight: (json['spanHeight'] as num?)?.toInt() ?? 1,
+    );
+  }
+
   /// 도안 셀에 저장되는 symbolId (abbreviation 기반 key)
   String get symbolId => abbreviation.toLowerCase().replaceAll(' ', '_');
 

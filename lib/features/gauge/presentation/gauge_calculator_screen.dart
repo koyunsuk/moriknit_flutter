@@ -18,15 +18,20 @@ import '../../pattern/data/pattern_repository.dart';
 import '../../pattern/domain/pattern_chart.dart';
 import '../../pattern/presentation/pattern_editor_screen.dart';
 import '../../pattern_generator/domain/body_measurement.dart';
+import '../../pattern_generator/domain/doll_presets.dart';
 import '../../pattern_generator/domain/raglan_generated_pattern.dart';
 import '../../pattern_generator/domain/raglan_generated_pattern_chart_builder.dart';
 import '../../pattern_generator/domain/raglan_pattern_generator.dart';
+import '../../pattern_generator/domain/standard_size_presets.dart';
 import '../../swatch/domain/swatch_model.dart';
 import '../../swatch/presentation/swatch_input_screen.dart';
 
 enum _GaugeMode { myGauge, patternConvert, bidirectional, photoReading, raglanGenerator }
 
 enum _EasePreset { doll, slim, adultStandard, loose, oversizedCrop }
+
+/// 빠른 사이즈 프리셋 탭 (이슈 #661 — 래글런 자동 입력).
+enum _SizePresetTab { women, men, doll }
 
 class GaugeCalculatorScreen extends ConsumerStatefulWidget {
   /// #639 — 인형 치수 프리셋 자동 입력용 measurementData (BuiltinTemplate.measurementData)
@@ -73,6 +78,11 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
   bool _optionalExpanded = false;
   _EasePreset _easePreset = _EasePreset.adultStandard;
   RaglanGeneratedPattern? _generatedPattern;
+
+  // 이슈 #661 — 빠른 사이즈 프리셋
+  _SizePresetTab _sizePresetTab = _SizePresetTab.women;
+  // 어떤 칩이 적용됐는지 시각 표시 (예: 'women_55 (S)', 'doll_barbie')
+  String? _selectedPresetKey;
 
   // ── 모드 4: 사진 판독 ──
   Uint8List? _photoBytes;
@@ -128,6 +138,42 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
           _ => _EasePreset.adultStandard,
         };
       }
+    });
+  }
+
+  /// 이슈 #661 — 빠른 사이즈 프리셋 적용 (성인 표준).
+  /// 8개 치수 컨트롤러를 BodyMeasurement로 자동 채움. ease는 사용자 선택 유지.
+  void _applyMeasurementPreset(BodyMeasurement m) {
+    setState(() {
+      _chestCtrl.text = _str(m.chestCm);
+      _neckCtrl.text = _str(m.neckCm);
+      _bodyLenCtrl.text = _str(m.bodyLengthCm);
+      _sleeveLenCtrl.text = _str(m.sleeveLengthCm);
+      _upperArmCtrl.text = _str(m.upperArmCm);
+      _wristCtrl.text = _str(m.wristCm);
+      _shoulderCtrl.text = _str(m.shoulderCm);
+      _armholeDepthCtrl.text = _str(m.armholeDepthCm);
+      _optionalExpanded = true;
+    });
+  }
+
+  /// 이슈 #661 — 인형 프리셋 적용 (치수 + ease만).
+  /// **게이지는 덮어쓰지 않음** — 사용자가 스와치/직접 입력한 게이지 유지.
+  /// (이전: 권장 게이지를 자동 적용 → 사용자 게이지 손실 버그. #661 후속 수정)
+  /// 권장 게이지는 인형 칩 hint로만 안내됨.
+  void _applyDollPreset(DollPreset preset) {
+    setState(() {
+      final m = preset.measurement;
+      _chestCtrl.text = _str(m.chestCm);
+      _neckCtrl.text = _str(m.neckCm);
+      _bodyLenCtrl.text = _str(m.bodyLengthCm);
+      _sleeveLenCtrl.text = _str(m.sleeveLengthCm);
+      _upperArmCtrl.text = _str(m.upperArmCm);
+      _wristCtrl.text = _str(m.wristCm);
+      _shoulderCtrl.text = _str(m.shoulderCm);
+      _armholeDepthCtrl.text = _str(m.armholeDepthCm);
+      _optionalExpanded = true;
+      _easePreset = _EasePreset.doll;
     });
   }
 
@@ -1372,9 +1418,192 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
     );
   }
 
+  /// 이슈 #661 — 빠른 사이즈 프리셋 카드 (여성/남성/인형 탭 + 사이즈 칩).
+  Widget _buildSizePresetCard(bool isKorean) {
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.checklist_rounded, color: C.pk, size: 18),
+              const SizedBox(width: 6),
+              Text(isKorean ? '📋 빠른 사이즈 프리셋' : '📋 Quick Size Preset', style: T.bodyBold),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            isKorean
+                ? '탭 선택 후 사이즈 칩을 누르면 치수가 자동 입력돼요'
+                : 'Pick a tab and tap a size to auto-fill',
+            style: T.caption.copyWith(color: C.mu),
+          ),
+          const SizedBox(height: 12),
+          // 탭 (여성 · 남성 · 인형)
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _SizePresetTab.values.map((tab) {
+              final selected = _sizePresetTab == tab;
+              return GestureDetector(
+                onTap: () => setState(() => _sizePresetTab = tab),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: selected ? C.lv : C.lvL,
+                    border: Border.all(color: selected ? C.lv : C.lv.withValues(alpha: 0.20)),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    _sizePresetTabLabel(tab, isKorean),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      color: selected ? Colors.white : C.lvD,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 12),
+          _buildSizePresetChips(isKorean),
+        ],
+      ),
+    );
+  }
+
+  String _sizePresetTabLabel(_SizePresetTab tab, bool isKorean) {
+    switch (tab) {
+      case _SizePresetTab.women:
+        return isKorean ? '여성' : 'Women';
+      case _SizePresetTab.men:
+        return isKorean ? '남성' : 'Men';
+      case _SizePresetTab.doll:
+        return isKorean ? '인형' : 'Doll';
+    }
+  }
+
+  Widget _buildSizePresetChips(bool isKorean) {
+    switch (_sizePresetTab) {
+      case _SizePresetTab.women:
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: womenStandardSizes.map((p) {
+            final key = 'women_${p.label}';
+            return _buildSizeChip(
+              label: p.label,
+              hint: p.hint,
+              selected: _selectedPresetKey == key,
+              onTap: () {
+                _applyMeasurementPreset(p.measurement);
+                setState(() => _selectedPresetKey = key);
+              },
+            );
+          }).toList(),
+        );
+      case _SizePresetTab.men:
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: menStandardSizes.map((p) {
+            final key = 'men_${p.label}';
+            return _buildSizeChip(
+              label: p.label,
+              hint: p.hint,
+              selected: _selectedPresetKey == key,
+              onTap: () {
+                _applyMeasurementPreset(p.measurement);
+                setState(() => _selectedPresetKey = key);
+              },
+            );
+          }).toList(),
+        );
+      case _SizePresetTab.doll:
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: builtinDollPresets.map((d) {
+            final key = 'doll_${d.id}';
+            return _buildSizeChip(
+              label: isKorean ? d.nameKo : d.nameEn,
+              hint: '${d.heightCm}cm · 권장 ${d.suggestedGauge.stitchesPer10cm.toInt()}/${d.suggestedGauge.rowsPer10cm.toInt()}',
+              selected: _selectedPresetKey == key,
+              onTap: () {
+                _applyDollPreset(d);
+                setState(() => _selectedPresetKey = key);
+              },
+            );
+          }).toList(),
+        );
+    }
+  }
+
+  Widget _buildSizeChip({
+    required String label,
+    required String hint,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? C.pk : C.pkL,
+          border: Border.all(
+            color: selected ? C.pk : C.pk.withValues(alpha: 0.30),
+            width: selected ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: selected
+              ? [BoxShadow(color: C.pk.withValues(alpha: 0.30), blurRadius: 8, offset: const Offset(0, 2))]
+              : null,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (selected) ...[
+                  const Icon(Icons.check_circle_rounded, color: Colors.white, size: 14),
+                  const SizedBox(width: 4),
+                ],
+                Text(
+                  label,
+                  style: T.caption.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: selected ? Colors.white : C.pkD,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              hint,
+              style: T.caption.copyWith(
+                color: selected ? Colors.white.withValues(alpha: 0.85) : C.mu,
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildModeRaglanGenerator(bool isKorean) {
     return Column(
       children: [
+        // 이슈 #661 — 빠른 사이즈 프리셋 (여성/남성/인형 자동 입력)
+        _buildSizePresetCard(isKorean),
+        const SizedBox(height: 14),
+
         // 인체 치수 (필수)
         GlassCard(
           child: Column(

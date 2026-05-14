@@ -1,4 +1,5 @@
-import 'dart:typed_data';
+
+import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -157,33 +158,68 @@ class PatternConverterRepository {
     });
   }
 
-  /// #655 무한로딩 fix — stream 대신 단발 get으로 가져옴.
-  /// 추가 보강:
-  ///  - doc.get()에 15초 timeout (네트워크 hang 회피)
-  ///  - fromJson을 try/catch로 감싸 일부 필드 손상 시 null 반환 (무한로딩 회피)
-  Future<PatternChart?> getAiPattern(String patternId) async {
-    debugPrint('[getAiPattern] start id=$patternId');
+  /// 도안 doc → PatternChart 디코딩 공통 헬퍼.
+  /// 손상 필드 등으로 fromJson이 실패하면 null 반환 (무한로딩/raw 노출 회피).
+  PatternChart? _decodeChart(DocumentSnapshot<Map<String, dynamic>> d) {
     try {
-      final d = await _chartsCol
-          .doc(patternId)
-          .get()
-          .timeout(const Duration(seconds: 15));
-      debugPrint('[getAiPattern] doc.get returned exists=${d.exists}');
       if (!d.exists) return null;
       final data = Map<String, dynamic>.from(d.data()!);
       if ((data['id'] as String?)?.isEmpty != false) data['id'] = d.id;
-      debugPrint('[getAiPattern] keys=${data.keys.toList()}');
-      try {
-        final chart = PatternChart.fromJson(data);
-        debugPrint('[getAiPattern] fromJson OK sections=${chart.aiSections?.length}');
-        return chart;
-      } catch (e, st) {
-        debugPrint('[getAiPattern] fromJson FAILED: $e\n$st');
-        rethrow;
-      }
+      return PatternChart.fromJson(data);
     } catch (e, st) {
-      debugPrint('[getAiPattern] EXCEPTION: $e\n$st');
-      rethrow;
+      debugPrint('[_decodeChart] fromJson FAILED: $e\n$st');
+      return null;
+    }
+  }
+
+  /// 백그라운드 서버 갱신 trigger — UI는 캐시로 진행, 서버 결과는 캐시에 반영.
+  Future<void> _refreshFromServer(String patternId) async {
+    try {
+      await _chartsCol
+          .doc(patternId)
+          .get(const GetOptions(source: Source.server))
+          .timeout(const Duration(seconds: 10));
+    } catch (_) {
+      // 백그라운드 실패 무음
+    }
+  }
+
+  /// #655 무한로딩 fix → #685 Phase 3: Firestore SDK 자체 캐시(Source.cache)
+  /// 우선 fetch, 미스 시 서버 fetch(5s timeout), 실패 시 null.
+  /// raw exception은 절대 rethrow하지 않음 — 호출부에서 친화 메시지 처리.
+  Future<PatternChart?> getAiPattern(String patternId) async {
+    debugPrint('[getAiPattern] start id=$patternId');
+
+    // 1) Source.cache 우선 (Firestore SDK 영속 캐시)
+    try {
+      final cached = await _chartsCol
+          .doc(patternId)
+          .get(const GetOptions(source: Source.cache));
+      if (cached.exists) {
+        debugPrint('[getAiPattern] HIT cache for $patternId');
+        // 백그라운드로 서버 갱신 trigger (UI는 캐시로 진행)
+        unawaited(_refreshFromServer(patternId));
+        return _decodeChart(cached);
+      }
+    } catch (_) {
+      // 캐시 없음 — 정상. server 폴백으로 진행
+    }
+
+    // 2) 서버 fetch — 5초 타임아웃, 실패 시 null
+    try {
+      final d = await _chartsCol
+          .doc(patternId)
+          .get(const GetOptions(source: Source.serverAndCache))
+          .timeout(const Duration(seconds: 5));
+      debugPrint('[getAiPattern] server fetch exists=${d.exists}');
+      if (!d.exists) return null;
+      return _decodeChart(d);
+    } on TimeoutException {
+      debugPrint('[getAiPattern] TIMEOUT after 5s → null');
+      return null;
+    } catch (e, st) {
+      debugPrint('[getAiPattern] EXCEPTION (swallowed): $e\n$st');
+      return null;
     }
   }
 

@@ -49,4 +49,8 @@ class Routes {
   static const toolsPatternTranslator = '/tools/pattern-translator';
   static const toolsMyParsedPatterns = '/tools/my-parsed-patterns';
   static const toolsPatternGate = '/tools/pattern-gate';
+  // 이슈 #660 Phase 2 — 통합 파일 탐색기 (외부 PDF/이미지 다중 임포트)
+  static const toolsFileExplorer = '/tools/file-explorer';
+  // 이슈 #664 — 패턴 생성기 (래글런 도안 + SVG 도식 + 출판용 PDF)
+  static const toolsPatternGenerator = '/tools/pattern-generator';
 }

@@ -32,6 +32,11 @@ class SubscriptionConstants {
   static const String boxUser = 'user';
   static const String boxViewerState = 'viewer_state';
 
+  // ── #685 영속 캐시 Box ────────────────────────────────────
+  static const String boxCacheKnitSymbols = 'cache_knit_symbols';
+  static const String boxCacheEncyclopedia = 'cache_encyclopedia';
+  static const String boxCachePatternCharts = 'cache_pattern_charts';
+
   // ── Sync ───────────────────────────────────────────────────
   static const int syncIntervalMinutes = 30;
 }

@@ -50,4 +50,13 @@ class AccessoryRepository {
     if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
     await _col.doc(id).delete();
   }
+
+  /// 이슈 #693 — 기존 악세사리 복사
+  Future<AccessoryModel> duplicateAccessory(AccessoryModel original) async {
+    final copy = original.copyWith(
+      id: '',
+      name: original.name.isEmpty ? '' : '${original.name} (복사)',
+    );
+    return createAccessory(copy, photoUrl: original.photoUrl);
+  }
 }

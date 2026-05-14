@@ -29,6 +29,17 @@ class RaglanGeneratedPattern {
   /// 앞목 쉐이핑 단수 (기본 11단).
   final int frontNeckShapingRows;
 
+  /// 가슴 짧은단 보정 (옵션 C — 인형/소형 사이즈에서 N=상완 기준일 때).
+  /// 0이면 보정 불필요. 양수면 추가 짧은단 단수.
+  final int chestShortRows;
+
+  /// 가슴 부족분 (코) — 짧은단으로 채워야 할 양 (검증·표시용).
+  final int chestDeficitStitches;
+
+  /// 분리 직후 한쪽 소매에서 즉시 줄여야 할 코수 (옵션 B — 성인 사이즈에서 가슴 기준 N → 소매 과대).
+  /// 0이면 보정 불필요.
+  final int sleeveAdjustDecrease;
+
   // ── 소매 분리 시점 ────────────────────────
   /// 소매 분리 후 최종 구간별 코수.
   final int finalFront;
@@ -79,6 +90,9 @@ class RaglanGeneratedPattern {
     required this.raglanStitches,
     required this.raglanRepeat,
     required this.frontNeckShapingRows,
+    this.chestShortRows = 0,
+    this.chestDeficitStitches = 0,
+    this.sleeveAdjustDecrease = 0,
     required this.finalFront,
     required this.finalBackEach,
     required this.finalSleeveEach,
@@ -98,9 +112,10 @@ class RaglanGeneratedPattern {
   double get actualChestCm =>
       bodyTotalStitches * 10 / gauge.stitchesPer10cm;
 
-  /// 실제 상완 둘레 (cm) — 검증용.
+  /// 실제 상완 둘레 (cm) — 한쪽 소매 한 바퀴 코수 / 게이지.
+  /// (사용자 정정 #2 — 한쪽 소매 = finalSleeveEach + 라글런 2 흡수 + 감아코 1쪽)
   double get actualUpperArmCm =>
-      (finalSleeveEach * 2 + underarmCastOn) * 10 / gauge.stitchesPer10cm;
+      (finalSleeveEach + 2 + underarmCastOn) * 10 / gauge.stitchesPer10cm;
 
   /// 결과를 서술형 도안 12단계로 변환 (프로젝트 단계로그 생성용).
   List<String> toNarrativeSteps({bool isKorean = true}) {

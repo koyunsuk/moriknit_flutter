@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' show acos, pi, max;
+import 'dart:ui' as ui;
 
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -26,10 +27,18 @@ import '../../counter/domain/counter_model.dart';
 import '../../project/domain/project_model.dart';
 import '../../swatch/domain/swatch_model.dart';
 import '../data/pattern_session_repository.dart';
+// 이슈 #665 Phase 5 — 원형 도안 PDF 내보내기.
+import '../data/round_chart_pdf_exporter.dart';
 import '../domain/ai_pattern_section.dart';
 import '../domain/narrative_block.dart';
 import '../domain/pattern_chart.dart';
 import '../domain/pattern_session.dart';
+// 이슈 #665 후속 — 원형 도안 트래킹/헤어라인 오버레이.
+import '../domain/round_chart.dart';
+// 이슈 #668 — 자유 Path 도안 뷰어.
+import 'widgets/guide_path_editor_view.dart';
+import 'widgets/round_chart_painter.dart';
+import 'widgets/round_tracking_overlay.dart';
 
 class PatternViewerScreen extends ConsumerStatefulWidget {
   final PatternChart chart;
@@ -52,11 +61,11 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
   double _rulerBaseY = 200.0; // #643: 카운터 rowCount=1 기준 Y
   bool _rulerFollowCounter = true; // #643: 카운터 연동 on/off
 
-  // Highlighter
+  // Highlighter (이슈 #663-B — undo/redo/clear 시스템)
   final List<_Stroke> _strokes = [];
+  final List<_Stroke> _redoStack = [];
   List<Offset> _currentStroke = [];
   Color _highlightColor = const Color(0x66FFFF00);
-  bool _isErasing = false;
   static const _highlightColors = [
     Color(0x66FFFF00),
     Color(0x66FF9F0A),
@@ -65,11 +74,8 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
     Color(0x665AC8FA),
   ];
 
-  // Sticky note
-  double _stickyX = 20.0;
-  double _stickyY = 120.0;
-  final _stickyCtrl = TextEditingController();
-  bool _stickyEditing = false;
+  // Sticky notes (이슈 #663-A — 다중 노트. 기존 단일 변수 → List)
+  final List<_LocalStickyNote> _stickyNotes = [];
 
   // Timer
   bool _timerDockVisible = false;
@@ -115,6 +121,25 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
   String? _pdfError;
   int _currentPage = 0;
   int _totalPages = 0;
+
+  // ── 이슈 #665 후속 — 원형 도안 전용 트래킹/헤어라인 state (사각 코드와 분리) ──
+  /// 현재 라운드 (1-base).
+  int _roundTrackingRound = 1;
+
+  /// 현재 세그먼트 (0-base, -1 = 전체 라운드만 표시, 진행 표시 없음).
+  int _roundTrackingSegment = -1;
+
+  /// 현재 헤어라인 각도 (라디안). -π/2 = 12시 방향.
+  double _roundHairlineAngle = -1.5707963267948966;
+
+  /// 트래킹 호 활성 여부.
+  bool _roundTrackingActive = false;
+
+  /// 회전 헤어라인 활성 여부.
+  bool _roundHairlineActive = false;
+
+  /// 현재 라운드의 코마다 정확히 정렬할지 (헤어라인 스냅).
+  bool _roundHairlineSnap = true;
 
   String get _id => widget.chart.id;
   bool get _isDark => widget.chart.type == PatternType.pdf;
@@ -192,15 +217,20 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
                 return _Stroke(points: pts, color: Color(s.colorValue));
               }));
           }
-          final note = loaded.stickyNotes.firstWhere(
-            (n) => n.id == _defaultStickyId,
-            orElse: () => loaded.stickyNotes.isNotEmpty
-                ? loaded.stickyNotes.first
-                : const StickyNote(id: _defaultStickyId),
-          );
-          _stickyX = note.x;
-          _stickyY = note.y;
-          if (note.text.isNotEmpty) _stickyCtrl.text = note.text;
+          // 이슈 #663-A — 다중 스티키 노트 로드. Firestore에 저장된 모든 노트 채움.
+          if (loaded.stickyNotes.isNotEmpty) {
+            for (final n in _stickyNotes) {
+              n.dispose();
+            }
+            _stickyNotes
+              ..clear()
+              ..addAll(loaded.stickyNotes.map((n) => _LocalStickyNote(
+                    id: n.id,
+                    text: n.text,
+                    x: n.x,
+                    y: n.y,
+                  )));
+          }
         }
       });
     } catch (_) {
@@ -226,17 +256,15 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
     ref.read(patternSessionRepositoryProvider).updateStrokes(_id, data);
   }
 
-  void _syncSticky() {
+  /// 이슈 #663-A — 스티키 노트 List 전체를 Firestore에 동기화 (덮어쓰기).
+  void _syncStickyNotes() {
     if (!_sessionApplied) return;
-    final note = StickyNote(
-      id: _defaultStickyId,
-      text: _stickyCtrl.text,
-      x: _stickyX,
-      y: _stickyY,
-    );
+    final notes = _stickyNotes
+        .map((n) => StickyNote(id: n.id, text: n.controller.text, x: n.x, y: n.y))
+        .toList();
     ref
         .read(patternSessionRepositoryProvider)
-        .updateStickyNote(_id, note);
+        .setStickyNotes(_id, notes);
   }
 
   @override
@@ -247,7 +275,10 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
       ref.read(patternSessionRepositoryProvider)
           .updateTotalSeconds(_id, _totalSeconds + _sessionSeconds);
     }
-    _stickyCtrl.dispose();
+    // 이슈 #663-A — 모든 스티키 노트 컨트롤러 정리
+    for (final n in _stickyNotes) {
+      n.dispose();
+    }
     super.dispose();
   }
 
@@ -362,9 +393,33 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
     _rulerFollowCounter = (b.get('ruler_follow_$_id') as bool?) ?? true; // #643
     _hairlineX = (b.get('hairline_x_$_id') as double?) ?? 0.5;
     _hairlineWidth = (b.get('hairline_w_$_id') as double?) ?? 20.0; // #643
-    _stickyX = (b.get('sticky_x_$_id') as double?) ?? 20.0;
-    _stickyY = (b.get('sticky_y_$_id') as double?) ?? 120.0;
-    _stickyCtrl.text = (b.get('sticky_text_$_id') as String?) ?? '';
+    // 이슈 #663-A — 다중 스티키 노트: 신규 List JSON 로드 + 구 단일키 마이그레이션
+    final stickyJson = b.get('sticky_notes_$_id') as String?;
+    if (stickyJson != null) {
+      try {
+        for (final n in jsonDecode(stickyJson) as List) {
+          _stickyNotes.add(_LocalStickyNote(
+            id: n['id'] as String,
+            text: n['text'] as String? ?? '',
+            x: (n['x'] as num).toDouble(),
+            y: (n['y'] as num).toDouble(),
+          ));
+        }
+      } catch (_) {}
+    }
+    if (_stickyNotes.isEmpty) {
+      final oldX = b.get('sticky_x_$_id') as double?;
+      final oldY = b.get('sticky_y_$_id') as double?;
+      final oldText = b.get('sticky_text_$_id') as String?;
+      if (oldX != null || oldY != null || (oldText?.isNotEmpty ?? false)) {
+        _stickyNotes.add(_LocalStickyNote(
+          id: _defaultStickyId,
+          text: oldText ?? '',
+          x: oldX ?? 20.0,
+          y: oldY ?? 120.0,
+        ));
+      }
+    }
     final raw = b.get('strokes_$_id') as String?;
     if (raw != null) {
       try {
@@ -398,11 +453,40 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
     _syncRuler();
   }
 
-  void _saveSticky() {
-    _box?.put('sticky_x_$_id', _stickyX);
-    _box?.put('sticky_y_$_id', _stickyY);
-    _box?.put('sticky_text_$_id', _stickyCtrl.text);
-    _syncSticky();
+  /// 이슈 #663-A — 스티키 노트 List 통째로 hive 저장 + Firestore 동기화.
+  void _saveStickyNotes() {
+    final json = jsonEncode(_stickyNotes.map((n) => {
+          'id': n.id,
+          'text': n.controller.text,
+          'x': n.x,
+          'y': n.y,
+        }).toList());
+    _box?.put('sticky_notes_$_id', json);
+    _syncStickyNotes();
+  }
+
+  /// 이슈 #663-A — 새 스티키 노트 추가.
+  void _addStickyNote() {
+    setState(() {
+      final newId = 'note_${DateTime.now().millisecondsSinceEpoch}';
+      final offset = (_stickyNotes.length * 24) % 120;
+      _stickyNotes.add(_LocalStickyNote(
+        id: newId,
+        x: 20.0 + offset,
+        y: 120.0 + offset,
+      ));
+    });
+    _saveStickyNotes();
+  }
+
+  /// 이슈 #663-A — 스티키 노트 삭제.
+  void _deleteStickyNote(int index) {
+    if (index < 0 || index >= _stickyNotes.length) return;
+    setState(() {
+      _stickyNotes[index].dispose();
+      _stickyNotes.removeAt(index);
+    });
+    _saveStickyNotes();
   }
 
   void _saveStrokes() {
@@ -412,6 +496,33 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
         }).toList());
     _box?.put('strokes_$_id', json);
     _syncStrokes();
+  }
+
+  /// 이슈 #663-B — 마지막 형광펜 stroke 한 단계 되돌리기.
+  void _undoStroke() {
+    if (_strokes.isEmpty) return;
+    setState(() {
+      _redoStack.add(_strokes.removeLast());
+    });
+    _saveStrokes();
+  }
+
+  /// 이슈 #663-B — undo한 stroke 다시 적용.
+  void _redoStroke() {
+    if (_redoStack.isEmpty) return;
+    setState(() {
+      _strokes.add(_redoStack.removeLast());
+    });
+    _saveStrokes();
+  }
+
+  /// 이슈 #663-B — 모든 형광펜 stroke 삭제 (redo 포함).
+  void _clearStrokes() {
+    setState(() {
+      _strokes.clear();
+      _redoStack.clear();
+    });
+    _saveStrokes();
   }
 
   Future<void> _loadPdf() async {
@@ -594,8 +705,378 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
     }
   }
 
+  // ── 이슈 #665 후속 — 원형 도안 전용 헬퍼/뷰어 (사각 코드와 분리) ──
+
+  /// 원형 도안에서 사용할 SVG 심볼 픽처 콜백.
+  /// SvgSymbolCache provider 미연결 시에도 안전하게 null 반환.
+  ui.Picture? _roundSymbolPicture(String id) => null;
+
+  /// 이슈 #665 Phase 5 — 원형 도안 PDF 공유 (시스템 공유 시트).
+  /// 도식·라운드 코수 표·심볼 범례를 포함한 출판용 PDF 생성.
+  Future<void> _shareRoundChartPdf(bool isKorean) async {
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? 'PDF 생성 중입니다.' : 'Generating PDF...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () async {
+          final user = ref.read(authStateProvider).valueOrNull;
+          final author =
+              user?.displayName ?? user?.email ?? 'MoriKnit';
+          await RoundChartPdfExporter().share(
+            pattern: widget.chart,
+            author: author,
+          );
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+
+  /// 라운드 이전/다음 이동 (1..rounds 사이로 클램프).
+  void _shiftRound(int delta) {
+    final round = widget.chart.roundData!;
+    final next = (_roundTrackingRound + delta).clamp(1, round.rounds);
+    setState(() {
+      _roundTrackingRound = next;
+      // 라운드가 바뀌면 세그먼트 진행은 초기화.
+      _roundTrackingSegment = -1;
+    });
+  }
+
+  /// 세그먼트 1칸 진행 (다음 코).
+  void _advanceSegment() {
+    final round = widget.chart.roundData!;
+    final stitchCount = round.stitchCountForRound(_roundTrackingRound);
+    if (stitchCount <= 0) return;
+    setState(() {
+      final next = _roundTrackingSegment + 1;
+      if (next >= stitchCount) {
+        // 다음 라운드로 자동 진행.
+        if (_roundTrackingRound < round.rounds) {
+          _roundTrackingRound += 1;
+          _roundTrackingSegment = -1;
+        } else {
+          _roundTrackingSegment = stitchCount - 1;
+        }
+      } else {
+        _roundTrackingSegment = next;
+      }
+    });
+  }
+
+  /// 세그먼트 1칸 되돌리기.
+  void _retreatSegment() {
+    if (_roundTrackingSegment <= -1) return;
+    setState(() => _roundTrackingSegment -= 1);
+  }
+
+  /// 헤어라인 시계방향 회전 (코마다 1칸).
+  void _rotateHairlineCw() {
+    final round = widget.chart.roundData!;
+    final stitchCount = round.stitchCountForRound(_roundTrackingRound);
+    if (stitchCount <= 0) return;
+    final step = (2 * pi) / stitchCount;
+    setState(() {
+      _roundHairlineAngle = _normalizeAngle(_roundHairlineAngle + step);
+    });
+  }
+
+  /// 헤어라인 반시계방향 회전 (코마다 1칸).
+  void _rotateHairlineCcw() {
+    final round = widget.chart.roundData!;
+    final stitchCount = round.stitchCountForRound(_roundTrackingRound);
+    if (stitchCount <= 0) return;
+    final step = (2 * pi) / stitchCount;
+    setState(() {
+      _roundHairlineAngle = _normalizeAngle(_roundHairlineAngle - step);
+    });
+  }
+
+  /// -π ~ π 범위로 정규화.
+  double _normalizeAngle(double a) {
+    var v = a;
+    while (v > pi) {
+      v -= 2 * pi;
+    }
+    while (v < -pi) {
+      v += 2 * pi;
+    }
+    return v;
+  }
+
+  /// 현재 헤어라인 각도를 시계 표기(12:00, 3:00 ...) 비슷하게 표시.
+  String _formatHairlineClock() {
+    // 12시 = -π/2 → 0시
+    var deg = _roundHairlineAngle * 180 / pi + 90;
+    while (deg < 0) {
+      deg += 360;
+    }
+    while (deg >= 360) {
+      deg -= 360;
+    }
+    final hour = (deg / 30).floor();
+    final minute = (((deg % 30) / 30) * 60).round();
+    final hh = hour == 0 ? 12 : hour;
+    final mm = minute.toString().padLeft(2, '0');
+    return '$hh:$mm';
+  }
+
+  /// 원형 도안 전용 뷰어 (사각 build 본체와 완전 분리).
+  Widget _buildRoundViewer() {
+    final isKorean = ref.watch(appLanguageProvider).isKorean;
+    final round = widget.chart.roundData!;
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          widget.chart.title,
+          style: T.h3,
+          overflow: TextOverflow.ellipsis,
+        ),
+        actions: [
+          // 트래킹 호 토글
+          Tooltip(
+            message: isKorean ? '원형 트래킹바' : 'Round Tracking',
+            child: IconButton(
+              icon: Icon(
+                Icons.donut_large_rounded,
+                color: _roundTrackingActive ? C.lv : C.tx,
+              ),
+              onPressed: () => setState(
+                () => _roundTrackingActive = !_roundTrackingActive,
+              ),
+            ),
+          ),
+          // 회전 헤어라인 토글
+          Tooltip(
+            message: isKorean ? '회전 헤어라인' : 'Rotating Hairline',
+            child: IconButton(
+              icon: Icon(
+                Icons.straighten_rounded,
+                color: _roundHairlineActive ? C.pkD : C.tx,
+              ),
+              onPressed: () => setState(
+                () => _roundHairlineActive = !_roundHairlineActive,
+              ),
+            ),
+          ),
+          // 이슈 #665 Phase 5 — PDF 내보내기 (원형 전용)
+          Tooltip(
+            message: isKorean ? 'PDF로 공유' : 'Share as PDF',
+            child: IconButton(
+              icon: Icon(Icons.picture_as_pdf_rounded, color: C.tx),
+              onPressed: () => _shareRoundChartPdf(isKorean),
+            ),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // 1) 도안 캔버스 (RoundChartView + 오버레이)
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final size = Size(constraints.maxWidth, constraints.maxHeight);
+                  return Stack(
+                    children: [
+                      // 1-1) 기본 원형 도안
+                      Positioned.fill(
+                        child: RoundChartView(
+                          chart: round,
+                          symbolPicture: _roundSymbolPicture,
+                        ),
+                      ),
+                      // 1-2) 트래킹 호 오버레이
+                      if (_roundTrackingActive)
+                        Positioned.fill(
+                          child: RoundTrackingArc(
+                            chart: round,
+                            currentRound: _roundTrackingRound,
+                            currentSegment: _roundTrackingSegment,
+                            canvasSize: size,
+                            color: C.lv,
+                          ),
+                        ),
+                      // 1-3) 회전 헤어라인 오버레이
+                      if (_roundHairlineActive)
+                        Positioned.fill(
+                          child: RoundHairlineRay(
+                            chart: round,
+                            angleRadians: _roundHairlineAngle,
+                            canvasSize: size,
+                            color: C.pkD,
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ),
+
+            // 2) 컨트롤 패널 (트래킹 / 헤어라인 활성 시만)
+            if (_roundTrackingActive || _roundHairlineActive)
+              _buildRoundControls(isKorean, round),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 원형 도안 전용 컨트롤 패널 (라운드 이동 + 회전 버튼).
+  Widget _buildRoundControls(bool isKorean, RoundChart round) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      decoration: BoxDecoration(
+        color: C.gx,
+        border: Border(top: BorderSide(color: C.lv.withValues(alpha: 0.15))),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── 트래킹: 라운드 이동 ──
+          if (_roundTrackingActive)
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.chevron_left_rounded),
+                  color: C.lv,
+                  tooltip: isKorean ? '이전 라운드' : 'Previous Round',
+                  onPressed:
+                      _roundTrackingRound > 1 ? () => _shiftRound(-1) : null,
+                ),
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      'R$_roundTrackingRound / ${round.rounds}'
+                      '${_roundTrackingSegment >= 0 ? '  ·  ${_roundTrackingSegment + 1}/${round.stitchCountForRound(_roundTrackingRound)}코' : ''}',
+                      style: T.body.copyWith(
+                        color: C.lvD,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right_rounded),
+                  color: C.lv,
+                  tooltip: isKorean ? '다음 라운드' : 'Next Round',
+                  onPressed: _roundTrackingRound < round.rounds
+                      ? () => _shiftRound(1)
+                      : null,
+                ),
+                // 세그먼트 진행/되돌리기
+                IconButton(
+                  icon: const Icon(Icons.remove_circle_outline_rounded),
+                  color: C.lvD,
+                  tooltip: isKorean ? '코 되돌리기' : 'Previous Stitch',
+                  onPressed:
+                      _roundTrackingSegment > -1 ? _retreatSegment : null,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.add_circle_outline_rounded),
+                  color: C.lvD,
+                  tooltip: isKorean ? '코 진행' : 'Next Stitch',
+                  onPressed: _advanceSegment,
+                ),
+              ],
+            ),
+
+          // ── 헤어라인: 회전 ──
+          if (_roundHairlineActive) ...[
+            if (_roundTrackingActive) const SizedBox(height: 8),
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.rotate_left_rounded),
+                  color: C.pkD,
+                  tooltip: isKorean ? '반시계 회전' : 'Counter-clockwise',
+                  onPressed: _rotateHairlineCcw,
+                ),
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      '${isKorean ? "각도" : "Angle"}: ${_formatHairlineClock()}',
+                      style: T.body.copyWith(
+                        color: C.pkD,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.rotate_right_rounded),
+                  color: C.pkD,
+                  tooltip: isKorean ? '시계 회전' : 'Clockwise',
+                  onPressed: _rotateHairlineCw,
+                ),
+              ],
+            ),
+            // 스냅 옵션
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  isKorean ? '코마다 정확히 정렬' : 'Snap to stitch',
+                  style: T.caption,
+                ),
+                Checkbox(
+                  value: _roundHairlineSnap,
+                  activeColor: C.pkD,
+                  onChanged: (v) =>
+                      setState(() => _roundHairlineSnap = v ?? true),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // ── 이슈 #668 — 자유 Path 도안 뷰어 (읽기 전용 GuidePathEditorView 재사용) ──
+    if (widget.chart.chartType == ChartShape.guidePath) {
+      final isKorean = ref.watch(appLanguageProvider).isKorean;
+      return Scaffold(
+        backgroundColor: C.bg,
+        appBar: AppBar(
+          backgroundColor: C.bg,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text(
+            widget.chart.title.isEmpty
+                ? (isKorean ? '자유 Path 도안' : 'Free Path Chart')
+                : widget.chart.title,
+            style: T.h3,
+          ),
+        ),
+        body: GuidePathEditorView(
+          chart: widget.chart,
+          onChange: (_) {},
+          isReadOnly: true,
+        ),
+      );
+    }
+
+    // ── 이슈 #665 후속 — 원형 도안이면 별도 뷰어로 분기 (사각 코드 보호) ──
+    if (widget.chart.chartType != ChartShape.rect &&
+        widget.chart.roundData != null) {
+      return _buildRoundViewer();
+    }
+
     final isKorean = ref.watch(appLanguageProvider).isKorean;
     final counter = ref.watch(counterByChartIdProvider(_id)).valueOrNull;
 
@@ -678,13 +1159,18 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
             dimColor: _isDark ? Colors.white : C.tx,
             onTap: () => setState(() => _highlighterActive = !_highlighterActive),
           ),
-          // ③ 주석 — 스티키노트
+          // ③ 주석 — 스티키노트 (이슈 #663-A 후속: 토글 ON 시 자동 1개 추가)
           _ToolIcon(
             icon: Icons.sticky_note_2_rounded,
             active: _stickyActive,
             activeColor: C.lmD,
             dimColor: _isDark ? Colors.white : C.tx,
-            onTap: () => setState(() => _stickyActive = !_stickyActive),
+            onTap: () {
+              setState(() => _stickyActive = !_stickyActive);
+              if (_stickyActive && _stickyNotes.isEmpty) {
+                _addStickyNote();
+              }
+            },
           ),
           // ④ 측정 — 측정도구
           _ToolIcon(
@@ -833,30 +1319,24 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
                         ),
                       ),
                     ),
-                  // Highlighter drawing overlay
+                  // Highlighter drawing overlay (이슈 #663-B — 지우개 모드 제거, undo/redo 사용)
                   if (_highlighterActive)
                     Positioned.fill(
                       child: GestureDetector(
                         onPanStart: (d) =>
                             setState(() => _currentStroke = [d.localPosition]),
                         onPanUpdate: (d) {
-                          if (_isErasing) {
-                            setState(() => _strokes.removeWhere((s) =>
-                                s.points.any(
-                                    (p) => (p - d.localPosition).distance < 22)));
-                            _saveStrokes();
-                          } else {
-                            setState(() =>
-                                _currentStroke = [..._currentStroke, d.localPosition]);
-                          }
+                          setState(() =>
+                              _currentStroke = [..._currentStroke, d.localPosition]);
                         },
                         onPanEnd: (d) {
-                          if (!_isErasing && _currentStroke.isNotEmpty) {
+                          if (_currentStroke.isNotEmpty) {
                             setState(() {
                               _strokes.add(_Stroke(
                                   points: List.from(_currentStroke),
                                   color: _highlightColor));
                               _currentStroke = [];
+                              _redoStack.clear(); // 새 stroke 추가 시 redo 스택 무효화
                             });
                             _saveStrokes();
                           } else {
@@ -1154,51 +1634,51 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
                       ),
                     ),
                   ],
-                  // Sticky note
-                  if (_stickyActive)
-                    Positioned(
-                      left: _stickyX.clamp(0, (maxW - 160).clamp(0, double.infinity)),
-                      top: _stickyY.clamp(0, (maxH - 140).clamp(0, double.infinity)),
-                      child: GestureDetector(
-                        onPanUpdate: _stickyEditing
-                            ? null
-                            : (d) {
-                                setState(() {
-                                  _stickyX = (_stickyX + d.delta.dx)
-                                      .clamp(0, (maxW - 160).clamp(0, double.infinity));
-                                  _stickyY = (_stickyY + d.delta.dy)
-                                      .clamp(0, (maxH - 140).clamp(0, double.infinity));
-                                });
-                                _saveSticky();
-                              },
-                        child: _StickyNoteWidget(
-                          controller: _stickyCtrl,
-                          isEditing: _stickyEditing,
-                          onEditToggle: () =>
-                              setState(() => _stickyEditing = !_stickyEditing),
-                          onTextChanged: (v) => _saveSticky(),
+                  // 이슈 #663-A — 다중 스티키 노트 + 추가 버튼
+                  if (_stickyActive) ...[
+                    for (int i = 0; i < _stickyNotes.length; i++)
+                      Positioned(
+                        left: _stickyNotes[i].x.clamp(0, (maxW - 160).clamp(0, double.infinity)),
+                        top: _stickyNotes[i].y.clamp(0, (maxH - 140).clamp(0, double.infinity)),
+                        child: GestureDetector(
+                          onPanUpdate: _stickyNotes[i].editing
+                              ? null
+                              : (d) {
+                                  setState(() {
+                                    _stickyNotes[i].x = (_stickyNotes[i].x + d.delta.dx)
+                                        .clamp(0, (maxW - 160).clamp(0, double.infinity)).toDouble();
+                                    _stickyNotes[i].y = (_stickyNotes[i].y + d.delta.dy)
+                                        .clamp(0, (maxH - 140).clamp(0, double.infinity)).toDouble();
+                                  });
+                                  _saveStickyNotes();
+                                },
+                          child: _StickyNoteWidget(
+                            controller: _stickyNotes[i].controller,
+                            isEditing: _stickyNotes[i].editing,
+                            onEditToggle: () =>
+                                setState(() => _stickyNotes[i].editing = !_stickyNotes[i].editing),
+                            onAdd: _addStickyNote,
+                            onDelete: () => _deleteStickyNote(i),
+                            onTextChanged: (v) => _saveStickyNotes(),
+                          ),
                         ),
                       ),
-                    ),
+                  ],
                 ],
               ),
             ),
-            // Highlighter toolbar
+            // Highlighter toolbar (이슈 #663-B — undo/redo/clear)
             if (_highlighterActive)
               _HighlighterBar(
                 colors: _highlightColors,
                 selected: _highlightColor,
-                isErasing: _isErasing,
                 isDark: _isDark,
-                onColor: (c) => setState(() {
-                  _highlightColor = c;
-                  _isErasing = false;
-                }),
-                onEraser: () => setState(() => _isErasing = !_isErasing),
-                onClear: () {
-                  setState(() => _strokes.clear());
-                  _saveStrokes();
-                },
+                canUndo: _strokes.isNotEmpty,
+                canRedo: _redoStack.isNotEmpty,
+                onColor: (c) => setState(() => _highlightColor = c),
+                onUndo: _undoStroke,
+                onRedo: _redoStroke,
+                onClear: _clearStrokes,
               ),
             // Measure bar
             if (_measureActive)
@@ -1321,6 +1801,22 @@ class _Stroke {
   const _Stroke({required this.points, required this.color});
 }
 
+/// 이슈 #663-A — 스티키 노트 다중 추가용 로컬 상태 (각 노트의 컨트롤러 + 위치 + 편집 상태).
+class _LocalStickyNote {
+  final String id;
+  final TextEditingController controller;
+  double x;
+  double y;
+  bool editing = false;
+  _LocalStickyNote({
+    required this.id,
+    String text = '',
+    this.x = 20,
+    this.y = 120,
+  }) : controller = TextEditingController(text: text);
+  void dispose() => controller.dispose();
+}
+
 // ── Tool icon ─────────────────────────────────────────────────────────────────
 
 class _ToolIcon extends StatelessWidget {
@@ -1386,27 +1882,35 @@ class _HighlighterPainter extends CustomPainter {
 
 // ── Highlighter toolbar ───────────────────────────────────────────────────────
 
+/// 이슈 #663-B — 기존 X(지우개)/휴지통 2버튼 → undo/redo/clear 3버튼으로 업데이트.
+/// canUndo/canRedo로 비활성화 상태 시각 표시.
 class _HighlighterBar extends StatelessWidget {
   final List<Color> colors;
   final Color selected;
-  final bool isErasing;
   final bool isDark;
+  final bool canUndo;
+  final bool canRedo;
   final ValueChanged<Color> onColor;
-  final VoidCallback onEraser;
+  final VoidCallback onUndo;
+  final VoidCallback onRedo;
   final VoidCallback onClear;
   const _HighlighterBar({
     required this.colors,
     required this.selected,
-    required this.isErasing,
     required this.isDark,
+    required this.canUndo,
+    required this.canRedo,
     required this.onColor,
-    required this.onEraser,
+    required this.onUndo,
+    required this.onRedo,
     required this.onClear,
   });
 
   @override
   Widget build(BuildContext context) {
     final bg = isDark ? const Color(0xFF1A1A2E) : C.bg;
+    final iconBase = isDark ? Colors.white70 : C.tx2;
+    final iconDim = isDark ? Colors.white24 : C.tx2.withValues(alpha: 0.30);
     return Container(
       height: 52,
       color: bg,
@@ -1423,7 +1927,7 @@ class _HighlighterBar extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: c,
                   shape: BoxShape.circle,
-                  border: selected == c && !isErasing
+                  border: selected == c
                       ? Border.all(
                           color: isDark ? Colors.white : C.tx, width: 2)
                       : null,
@@ -1431,27 +1935,26 @@ class _HighlighterBar extends StatelessWidget {
               ),
             ),
           const Spacer(),
-          GestureDetector(
-            onTap: onEraser,
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: isErasing
-                    ? (isDark ? Colors.white24 : C.tx2.withValues(alpha: 0.15))
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(Icons.backspace_outlined,
-                  size: 20, color: isDark ? Colors.white70 : C.tx2),
-            ),
+          // Undo
+          IconButton(
+            tooltip: '실행 취소',
+            onPressed: canUndo ? onUndo : null,
+            visualDensity: VisualDensity.compact,
+            icon: Icon(Icons.undo_rounded, size: 22, color: canUndo ? iconBase : iconDim),
           ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: onClear,
-            child: Padding(
-              padding: const EdgeInsets.all(6),
-              child: Icon(Icons.delete_sweep_rounded, size: 20, color: C.og),
-            ),
+          // Redo
+          IconButton(
+            tooltip: '다시 실행',
+            onPressed: canRedo ? onRedo : null,
+            visualDensity: VisualDensity.compact,
+            icon: Icon(Icons.redo_rounded, size: 22, color: canRedo ? iconBase : iconDim),
+          ),
+          // Clear (전체 삭제)
+          IconButton(
+            tooltip: '전체 삭제',
+            onPressed: onClear,
+            visualDensity: VisualDensity.compact,
+            icon: Icon(Icons.delete_sweep_rounded, size: 22, color: C.og),
           ),
         ],
       ),
@@ -1465,11 +1968,15 @@ class _StickyNoteWidget extends StatelessWidget {
   final TextEditingController controller;
   final bool isEditing;
   final VoidCallback onEditToggle;
+  final VoidCallback onAdd; // 이슈 #663-A 후속 — 노트 헤더에서 새 노트 추가
+  final VoidCallback onDelete; // 이슈 #663-A — 다중 노트 삭제
   final ValueChanged<String> onTextChanged;
   const _StickyNoteWidget({
     required this.controller,
     required this.isEditing,
     required this.onEditToggle,
+    required this.onAdd,
+    required this.onDelete,
     required this.onTextChanged,
   });
 
@@ -1500,14 +2007,21 @@ class _StickyNoteWidget extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const SizedBox(width: 8),
+                // 이슈 #663-A 후속 — 좌측 + 버튼: 새 노트 추가 (FAB 대체)
+                GestureDetector(
+                  onTap: onAdd,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 6),
+                    child: Icon(Icons.add_rounded, size: 16, color: Color(0xFF616161)),
+                  ),
+                ),
                 const Icon(Icons.drag_indicator_rounded,
                     size: 14, color: Color(0xFF9E9E9E)),
                 const Spacer(),
                 GestureDetector(
                   onTap: onEditToggle,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
                     child: Icon(
                       isEditing
                           ? Icons.check_rounded
@@ -1517,6 +2031,15 @@ class _StickyNoteWidget extends StatelessWidget {
                     ),
                   ),
                 ),
+                // 이슈 #663-A — 노트 삭제 X 버튼
+                GestureDetector(
+                  onTap: onDelete,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 6),
+                    child: Icon(Icons.close_rounded, size: 14, color: Color(0xFFC62828)),
+                  ),
+                ),
+                const SizedBox(width: 4),
               ],
             ),
           ),

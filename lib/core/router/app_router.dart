@@ -45,6 +45,8 @@ import 'package:moriknit_flutter/features/tools/presentation/tools_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/tool_memo_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/free_timer_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/time_dashboard_screen.dart';
+import 'package:moriknit_flutter/features/file_explorer/presentation/file_explorer_screen.dart';
+import 'package:moriknit_flutter/features/pattern_generator/presentation/pattern_generator_screen.dart';
 import 'package:moriknit_flutter/features/ravelry/presentation/ravelry_screen.dart';
 import 'package:moriknit_flutter/features/etsy/presentation/etsy_screen.dart';
 import 'package:moriknit_flutter/features/dropbox/presentation/dropbox_screen.dart';
@@ -157,7 +159,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(path: 'pattern-gate', pageBuilder: (_, _) => _fadePage(const PatternGateScreen())),
               GoRoute(
                 path: 'pattern',
-                pageBuilder: (_, _) => _fadePage(const PatternEditorScreen()),
+                pageBuilder: (_, state) => _fadePage(PatternEditorScreen(
+                  // 이슈 #665 — query parameter로 chartType 전달 (rect / roundFull / roundHalf / roundSector)
+                  initialChartType: state.uri.queryParameters['chartType'],
+                )),
                 routes: [
                   GoRoute(
                     path: ':id',
@@ -188,6 +193,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(path: 'memo', pageBuilder: (_, _) => _fadePage(const ToolMemoScreen())),
               GoRoute(path: 'free-timer', pageBuilder: (_, _) => _fadePage(const FreeTimerScreen())),
               GoRoute(path: 'time-dashboard', pageBuilder: (_, _) => _fadePage(const TimeDashboardScreen())),
+              // 이슈 #660 Phase 2 — 통합 파일 탐색기
+              GoRoute(path: 'file-explorer', pageBuilder: (_, _) => _fadePage(const FileExplorerScreen())),
+              // 이슈 #664 — 패턴 생성기 (래글런 + SVG 도식 + 출판용 PDF)
+              GoRoute(path: 'pattern-generator', pageBuilder: (_, _) => _fadePage(const PatternGeneratorScreen())),
               GoRoute(path: 'ravelry', pageBuilder: (_, _) => _fadePage(const RavelryScreen())),
               GoRoute(path: 'etsy', pageBuilder: (_, _) => _fadePage(const EtsyScreen())),
               GoRoute(

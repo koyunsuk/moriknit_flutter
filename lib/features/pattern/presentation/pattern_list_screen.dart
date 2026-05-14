@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -17,6 +18,7 @@ import '../../../providers/pattern_library_provider.dart';
 import '../../../providers/project_provider.dart';
 
 import '../../pattern_library/domain/pattern_file.dart';
+import 'widgets/chart_shape_picker.dart';
 import '../../ravelry/data/ravelry_auth_provider.dart';
 import '../../ravelry/data/ravelry_repository.dart';
 import '../../ravelry/domain/ravelry_models.dart';
@@ -370,6 +372,76 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
     }
   }
 
+  /// 이슈 #683 — 웹 호환 PDF 저장 (bytes 진입점).
+  /// 기존 _savePdfFile(File)과 동일한 흐름. repo.savePdfPatternFromBytes 호출.
+  Future<void> _savePdfBytes(
+    BuildContext context,
+    WidgetRef ref,
+    Uint8List bytes,
+    String fileName,
+    bool isKorean, {
+    bool aiAnalysis = true,
+  }) async {
+    final repo = ref.read(patternRepositoryProvider);
+    final title = await _askPatternTitle(context, isKorean);
+    if (title == null || !context.mounted) return;
+
+    try {
+      PatternChart? saved;
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () async {
+          saved = await repo.savePdfPatternFromBytes(
+            title: title,
+            bytes: bytes,
+            fileName: fileName,
+          );
+        },
+      );
+      if (!context.mounted || saved == null) return;
+      Navigator.push(context, MaterialPageRoute(builder: (_) => PatternDetailScreen(chart: saved!)));
+    } catch (e) {
+      if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+
+  /// 이슈 #683 — 웹 호환 이미지 저장 (bytes 진입점).
+  /// 기존 _saveImageFile(File)과 동일한 흐름. repo.saveImagePatternFromBytes 호출.
+  Future<void> _saveImageBytes(
+    BuildContext context,
+    WidgetRef ref,
+    Uint8List bytes,
+    String fileName,
+    bool isKorean, {
+    bool aiAnalysis = true,
+  }) async {
+    final repo = ref.read(patternRepositoryProvider);
+    final title = await _askPatternTitle(context, isKorean);
+    if (title == null || !context.mounted) return;
+
+    try {
+      PatternChart? saved;
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () async {
+          saved = await repo.saveImagePatternFromBytes(
+            title: title,
+            bytes: bytes,
+            fileName: fileName,
+          );
+        },
+      );
+      if (!context.mounted || saved == null) return;
+      Navigator.push(context, MaterialPageRoute(builder: (_) => PatternDetailScreen(chart: saved!)));
+    } catch (e) {
+      if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+
   Future<String?> _askPatternTitle(BuildContext context, bool isKorean) async {
     final ctrl = TextEditingController();
     String? result;
@@ -440,6 +512,11 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
     // 로컬 변수이므로 GC가 처리하도록 dispose 생략.
     return result;
   }
+
+  /// 이슈 #665 — 사각/원형 도안 형태 선택 모달.
+  /// 도구함과 공통 사용 — chart_shape_picker.dart의 showChartShapePicker로 위임.
+  Future<String?> _pickChartShape(BuildContext context, bool isKorean) =>
+      showChartShapePicker(context, isKorean);
 
   Future<void> _showPatternStartSheet(BuildContext context, WidgetRef ref) async {
     final isKorean = ref.read(appLanguageProvider).isKorean;
@@ -555,7 +632,16 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                   Navigator.pop(ctx);
                   await Future.microtask(() {});
                   if (kIsWeb) {
-                    if (context.mounted) showSavedSnackBar(context, message: isKorean ? '모바일에서만 사용 가능해요.' : 'Available on mobile only.');
+                    // 이슈 #683 — 웹 분기: bytes로 업로드
+                    final result = await FilePicker.platform.pickFiles(
+                      type: FileType.custom,
+                      allowedExtensions: ['pdf'],
+                      withData: true,
+                    );
+                    if (result == null || result.files.isEmpty) return;
+                    final f = result.files.first;
+                    if (f.bytes == null || !context.mounted) return;
+                    await _savePdfBytes(context, ref, f.bytes!, f.name, isKorean, aiAnalysis: aiAnalysis);
                     return;
                   }
                   final result = await FilePicker.platform.pickFiles(
@@ -597,11 +683,90 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                 ]),
               ),
               const SizedBox(height: 10),
-              // 3. 도안에디터로 만들기 (신규)
+              // 이슈 #660 Phase 1 — 내 폰 파일에서 가져오기 (PDF + 이미지 통합)
+              // 이슈 #683 — 웹에서도 PC 파일 업로드 지원 (bytes 경로)
               GlassCard(
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(ctx);
-                  context.push(Routes.toolsPattern);
+                  await Future.microtask(() {});
+                  if (kIsWeb) {
+                    final result = await FilePicker.platform.pickFiles(
+                      type: FileType.custom,
+                      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
+                      withData: true,
+                    );
+                    if (result == null || result.files.isEmpty) return;
+                    final f = result.files.first;
+                    if (f.bytes == null || !context.mounted) return;
+                    final ext = f.name.split('.').last.toLowerCase();
+                    if (ext == 'pdf') {
+                      await _savePdfBytes(context, ref, f.bytes!, f.name, isKorean, aiAnalysis: aiAnalysis);
+                    } else {
+                      await _saveImageBytes(context, ref, f.bytes!, f.name, isKorean, aiAnalysis: aiAnalysis);
+                    }
+                    return;
+                  }
+                  final result = await FilePicker.platform.pickFiles(
+                    type: FileType.custom,
+                    allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
+                  );
+                  if (result == null || result.files.first.path == null) return;
+                  if (!context.mounted) return;
+                  final path = result.files.first.path!;
+                  final ext = path.split('.').last.toLowerCase();
+                  final file = File(path);
+                  if (ext == 'pdf') {
+                    await _savePdfFile(context, ref, file, isKorean, aiAnalysis: aiAnalysis);
+                  } else {
+                    await _saveImageFile(context, ref, file, isKorean, aiAnalysis: aiAnalysis);
+                  }
+                },
+                child: Row(children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: C.lv.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(Icons.folder_open_rounded, color: C.lv),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isKorean ? '내 폰 파일에서 가져오기' : 'Import from device',
+                          style: T.bodyBold,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          isKorean
+                              ? '다운로드 폴더 등에서 PDF·이미지 파일을 골라요'
+                              : 'Pick PDF or image from downloads/files',
+                          style: T.caption.copyWith(color: C.mu),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: C.mu),
+                ]),
+              ),
+              const SizedBox(height: 10),
+              // 도안에디터로 만들기 (이슈 #665 — 사각 / 원형 분기)
+              GlassCard(
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  if (!context.mounted) return;
+                  final shape = await _pickChartShape(context, isKorean);
+                  if (shape == null) return;
+                  if (!context.mounted) return;
+                  if (shape == 'rect') {
+                    context.push(Routes.toolsPattern);
+                  } else {
+                    context.push('${Routes.toolsPattern}?chartType=$shape');
+                  }
                 },
                 child: Row(children: [
                   Container(
@@ -624,7 +789,9 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          isKorean ? '모리앱 도안 에디터로 직접 만들어요' : 'Draw directly with MoriKnit editor',
+                          isKorean
+                              ? '사각 그리드(스웨터) 또는 원형(코바늘) 직접 작성'
+                              : 'Draw rect grid (sweater) or round (crochet)',
                           style: T.caption.copyWith(color: C.mu),
                         ),
                       ],

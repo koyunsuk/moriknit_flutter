@@ -1,7 +1,8 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -37,11 +38,22 @@ void main() async {
       Hive.openBox<Map>(SubscriptionConstants.boxSyncQueue),
       Hive.openBox<Map>(SubscriptionConstants.boxUser),
       Hive.openBox<dynamic>(SubscriptionConstants.boxViewerState),
+      // #685 — 영속 캐시 Box
+      Hive.openBox<Map>(SubscriptionConstants.boxCacheKnitSymbols),
+      Hive.openBox<Map>(SubscriptionConstants.boxCacheEncyclopedia),
+      Hive.openBox<Map>(SubscriptionConstants.boxCachePatternCharts),
     ]);
   }
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // #685 — Firestore 영속 캐시 (모바일 SQLite / 웹 IndexedDB 자동).
+  // v6 SDK: settings로 통합. enablePersistence 별도 호출 불필요.
+  FirebaseFirestore.instance.settings = const Settings(
+    persistenceEnabled: true,
+    cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
   );
 
   if (!kIsWeb) {

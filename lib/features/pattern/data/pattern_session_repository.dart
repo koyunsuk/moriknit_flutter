@@ -80,6 +80,15 @@ class PatternSessionRepository {
     }, SetOptions(merge: true));
   }
 
+  /// 이슈 #663-A — 스티키 노트 다중 지원: List 통째로 덮어쓰기 (추가/이동/삭제 한꺼번에).
+  Future<void> setStickyNotes(String sessionId, List<StickyNote> notes) async {
+    if (_uid.isEmpty) return;
+    await _sessionsRef.doc(sessionId).set({
+      'stickyNotes': notes.map((e) => e.toJson()).toList(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
   // ── UPDATE: STICKY NOTE (upsert by id) ─────────────────────
   Future<void> updateStickyNote(String sessionId, StickyNote note) async {
     if (_uid.isEmpty) return;

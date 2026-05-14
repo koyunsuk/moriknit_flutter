@@ -18,9 +18,11 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../data/pattern_export_service.dart';
 import '../data/pattern_repository.dart';
+import '../domain/guide_path_chart.dart';
 import '../domain/knit_symbols.dart';
 import '../domain/narrative_block.dart';
 import '../domain/pattern_chart.dart';
+import '../domain/round_chart.dart';
 import '../../../features/counter/domain/counter_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/counter_provider.dart';
@@ -29,6 +31,8 @@ import 'widgets/chart_canvas.dart';
 import 'widgets/chart_toolbar.dart';
 import 'widgets/chart_tracking_overlay.dart';
 import 'widgets/grid_size_dialog.dart';
+import 'widgets/guide_path_editor_view.dart';
+import 'widgets/round_editor_view.dart';
 import 'widgets/section_grouper.dart';
 
 class PatternEditorScreen extends ConsumerStatefulWidget {
@@ -39,6 +43,9 @@ class PatternEditorScreen extends ConsumerStatefulWidget {
   final bool readOnly;
   /// 저장/삭제/나가기 후 이동할 경로. null이면 sourceType 기반 기본값 사용.
   final String? returnRoute;
+  /// 이슈 #665 — 신규 도안 생성 시 도안 형태 ('rect' / 'roundFull' / 'roundHalf' / 'roundSector').
+  /// null이면 'rect' (기존 사각).
+  final String? initialChartType;
   const PatternEditorScreen({
     super.key,
     this.patternId,
@@ -46,6 +53,7 @@ class PatternEditorScreen extends ConsumerStatefulWidget {
     this.referencePdfPath,
     this.readOnly = false,
     this.returnRoute,
+    this.initialChartType,
   });
 
   @override
@@ -102,25 +110,54 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
   @override
   void initState() {
     super.initState();
+    // 이슈 #665 — initialChartType이 round*면 빈 RoundChart 부착.
+    final chartShape = _chartShapeFromString(widget.initialChartType);
     _chart = PatternChart.empty(
       id: widget.patternId ?? '',
       title: 'Untitled',
+    ).copyWith(
+      chartType: chartShape,
+      // 이슈 #665 — round*: RoundChart 부착. 이슈 #668 — guidePath: GuidePathChart 부착.
+      roundData: (chartShape == ChartShape.roundFull ||
+              chartShape == ChartShape.roundHalf ||
+              chartShape == ChartShape.roundSector)
+          ? const RoundChart()
+          : null,
+      guidePathData:
+          chartShape == ChartShape.guidePath ? const GuidePathChart() : null,
     );
     _narrativeController = TextEditingController(text: _chart.narrativeText);
     _titleController = TextEditingController(text: _chart.title);
     _referenceImageFile = widget.referenceImageFile;
     if (widget.patternId != null && widget.patternId!.isNotEmpty) {
       _loadChart(widget.patternId!);
-    } else if (!widget.readOnly) {
-      // 새 도안: 첫 프레임 후 그리드 크기 설정 다이얼로그 표시 (뷰어 모드에서는 제외)
-      WidgetsBinding.instance.addPostFrameCallback((_) => _showGridSizeDialogForNew());
     }
+    // #680 — 새 도안은 즉시 작업 가능 (워드/엑셀 패턴).
+    //   기본 20코×30단으로 시작. 사이즈 변경은 정보바/툴바에서 가능.
     if (widget.referenceImageFile != null || widget.referencePdfPath != null) {
       _showReference = true;
     }
     // 첫 번째 기호 기본 선택
     final firstSymbol = KnitSymbolLibrary.byCategory(SymbolCategory.basic).firstOrNull;
     _activeSymbolId = firstSymbol?.id;
+  }
+
+  /// 이슈 #665/#668 — 라우터 query 파싱
+  /// ('roundFull'/'roundHalf'/'roundSector'/'guidePath'/'rect').
+  ChartShape _chartShapeFromString(String? name) {
+    switch (name) {
+      case 'roundFull':
+        return ChartShape.roundFull;
+      case 'roundHalf':
+        return ChartShape.roundHalf;
+      case 'roundSector':
+        return ChartShape.roundSector;
+      case 'guidePath':
+        return ChartShape.guidePath;
+      case 'rect':
+      default:
+        return ChartShape.rect;
+    }
   }
 
   @override
@@ -132,33 +169,71 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
     super.dispose();
   }
 
-  Future<void> _showGridSizeDialogForNew() async {
-    if (!mounted) return;
-    final result = await showGridSizeDialog(
-      context,
-      initialRows: 30,
-      initialCols: 20,
+  // #680 — _showGridSizeDialogForNew 제거 (즉시 시작 패턴 적용).
+
+  /// #680 — 정보바: 그리드 사이즈/대칭/미저장 표시 (다이얼로그 대체).
+  Widget _buildInfoBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: C.gx,
+        border: Border(bottom: BorderSide(color: C.bd, width: 1)),
+      ),
+      child: Row(
+        children: [
+          // 그리드 사이즈 — 클릭으로 변경.
+          InkWell(
+            onTap: _showGridSizeDialogForEdit,
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.grid_on_rounded, size: 14, color: C.lvD),
+                const SizedBox(width: 4),
+                Text('${_chart.cols}코 × ${_chart.rows}단',
+                    style: T.caption.copyWith(
+                        color: C.tx, fontWeight: FontWeight.w700)),
+              ]),
+            ),
+          ),
+          if (_chart.mirrorMode) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: C.lv.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.flip, size: 12, color: C.lvD),
+                const SizedBox(width: 3),
+                Text('대칭',
+                    style: T.caption.copyWith(
+                        fontSize: 10, color: C.lvD,
+                        fontWeight: FontWeight.w700)),
+              ]),
+            ),
+          ],
+          const Spacer(),
+          // 미저장 표시 — 닷.
+          if (_isDirty)
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: C.og,
+                shape: BoxShape.circle,
+              ),
+            ),
+          if (_isDirty) const SizedBox(width: 4),
+          Text(
+            _isDirty ? '편집중' : '저장됨',
+            style: T.caption.copyWith(
+                color: _isDirty ? C.og : C.mu, fontSize: 10),
+          ),
+        ],
+      ),
     );
-    if (!mounted) return;
-    if (result != null) {
-      setState(() {
-        _chart = PatternChart.empty(
-          id: _chart.id,
-          title: result.title.isNotEmpty ? result.title : _chart.title,
-          rows: result.rows,
-          cols: result.cols,
-          mode: result.mode,
-          mirrorMode: result.mirrorMode,
-          category: result.category,
-          createdAt: result.createdAt,
-        );
-        // 컬러차트 모드: 기본 도구를 브러쉬(셀 배경색)로 설정
-        if (result.mode == ChartMode.colorChart) {
-          _activeTool = ChartTool.brush;
-          _activeLayer = DrawLayer.color;
-        }
-      });
-    }
   }
 
   Future<void> _showGridSizeDialogForEdit() async {
@@ -1122,6 +1197,81 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
   Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
 
+    // 이슈 #668 — 자유 Path 도안이면 GuidePathEditorView로 분기 (사각/원형 코드 무손상).
+    if (_chart.chartType == ChartShape.guidePath) {
+      return Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text(
+            _chart.title.isEmpty
+                ? (isKorean ? '자유 Path 도안' : 'Free Path Chart')
+                : _chart.title,
+            style: T.h3,
+          ),
+          backgroundColor: C.bg,
+          elevation: 0,
+          actions: widget.readOnly
+              ? null
+              : [
+                  IconButton(
+                    icon: Icon(Icons.save_rounded, color: C.lv),
+                    tooltip: isKorean ? '저장' : 'Save',
+                    onPressed: _save,
+                  ),
+                ],
+        ),
+        body: GuidePathEditorView(
+          chart: _chart.guidePathData == null
+              ? _chart.copyWith(guidePathData: const GuidePathChart())
+              : _chart,
+          onChange: (updated) {
+            setState(() {
+              _chart = updated;
+              _isDirty = true;
+            });
+          },
+          isReadOnly: widget.readOnly,
+        ),
+      );
+    }
+
+    // 이슈 #665 — 원형 도안이면 RoundEditorView로 분기 (사각 코드 무손상).
+    if (_chart.chartType != ChartShape.rect && _chart.roundData != null) {
+      return Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text(_chart.title.isEmpty ? (isKorean ? '원형 도안' : 'Round Chart') : _chart.title, style: T.h3),
+          backgroundColor: C.bg,
+          elevation: 0,
+          actions: widget.readOnly
+              ? null
+              : [
+                  IconButton(
+                    icon: Icon(Icons.save_rounded, color: C.lv),
+                    tooltip: isKorean ? '저장' : 'Save',
+                    onPressed: _save,
+                  ),
+                ],
+        ),
+        body: RoundEditorView(
+          chart: _chart,
+          onChange: (updated) {
+            setState(() {
+              _chart = updated;
+              _isDirty = true;
+            });
+          },
+          isReadOnly: widget.readOnly,
+        ),
+      );
+    }
+
     return PopScope(
       canPop: !_isDirty || widget.readOnly,
       onPopInvokedWithResult: (didPop, _) async {
@@ -1380,6 +1530,8 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
                     constraints: const BoxConstraints(maxHeight: 200),
                     child: PDFView(filePath: widget.referencePdfPath!),
                   ),
+                // #680 — 정보바: 그리드 사이즈 + 대칭 모드 + 미저장 표시.
+                if (!widget.readOnly) _buildInfoBar(),
                 Expanded(
                   child: ClipRect(
                     child: Stack(
@@ -1399,6 +1551,14 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
                             transformationController: _trackingCtrl,
                           ),
                         ),
+                        // #680 — 대칭 모드 시 분할선 (시각 가이드)
+                        if (_chart.mirrorMode)
+                          IgnorePointer(
+                            child: CustomPaint(
+                              size: Size.infinite,
+                              painter: _MirrorAxisPainter(color: C.lv),
+                            ),
+                          ),
                         // 행 트래킹 — 그리드 위 시각 오버레이만 (컨트롤바 분리)
                         if (_trackingEnabled)
                           _TrackingOverlay(
@@ -2247,4 +2407,32 @@ class _LegendChip extends StatelessWidget {
       ),
     );
   }
+}
+
+/// #680 — 대칭 모드 시 캔버스 정중앙에 점선 분할선 그림 (시각 가이드).
+class _MirrorAxisPainter extends CustomPainter {
+  final Color color;
+  _MirrorAxisPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+    final paint = Paint()
+      ..color = color.withValues(alpha: 0.55)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+    final cx = size.width / 2;
+    // 점선 (8px 그리고 6px 띄우고 반복).
+    const dash = 8.0;
+    const gap = 6.0;
+    double y = 0;
+    while (y < size.height) {
+      final next = (y + dash).clamp(0, size.height).toDouble();
+      canvas.drawLine(Offset(cx, y), Offset(cx, next), paint);
+      y = next + gap;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MirrorAxisPainter old) => old.color != color;
 }

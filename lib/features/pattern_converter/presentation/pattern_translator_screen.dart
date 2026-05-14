@@ -15,6 +15,7 @@ import '../../dropbox/data/dropbox_auth_provider.dart';
 import '../../dropbox/domain/dropbox_file_entry.dart';
 import '../../../providers/dropbox_provider.dart';
 import '../../../providers/parsed_pattern_provider.dart';
+import '../data/ai_error_mapper.dart';
 import '../data/pattern_converter_repository.dart';
 import 'ai_pattern_edit_screen.dart';
 
@@ -254,15 +255,24 @@ class _PatternTranslatorScreenState
       );
     } catch (e) {
       if (!mounted) return;
-      final errMsg = e
-          .toString()
-          .split('\n')
-          .first
-          .replaceAll(RegExp(r'^\[firebase_functions/[^\]]+\]\s*'), '');
-      showSaveErrorSnackBar(
-        messenger,
-        message: isKorean ? '오류가 발생했어요: $errMsg' : 'Error: $errMsg',
-      );
+      final info = AiErrorMapper.map(e, isKorean: isKorean);
+      if (info.action == AiErrorAction.upgradeSubscription) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(info.message),
+            duration: const Duration(seconds: 6),
+            action: SnackBarAction(
+              label: isKorean ? '구독' : 'Upgrade',
+              onPressed: () {
+                if (!mounted) return;
+                context.push(Routes.my);
+              },
+            ),
+          ),
+        );
+      } else {
+        showSaveErrorSnackBar(messenger, message: info.message);
+      }
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }

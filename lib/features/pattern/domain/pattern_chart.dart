@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'ai_pattern_section.dart';
+import 'crochet_symbols.dart';
+import 'guide_path_chart.dart';
 import 'knit_symbols.dart';
 import 'narrative_block.dart';
+import 'round_chart.dart';
 
 enum ChartMode { color, symbol, colorChart, narrative }
 
@@ -266,6 +269,18 @@ class PatternChart {
   /// 모리니트 자체 도안은 null. 프로젝트 동기화 시 Ravelry createProject의 pattern_id로 전달.
   final int? ravelryPatternId;
 
+  /// 이슈 #665 — 도안 형태 (사각 그리드 / 원형 라운드).
+  /// 기본 ChartShape.rect (기존 도안과 호환).
+  final ChartShape chartType;
+
+  /// 이슈 #665 — chartType이 round*일 때 원형 도안 데이터.
+  /// 사각 그리드 도안은 null.
+  final RoundChart? roundData;
+
+  /// 이슈 #668 — chartType이 guidePath일 때 자유 Path 도안 데이터.
+  /// 사각·원형 도안은 null.
+  final GuidePathChart? guidePathData;
+
   PatternChart({
     required this.id,
     required this.title,
@@ -291,6 +306,9 @@ class PatternChart {
     this.repeatRegions = const [],
     this.narrativeBlocks = const [],
     this.ravelryPatternId,
+    this.chartType = ChartShape.rect,
+    this.roundData,
+    this.guidePathData,
   });
 
   PatternChart setCell(int row, int col, CellData cell) {
@@ -458,10 +476,12 @@ class PatternChart {
 
       final rowLabel = korean ? '${r + 1}단' : 'Row ${r + 1}';
       final parts = runs.map((run) {
+        // 이슈 #665 옵션 1.5 — 대바늘 라이브러리에 없으면 코바늘 fallback (혼용 도안 지원)
         final sym = KnitSymbolLibrary.byId(run.symId);
+        final crochet = sym == null ? CrochetSymbolLibrary.byId(run.symId) : null;
         final name = korean
-            ? (sym?.verbKo ?? sym?.name ?? run.symId)
-            : (sym?.verbEn ?? sym?.abbr ?? run.symId);
+            ? (sym?.verbKo ?? sym?.name ?? crochet?.labelKo ?? run.symId)
+            : (sym?.verbEn ?? sym?.abbr ?? crochet?.labelEn ?? run.symId);
         final base = run.count > 1 ? '$name ${run.count}' : name;
         if (!isColorChart) return base;
         final label = colorLabels[run.argb] ?? 'MC';
@@ -521,6 +541,9 @@ class PatternChart {
     List<RepeatRegion>? repeatRegions,
     List<NarrativeBlock>? narrativeBlocks,
     Object? ravelryPatternId = _sentinel,
+    ChartShape? chartType,
+    Object? roundData = _sentinel,
+    Object? guidePathData = _sentinel,
   }) => _copyWith(
     id: id, title: title, rows: rows, cols: cols, mode: mode, grid: grid,
     narrativeText: narrativeText, type: type, imageUrl: imageUrl, pdfUrl: pdfUrl,
@@ -531,6 +554,9 @@ class PatternChart {
     knittingDirection: knittingDirection, gauge: gauge, repeatRegions: repeatRegions,
     narrativeBlocks: narrativeBlocks,
     ravelryPatternId: ravelryPatternId,
+    chartType: chartType,
+    roundData: roundData,
+    guidePathData: guidePathData,
   );
 
   static const Object _sentinel = Object();
@@ -560,6 +586,9 @@ class PatternChart {
     List<RepeatRegion>? repeatRegions,
     List<NarrativeBlock>? narrativeBlocks,
     Object? ravelryPatternId = _sentinel,
+    ChartShape? chartType,
+    Object? roundData = _sentinel,
+    Object? guidePathData = _sentinel,
   }) {
     return PatternChart(
       id: id ?? this.id,
@@ -588,6 +617,13 @@ class PatternChart {
       ravelryPatternId: identical(ravelryPatternId, _sentinel)
           ? this.ravelryPatternId
           : ravelryPatternId as int?,
+      chartType: chartType ?? this.chartType,
+      roundData: identical(roundData, _sentinel)
+          ? this.roundData
+          : roundData as RoundChart?,
+      guidePathData: identical(guidePathData, _sentinel)
+          ? this.guidePathData
+          : guidePathData as GuidePathChart?,
     );
   }
 
@@ -617,6 +653,11 @@ class PatternChart {
         if (repeatRegions.isNotEmpty) 'repeatRegions': repeatRegions.map((r) => r.toJson()).toList(),
         if (narrativeBlocks.isNotEmpty) 'narrativeBlocks': narrativeBlocks.map((b) => b.toMap()).toList(),
         if (ravelryPatternId != null) 'ravelryPatternId': ravelryPatternId,
+        // 이슈 #665 — 원형 도안. 기본 rect는 저장 생략 (호환성).
+        if (chartType != ChartShape.rect) 'chartType': chartType.name,
+        if (roundData != null) 'roundData': roundData!.toJson(),
+        // 이슈 #668 — 자유 Path 도안.
+        if (guidePathData != null) 'guidePathData': guidePathData!.toJson(),
       };
 
   factory PatternChart.fromJson(Map<String, dynamic> json) {
@@ -673,7 +714,33 @@ class PatternChart {
           : (json['ravelryPatternId'] is num
               ? (json['ravelryPatternId'] as num).toInt()
               : null),
+      // 이슈 #665 — 원형 도안 마이그레이션 (없으면 rect).
+      chartType: _parseChartShape(json['chartType'] as String?),
+      roundData: json['roundData'] != null
+          ? RoundChart.fromJson(Map<String, dynamic>.from(json['roundData'] as Map))
+          : null,
+      // 이슈 #668 — 자유 Path 도안 마이그레이션.
+      guidePathData: json['guidePathData'] != null
+          ? GuidePathChart.fromJson(
+              Map<String, dynamic>.from(json['guidePathData'] as Map))
+          : null,
     );
+  }
+
+  static ChartShape _parseChartShape(String? name) {
+    switch (name) {
+      case 'roundFull':
+        return ChartShape.roundFull;
+      case 'roundHalf':
+        return ChartShape.roundHalf;
+      case 'roundSector':
+        return ChartShape.roundSector;
+      case 'guidePath':
+        return ChartShape.guidePath;
+      case 'rect':
+      default:
+        return ChartShape.rect;
+    }
   }
 
   /// narrativeBlocks 파싱 + 호환 레이어:

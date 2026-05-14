@@ -20,6 +20,7 @@ import '../../../features/project/domain/raglan_pattern_builder.dart';
 import '../../../features/project/domain/raglan_template.dart';
 import '../../../providers/parsed_pattern_provider.dart';
 import '../../dropbox/data/dropbox_auth_provider.dart';
+import '../data/ai_error_mapper.dart';
 import '../data/pattern_converter_repository.dart';
 import 'ai_pattern_edit_screen.dart';
 import 'pattern_translator_screen.dart' show DropboxPickerScreen, DropboxPickResult;
@@ -427,10 +428,34 @@ class _PatternConverterScreenState
       );
     } catch (e) {
       if (!mounted) return;
-      showSaveErrorSnackBar(
-        messenger,
-        message: isKorean ? '오류가 발생했어요: $e' : 'Error: $e',
+      _showAiErrorFeedback(messenger, e, isKorean: isKorean);
+    }
+  }
+
+  /// 이슈 #688 — raw 에러 노출 차단. [AiErrorMapper]로 분류 후 친화 메시지 표시.
+  /// rate_limit 등 결제 한도 케이스에는 마이페이지(구독 카드) 이동 액션 추가.
+  void _showAiErrorFeedback(
+    ScaffoldMessengerState messenger,
+    Object error, {
+    required bool isKorean,
+  }) {
+    final info = AiErrorMapper.map(error, isKorean: isKorean);
+    if (info.action == AiErrorAction.upgradeSubscription) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(info.message),
+          duration: const Duration(seconds: 6),
+          action: SnackBarAction(
+            label: isKorean ? '구독' : 'Upgrade',
+            onPressed: () {
+              if (!mounted) return;
+              context.push(Routes.my);
+            },
+          ),
+        ),
       );
+    } else {
+      showSaveErrorSnackBar(messenger, message: info.message);
     }
   }
 
@@ -626,15 +651,7 @@ class _PatternConverterScreenState
       );
     } catch (e) {
       if (!mounted) return;
-      final errMsg = e
-          .toString()
-          .split('\n')
-          .first
-          .replaceAll(RegExp(r'^\[firebase_functions/[^\]]+\]\s*'), '');
-      showSaveErrorSnackBar(
-        messenger,
-        message: isKorean ? '오류가 발생했어요: $errMsg' : 'Error: $errMsg',
-      );
+      _showAiErrorFeedback(messenger, e, isKorean: isKorean);
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }

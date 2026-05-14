@@ -1,9 +1,12 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../providers/project_provider.dart';
+import '../../project/domain/project_model.dart';
 import '../data/ravelry_repository.dart';
 
 // 라벨리 프로젝트 상태 목록
@@ -113,18 +116,44 @@ class _ProjectCreateSheetState extends State<_ProjectCreateSheet> {
         context,
         message: isKorean ? '저장하는 중입니다.' : 'Saving...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
-        task: () => repo.createProject(
-          name: name,
-          patternId: widget.patternId,
-          notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-          statusTypeId: _statusTypeId,
-        ),
+        task: () async {
+          // 이슈 #662 — 응답 검증 + 모리니트 프로젝트 자동 생성
+          final created = await repo.createProject(
+            name: name,
+            patternId: widget.patternId,
+            notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+            statusTypeId: _statusTypeId,
+          );
+          // Ravelry가 200 OK + 빈 응답을 보냈을 때 silent failure 방지
+          if (created.id <= 0) {
+            throw Exception(
+              isKorean
+                  ? '라벨리 응답에 프로젝트 ID가 없어요. 잠시 후 다시 시도해 주세요.'
+                  : 'Ravelry response missing project id. Please retry.',
+            );
+          }
+          // 모리니트 ProjectModel도 함께 생성 — 모리니트 프로젝트 보드에서 즉시 발견 가능
+          final user = FirebaseAuth.instance.currentUser;
+          if (user != null) {
+            final projectRepo = widget.ref.read(projectRepositoryProvider);
+            final notes = _notesCtrl.text.trim();
+            final mori = ProjectModel.empty(uid: user.uid).copyWith(
+              title: name,
+              memo: notes,
+              ravelryProjectId: created.id,
+              ravelryPatternId: widget.patternId,
+            );
+            await projectRepo.createProject(mori);
+          }
+        },
       );
       if (!mounted) return;
       Navigator.pop(context);
       showSavedSnackBar(
         ScaffoldMessenger.of(context),
-        message: isKorean ? '라벨리에 프로젝트가 생성됐어요.' : 'Project created on Ravelry.',
+        message: isKorean
+            ? '라벨리 + 모리니트에 프로젝트가 생성됐어요.'
+            : 'Project created on Ravelry + MoriKnit.',
       );
     } catch (e) {
       if (!mounted) return;

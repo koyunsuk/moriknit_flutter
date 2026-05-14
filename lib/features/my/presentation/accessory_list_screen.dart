@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -43,10 +44,7 @@ class AccessoryListScreen extends ConsumerWidget {
                   ),
                 ],
                 addLabel: isKorean ? '추가' : 'Add',
-                onAdd: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AccessoryInputScreen()),
-                ),
+                onAdd: () => _showAccessoryStartSheet(context, ref),
               ),
             ),
             Expanded(
@@ -66,10 +64,7 @@ class AccessoryListScreen extends ConsumerWidget {
                                 title: isKorean ? '아직 악세사리가 없어요' : 'No accessories yet',
                                 subtitle: isKorean ? '니팅 도구를 추가해 보세요' : 'Add your knitting tools',
                                 buttonLabel: isKorean ? '추가하기' : 'Add',
-                                onAction: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const AccessoryInputScreen()),
-                                ),
+                                onAction: () => _showAccessoryStartSheet(context, ref),
                               )
                             : Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -90,6 +85,157 @@ class AccessoryListScreen extends ConsumerWidget {
                               ),
                   ),
                 ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _navigateToInput(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AccessoryInputScreen()),
+    );
+  }
+
+  // 이슈 #693 — 신규/복사 시작 시트 (나의 바늘 패턴 통일)
+  void _showAccessoryStartSheet(BuildContext context, WidgetRef ref) {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.4,
+        maxChildSize: 0.6,
+        minChildSize: 0.3,
+        builder: (_, scrollCtrl) => Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(children: [Text(isKorean ? '악세사리 추가' : 'Add accessory', style: T.h3)]),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                children: [
+                  GlassCard(
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _navigateToInput(context);
+                    },
+                    child: Row(
+                      children: [
+                        Container(width: 48, height: 48, decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(14)), child: Icon(Icons.add_rounded, color: C.tx2)),
+                        const SizedBox(width: 14),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(isKorean ? '새 악세사리 추가' : 'Add new accessory', style: T.bodyBold),
+                          const SizedBox(height: 4),
+                          Text(isKorean ? '새 악세사리 정보를 직접 입력해요' : 'Enter accessory info manually', style: T.caption.copyWith(color: C.mu)),
+                        ])),
+                        Icon(Icons.chevron_right_rounded, color: C.mu),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  GlassCard(
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showCopyAccessorySheet(context, ref);
+                    },
+                    child: Row(
+                      children: [
+                        Container(width: 48, height: 48, decoration: BoxDecoration(color: C.pkD.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14)), child: Icon(Icons.copy_rounded, color: C.pkD)),
+                        const SizedBox(width: 14),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(isKorean ? '기존 악세사리 복사로 시작' : 'Copy existing accessory', style: T.bodyBold),
+                          const SizedBox(height: 4),
+                          Text(isKorean ? '기존 악세사리를 복사해서 시작해요' : 'Duplicate an existing accessory', style: T.caption.copyWith(color: C.mu)),
+                        ])),
+                        Icon(Icons.chevron_right_rounded, color: C.mu),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCopyAccessorySheet(BuildContext context, WidgetRef ref) {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final items = ref.read(accessoryListProvider).valueOrNull ?? <AccessoryModel>[];
+    if (items.isEmpty) {
+      showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '복사할 악세사리가 없어요.' : 'No accessories to copy.');
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        maxChildSize: 0.9,
+        minChildSize: 0.4,
+        builder: (_, scrollCtrl) => Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: C.bd2, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Text(isKorean ? '복사할 악세사리 선택' : 'Select accessory to copy', style: T.h3)),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                itemCount: items.length,
+                itemBuilder: (_, i) {
+                  final item = items[i];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: GlassCard(
+                      onTap: () async {
+                        Navigator.pop(ctx);
+                        try {
+                          await runWithMoriLoadingDialog<void>(
+                            context,
+                            message: isKorean ? '복사하는 중입니다.' : 'Duplicating...',
+                            subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+                            task: () => ref.read(accessoryRepositoryProvider).duplicateAccessory(item),
+                          );
+                          if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '복사됐어요.' : 'Duplicated.');
+                        } catch (e) {
+                          if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+                        }
+                      },
+                      child: Row(
+                        children: [
+                          Container(width: 48, height: 48, decoration: BoxDecoration(color: C.pkD.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(10)), child: Icon(Icons.build_rounded, color: C.pkD, size: 24)),
+                          const SizedBox(width: 14),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(item.localizedTypeLabel(isKorean), style: T.bodyBold),
+                            if (item.brandName.isNotEmpty) Text(item.brandName, style: T.caption.copyWith(color: C.mu)),
+                          ])),
+                          Icon(Icons.copy_rounded, color: C.mu, size: 18),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ],

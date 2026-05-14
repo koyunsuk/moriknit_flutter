@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,6 +9,8 @@ import 'package:http/http.dart' as http;
 
 import '../../pattern_converter/data/pdf_thumbnail_extractor.dart';
 import '../domain/pattern_chart.dart';
+import '../domain/round_chart.dart';
+import 'round_chart_thumbnail.dart';
 
 class PatternRepository {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -23,22 +24,23 @@ class PatternRepository {
   Future<PatternChart> save(PatternChart chart) async {
     if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
     final docRef = chart.id.isEmpty ? _ref.doc() : _ref.doc(chart.id);
-    final saved = PatternChart(
+
+    // 이슈 #665 Phase 5 — 원형 도안이면 썸네일 자동 생성·업로드.
+    // imageUrl이 비어있을 때만 자동 생성 (사용자 명시 커버 보존).
+    String resolvedImageUrl = chart.imageUrl;
+    if (chart.chartType != ChartShape.rect &&
+        chart.roundData != null &&
+        resolvedImageUrl.isEmpty) {
+      final url = await generateAndUploadRoundThumbnail(
+        patternId: docRef.id,
+        chart: chart.roundData!,
+      );
+      if (url != null && url.isNotEmpty) resolvedImageUrl = url;
+    }
+
+    final saved = chart.copyWith(
       id: docRef.id,
-      title: chart.title,
-      rows: chart.rows,
-      cols: chart.cols,
-      mode: chart.mode,
-      grid: chart.grid,
-      narrativeText: chart.narrativeText,
-      type: chart.type,
-      imageUrl: chart.imageUrl,
-      pdfUrl: chart.pdfUrl,
-      forkCount: chart.forkCount,
-      sourcePatternId: chart.sourcePatternId,
-      sourceOwnerName: chart.sourceOwnerName,
-      sourceType: chart.sourceType,
-      aiSections: chart.aiSections,
+      imageUrl: resolvedImageUrl,
     );
     final isNew = chart.id.isEmpty;
     await docRef.set({
@@ -182,6 +184,41 @@ class PatternRepository {
     return storageRef.getDownloadURL();
   }
 
+  /// 이슈 #683 — 웹 호환 bytes 업로드 헬퍼.
+  /// kIsWeb 환경에서 File 객체 대신 Uint8List bytes를 직접 업로드.
+  Future<String> _uploadBytes(
+    Uint8List bytes,
+    String folder,
+    String fileName,
+  ) async {
+    if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
+    final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : 'bin';
+    String? contentType;
+    switch (ext) {
+      case 'jpg':
+      case 'jpeg':
+        contentType = 'image/jpeg';
+        break;
+      case 'png':
+        contentType = 'image/png';
+        break;
+      case 'webp':
+        contentType = 'image/webp';
+        break;
+      case 'pdf':
+        contentType = 'application/pdf';
+        break;
+    }
+    final storageRef = FirebaseStorage.instance.ref().child(
+          'users/$_uid/patterns/$folder/${DateTime.now().millisecondsSinceEpoch}.$ext',
+        );
+    await storageRef.putData(
+      bytes,
+      contentType != null ? SettableMetadata(contentType: contentType) : null,
+    );
+    return storageRef.getDownloadURL();
+  }
+
   /// 이슈 #648 — PDF 첫 페이지를 추출해 Storage에 업로드하고 다운로드 URL 반환.
   /// 실패 시 null 반환 (호출자가 fallback 가능).
   Future<String?> _uploadPdfCover(File pdfFile) async {
@@ -266,6 +303,88 @@ class PatternRepository {
       });
     } catch (e) {
       // 백그라운드 실패는 무음 (사용자 흐름 영향 없음)
+    }
+  }
+
+  /// 이슈 #683 — 웹 호환 이미지 도안 저장 (bytes 입력).
+  /// 기존 saveImagePattern(File)과 동일한 로직, putFile 대신 putData 사용.
+  Future<PatternChart> saveImagePatternFromBytes({
+    required String title,
+    required Uint8List bytes,
+    required String fileName,
+  }) async {
+    final imageUrl = await _uploadBytes(bytes, 'images', fileName);
+    final docRef = _ref.doc();
+    final chart = PatternChart(
+      id: docRef.id,
+      title: title,
+      rows: 0,
+      cols: 0,
+      mode: ChartMode.color,
+      grid: const <List<CellData>>[],
+      type: PatternType.image,
+      imageUrl: imageUrl,
+    );
+    await docRef.set({
+      ...chart.toJson(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    return chart;
+  }
+
+  /// 이슈 #683 — 웹 호환 PDF 도안 저장 (bytes 입력).
+  /// 기존 savePdfPattern(File)과 동일한 흐름. 커버는 백그라운드 추출.
+  Future<PatternChart> savePdfPatternFromBytes({
+    required String title,
+    required Uint8List bytes,
+    required String fileName,
+  }) async {
+    final pdfUrl = await _uploadBytes(bytes, 'pdfs', fileName);
+    final docRef = _ref.doc();
+    final chart = PatternChart(
+      id: docRef.id,
+      title: title,
+      rows: 0,
+      cols: 0,
+      mode: ChartMode.color,
+      grid: const <List<CellData>>[],
+      type: PatternType.pdf,
+      pdfUrl: pdfUrl,
+      imageUrl: '', // 커버는 백그라운드 추출 후 채워짐
+    );
+    await docRef.set({
+      ...chart.toJson(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    // 백그라운드 fire-and-forget — 사용자 흐름 차단 X
+    _extractAndSetPdfCoverFromBytes(chart.id, bytes);
+    return chart;
+  }
+
+  /// 이슈 #683 — PDF 커버 백그라운드 추출 (bytes 버전).
+  /// 기존 _extractAndSetPdfCover(File)와 동일 흐름, readAsBytes 단계 생략.
+  Future<void> _extractAndSetPdfCoverFromBytes(
+    String patternId,
+    Uint8List pdfBytes,
+  ) async {
+    try {
+      if (_uid.isEmpty) return;
+      final thumb = await PdfThumbnailExtractor.extractFirstPageThumbnail(pdfBytes);
+      if (thumb == null || thumb.isEmpty) return;
+      final ref = FirebaseStorage.instance.ref().child(
+            'users/$_uid/patterns/covers/${DateTime.now().millisecondsSinceEpoch}_cover.jpg',
+          );
+      await ref.putData(thumb, SettableMetadata(contentType: 'image/jpeg'));
+      final coverUrl = await ref.getDownloadURL();
+      if (coverUrl.isEmpty) return;
+      await _ref.doc(patternId).update({
+        'imageUrl': coverUrl,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {
+      // 백그라운드 실패 무음
     }
   }
 

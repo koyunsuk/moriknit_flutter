@@ -8,6 +8,9 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/web_utils_stub.dart'
+    // ignore: uri_does_not_exist
+    if (dart.library.js_interop) '../../../core/utils/web_utils.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/encyclopedia_provider.dart';
@@ -19,6 +22,7 @@ import '../../market/domain/market_item.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'landing_scaffold.dart';
 
+const String _mainAppUrl = 'https://app.moriknit.com';
 const double _landingMaxWidth = 1160;
 
 // ── 최근 가입자 스트림 ─────────────────────────────────────────────────────────
@@ -97,7 +101,7 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
           child: _LandingHero(
             isLoggedIn: user != null,
             onLogin: () => context.go(Routes.login),
-            onOpenApp: () => context.go(Routes.home),
+            onOpenApp: () => goToWebUrl('$_mainAppUrl/home'),
             onScrollToFeatures: _scrollToFeatures,
           ),
         ),
@@ -847,7 +851,7 @@ Widget _mockBottomNav(int selected) {
 
 // ── 1. 홈 화면 ────────────────────────────────────────────────────────────────
 class MockHomeScreen extends StatelessWidget {
-  const MockHomeScreen();
+  const MockHomeScreen({super.key});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -897,7 +901,7 @@ class MockHomeScreen extends StatelessWidget {
 
 // ── 2. 프로젝트 목록 ──────────────────────────────────────────────────────────
 class MockProjectListScreen extends StatelessWidget {
-  const MockProjectListScreen();
+  const MockProjectListScreen({super.key});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -927,7 +931,7 @@ class MockProjectListScreen extends StatelessWidget {
 
 // ── 3. 단계로그 (HIGHLIGHT) ───────────────────────────────────────────────────
 class MockStepLogScreen extends StatelessWidget {
-  const MockStepLogScreen();
+  const MockStepLogScreen({super.key});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -992,7 +996,7 @@ class MockStepLogScreen extends StatelessWidget {
 
 // ── 4. 카운터 ─────────────────────────────────────────────────────────────────
 class MockCounterScreen extends StatelessWidget {
-  const MockCounterScreen();
+  const MockCounterScreen({super.key});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1068,7 +1072,7 @@ class MockCounterScreen extends StatelessWidget {
 
 // ── 5. 스와치 ─────────────────────────────────────────────────────────────────
 class MockSwatchScreen extends StatelessWidget {
-  const MockSwatchScreen();
+  const MockSwatchScreen({super.key});
   static const _swatches = [
     (Color(0xFFB39DDB), '170m', '3.5mm'),
     (Color(0xFFF48FB1), '320m', '4.0mm'),
@@ -1127,7 +1131,7 @@ class MockSwatchScreen extends StatelessWidget {
 
 // ── 6. 도안 에디터 ───────────────────────────────────────────────────────────
 class MockPatternEditorScreen extends StatelessWidget {
-  const MockPatternEditorScreen();
+  const MockPatternEditorScreen({super.key});
   @override
   Widget build(BuildContext context) {
     const cellSize = 13.0;
@@ -1215,7 +1219,7 @@ class MockPatternEditorScreen extends StatelessWidget {
 
 // ── 7. 마켓 ──────────────────────────────────────────────────────────────────
 class MockMarketScreen extends StatelessWidget {
-  const MockMarketScreen();
+  const MockMarketScreen({super.key});
   static const _items = [
     ('탑다운 스웨터', '₩3,500', Color(0xFFB39DDB)),
     ('케이블 목도리', '₩2,000', Color(0xFFF48FB1)),
@@ -1277,7 +1281,7 @@ class MockMarketScreen extends StatelessWidget {
 
 // ── 8. 내 도안 판매 (셀러) ───────────────────────────────────────────────────
 class MockSellerScreen extends StatelessWidget {
-  const MockSellerScreen();
+  const MockSellerScreen({super.key});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1363,7 +1367,7 @@ class MockSellerScreen extends StatelessWidget {
 
 // ── 9. 커뮤니티 ──────────────────────────────────────────────────────────────
 class MockCommunityScreen extends StatelessWidget {
-  const MockCommunityScreen();
+  const MockCommunityScreen({super.key});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1442,7 +1446,7 @@ class MockCommunityScreen extends StatelessWidget {
 
 // ── 10. 강의 ─────────────────────────────────────────────────────────────────
 class MockCourseScreen extends StatelessWidget {
-  const MockCourseScreen();
+  const MockCourseScreen({super.key});
   static const _courses = [
     ('탑다운 스웨터 입문', '뜨개선생님', Color(0xFFB39DDB)),
     ('케이블 뜨기 마스터', '케이블장인', Color(0xFFF48FB1)),
@@ -1496,7 +1500,7 @@ class MockCourseScreen extends StatelessWidget {
 
 // ── 11. 뜨개백과 ─────────────────────────────────────────────────────────────
 class MockEncyclopediaScreen extends StatelessWidget {
-  const MockEncyclopediaScreen();
+  const MockEncyclopediaScreen({super.key});
   static const _entries = [
     ('겉뜨기 (Knit)', '기본 뜨기 기법. 앞에서 뒤로 바늘을 넣어 뜹니다.', '기법'),
     ('안뜨기 (Purl)', '겉뜨기의 반대. 뒤에서 앞으로 바늘을 넣습니다.', '기법'),
@@ -1546,7 +1550,7 @@ class MockEncyclopediaScreen extends StatelessWidget {
 
 // ── 12. English (다국어) ──────────────────────────────────────────────────────
 class MockEnglishScreen extends StatelessWidget {
-  const MockEnglishScreen();
+  const MockEnglishScreen({super.key});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1601,7 +1605,7 @@ class MockEnglishScreen extends StatelessWidget {
 
 // ── 13. 테마 설정 ─────────────────────────────────────────────────────────────
 class MockThemeScreen extends StatelessWidget {
-  const MockThemeScreen();
+  const MockThemeScreen({super.key});
   static const _themes = [
     ('모리냥이', Color(0xFFB39DDB), Color(0xFFF48FB1)),
     ('라벤더', Color(0xFF9C89C5), Color(0xFFC8B8E8)),
@@ -1676,7 +1680,7 @@ class MockThemeScreen extends StatelessWidget {
 
 // ── Ravelry 실 검색 목업 ──────────────────────────────────────────────────────
 class MockRavelryYarnScreen extends StatelessWidget {
-  const MockRavelryYarnScreen();
+  const MockRavelryYarnScreen({super.key});
 
   static const _results = [
     (name: 'Malabrigo Rios', brand: 'Malabrigo', weight: 'Worsted', color: Color(0xFFB39DDB)),
@@ -1764,7 +1768,7 @@ class MockRavelryYarnScreen extends StatelessWidget {
 
 // ── Ravelry 도안 검색 목업 ─────────────────────────────────────────────────────
 class MockRavelryPatternScreen extends StatelessWidget {
-  const MockRavelryPatternScreen();
+  const MockRavelryPatternScreen({super.key});
 
   static const _results = [
     (name: 'Hermione\'s Everyday Socks', designer: 'Hermione Buccleigh', cat: '양말', color: Color(0xFFB39DDB)),
@@ -1854,7 +1858,7 @@ class MockRavelryPatternScreen extends StatelessWidget {
 
 // ── 6-2. 도안에디터 확장 (게이지·반복구간·RS/WS) ─────────────────────────────
 class MockPatternEditorExtendedScreen extends StatelessWidget {
-  const MockPatternEditorExtendedScreen();
+  const MockPatternEditorExtendedScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -1993,7 +1997,7 @@ class MockPatternEditorExtendedScreen extends StatelessWidget {
 
 // ── 15. 측정 도구 ─────────────────────────────────────────────────────────────
 class MockMeasureToolScreen extends StatelessWidget {
-  const MockMeasureToolScreen();
+  const MockMeasureToolScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -2126,7 +2130,7 @@ class MockMeasureToolScreen extends StatelessWidget {
 
 // ── 16. Ravelry 동기화 ────────────────────────────────────────────────────────
 class MockRavelrySyncScreen extends StatelessWidget {
-  const MockRavelrySyncScreen();
+  const MockRavelrySyncScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -2898,7 +2902,7 @@ class _FeatureSection extends StatelessWidget {
 // -- #609 mising 6 mock widgets ----------------------------------------------
 
 class MockGaugeScreen extends StatelessWidget {
-  const MockGaugeScreen();
+  const MockGaugeScreen({super.key});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -2962,7 +2966,7 @@ class MockGaugeScreen extends StatelessWidget {
 }
 
 class MockEtsyScreen extends StatelessWidget {
-  const MockEtsyScreen();
+  const MockEtsyScreen({super.key});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -3010,7 +3014,7 @@ class MockEtsyScreen extends StatelessWidget {
 }
 
 class MockAiPatternConverterScreen extends StatelessWidget {
-  const MockAiPatternConverterScreen();
+  const MockAiPatternConverterScreen({super.key});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -3057,7 +3061,7 @@ class MockAiPatternConverterScreen extends StatelessWidget {
 }
 
 class MockAiGaugeScreen extends StatelessWidget {
-  const MockAiGaugeScreen();
+  const MockAiGaugeScreen({super.key});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -3093,7 +3097,7 @@ class MockAiGaugeScreen extends StatelessWidget {
 }
 
 class MockAiTranslatorScreen extends StatelessWidget {
-  const MockAiTranslatorScreen();
+  const MockAiTranslatorScreen({super.key});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -3133,7 +3137,7 @@ class MockAiTranslatorScreen extends StatelessWidget {
 }
 
 class MockCloudSyncScreen extends StatelessWidget {
-  const MockCloudSyncScreen();
+  const MockCloudSyncScreen({super.key});
   @override
   Widget build(BuildContext context) {
     return Container(

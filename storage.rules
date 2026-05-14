@@ -146,6 +146,12 @@ service firebase.storage {
       allow write: if isAdmin();
     }
 
+    // ── 코바늘 도안 기호 (어드민) — #674 누락된 규칙 추가 ──────────────────
+    match /crochet_symbols/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // ── 랜딩 자산 (어드민) ────────────────────────────────────────────────
     match /landing/{allPaths=**} {
       allow read: if true;

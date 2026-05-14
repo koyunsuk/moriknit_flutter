@@ -11,11 +11,11 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/localization/app_language.dart';
 import '../../../core/router/routes.dart';
+import '../../../core/router/step_unit_entry_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
-import 'pattern_editor_screen.dart';
 import 'pattern_viewer_screen.dart';
 import '../../../providers/counter_provider.dart';
 import '../../counter/domain/counter_model.dart';
@@ -1148,18 +1148,13 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                               ),
                               const SizedBox(height: 8),
                               // 이슈 #626 (B-4) — "섹션 편집하기" 직접 진입 CTA
+                              // 이슈 #687 (Phase F) — chart/pdf/image 타입에 따라 분기
                               ElevatedButton.icon(
-                                onPressed: () {
-                                  // 도안에디터로 진입 — 서술형 시트의 "섹션 나누기" 탭에서 완성 가능
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => PatternEditorScreen(
-                                        patternId: widget.chart.id,
-                                      ),
-                                    ),
-                                  );
-                                },
+                                onPressed: () =>
+                                    StepUnitEntryRouter.openSectionEditor(
+                                  context,
+                                  chart: widget.chart,
+                                ),
                                 icon: Icon(Icons.segment_rounded, size: 16),
                                 label: Text(
                                   isKorean ? '섹션 편집하기' : 'Edit Sections',

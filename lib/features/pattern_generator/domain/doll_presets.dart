@@ -42,7 +42,7 @@ const DollPreset barbieDoll = DollPreset(
   measurement: BodyMeasurement(
     chestCm: 13.46,
     neckCm: 6.0, // 추정 — 가슴의 약 45%
-    bodyLengthCm: 10, // 어깨~힙 추정 (크롭 기준)
+    bodyLengthCm: 13, // #661 — 옷 전체(목밑~밑단). 기존 10cm는 어깨~힙(크롭)이라 도안 생성기에서 몸통 0단 발생
     sleeveLengthCm: 7, // 어깨~손목 추정
     upperArmCm: 4,
     wristCm: 2.5,
@@ -57,27 +57,27 @@ const DollPreset barbieDoll = DollPreset(
 );
 
 /// Tammy's Little Sister (Pepper, 1963, 11.5inch/29.2cm).
-/// 출처: 사용자 제공 재봉용 공식 측정치 (2026-04-24 갱신).
+/// 출처: 사용자 제공 인형 실측치 (2026-04-27, #670 재조정).
 const DollPreset tammyDoll = DollPreset(
   id: 'tammy',
   nameKo: '태미의 작은 동생 (1963)',
   nameEn: "Tammy's Little Sister",
   heightCm: 29.2, // 11.5 inch
   measurement: BodyMeasurement(
-    chestCm: 13.5,               // Bust
-    neckCm: 6.5,                 // Neck circumference
-    bodyLengthCm: 8,             // collar to waist 5.1 + 여유 (crop 기준)
-    sleeveLengthCm: 7.7,         // shoulder seam to cuff
-    upperArmCm: 4.8,             // upper arm bicep
-    wristCm: 3,                  // 추정 (공식 값 없음)
-    shoulderCm: 2.5,             // neck to shoulder seam
-    armholeDepthCm: 2.9,         // underarm to true waist
+    chestCm: 11,                 // 가슴 둘레 (실측)
+    neckCm: 6.5,                 // 목 둘레 (추정)
+    bodyLengthCm: 18,            // 옷 길이 (어깨~힙) — 24cm 전체 중 옷 영역
+    sleeveLengthCm: 12,          // 어깨~손목 (위팔 5 + 팔뚝 7)
+    upperArmCm: 4,               // 상완 둘레 (실측)
+    wristCm: 3,                  // 손목 둘레 (실측)
+    shoulderCm: 5,               // 어깨 폭 (실측)
+    armholeDepthCm: 5,           // 위팔 길이 = 진동 깊이 근사
   ),
   suggestedGauge: UserGauge(stitchesPer10cm: 40, rowsPer10cm: 50),
   suggestedEase: EaseSettings.doll,
   suggestedYarn: 'vincent 3ply 또는 유사한 초극세사',
   suggestedNeedle: 'US0 (2.0mm) 4개 DPN',
-  descriptionKo: '빈티지한 비율. 11.5인치 키에 정교한 디테일. 재봉용 공식 측정치 기반이라 원피스·블라우스·팬츠까지 폭넓게 활용.',
+  descriptionKo: '빈티지한 비율. 11.5인치 키에 정교한 디테일. 사용자 실측 기반으로 원피스·블라우스·풀오버 모두 적합.',
 );
 
 /// Paola Reina (33.7cm) — 스페인 공예 인형.

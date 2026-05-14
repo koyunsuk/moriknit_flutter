@@ -122,4 +122,17 @@ class KnitSymbolLibrary {
       return null;
     }
   }
+
+  /// 약어(abbr)로 KnitSymbol 검색 — 대소문자/공백 무시.
+  /// Firestore knit_symbols.abbreviation 과 정적 라이브러리 매칭용 (#672).
+  static KnitSymbol? byAbbr(String abbr) {
+    final norm = abbr.toLowerCase().replaceAll(' ', '_');
+    try {
+      return all.firstWhere(
+        (s) => s.abbr.toLowerCase().replaceAll(' ', '_') == norm,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 }

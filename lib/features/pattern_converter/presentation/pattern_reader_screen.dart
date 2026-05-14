@@ -24,9 +24,9 @@ class PatternReaderScreen extends ConsumerWidget {
         backgroundColor: C.bg,
         body: const Center(child: CircularProgressIndicator()),
       ),
-      error: (e, _) => Scaffold(
-        backgroundColor: C.bg,
-        body: Center(child: Text('$e')),
+      error: (e, _) => _PatternLoadErrorScreen(
+        isKorean: isKorean,
+        onRetry: () => ref.invalidate(aiPatternDetailProvider(patternId)),
       ),
       data: (pattern) {
         if (pattern == null) {
@@ -287,6 +287,67 @@ class _StepTileState extends State<_StepTile> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── #684 로드 실패 플레이스홀더 (친화 메시지 + 재시도) ───────────────────────
+class _PatternLoadErrorScreen extends StatelessWidget {
+  final bool isKorean;
+  final VoidCallback onRetry;
+  const _PatternLoadErrorScreen({required this.isKorean, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: C.bg,
+      appBar: AppBar(
+        backgroundColor: C.bg,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, size: 20),
+          color: C.tx,
+          onPressed: () => context.pop(),
+        ),
+      ),
+      body: Stack(
+        children: [
+          const BgOrbs(),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.cloud_off_rounded, size: 56, color: C.tx2),
+                  const SizedBox(height: 16),
+                  Text(
+                    isKorean
+                        ? '도안 데이터를 불러오지 못했어요'
+                        : 'Failed to load pattern data.',
+                    textAlign: TextAlign.center,
+                    style: T.h3.copyWith(color: C.tx2),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: Text(isKorean ? '다시 시도' : 'Retry'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: C.lv,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

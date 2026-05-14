@@ -570,6 +570,9 @@ exports.ravelryCreateProject = onRequest(
       if (req.method !== 'POST') { res.status(405).json({ error: 'Method Not Allowed' }); return; }
       const connection = await getValidConnection(decoded.uid);
       const username = connection.username;
+      const projectBody = req.body.project ?? req.body;
+      // 이슈 #662 — silent failure 추적용 진단 로그
+      console.log('[ravelryCreateProject] uid=%s username=%s body=%j', decoded.uid, username, projectBody);
       const response = await fetch(`${RAVELRY_API_BASE}/projects/${username}/create.json`, {
         method: 'POST',
         headers: {
@@ -577,11 +580,25 @@ exports.ravelryCreateProject = onRequest(
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
-        body: JSON.stringify(req.body.project ?? req.body),
+        body: JSON.stringify(projectBody),
       });
       const text = await response.text();
+      console.log('[ravelryCreateProject] status=%s body=%s', response.status, text.slice(0, 500));
       if (!response.ok) { res.status(response.status).json({ error: `Ravelry API error: ${text.slice(0, 200)}` }); return; }
-      res.json(JSON.parse(text));
+      // 이슈 #662 — 200 OK + 빈/비정상 응답 검증 (project.id 없으면 422)
+      let parsed;
+      try { parsed = JSON.parse(text); } catch (e) {
+        console.error('[ravelryCreateProject] JSON parse failed:', e.message);
+        res.status(502).json({ error: 'Ravelry returned invalid JSON' });
+        return;
+      }
+      const projectIdValue = parsed?.project?.id ?? parsed?.id;
+      if (!projectIdValue || Number(projectIdValue) <= 0) {
+        console.error('[ravelryCreateProject] project.id missing in response:', JSON.stringify(parsed).slice(0, 300));
+        res.status(422).json({ error: 'Ravelry response missing project.id', body: text.slice(0, 200) });
+        return;
+      }
+      res.json(parsed);
     });
   },
 );
