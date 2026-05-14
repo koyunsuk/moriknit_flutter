@@ -53,3 +53,31 @@ final runProgressByUnitProvider = StreamProvider.family<
       .watch(stepRunRepositoryProvider)
       .watchProgressUnit(args.runId, args.unitId);
 });
+
+// ── Phase I-C: legacy fallback providers ───────────────────────────────────
+//
+// 프로젝트의 신규 step_runs 문서를 우선 조회하고, 없으면 기존 ProjectStep
+// 컬렉션을 합성 StepRun으로 어댑터 변환해 반환. 마이그레이션 전이라도
+// 신규 모델 화면이 안전하게 동작하도록 보장.
+
+/// 프로젝트 ID로 신규 StepRun을 조회하거나 기존 ProjectStep을 어댑터 변환.
+/// 1회성 FutureProvider — 화면 진입 시 한 번만 조회.
+final stepRunByProjectIdProvider =
+    FutureProvider.family<StepRun?, String>((ref, projectId) async {
+  final loggedIn = ref.watch(isLoggedInProvider);
+  if (!loggedIn) return null;
+  return ref
+      .watch(stepRunRepositoryProvider)
+      .getOrAdaptLegacyByProjectId(projectId);
+});
+
+/// 프로젝트의 progress 리스트 스트림 — 신규 컬렉션 또는 기존 ProjectStep 어댑터.
+final runProgressByProjectIdProvider = StreamProvider.family<
+    List<StepRunProgress>, ({String projectId, String? runId})>((ref, args) {
+  final loggedIn = ref.watch(isLoggedInProvider);
+  if (!loggedIn) return Stream.value(const []);
+  return ref.watch(stepRunRepositoryProvider).watchProgressWithLegacy(
+        projectId: args.projectId,
+        runId: args.runId,
+      );
+});

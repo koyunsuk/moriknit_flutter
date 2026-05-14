@@ -15,9 +15,13 @@
 //
 // 본격 권한 검사는 Firestore Rules에 위임. 본 Repository는 데이터 정합성만 책임.
 
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../pattern/data/pattern_repository.dart';
+import '../../pattern/domain/pattern_chart.dart' as pat;
 import '../domain/step_blueprint.dart';
 import '../domain/step_blueprint_unit.dart';
 import '../domain/step_unit_groupmeta.dart';
@@ -297,4 +301,149 @@ class StepBlueprintRepository {
       .orderBy('updatedAt', descending: true)
       .snapshots()
       .map((s) => s.docs.map(_readBlueprint).toList());
+
+  // ── Phase I-A : 신규 컬렉션 우선 + 기존 pattern_charts 어댑터 fallback ────
+  //
+  // 마이그레이션 실행 여부와 무관하게 화면이 정상 동작하도록 보강.
+  // 본 메서드는 **읽기 전용 어댑터** — pattern_charts 데이터는 변형하지 않음.
+  // 어댑터로 생성된 StepBlueprint는 신규 컬렉션에 저장되지 않고 메모리에서만 사용.
+  //
+  // Phase J(옛 코드 삭제) 진입 시 본 fallback 메서드들도 함께 제거 예정.
+
+  /// 단일 청사진 조회 — 신규 컬렉션 우선, 없으면 기존 pattern_charts에서 어댑터 변환.
+  ///
+  /// 사용 예: 청사진 상세화면이 [id]를 받아 표시할 때, 마이그레이션 안 한 사용자는
+  /// pattern_charts 데이터를 어댑터로 즉시 보여줌(저장 안 함).
+  Future<StepBlueprint?> getOrAdaptLegacy(
+    String id, {
+    required PatternRepository patternRepo,
+  }) async {
+    final blueprint = await get(id);
+    if (blueprint != null) return blueprint;
+    final chart = await patternRepo.get(id);
+    if (chart == null) return null;
+    return adaptFromPatternChart(chart, ownerUid: _uid);
+  }
+
+  /// 내 청사진 목록 — step_blueprints 우선 + pattern_charts 어댑터 보충 (중복 제거).
+  ///
+  /// 두 stream을 동시 구독하고 매 emission마다 최신 결합 리스트를 emit.
+  /// - 같은 id가 양쪽에 있으면 step_blueprints 우선 (마이그레이션 완료 데이터).
+  /// - pattern_charts 단독은 어댑터로 변환(임시) 후 합산.
+  Stream<List<StepBlueprint>> watchMyBlueprintsWithLegacy({
+    required String ownerUid,
+    required PatternRepository patternRepo,
+  }) {
+    final controller = StreamController<List<StepBlueprint>>.broadcast();
+    var latestBlueprints = <StepBlueprint>[];
+    var latestCharts = <pat.PatternChart>[];
+    var hasBlueprints = false;
+    var hasCharts = false;
+
+    void emit() {
+      // step_blueprints는 우선권 (이미 마이그레이션된 데이터).
+      final blueprintIds = latestBlueprints.map((b) => b.id).toSet();
+      // sourcePatternChartId / chartAssetId 매칭으로도 중복 차단 (id 형식이 다를 수 있음).
+      final referencedChartIds = <String>{
+        for (final b in latestBlueprints) ...[
+          if (b.sourcePatternChartId != null) b.sourcePatternChartId!,
+          if (b.chartAssetId != null) b.chartAssetId!,
+        ],
+      };
+
+      final adapted = <StepBlueprint>[];
+      for (final chart in latestCharts) {
+        if (blueprintIds.contains(chart.id)) continue;
+        if (referencedChartIds.contains(chart.id)) continue;
+        adapted.add(adaptFromPatternChart(chart, ownerUid: ownerUid));
+      }
+
+      final merged = <StepBlueprint>[...latestBlueprints, ...adapted];
+      merged.sort((a, b) {
+        final au = a.updatedAt ?? a.createdAt;
+        final bu = b.updatedAt ?? b.createdAt;
+        return bu.compareTo(au);
+      });
+      controller.add(merged);
+    }
+
+    final subBlueprints = watchByOwner(ownerUid).listen(
+      (list) {
+        latestBlueprints = list;
+        hasBlueprints = true;
+        // 한쪽만 와도 빠르게 노출. emit()는 두 리스트의 현 상태로 결합.
+        if (hasCharts || hasBlueprints) {
+          emit();
+        }
+      },
+      onError: controller.addError,
+    );
+    final subCharts = patternRepo.watchAll().listen(
+      (list) {
+        latestCharts = list;
+        hasCharts = true;
+        emit();
+      },
+      onError: controller.addError,
+    );
+
+    controller.onCancel = () async {
+      await subBlueprints.cancel();
+      await subCharts.cancel();
+    };
+    return controller.stream;
+  }
+
+  /// PatternChart → StepBlueprint 어댑터 (메모리 변환, 저장 X).
+  ///
+  /// 신규 컬렉션이 비어 있을 때 화면에 표시하기 위한 임시 표현. 사용자가 청사진을
+  /// 명시적으로 발행/저장할 때 비로소 step_blueprints 컬렉션에 기록된다.
+  static StepBlueprint adaptFromPatternChart(
+    pat.PatternChart chart, {
+    required String ownerUid,
+  }) {
+    final aiSections = chart.aiSections ?? const [];
+    final groups = <StepGroupMeta>[];
+    for (var gi = 0; gi < aiSections.length; gi++) {
+      final section = aiSections[gi];
+      groups.add(StepGroupMeta(
+        id: section.id,
+        title: section.title,
+        titleKo: section.titleKo,
+        order: gi,
+        unitIds: section.steps.map((s) => s.id).toList(),
+      ));
+    }
+
+    final attachedImageUrls =
+        chart.imageUrl.isNotEmpty ? <String>[chart.imageUrl] : null;
+    final attachedPdfUrls =
+        chart.pdfUrl.isNotEmpty ? <String>[chart.pdfUrl] : null;
+
+    return StepBlueprint(
+      id: chart.id,
+      ownerUid: ownerUid,
+      title: chart.title,
+      kind: BlueprintKind.pattern,
+      visibility: BlueprintVisibility.private,
+      license: const BlueprintLicense(),
+      provider: BlueprintProvider.user,
+      sourcePatternChartId: chart.id,
+      chartAssetId: chart.id,
+      attachedImageUrls: attachedImageUrls,
+      attachedPdfUrls: attachedPdfUrls,
+      version: '1.0.0',
+      publishedVersions: const [],
+      autoSyncOwnerRuns: true,
+      members: const {},
+      discoverability: BlueprintDiscoverability.hidden,
+      isFeatured: false,
+      isCurated: false,
+      moriknitVerified: false,
+      tags: const ['adapter:legacy_pattern_chart'],
+      groups: groups,
+      createdAt: chart.createdAt ?? DateTime.now(),
+      updatedAt: chart.createdAt,
+    );
+  }
 }

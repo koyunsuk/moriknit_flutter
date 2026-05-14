@@ -1,12 +1,14 @@
 // lib/providers/blueprint_provider.dart
 //
 // 이슈 #687 (Phase G) — StepBlueprint Provider.
+// 이슈 #687 (Phase I-A) — Legacy pattern_charts fallback provider 추가.
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/blueprint/data/step_blueprint_repository.dart';
 import '../features/blueprint/domain/step_blueprint.dart';
 import '../features/blueprint/domain/step_blueprint_unit.dart';
+import '../features/pattern/data/pattern_repository.dart';
 import 'auth_provider.dart';
 
 final stepBlueprintRepositoryProvider = Provider<StepBlueprintRepository>(
@@ -46,4 +48,33 @@ final marketplaceBlueprintsProvider =
 final blueprintsByKindProvider =
     StreamProvider.family<List<StepBlueprint>, BlueprintKind>((ref, kind) {
   return ref.watch(stepBlueprintRepositoryProvider).watchByKind(kind);
+});
+
+// ── Phase I-A : 신규 컬렉션 + 기존 pattern_charts fallback 합쳐 노출 ────────
+
+/// 단일 청사진 — 신규 컬렉션 우선 + 기존 pattern_charts 어댑터 fallback.
+///
+/// 도안 라이브러리·상세 화면에서 사용. 마이그레이션 안 한 데이터도 동일하게 표시.
+/// 어댑터 변환된 결과는 메모리 전용 — Firestore에 저장되지 않음.
+final blueprintByIdWithLegacyProvider =
+    FutureProvider.family<StepBlueprint?, String>((ref, id) async {
+  final repo = ref.watch(stepBlueprintRepositoryProvider);
+  final patternRepo = ref.watch(patternRepositoryProvider);
+  return repo.getOrAdaptLegacy(id, patternRepo: patternRepo);
+});
+
+/// 내 청사진 목록 — step_blueprints + pattern_charts 어댑터 보충 (중복 제거).
+///
+/// 도안 라이브러리 화면에서 사용. step_blueprints의 청사진과 마이그레이션 안 된
+/// pattern_charts의 어댑터를 합쳐 단일 리스트로 노출한다. 같은 id는 신규가 우선.
+final myBlueprintsWithLegacyProvider =
+    StreamProvider<List<StepBlueprint>>((ref) {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return Stream.value(const []);
+  final repo = ref.watch(stepBlueprintRepositoryProvider);
+  final patternRepo = ref.watch(patternRepositoryProvider);
+  return repo.watchMyBlueprintsWithLegacy(
+    ownerUid: user.uid,
+    patternRepo: patternRepo,
+  );
 });
