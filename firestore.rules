@@ -13,6 +13,37 @@ service cloud.firestore {
       return isLoggedIn() && request.auth.token.email == 'koyunsuk@gmail.com';
     }
 
+    // ── 청사진 권한 helpers (이슈 #687) ────────────────────────────────────────
+    function isBlueprintOwner(bid) {
+      return isLoggedIn()
+        && exists(/databases/$(database)/documents/step_blueprints/$(bid))
+        && get(/databases/$(database)/documents/step_blueprints/$(bid)).data.ownerUid == request.auth.uid;
+    }
+    function isBlueprintOwnerOrAdmin(bid) {
+      return isBlueprintOwner(bid) || isAdmin();
+    }
+    function hasBlueprintMemberRole(bid) {
+      return isLoggedIn()
+        && exists(/databases/$(database)/documents/step_blueprints/$(bid))
+        && (request.auth.uid in get(/databases/$(database)/documents/step_blueprints/$(bid)).data.members);
+    }
+    function isBlueprintEditor(bid) {
+      // 본인이 admin/editor 멤버이거나 청사진 owner
+      return isBlueprintOwner(bid) || (
+        hasBlueprintMemberRole(bid)
+        && (
+          get(/databases/$(database)/documents/step_blueprints/$(bid)).data.members[request.auth.uid] == 'admin'
+          || get(/databases/$(database)/documents/step_blueprints/$(bid)).data.members[request.auth.uid] == 'editor'
+        )
+      );
+    }
+    function hasPurchase(bid) {
+      // purchases/{auto}: { userUid, blueprintId, status: 'completed' }
+      // 클라이언트에서 단순 query/exists 어렵기 때문에 핵심 정책은
+      // Cloud Functions에서 사후 검증. 본 helper는 marketplace fallback.
+      return false;
+    }
+
     // ── 사용자 프로필 ───────────────────────────────────────────────────────────
     match /users/{uid} {
       allow read: if isLoggedIn();
@@ -280,6 +311,79 @@ service cloud.firestore {
     match /editorial_posts/{docId} {
       allow read: if isLoggedIn();
       allow write: if isAdmin();
+    }
+
+    // ── 청사진 (이슈 #687 Phase G) ──────────────────────────────────────────────
+    // step_blueprints/{bid} : 전역 컬렉션, ownerUid 필드로 소유자 식별
+    match /step_blueprints/{bid} {
+      allow read: if isLoggedIn() && (
+            resource.data.ownerUid == request.auth.uid
+            || resource.data.visibility == 'public'
+            || resource.data.visibility == 'unlisted'
+            || resource.data.visibility == 'community_showcase'
+            || (resource.data.visibility == 'marketplace' && hasPurchase(bid))
+            || hasBlueprintMemberRole(bid)
+            || isAdmin()
+          );
+      allow create: if isLoggedIn()
+                   && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if isBlueprintOwnerOrAdmin(bid);
+
+      // 청사진 단위
+      match /units/{unitId} {
+        allow read: if isLoggedIn() && (
+              // 부모 청사진이 읽기 가능한 사용자거나, preview 단위(마켓 미리보기)
+              get(/databases/$(database)/documents/step_blueprints/$(bid)).data.ownerUid == request.auth.uid
+              || get(/databases/$(database)/documents/step_blueprints/$(bid)).data.visibility == 'public'
+              || get(/databases/$(database)/documents/step_blueprints/$(bid)).data.visibility == 'unlisted'
+              || get(/databases/$(database)/documents/step_blueprints/$(bid)).data.visibility == 'community_showcase'
+              || (get(/databases/$(database)/documents/step_blueprints/$(bid)).data.visibility == 'marketplace'
+                  && (resource.data.isPreview == true || hasPurchase(bid)))
+              || hasBlueprintMemberRole(bid)
+              || isAdmin()
+            );
+        allow write: if isBlueprintEditor(bid) || isAdmin();
+      }
+    }
+
+    // ── 사용자 청사진 실행 (StepRun) ────────────────────────────────────────────
+    match /users/{uid}/step_runs/{rid} {
+      allow read, write: if isOwner(uid);
+
+      match /progress/{unitId} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+
+    // ── 구매 (마켓플레이스 청사진 구매) ────────────────────────────────────────
+    // purchases/{pid}: { userUid, blueprintId, status, amountCents, ... }
+    match /purchases/{pid} {
+      allow read: if isLoggedIn()
+                 && resource.data.userUid == request.auth.uid;
+      // 클라이언트에서 만든 결제 요청은 status=pending 까지만.
+      // 결제 완료 status=completed 전환은 Cloud Functions(서버)가 책임.
+      allow create: if isLoggedIn()
+                   && request.resource.data.userUid == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // ── 발행 글 (Article) ──────────────────────────────────────────────────────
+    match /articles/{aid} {
+      allow read: if (resource.data.publishStatus == 'published')
+                 || (isLoggedIn() && resource.data.authorUid == request.auth.uid)
+                 || isAdmin();
+      allow create: if isLoggedIn()
+                   && request.resource.data.authorUid == request.auth.uid;
+      allow update, delete: if isLoggedIn()
+                           && resource.data.authorUid == request.auth.uid;
+    }
+
+    // ── 어드민 청사진 CollectionGroup 읽기 ──────────────────────────────────────
+    match /{path=**}/step_runs/{rid} {
+      allow read: if isAdmin();
+    }
+    match /{path=**}/progress/{unitId} {
+      allow read: if isAdmin();
     }
 
   }

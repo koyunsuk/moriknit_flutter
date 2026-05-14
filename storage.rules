@@ -163,5 +163,25 @@ service firebase.storage {
       allow read: if isLoggedIn();
       allow write: if isAdmin();
     }
+
+    // ── 청사진 참고 이미지 (이슈 #687 Phase G) ────────────────────────────
+    // 본 자산은 청사진 visibility 와 무관하게 url 보유자 읽기 허용.
+    // 비공개 청사진을 보호하려면 호출부(클라이언트/CF)에서 url 노출 통제.
+    match /step_blueprints/{bid}/reference/{unitId}/{photoId} {
+      allow read: if true;
+      allow write: if isLoggedIn();  // 본격 권한은 Firestore Rules가 책임
+    }
+
+    // ── 청사진 보조 자료(PDF/이미지) ───────────────────────────────────────
+    match /step_blueprints/{bid}/attachments/{allPaths=**} {
+      allow read: if true;
+      allow write: if isLoggedIn();
+    }
+
+    // ── 사용자 실행 진행 사진 (소유자만) ───────────────────────────────────
+    match /users/{uid}/step_runs/{rid}/progress/{unitId}/{photoId} {
+      allow read: if isOwner(uid);
+      allow write: if isOwner(uid);
+    }
   }
 }

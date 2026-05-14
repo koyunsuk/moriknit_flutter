@@ -27,6 +27,7 @@ import '../../home/domain/editorial_post.dart';
 import '../../project/domain/builtin_template.dart';
 import '../data/admin_bulk_import_service.dart';
 import '../domain/admin_import_models.dart';
+import '../../blueprint/data/blueprint_migration.dart';
 import '../../landing/data/landing_board_repository.dart';
 import '../../pattern/data/pattern_repository.dart';
 
@@ -293,6 +294,7 @@ class _AdminConsoleState extends State<_AdminConsole> {
 
     _AdminNavItem.group(label: '설정', color: Color(0xFF64748B), groupIcon: Icons.tune_rounded),
     _AdminNavItem.tab(index: 14, icon: Icons.settings_rounded, label: '설정', color: Color(0xFF64748B)),
+    _AdminNavItem.tab(index: 25, icon: Icons.transform_rounded, label: '#687 마이그레이션', color: Color(0xFFFB923C)),
   ];
 
   String get _currentPageLabel {
@@ -371,6 +373,7 @@ class _AdminConsoleState extends State<_AdminConsole> {
       case 22: return const _AdminTemplatesTab();
       case 23: return _SupportSettingsTab(isKorean: widget.isKorean);
       case 24: return const _MockupImagesAdminTab();
+      case 25: return _BlueprintMigrationTab(isKorean: widget.isKorean, adminUid: widget.user.uid);
       default: return _DashboardTab(isKorean: widget.isKorean, onTabChange: (i) => setState(() => _selectedIndex = i));
     }
   }
@@ -8952,6 +8955,234 @@ class _MockupPlaceholder extends StatelessWidget {
       color: const Color(0xFF0F172A),
       child: Center(
         child: Icon(Icons.smartphone_rounded, color: Colors.white.withValues(alpha: 0.15), size: 36),
+      ),
+    );
+  }
+}
+
+// ── #687 Phase H 마이그레이션 탭 ──────────────────────────────────────────────
+
+class _BlueprintMigrationTab extends StatefulWidget {
+  final bool isKorean;
+  final String adminUid;
+  const _BlueprintMigrationTab({required this.isKorean, required this.adminUid});
+
+  @override
+  State<_BlueprintMigrationTab> createState() => _BlueprintMigrationTabState();
+}
+
+class _BlueprintMigrationTabState extends State<_BlueprintMigrationTab> {
+  Map<String, MigrationResult>? _lastResult;
+  CollectionCounts? _lastCounts;
+  bool _lastDryRun = true;
+  bool _running = false;
+
+  String _localized(String ko, String en) => widget.isKorean ? ko : en;
+
+  Future<void> _runMigration({required bool dryRun}) async {
+    if (_running) return;
+    if (!dryRun) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(_localized('실제 마이그레이션 실행', 'Run real migration')),
+          content: Text(_localized(
+            '신규 청사진/실행 컬렉션에 데이터를 복제해요.\n기존 컬렉션은 삭제되지 않아요.\n진행할까요?',
+            'This will copy data into new blueprint/run collections.\nExisting collections will NOT be deleted.\nProceed?',
+          )),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(_localized('취소', 'Cancel'))),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(_localized('실행', 'Run')),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+    if (!mounted) return;
+    setState(() => _running = true);
+    try {
+      final migration = BlueprintMigration(uid: widget.adminUid);
+      final result = await runWithMoriLoadingDialog<Map<String, MigrationResult>>(
+        context,
+        message: _localized(
+          dryRun ? 'Dry Run 시뮬레이션 중입니다.' : '마이그레이션 실행 중입니다.',
+          dryRun ? 'Dry running...' : 'Migrating...',
+        ),
+        subtitle: _localized('잠시만 기다려 주세요.', 'Please wait a moment.'),
+        task: () => migration.migrateAll(dryRun: dryRun),
+      );
+      if (!mounted) return;
+      setState(() {
+        _lastResult = result;
+        _lastDryRun = dryRun;
+      });
+      showSavedSnackBar(
+        ScaffoldMessenger.of(context),
+        message: _localized(
+          dryRun ? 'Dry Run 완료' : '마이그레이션 완료',
+          dryRun ? 'Dry run completed' : 'Migration completed',
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    } finally {
+      if (mounted) setState(() => _running = false);
+    }
+  }
+
+  Future<void> _runDiagnostics() async {
+    if (_running) return;
+    setState(() => _running = true);
+    try {
+      final migration = BlueprintMigration(uid: widget.adminUid);
+      final counts = await runWithMoriLoadingDialog<CollectionCounts>(
+        context,
+        message: _localized('컬렉션 집계 중입니다.', 'Counting...'),
+        subtitle: _localized('잠시만 기다려 주세요.', 'Please wait a moment.'),
+        task: () => migration.countByCollection(),
+      );
+      if (!mounted) return;
+      setState(() => _lastCounts = counts);
+      showSavedSnackBar(
+        ScaffoldMessenger.of(context),
+        message: _localized('진단 완료', 'Diagnostics done'),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    } finally {
+      if (mounted) setState(() => _running = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        Text(
+          _localized('#687 Phase H — 마이그레이션', '#687 Phase H — Migration'),
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          _localized(
+            '기존 컬렉션(pattern_charts / projects.steps / templates / builtin_templates)을\n'
+            '신규 step_blueprints + step_runs 구조로 병렬 복제해요.\n'
+            '기존 컬렉션은 절대 삭제되지 않으며, 재실행은 멱등(migrationVersion=$kBlueprintMigrationVersion)으로 안전합니다.',
+            'Copies existing collections into the new blueprint/run structure.\n'
+            'Existing collections are never deleted. Re-runs are idempotent.',
+          ),
+          style: const TextStyle(fontSize: 12, color: Colors.grey, height: 1.4),
+        ),
+        const SizedBox(height: 20),
+
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            OutlinedButton.icon(
+              onPressed: _running ? null : () => _runMigration(dryRun: true),
+              icon: const Icon(Icons.visibility_outlined),
+              label: Text(_localized('Dry Run (시뮬레이션)', 'Dry Run (simulate)')),
+            ),
+            FilledButton.icon(
+              onPressed: _running ? null : () => _runMigration(dryRun: false),
+              icon: const Icon(Icons.play_arrow_rounded),
+              label: Text(_localized('실제 마이그레이션 실행', 'Run real migration')),
+            ),
+            OutlinedButton.icon(
+              onPressed: _running ? null : _runDiagnostics,
+              icon: const Icon(Icons.fact_check_outlined),
+              label: Text(_localized('컬렉션 진단', 'Count collections')),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+
+        if (_lastResult != null) ...[
+          Text(
+            _localized(
+              _lastDryRun ? '마지막 Dry Run 결과' : '마지막 실제 마이그레이션 결과',
+              _lastDryRun ? 'Last dry run result' : 'Last real migration result',
+            ),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 10),
+          ..._lastResult!.entries.map((e) => _ResultCard(label: e.key, result: e.value)),
+        ],
+
+        if (_lastCounts != null) ...[
+          const SizedBox(height: 24),
+          Text(
+            _localized('컬렉션 진단 결과', 'Collection diagnostics'),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Text(_lastCounts!.summary, style: const TextStyle(fontSize: 12)),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ResultCard extends StatelessWidget {
+  final String label;
+  final MigrationResult result;
+  const _ResultCard({required this.label, required this.result});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasErrors = result.errors > 0;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: hasErrors ? Colors.red.shade50 : Colors.green.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: hasErrors ? Colors.red.shade200 : Colors.green.shade200,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          const SizedBox(height: 4),
+          Text(result.summary, style: const TextStyle(fontSize: 12)),
+          if (result.errorMessages.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            ...result.errorMessages.take(5).map(
+                  (msg) => Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      '• $msg',
+                      style: TextStyle(fontSize: 11, color: Colors.red.shade700),
+                    ),
+                  ),
+                ),
+            if (result.errorMessages.length > 5)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  '... +${result.errorMessages.length - 5} more',
+                  style: TextStyle(fontSize: 11, color: Colors.red.shade700),
+                ),
+              ),
+          ],
+        ],
       ),
     );
   }

@@ -24,6 +24,8 @@ import '../data/pattern_export_service.dart';
 import '../data/pattern_repository.dart';
 import '../data/pattern_session_repository.dart';
 import '../../../providers/project_provider.dart';
+import '../../../providers/step_unit_provider.dart';
+import '../../project/domain/project_model.dart';
 
 
 class PatternDetailScreen extends ConsumerStatefulWidget {
@@ -494,6 +496,77 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                       style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                     ),
                   ),
+                  // 이슈 #694 — "새 프로젝트 시작하기" 옵션 (항상 최상단 강조)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                    child: Material(
+                      color: C.lv.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _startNewProjectFromPattern(isKorean);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: C.lv.withValues(alpha: 0.35)),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: C.lv.withValues(alpha: 0.18),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(Icons.create_new_folder_rounded, color: C.lvD, size: 22),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      isKorean ? '새 프로젝트 시작하기' : 'Start new project',
+                                      style: T.bodyBold.copyWith(color: C.lvD),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      isKorean
+                                          ? '이 도안으로 새 프로젝트를 만들어요'
+                                          : 'Create a new project with this pattern',
+                                      style: T.caption.copyWith(color: C.mu),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(Icons.chevron_right_rounded, color: C.lvD, size: 20),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                    child: Row(
+                      children: [
+                        Expanded(child: Divider(color: C.bd2)),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Text(
+                            isKorean ? '기존 프로젝트에 연결' : 'Link to existing project',
+                            style: T.caption.copyWith(color: C.mu),
+                          ),
+                        ),
+                        Expanded(child: Divider(color: C.bd2)),
+                      ],
+                    ),
+                  ),
                   if (allProjects.isEmpty)
                     Expanded(
                       child: Center(
@@ -559,6 +632,121 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
         },
       ),
     );
+  }
+
+  /// 이슈 #694 — 이 도안으로 새 프로젝트 시작하기.
+  /// 간단한 이름 입력 다이얼로그 → 프로젝트 생성 → 자동 도안 연결 → (complete 도안이면)
+  /// 단계로그 자동 미러링.
+  Future<void> _startNewProjectFromPattern(bool isKorean) async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
+    if (widget.chart.id.isEmpty) {
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context),
+          message: isKorean ? '저장된 도안만 프로젝트로 만들 수 있어요.' : 'Save the pattern first.');
+      return;
+    }
+
+    final nameCtrl = TextEditingController(text: widget.chart.title);
+    final memoCtrl = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(isKorean ? '새 프로젝트 시작' : 'Start new project', style: T.h3),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isKorean
+                  ? '이 도안으로 새 프로젝트를 만들어요.'
+                  : 'Create a new project with this pattern.',
+              style: T.caption.copyWith(color: C.mu),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: nameCtrl,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: isKorean ? '프로젝트 이름' : 'Project name',
+                hintText: widget.chart.title,
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: memoCtrl,
+              maxLines: 2,
+              decoration: InputDecoration(
+                labelText: isKorean ? '메모 (선택)' : 'Memo (optional)',
+                hintText: isKorean ? '간단한 메모' : 'Brief note',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(isKorean ? '취소' : 'Cancel', style: TextStyle(color: C.mu)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(isKorean ? '시작' : 'Start'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final title = nameCtrl.text.trim().isEmpty
+        ? widget.chart.title
+        : nameCtrl.text.trim();
+    final memo = memoCtrl.text.trim();
+
+    ProjectModel? created;
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () async {
+          final draft = ProjectModel.empty(uid: user.uid).copyWith(
+            title: title,
+            memo: memo,
+            sourcePatternId: widget.chart.id,
+          );
+          created = await ref.read(projectRepositoryProvider).createProject(draft);
+          // 도안이 complete 상태이면 단계로그 자동 미러링
+          if (created != null && widget.chart.isComplete) {
+            await ref.read(stepUnitRepositoryProvider).mirrorGroupsToProject(
+                  projectId: created!.id,
+                  chart: widget.chart,
+                  isKorean: isKorean,
+                );
+          }
+        },
+      );
+      if (!mounted || created == null) return;
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            isKorean
+                ? '프로젝트가 만들어졌고 도안이 연결됐어요.'
+                : 'Project created and pattern linked.',
+          ),
+          action: SnackBarAction(
+            label: isKorean ? '이동' : 'Open',
+            onPressed: () {
+              if (mounted) context.push('/project/${created!.id}');
+            },
+          ),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
   }
 
   Future<void> _forkPattern() async {
