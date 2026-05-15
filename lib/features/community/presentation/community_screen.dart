@@ -648,7 +648,7 @@ class _GuestbookWriteSheetState extends ConsumerState<_GuestbookWriteSheet> {
 
     if (!mounted) return;
 
-    showSavedSnackBar(ScaffoldMessenger.of(context), message: widget.isKorean ? '방명록이 등록되었어요! +100 🪙' : 'Added to guestbook! +100 🪙');
+    showSavedSnackBar(ScaffoldMessenger.of(context), message: widget.isKorean ? '방명록이 등록되었어요!' : 'Added to guestbook!');
     Navigator.of(context).pop();
   }
 
@@ -700,31 +700,6 @@ class _GuestbookWriteSheetState extends ConsumerState<_GuestbookWriteSheet> {
                   visualDensity: VisualDensity.compact,
                 ),
               ],
-            ),
-            const SizedBox(height: 6),
-            // 모리화폐 안내
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: C.lm.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: C.lm.withValues(alpha: 0.4)),
-              ),
-              child: Row(
-                children: [
-                  Text('🪙', style: const TextStyle(fontSize: 14)),
-                  const SizedBox(width: 6),
-                  Text(
-                    widget.isKorean
-                        ? '방명록 작성 시 모리화폐 +100 적립!'
-                        : 'Earn +100 MoriCoin for writing!',
-                    style: T.caption.copyWith(
-                      color: C.lmD,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
             ),
             const SizedBox(height: 14),
             TextField(

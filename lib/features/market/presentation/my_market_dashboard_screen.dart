@@ -99,7 +99,7 @@ class MyMarketDashboardScreen extends ConsumerWidget {
                         badgeColor: C.pkD,
                         values: [
                           '${myItems.length}${isKorean ? '개' : ''}',
-                          '$totalRevenue M',
+                          '$totalRevenue원',
                           '-',
                         ],
                         valueColors: [C.lvD, C.pkD, C.mu],

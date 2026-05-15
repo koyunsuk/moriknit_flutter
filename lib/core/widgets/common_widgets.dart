@@ -624,7 +624,7 @@ class MoriBrandHeader extends StatelessWidget {
     if (compact) {
       return Container(
         width: double.infinity,
-        height: 62,
+        height: 76,
         color: Colors.transparent,
         child: Stack(
           fit: StackFit.expand,
@@ -640,7 +640,7 @@ class MoriBrandHeader extends StatelessWidget {
                   fit: BoxFit.contain,
                 ),
                 const SizedBox(height: 1),
-                MoriKnitTitle(fontSize: 11, width: 92),
+                MoriKnitTitle(fontSize: 12, width: 100),
               ],
             ),
             if (subtitle != null)
@@ -672,7 +672,7 @@ class MoriBrandHeader extends StatelessWidget {
     }
     return Container(
       width: double.infinity,
-      height: 104,
+      height: 128,
       color: Colors.transparent,
       child: Stack(
         fit: StackFit.expand,
@@ -688,7 +688,7 @@ class MoriBrandHeader extends StatelessWidget {
                 fit: BoxFit.contain,
               ),
               const SizedBox(height: 0),
-              MoriKnitTitle(fontSize: 15, width: 136),
+              MoriKnitTitle(fontSize: 17, width: 156),
             ],
           ),
           if (subtitle != null)
