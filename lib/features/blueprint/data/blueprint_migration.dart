@@ -215,6 +215,7 @@ class BlueprintMigration {
               chartRegion: null,
               isPreview: false,
               tags: const [],
+              sourceSectionId: section.id,
               createdAt: createdAt,
             ));
           }
@@ -245,6 +246,14 @@ class BlueprintMigration {
             'sourceType:${sourceType.name}',
           ],
           groups: groups,
+          // ── #687 Phase A — 1:1 이식 보강 필드 ──
+          ravelryPatternId: chart?.ravelryPatternId,
+          forkCount: chart?.forkCount ?? 0,
+          assetType: chart?.type.name,
+          gaugeJson: chart?.gauge?.toJson(),
+          repeatRegionsJson: (chart?.repeatRegions ?? const [])
+              .map((r) => r.toJson())
+              .toList(),
           createdAt: createdAt,
           updatedAt: DateTime.now(),
         );
@@ -361,6 +370,8 @@ class BlueprintMigration {
                   chartRegion: null,
                   isPreview: false,
                   tags: const [],
+                  blockType: step.blockType.name,
+                  sourceSectionId: step.sourceSectionId,
                   createdAt: step.createdAt,
                 ));
               }
@@ -728,6 +739,14 @@ class BlueprintMigration {
             'kind:${tmpl.kind.value}',
           ],
           groups: groups,
+          // ── #687 Phase A — 1:1 이식 보강 필드 ──
+          iconName: tmpl.iconName.isEmpty ? null : tmpl.iconName,
+          colorHex: tmpl.colorHex.isEmpty ? null : tmpl.colorHex,
+          order: tmpl.order,
+          measurementData: tmpl.measurementData,
+          description: tmpl.descKo.isNotEmpty
+              ? tmpl.descKo
+              : (tmpl.descEn.isNotEmpty ? tmpl.descEn : null),
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );

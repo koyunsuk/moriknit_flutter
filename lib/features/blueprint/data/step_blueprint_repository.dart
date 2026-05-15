@@ -288,6 +288,94 @@ class StepBlueprintRepository {
       .snapshots()
       .map((s) => s.docs.map(_readBlueprint).toList());
 
+  /// 협업자(members 맵의 key)로 참여 중인 청사진 스트림.
+  ///
+  /// Firestore는 map 의 key 존재 여부 단독 query 가 어렵기 때문에
+  /// `members.{uid}` 필드 존재 여부로 매칭한다. Firestore rules 의 hasBlueprintMemberRole
+  /// 와 동일한 정책: members 맵에 uid 가 키로 들어가 있으면 협업자.
+  ///
+  /// 자기 자신이 ownerUid 인 청사진은 제외 (watchByOwner 와 중복 방지).
+  Stream<List<StepBlueprint>> watchByMember(String uid) {
+    if (uid.isEmpty) return Stream.value(const []);
+    return _root
+        .where('members.$uid', whereIn: const [
+          'admin',
+          'editor',
+          'tester',
+          'commenter',
+          'viewer',
+        ])
+        .snapshots()
+        .map((s) => s.docs
+            .map(_readBlueprint)
+            .where((bp) => bp.ownerUid != uid)
+            .toList());
+  }
+
+  // ── 협업자(members) 관리 ──────────────────────────────────────────────────
+
+  /// 협업자 추가/역할 변경. owner 만 호출해야 한다(Rules 에서 차단됨).
+  Future<void> upsertMember({
+    required String blueprintId,
+    required String memberUid,
+    required BlueprintMemberRole role,
+  }) async {
+    await _doc(blueprintId).set({
+      'members': {memberUid: role.name},
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  /// 협업자 제거.
+  Future<void> removeMember({
+    required String blueprintId,
+    required String memberUid,
+  }) async {
+    await _doc(blueprintId).update({
+      'members.$memberUid': FieldValue.delete(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// 사용자 검색 (displayName prefix). 협업자 초대 시트에서 사용.
+  Future<List<Map<String, String>>> searchUsersByDisplayName(
+    String query, {
+    String? excludeUid,
+  }) async {
+    final q = query.trim();
+    if (q.isEmpty) return [];
+    final snap = await _db
+        .collection('users')
+        .where('displayName', isGreaterThanOrEqualTo: q)
+        .where('displayName', isLessThan: '$qꯦ')
+        .limit(20)
+        .get();
+    return snap.docs
+        .map((doc) => {
+              'uid': doc.id,
+              'displayName': (doc.data()['displayName'] as String?) ?? '',
+              'email': (doc.data()['email'] as String?) ?? '',
+              'photoURL': (doc.data()['photoURL'] as String?) ?? '',
+            })
+        .where((u) =>
+            u['uid'] != excludeUid && (u['displayName']!.isNotEmpty))
+        .toList();
+  }
+
+  /// 단일 사용자 조회 (uid 로). 협업자 표시에 닉네임 가져올 때 사용.
+  Future<Map<String, String>?> getUserProfile(String uid) async {
+    if (uid.isEmpty) return null;
+    final snap = await _db.collection('users').doc(uid).get();
+    final data = snap.data();
+    if (data == null) return null;
+    return {
+      'uid': uid,
+      'displayName': (data['displayName'] as String?) ?? '',
+      'email': (data['email'] as String?) ?? '',
+      'photoURL': (data['photoURL'] as String?) ?? '',
+    };
+  }
+
   Stream<List<StepBlueprint>> watchByVisibility(BlueprintVisibility v) => _root
       .where('visibility', isEqualTo: v.name)
       .orderBy('updatedAt', descending: true)
@@ -346,16 +434,26 @@ class StepBlueprintRepository {
   }) {
     final controller = StreamController<List<StepBlueprint>>.broadcast();
     var latestBlueprints = <StepBlueprint>[];
+    var latestMemberBlueprints = <StepBlueprint>[];
     var latestCharts = <pat.PatternChart>[];
     var hasBlueprints = false;
     var hasCharts = false;
 
     void emit() {
       // step_blueprints는 우선권 (이미 마이그레이션된 데이터).
-      final blueprintIds = latestBlueprints.map((b) => b.id).toSet();
+      // ownerUid 가 자신인 청사진 + 협업자로 참여중인 청사진 결합.
+      final ownerIds = latestBlueprints.map((b) => b.id).toSet();
+      final memberOnly = latestMemberBlueprints
+          .where((b) => !ownerIds.contains(b.id))
+          .toList();
+      final combinedBlueprints = <StepBlueprint>[
+        ...latestBlueprints,
+        ...memberOnly,
+      ];
+      final blueprintIds = combinedBlueprints.map((b) => b.id).toSet();
       // sourcePatternChartId / chartAssetId 매칭으로도 중복 차단 (id 형식이 다를 수 있음).
       final referencedChartIds = <String>{
-        for (final b in latestBlueprints) ...[
+        for (final b in combinedBlueprints) ...[
           if (b.sourcePatternChartId != null) b.sourcePatternChartId!,
           if (b.chartAssetId != null) b.chartAssetId!,
         ],
@@ -368,7 +466,7 @@ class StepBlueprintRepository {
         adapted.add(adaptFromPatternChart(chart, ownerUid: ownerUid));
       }
 
-      final merged = <StepBlueprint>[...latestBlueprints, ...adapted];
+      final merged = <StepBlueprint>[...combinedBlueprints, ...adapted];
       merged.sort((a, b) {
         final au = a.updatedAt ?? a.createdAt;
         final bu = b.updatedAt ?? b.createdAt;
@@ -388,6 +486,18 @@ class StepBlueprintRepository {
       },
       onError: controller.addError,
     );
+    // 협업자로 참여 중인 청사진도 함께 라이브러리에 노출 (#687).
+    final subMemberBlueprints = watchByMember(ownerUid).listen(
+      (list) {
+        latestMemberBlueprints = list;
+        emit();
+      },
+      // members map 쿼리 미지원 환경/색인 부재 시 조용히 빈 리스트 유지.
+      onError: (_) {
+        latestMemberBlueprints = const [];
+        emit();
+      },
+    );
     final subCharts = patternRepo.watchAll().listen(
       (list) {
         latestCharts = list;
@@ -399,6 +509,7 @@ class StepBlueprintRepository {
 
     controller.onCancel = () async {
       await subBlueprints.cancel();
+      await subMemberBlueprints.cancel();
       await subCharts.cancel();
     };
     return controller.stream;
@@ -452,6 +563,13 @@ class StepBlueprintRepository {
       moriknitVerified: false,
       tags: const ['adapter:legacy_pattern_chart'],
       groups: groups,
+      // ── #687 Phase A — 1:1 이식 보강 필드 ──
+      ravelryPatternId: chart.ravelryPatternId,
+      forkCount: chart.forkCount,
+      assetType: chart.type.name,
+      gaugeJson: chart.gauge?.toJson(),
+      repeatRegionsJson:
+          chart.repeatRegions.map((r) => r.toJson()).toList(),
       createdAt: chart.createdAt ?? DateTime.now(),
       updatedAt: chart.createdAt,
     );

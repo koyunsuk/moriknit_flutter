@@ -392,6 +392,38 @@ class StepBlueprint {
   final List<String>? attachedPdfUrls;
   final List<String>? attachedImageUrls;
 
+  // ── #687 Phase A — 1:1 이식 보강 필드 ─────────────────────────────────────
+
+  /// PatternChart.ravelryPatternId — Ravelry 임포트 추적용.
+  final int? ravelryPatternId;
+
+  /// PatternChart.forkCount — Fork 카운트.
+  final int forkCount;
+
+  /// BuiltinTemplate.descKo/descEn — 카드 부제목/설명.
+  final String? description;
+
+  /// BuiltinTemplate.iconName — 카드 아이콘.
+  final String? iconName;
+
+  /// BuiltinTemplate.colorHex — 카드 색상.
+  final String? colorHex;
+
+  /// BuiltinTemplate.measurementData — 인형 치수 등 측정 데이터.
+  final Map<String, dynamic>? measurementData;
+
+  /// BuiltinTemplate.order — 빌트인 템플릿 정렬 순서.
+  final int order;
+
+  /// PatternChart.type — 'chart' | 'image' | 'pdf'.
+  final String? assetType;
+
+  /// PatternChart.gauge.toJson() — 게이지 정보 (의존 회피용 JSON).
+  final Map<String, dynamic>? gaugeJson;
+
+  /// PatternChart.repeatRegions — 반복 구간 (JSON 리스트).
+  final List<Map<String, dynamic>> repeatRegionsJson;
+
   final DateTime createdAt;
   final DateTime? updatedAt;
 
@@ -424,6 +456,16 @@ class StepBlueprint {
     this.tags = const [],
     this.attachedPdfUrls,
     this.attachedImageUrls,
+    this.ravelryPatternId,
+    this.forkCount = 0,
+    this.description,
+    this.iconName,
+    this.colorHex,
+    this.measurementData,
+    this.order = 0,
+    this.assetType,
+    this.gaugeJson,
+    this.repeatRegionsJson = const [],
     required this.createdAt,
     this.updatedAt,
   });
@@ -477,6 +519,17 @@ class StepBlueprint {
         'tags': tags,
         if (attachedPdfUrls != null) 'attachedPdfUrls': attachedPdfUrls,
         if (attachedImageUrls != null) 'attachedImageUrls': attachedImageUrls,
+        if (ravelryPatternId != null) 'ravelryPatternId': ravelryPatternId,
+        'forkCount': forkCount,
+        if (description != null) 'description': description,
+        if (iconName != null) 'iconName': iconName,
+        if (colorHex != null) 'colorHex': colorHex,
+        if (measurementData != null) 'measurementData': measurementData,
+        'order': order,
+        if (assetType != null) 'assetType': assetType,
+        if (gaugeJson != null) 'gaugeJson': gaugeJson,
+        if (repeatRegionsJson.isNotEmpty)
+          'repeatRegionsJson': repeatRegionsJson,
         'createdAt': createdAt.toIso8601String(),
         if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
       };
@@ -546,6 +599,26 @@ class StepBlueprint {
             : ((m['attachedImageUrls'] as List)
                 .map((e) => e as String)
                 .toList()),
+        ravelryPatternId: m['ravelryPatternId'] is int
+            ? m['ravelryPatternId'] as int
+            : (m['ravelryPatternId'] is num
+                ? (m['ravelryPatternId'] as num).toInt()
+                : null),
+        forkCount: (m['forkCount'] as num?)?.toInt() ?? 0,
+        description: m['description'] as String?,
+        iconName: m['iconName'] as String?,
+        colorHex: m['colorHex'] as String?,
+        measurementData: m['measurementData'] == null
+            ? null
+            : Map<String, dynamic>.from(m['measurementData'] as Map),
+        order: (m['order'] as num?)?.toInt() ?? 0,
+        assetType: m['assetType'] as String?,
+        gaugeJson: m['gaugeJson'] == null
+            ? null
+            : Map<String, dynamic>.from(m['gaugeJson'] as Map),
+        repeatRegionsJson: ((m['repeatRegionsJson'] as List?) ?? const [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList(),
         createdAt: DateTime.tryParse(m['createdAt'] as String? ?? '') ??
             DateTime.now(),
         updatedAt: m['updatedAt'] == null
@@ -582,6 +655,16 @@ class StepBlueprint {
     List<String>? tags,
     List<String>? attachedPdfUrls,
     List<String>? attachedImageUrls,
+    int? ravelryPatternId,
+    int? forkCount,
+    String? description,
+    String? iconName,
+    String? colorHex,
+    Map<String, dynamic>? measurementData,
+    int? order,
+    String? assetType,
+    Map<String, dynamic>? gaugeJson,
+    List<Map<String, dynamic>>? repeatRegionsJson,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) =>
@@ -616,6 +699,16 @@ class StepBlueprint {
         tags: tags ?? this.tags,
         attachedPdfUrls: attachedPdfUrls ?? this.attachedPdfUrls,
         attachedImageUrls: attachedImageUrls ?? this.attachedImageUrls,
+        ravelryPatternId: ravelryPatternId ?? this.ravelryPatternId,
+        forkCount: forkCount ?? this.forkCount,
+        description: description ?? this.description,
+        iconName: iconName ?? this.iconName,
+        colorHex: colorHex ?? this.colorHex,
+        measurementData: measurementData ?? this.measurementData,
+        order: order ?? this.order,
+        assetType: assetType ?? this.assetType,
+        gaugeJson: gaugeJson ?? this.gaugeJson,
+        repeatRegionsJson: repeatRegionsJson ?? this.repeatRegionsJson,
         createdAt: createdAt ?? this.createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
       );

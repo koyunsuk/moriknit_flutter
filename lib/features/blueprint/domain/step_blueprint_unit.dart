@@ -37,6 +37,17 @@ class StepBlueprintUnit {
 
   final List<StepUnitTag> tags;
 
+  // ── #687 Phase A — 1:1 이식 보강 필드 ─────────────────────────────────────
+
+  /// ProjectStep.blockType.name — 'text' | 'stitchCount' | 'patternLink'.
+  final String? blockType;
+
+  /// 카운터 연결 (청사진 측). 인스턴스 카운터는 StepRunProgress.counterId 사용.
+  final String? linkedCounterId;
+
+  /// 도안 섹션 추적용 — AiSection.id 원본.
+  final String? sourceSectionId;
+
   final DateTime createdAt;
   final DateTime? updatedAt;
 
@@ -55,6 +66,9 @@ class StepBlueprintUnit {
     this.chartRegion,
     this.isPreview = false,
     this.tags = const [],
+    this.blockType,
+    this.linkedCounterId,
+    this.sourceSectionId,
     required this.createdAt,
     this.updatedAt,
   });
@@ -81,6 +95,9 @@ class StepBlueprintUnit {
         if (chartRegion != null) 'chartRegion': chartRegion!.toMap(),
         'isPreview': isPreview,
         'tags': tags.map((t) => t.toMap()).toList(),
+        if (blockType != null) 'blockType': blockType,
+        if (linkedCounterId != null) 'linkedCounterId': linkedCounterId,
+        if (sourceSectionId != null) 'sourceSectionId': sourceSectionId,
         'createdAt': createdAt.toIso8601String(),
         if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
       };
@@ -115,6 +132,9 @@ class StepBlueprintUnit {
               (t) => StepUnitTag.fromMap(Map<String, dynamic>.from(t as Map)),
             )
             .toList(),
+        blockType: m['blockType'] as String?,
+        linkedCounterId: m['linkedCounterId'] as String?,
+        sourceSectionId: m['sourceSectionId'] as String?,
         createdAt: DateTime.tryParse(m['createdAt'] as String? ?? '') ??
             DateTime.now(),
         updatedAt: m['updatedAt'] == null
@@ -137,6 +157,9 @@ class StepBlueprintUnit {
     ChartRegion? chartRegion,
     bool? isPreview,
     List<StepUnitTag>? tags,
+    String? blockType,
+    String? linkedCounterId,
+    String? sourceSectionId,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) =>
@@ -155,6 +178,9 @@ class StepBlueprintUnit {
         chartRegion: chartRegion ?? this.chartRegion,
         isPreview: isPreview ?? this.isPreview,
         tags: tags ?? this.tags,
+        blockType: blockType ?? this.blockType,
+        linkedCounterId: linkedCounterId ?? this.linkedCounterId,
+        sourceSectionId: sourceSectionId ?? this.sourceSectionId,
         createdAt: createdAt ?? this.createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
       );

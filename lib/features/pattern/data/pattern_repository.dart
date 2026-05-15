@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
+import '../../blueprint/data/chart_to_units_converter.dart';
 import '../../blueprint/data/step_blueprint_repository.dart';
 import '../../blueprint/domain/step_blueprint_unit.dart';
 import '../../pattern_converter/data/pdf_thumbnail_extractor.dart';
@@ -69,7 +70,11 @@ class PatternRepository {
   }
 
   /// #687 — PatternChart를 step_blueprints + units에 미러링.
-  /// blueprint.id == chart.id 보장. aiSections는 units로 전개.
+  /// blueprint.id == chart.id 보장. units 생성 분기:
+  ///   1) aiSections 있음 → aiSections.steps → units (기존 흐름)
+  ///   2) ChartMode.narrative 또는 grid 비었지만 narrativeText 있음 → 행별 분해 (auto:narrative)
+  ///   3) grid 있는 차트 모드 (symbol/colorChart/color) → toNarrative RLE → 행별 unit (auto:chart)
+  ///   4) 그 외 (image/pdf 도안, 빈 차트) → units 없음 (단계 미생성 상태)
   Future<void> _mirrorToBlueprint(PatternChart chart) async {
     final blueprint = StepBlueprintRepository.adaptFromPatternChart(
       chart,
@@ -78,27 +83,62 @@ class PatternRepository {
     await _blueprintRepo.save(blueprint);
 
     final aiSections = chart.aiSections ?? const <AiSection>[];
-    if (aiSections.isEmpty) return;
 
-    final units = <StepBlueprintUnit>[];
-    int order = 0;
-    final now = DateTime.now();
-    for (final section in aiSections) {
-      for (final step in section.steps) {
-        units.add(StepBlueprintUnit(
-          id: step.id,
-          blueprintId: blueprint.id,
-          order: order++,
-          title: '',
-          instruction: step.instruction,
-          instructionKo: step.instructionKo,
-          createdAt: now,
-        ));
+    // 1) aiSections 있으면 기존 흐름 유지 (AI 변환 도안)
+    if (aiSections.isNotEmpty) {
+      final units = <StepBlueprintUnit>[];
+      int order = 0;
+      final now = DateTime.now();
+      for (final section in aiSections) {
+        for (final step in section.steps) {
+          units.add(StepBlueprintUnit(
+            id: step.id,
+            blueprintId: blueprint.id,
+            order: order++,
+            title: '',
+            instruction: step.instruction,
+            instructionKo: step.instructionKo,
+            createdAt: now,
+          ));
+        }
       }
+      if (units.isNotEmpty) {
+        await _blueprintRepo.saveUnits(blueprint.id, units);
+      }
+      return;
     }
-    if (units.isNotEmpty) {
-      await _blueprintRepo.saveUnits(blueprint.id, units);
+
+    // 2) 서술형 도안 (narrativeText 행별 분해)
+    //    ChartMode.narrative이거나, grid가 비어 있어도 narrativeText 있을 때.
+    final hasNarrativeText = chart.narrativeText.trim().isNotEmpty;
+    final isNarrativeMode = chart.mode == ChartMode.narrative;
+    if (hasNarrativeText && (isNarrativeMode || chart.grid.isEmpty)) {
+      final units = ChartToUnitsConverter.convertFromNarrativeText(
+        narrativeText: chart.narrativeText,
+        blueprintId: blueprint.id,
+        korean: true,
+      );
+      if (units.isNotEmpty) {
+        await _blueprintRepo.saveUnits(blueprint.id, units);
+      }
+      return;
     }
+
+    // 3) 차트(symbol/colorChart/color) 자동 텍스트화 — toNarrative RLE → 행별 unit
+    //    image/pdf 타입(grid 비었음)은 자동 제외됨.
+    if (chart.grid.isNotEmpty && chart.rows > 0 && chart.cols > 0) {
+      final units = ChartToUnitsConverter.convert(
+        chart: chart,
+        blueprintId: blueprint.id,
+        korean: true,
+      );
+      if (units.isNotEmpty) {
+        await _blueprintRepo.saveUnits(blueprint.id, units);
+      }
+      return;
+    }
+
+    // 4) 그 외 — units 없이 blueprint만 미러링 (단계 미생성 상태)
   }
 
   Future<void> delete(String id) async {
