@@ -286,7 +286,12 @@ class StepBlueprintRepository {
       .where('ownerUid', isEqualTo: ownerUid)
       .orderBy('updatedAt', descending: true)
       .snapshots()
-      .map((s) => s.docs.map(_readBlueprint).toList());
+      .map((s) => s.docs.map(_readBlueprint).toList())
+      // 이슈 #700 — 인덱스 빌드/네트워크 지연 시 무한로딩 차단. 5초 후 빈 폴백.
+      .timeout(
+        const Duration(seconds: 5),
+        onTimeout: (sink) => sink.add(const <StepBlueprint>[]),
+      );
 
   /// 협업자(members 맵의 key)로 참여 중인 청사진 스트림.
   ///
@@ -436,8 +441,9 @@ class StepBlueprintRepository {
     var latestBlueprints = <StepBlueprint>[];
     var latestMemberBlueprints = <StepBlueprint>[];
     var latestCharts = <pat.PatternChart>[];
-    var hasBlueprints = false;
-    var hasCharts = false;
+    // 이슈 #700 — emit 게이트 제거. 어느 stream 이 먼저 와도 즉시 노출.
+    // 이전: hasCharts/hasBlueprints 양쪽 게이트로 한쪽 hang 시 무한로딩.
+    // 현재: 첫 emit 보장(빈 리스트) + 매 stream tick 마다 결합 결과 즉시 노출.
 
     void emit() {
       // step_blueprints는 우선권 (이미 마이그레이션된 데이터).
@@ -475,16 +481,22 @@ class StepBlueprintRepository {
       controller.add(merged);
     }
 
+    // 이슈 #700 — 무한로딩 차단: 첫 emit 보장(빈 리스트).
+    // Stream 가 still hot 상태가 되기 전 listener 등록 → microtask 로 push.
+    scheduleMicrotask(() {
+      if (!controller.isClosed) controller.add(const <StepBlueprint>[]);
+    });
+
     final subBlueprints = watchByOwner(ownerUid).listen(
       (list) {
         latestBlueprints = list;
-        hasBlueprints = true;
-        // 한쪽만 와도 빠르게 노출. emit()는 두 리스트의 현 상태로 결합.
-        if (hasCharts || hasBlueprints) {
-          emit();
-        }
+        emit();
       },
-      onError: controller.addError,
+      // 인덱스 빌드/네트워크 지연 시 raw 예외 노출 금지. 빈 리스트로 폴백.
+      onError: (_) {
+        latestBlueprints = const [];
+        emit();
+      },
     );
     // 협업자로 참여 중인 청사진도 함께 라이브러리에 노출 (#687).
     final subMemberBlueprints = watchByMember(ownerUid).listen(
@@ -501,10 +513,13 @@ class StepBlueprintRepository {
     final subCharts = patternRepo.watchAll().listen(
       (list) {
         latestCharts = list;
-        hasCharts = true;
         emit();
       },
-      onError: controller.addError,
+      // pattern_charts 옛 컬렉션 오류 시도 폴백.
+      onError: (_) {
+        latestCharts = const [];
+        emit();
+      },
     );
 
     controller.onCancel = () async {

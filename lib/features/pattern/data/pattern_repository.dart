@@ -227,7 +227,8 @@ class PatternRepository {
   }
 
   Stream<List<PatternChart>> watchAll() {
-    if (_uid.isEmpty) return const Stream.empty();
+    // 이슈 #700 — 비로그인/지연 시에도 빈 리스트 첫 emit 보장 (무한로딩 차단).
+    if (_uid.isEmpty) return Stream.value(const <PatternChart>[]);
     return _ref
         .orderBy('updatedAt', descending: true)
         .snapshots()
@@ -236,7 +237,12 @@ class PatternRepository {
               // id 필드가 없는 구버전 문서는 doc.id로 보완
               if ((data['id'] as String?)?.isEmpty != false) data['id'] = d.id;
               return PatternChart.fromJson(data);
-            }).toList());
+            }).toList())
+        // 이슈 #700 — 인덱스 빌드/네트워크 지연 시 무한로딩 차단. 5초 후 빈 폴백.
+        .timeout(
+          const Duration(seconds: 5),
+          onTimeout: (sink) => sink.add(const <PatternChart>[]),
+        );
   }
 
   /// id 필드가 없는 구버전 도안에 id 필드를 자동 등록합니다.
