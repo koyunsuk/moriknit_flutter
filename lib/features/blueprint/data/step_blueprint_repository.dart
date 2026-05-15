@@ -433,6 +433,10 @@ class StepBlueprintRepository {
   /// 두 stream을 동시 구독하고 매 emission마다 최신 결합 리스트를 emit.
   /// - 같은 id가 양쪽에 있으면 step_blueprints 우선 (마이그레이션 완료 데이터).
   /// - pattern_charts 단독은 어댑터로 변환(임시) 후 합산.
+  ///
+  /// 이슈 #701 — UI freeze 방지:
+  /// - 세 stream 동시 listen 시 매 tick 마다 emit 폭주 → 직전 결과와 동일 id 시그니처면 emit 차단.
+  /// - 각 stream 의 첫 도착 전 dummy emit 도 distinct 로 중복 차단.
   Stream<List<StepBlueprint>> watchMyBlueprintsWithLegacy({
     required String ownerUid,
     required PatternRepository patternRepo,
@@ -444,6 +448,8 @@ class StepBlueprintRepository {
     // 이슈 #700 — emit 게이트 제거. 어느 stream 이 먼저 와도 즉시 노출.
     // 이전: hasCharts/hasBlueprints 양쪽 게이트로 한쪽 hang 시 무한로딩.
     // 현재: 첫 emit 보장(빈 리스트) + 매 stream tick 마다 결합 결과 즉시 노출.
+    // 이슈 #701 — distinct 시그니처로 동일 결과 반복 emit 차단 (UI freeze 방지).
+    String? lastSignature;
 
     void emit() {
       // step_blueprints는 우선권 (이미 마이그레이션된 데이터).
@@ -478,13 +484,22 @@ class StepBlueprintRepository {
         final bu = b.updatedAt ?? b.createdAt;
         return bu.compareTo(au);
       });
-      controller.add(merged);
+      // 이슈 #701 — 시그니처(id+updatedAt) 기반 distinct. 동일 결과면 emit 생략.
+      final signature = merged
+          .map((b) => '${b.id}|${(b.updatedAt ?? b.createdAt).millisecondsSinceEpoch}')
+          .join(',');
+      if (signature == lastSignature) return;
+      lastSignature = signature;
+      if (!controller.isClosed) controller.add(merged);
     }
 
     // 이슈 #700 — 무한로딩 차단: 첫 emit 보장(빈 리스트).
     // Stream 가 still hot 상태가 되기 전 listener 등록 → microtask 로 push.
     scheduleMicrotask(() {
-      if (!controller.isClosed) controller.add(const <StepBlueprint>[]);
+      if (!controller.isClosed && lastSignature == null) {
+        lastSignature = '';
+        controller.add(const <StepBlueprint>[]);
+      }
     });
 
     final subBlueprints = watchByOwner(ownerUid).listen(

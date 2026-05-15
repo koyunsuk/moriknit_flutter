@@ -168,9 +168,13 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                                     ?? (bp.sourcePatternChartId != null ? chartById[bp.sourcePatternChartId!] : null)
                                     ?? (bp.chartAssetId != null ? chartById[bp.chartAssetId!] : null)
                                     ?? _blueprintToChart(bp);
+                                // 이슈 #701 — visibility 를 부모 stream 데이터에서 직접 전달.
+                                // 기존 _PatternRow 내부의 blueprintByIdWithLegacyProvider(chart.id) 호출 제거 →
+                                // N 개 카드 × per-row Firestore round-trip 으로 인한 freeze 차단.
                                 return _PatternRow(
                                   chart: chart,
                                   isKorean: isKorean,
+                                  blueprintVisibility: bp.visibility,
                                   onTap: () => _openPattern(context, chart, filesAsync),
                                 );
                               }),
@@ -1132,7 +1136,16 @@ class _PatternRow extends ConsumerWidget {
   final PatternChart chart;
   final bool isKorean;
   final VoidCallback onTap;
-  const _PatternRow({required this.chart, required this.isKorean, required this.onTap});
+  // 이슈 #701 — 부모 stream 의 StepBlueprint.visibility 를 직접 받음.
+  // 과거: 카드마다 blueprintByIdWithLegacyProvider 로 Firestore 재호출 → N 카드 × 라운드트립으로 UI freeze.
+  // 현재: 부모 watch 결과를 props 로 전달 → 추가 I/O 0.
+  final BlueprintVisibility? blueprintVisibility;
+  const _PatternRow({
+    required this.chart,
+    required this.isKorean,
+    required this.onTap,
+    this.blueprintVisibility,
+  });
 
   IconData get _typeIcon {
     switch (chart.type) {
@@ -1169,13 +1182,11 @@ class _PatternRow extends ConsumerWidget {
   }
 
   /// #687 — 청사진 visibility 배지 (없으면 null). 라이브러리 카드 좌측에 표시.
-  /// blueprintByIdWithLegacyProvider 가 어댑터로도 청사진을 만들어주므로 항상 시도.
-  Widget? _visibilityBadge(WidgetRef ref) {
+  /// 이슈 #701 — 부모 stream 데이터 (StepBlueprint.visibility) 를 직접 사용. Firestore 재호출 제거.
+  Widget? _visibilityBadge() {
     if (chart.id.isEmpty) return null;
-    final async = ref.watch(blueprintByIdWithLegacyProvider(chart.id));
-    final bp = async.valueOrNull;
-    if (bp == null) return null;
-    final v = bp.visibility;
+    final v = blueprintVisibility;
+    if (v == null) return null;
     // draft 배지는 chart.isComplete 기반으로 이미 표시 중 → 중복 방지.
     if (v == BlueprintVisibility.draft) return null;
     final (Color bg, Color fg, String label) = switch (v) {
@@ -1222,7 +1233,7 @@ class _PatternRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final visibilityBadge = _visibilityBadge(ref);
+    final visibilityBadge = _visibilityBadge();
     return MoriLibraryCard(
       title: chart.title,
       subtitle1: _subtitleText(isKorean),
