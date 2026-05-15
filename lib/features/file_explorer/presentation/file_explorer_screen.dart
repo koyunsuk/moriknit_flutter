@@ -237,6 +237,7 @@ class _FileExplorerScreenState extends ConsumerState<FileExplorerScreen> {
           _buildCloudCard(
             isKorean: isKorean,
             icon: Icons.cloud_outlined,
+            iconAsset: 'assets/cloud_icons/dropbox.png',
             color: const Color(0xFF0061FF),
             title: 'Dropbox',
             description: isKorean
@@ -249,6 +250,7 @@ class _FileExplorerScreenState extends ConsumerState<FileExplorerScreen> {
           _buildCloudCard(
             isKorean: isKorean,
             icon: Icons.cloud_outlined,
+            iconAsset: 'assets/cloud_icons/google_drive.png',
             color: const Color(0xFF1A73E8),
             title: 'Google Drive',
             description: isKorean
@@ -260,6 +262,7 @@ class _FileExplorerScreenState extends ConsumerState<FileExplorerScreen> {
           _buildCloudCard(
             isKorean: isKorean,
             icon: Icons.cloud_outlined,
+            iconAsset: 'assets/cloud_icons/icloud.png',
             color: const Color(0xFF1D1D1F),
             title: 'iCloud Drive',
             description: isKorean
@@ -271,6 +274,7 @@ class _FileExplorerScreenState extends ConsumerState<FileExplorerScreen> {
           _buildCloudCard(
             isKorean: isKorean,
             icon: Icons.cloud_outlined,
+            iconAsset: 'assets/cloud_icons/onedrive.png',
             color: const Color(0xFF0078D4),
             title: 'OneDrive',
             description: isKorean
@@ -437,9 +441,11 @@ class _FileExplorerScreenState extends ConsumerState<FileExplorerScreen> {
   }
 
   /// 외부 클라우드 진입 카드 (Dropbox 등). 모바일/웹 공통.
+  /// [iconAsset] — 브랜드 PNG 경로. 없거나 로드 실패 시 [icon]으로 fallback.
   Widget _buildCloudCard({
     required bool isKorean,
     required IconData icon,
+    String? iconAsset,
     required Color color,
     required String title,
     required String description,
@@ -455,7 +461,16 @@ class _FileExplorerScreenState extends ConsumerState<FileExplorerScreen> {
             color: color.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(icon, color: color, size: 22),
+          child: Center(
+            child: iconAsset != null
+                ? Image.asset(
+                    iconAsset,
+                    width: 26,
+                    height: 26,
+                    errorBuilder: (_, __, ___) => Icon(icon, color: color, size: 22),
+                  )
+                : Icon(icon, color: color, size: 22),
+          ),
         ),
         const SizedBox(width: 12),
         Expanded(

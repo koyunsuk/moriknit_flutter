@@ -88,7 +88,14 @@ class _DropboxCard extends ConsumerWidget {
               color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.cloud_rounded, color: color),
+            child: Center(
+              child: Image.asset(
+                'assets/cloud_icons/dropbox.png',
+                width: 28,
+                height: 28,
+                errorBuilder: (_, __, ___) => const Icon(Icons.cloud_rounded, color: color),
+              ),
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -135,7 +142,14 @@ class _GoogleDriveCard extends ConsumerWidget {
               color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.cloud_rounded, color: color),
+            child: Center(
+              child: Image.asset(
+                'assets/cloud_icons/google_drive.png',
+                width: 28,
+                height: 28,
+                errorBuilder: (_, __, ___) => const Icon(Icons.cloud_rounded, color: color),
+              ),
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -182,7 +196,14 @@ class _ICloudCard extends ConsumerWidget {
               color: color.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.cloud_rounded, color: color),
+            child: Center(
+              child: Image.asset(
+                'assets/cloud_icons/icloud.png',
+                width: 28,
+                height: 28,
+                errorBuilder: (_, __, ___) => const Icon(Icons.cloud_rounded, color: color),
+              ),
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -229,7 +250,14 @@ class _OneDriveCard extends ConsumerWidget {
               color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.cloud_rounded, color: color),
+            child: Center(
+              child: Image.asset(
+                'assets/cloud_icons/onedrive.png',
+                width: 28,
+                height: 28,
+                errorBuilder: (_, __, ___) => const Icon(Icons.cloud_rounded, color: color),
+              ),
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
