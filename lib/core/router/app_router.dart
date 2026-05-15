@@ -51,6 +51,9 @@ import 'package:moriknit_flutter/features/ravelry/presentation/ravelry_screen.da
 import 'package:moriknit_flutter/features/etsy/presentation/etsy_screen.dart';
 import 'package:moriknit_flutter/features/dropbox/presentation/dropbox_screen.dart';
 import 'package:moriknit_flutter/features/dropbox/presentation/dropbox_explorer_screen.dart';
+import 'package:moriknit_flutter/features/cloud_integrations/presentation/google_drive_screen.dart';
+import 'package:moriknit_flutter/features/cloud_integrations/presentation/icloud_screen.dart';
+import 'package:moriknit_flutter/features/cloud_integrations/presentation/onedrive_screen.dart';
 import 'package:moriknit_flutter/features/landing/presentation/landing_feature_page.dart';
 import 'package:moriknit_flutter/features/landing/presentation/landing_classes_screen.dart';
 import 'package:moriknit_flutter/features/home/presentation/editorial_screen.dart';
@@ -209,6 +212,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                         _fadePage(const DropboxExplorerScreen()),
                   ),
                 ],
+              ),
+              // 이슈 #703 — 외부 클라우드 확장
+              GoRoute(
+                path: 'google-drive',
+                pageBuilder: (_, _) => _fadePage(const GoogleDriveScreen()),
+              ),
+              GoRoute(
+                path: 'icloud',
+                pageBuilder: (_, _) => _fadePage(const ICloudScreen()),
+              ),
+              GoRoute(
+                path: 'onedrive',
+                pageBuilder: (_, _) => _fadePage(const OneDriveScreen()),
               ),
               GoRoute(path: 'needle-size', pageBuilder: (_, _) => _fadePage(const NeedleSizeConverterScreen())),
               GoRoute(path: 'measure', pageBuilder: (_, _) => _fadePage(const MeasureToolScreen())),

@@ -43,6 +43,10 @@ class Routes {
   static const etsy = '/tools/etsy';
   static const dropbox = '/tools/dropbox';
   static const dropboxExplorer = '/tools/dropbox/explorer';
+  // 이슈 #703 — 외부 클라우드 확장 (Google Drive·iCloud·OneDrive)
+  static const googleDrive = '/tools/google-drive';
+  static const iCloud = '/tools/icloud';
+  static const oneDrive = '/tools/onedrive';
   static const toolsNeedleSize = '/tools/needle-size';
   static const toolsMeasure = '/tools/measure';
   static const toolsPatternConverter = '/tools/pattern-converter';

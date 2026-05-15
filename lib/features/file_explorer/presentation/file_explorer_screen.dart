@@ -244,6 +244,40 @@ class _FileExplorerScreenState extends ConsumerState<FileExplorerScreen> {
                 : 'Import PDF/image patterns from Dropbox',
             onTap: () => context.push(Routes.dropboxExplorer),
           ),
+          const SizedBox(height: 10),
+          // 이슈 #703 — 외부 클라우드 확장 (Google Drive·iCloud·OneDrive)
+          _buildCloudCard(
+            isKorean: isKorean,
+            icon: Icons.cloud_outlined,
+            color: const Color(0xFF1A73E8),
+            title: 'Google Drive',
+            description: isKorean
+                ? 'Google 드라이브에 저장된 PDF·이미지 도안 가져오기'
+                : 'Import PDF/image patterns from Google Drive',
+            onTap: () => context.push(Routes.googleDrive),
+          ),
+          const SizedBox(height: 10),
+          _buildCloudCard(
+            isKorean: isKorean,
+            icon: Icons.cloud_outlined,
+            color: const Color(0xFF1D1D1F),
+            title: 'iCloud Drive',
+            description: isKorean
+                ? 'iCloud에 저장된 PDF·이미지 도안 가져오기 (iOS 전용)'
+                : 'Import PDF/image patterns from iCloud (iOS only)',
+            onTap: () => context.push(Routes.iCloud),
+          ),
+          const SizedBox(height: 10),
+          _buildCloudCard(
+            isKorean: isKorean,
+            icon: Icons.cloud_outlined,
+            color: const Color(0xFF0078D4),
+            title: 'OneDrive',
+            description: isKorean
+                ? 'OneDrive에 저장된 PDF·이미지 도안 가져오기'
+                : 'Import PDF/image patterns from OneDrive',
+            onTap: () => context.push(Routes.oneDrive),
+          ),
           const SizedBox(height: 14),
           // 로컬 파일 안내 카드
           GlassCard(
