@@ -182,29 +182,7 @@ class _AccessoryInputScreenState extends ConsumerState<AccessoryInputScreen> {
         await _handleUnsavedBack(context);
       },
       child: Scaffold(
-      backgroundColor: C.bg,
-      appBar: AppBar(
-        backgroundColor: C.bg,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-          onPressed: () async {
-            if (!_isDirty) {
-              Navigator.pop(context);
-              return;
-            }
-            await _handleUnsavedBack(context);
-          },
-        ),
-        title: Text(
-          widget.initialItem == null
-              ? (widget.copyFrom != null
-                  ? (isKorean ? '악세사리 복사' : 'Copy Accessory')
-                  : (isKorean ? '악세사리 추가' : 'Add Accessory'))
-              : (isKorean ? '악세사리 수정' : 'Edit Accessory'),
-          style: T.h3,
-        ),
-      ),
+      backgroundColor: Colors.transparent,
       bottomNavigationBar: SafeArea(
         top: false,
         child: Padding(
@@ -222,11 +200,43 @@ class _AccessoryInputScreenState extends ConsumerState<AccessoryInputScreen> {
       body: Stack(
         children: [
           const BgOrbs(),
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+          SafeArea(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Stack(
+                  children: [
+                    MoriPageHeaderShell(
+                      child: MoriWideHeader(
+                        title: widget.initialItem == null
+                            ? (widget.copyFrom != null
+                                ? (isKorean ? '악세사리 복사' : 'Copy Accessory')
+                                : (isKorean ? '악세사리 추가' : 'Add Accessory'))
+                            : (isKorean ? '악세사리 수정' : 'Edit Accessory'),
+                        subtitle: isKorean ? '니팅 도구 정보를 기록해요' : 'Record your knitting tool info',
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: IconButton(
+                        icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
+                        onPressed: () async {
+                          if (!_isDirty) {
+                            Navigator.pop(context);
+                            return;
+                          }
+                          await _handleUnsavedBack(context);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                 // 사진
                 SectionTitle(title: isKorean ? '사진 (선택)' : 'Photo (optional)'),
                 const SizedBox(height: 10),
@@ -342,17 +352,21 @@ class _AccessoryInputScreenState extends ConsumerState<AccessoryInputScreen> {
                 // 메모
                 SectionTitle(title: isKorean ? '메모 (선택)' : 'Memo (optional)'),
                 const SizedBox(height: 8),
-                TextField(
-                  controller: _memoCtrl,
-                  onChanged: notifier.setMemo,
-                  maxLines: 4,
-                  decoration: InputDecoration(
-                    labelText: isKorean ? '메모' : 'Notes',
-                    hintText: isKorean ? '자유롭게 기록해요' : 'Free notes',
-                    alignLabelWithHint: true,
-                    fillColor: C.gx,
+                      TextField(
+                        controller: _memoCtrl,
+                        onChanged: notifier.setMemo,
+                        maxLines: 4,
+                        decoration: InputDecoration(
+                          labelText: isKorean ? '메모' : 'Notes',
+                          hintText: isKorean ? '자유롭게 기록해요' : 'Free notes',
+                          alignLabelWithHint: true,
+                          fillColor: C.gx,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+              ),
               ],
             ),
           ),

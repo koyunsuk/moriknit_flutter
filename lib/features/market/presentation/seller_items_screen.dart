@@ -26,45 +26,60 @@ class SellerItemsScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: C.bg,
-      appBar: AppBar(
-        backgroundColor: C.bg,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-        title: Text(sellerName, style: T.h3),
-        centerTitle: false,
-      ),
       body: Stack(
         children: [
           const BgOrbs(),
-          itemsAsync.when(
-            loading: () => AsyncLoadingFriendly(
-              isKorean: isKorean,
-              onRetry: () => ref.invalidate(sellerItemsProvider(sellerUid)),
-            ),
-            error: (e, _) => AsyncDelayedFriendly(
-              isKorean: isKorean,
-              onRetry: () => ref.invalidate(sellerItemsProvider(sellerUid)),
-            ),
-            data: (items) {
-              if (items.isEmpty) {
-                return _EmptyState(isKorean: isKorean);
-              }
-              return GridView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 0.78,
+          SafeArea(
+            child: Column(
+              children: [
+                MoriPageHeaderShell(
+                  child: MoriWideHeader(
+                    title: sellerName,
+                    subtitle: isKorean ? '판매자 상품 목록' : 'Seller items',
+                    trailing: [
+                      IconButton(
+                        icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        tooltip: isKorean ? '뒤로' : 'Back',
+                      ),
+                    ],
+                  ),
                 ),
-                itemCount: items.length,
-                itemBuilder: (context, index) {
-                  return _SellerItemCard(item: items[index]);
-                },
-              );
-            },
+                Expanded(
+                  child: itemsAsync.when(
+                    loading: () => AsyncLoadingFriendly(
+                      isKorean: isKorean,
+                      onRetry: () =>
+                          ref.invalidate(sellerItemsProvider(sellerUid)),
+                    ),
+                    error: (e, _) => AsyncDelayedFriendly(
+                      isKorean: isKorean,
+                      onRetry: () =>
+                          ref.invalidate(sellerItemsProvider(sellerUid)),
+                    ),
+                    data: (items) {
+                      if (items.isEmpty) {
+                        return _EmptyState(isKorean: isKorean);
+                      }
+                      return GridView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          childAspectRatio: 0.78,
+                        ),
+                        itemCount: items.length,
+                        itemBuilder: (context, index) {
+                          return _SellerItemCard(item: items[index]);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

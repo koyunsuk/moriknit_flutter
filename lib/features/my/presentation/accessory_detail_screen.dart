@@ -21,76 +21,89 @@ class AccessoryDetailScreen extends ConsumerWidget {
 
     if (item == null) {
       return Scaffold(
-        appBar: AppBar(backgroundColor: C.bg, elevation: 0,
-          leading: IconButton(icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20), onPressed: () => Navigator.pop(context))),
-        backgroundColor: C.bg,
-        body: Center(child: Text(isKorean ? '항목을 찾을 수 없어요.' : 'Item not found.', style: T.body)),
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          child: Column(
+            children: [
+              MoriPageHeaderShell(
+                child: MoriWideHeader(
+                  title: isKorean ? '악세사리' : 'Accessory',
+                  subtitle: isKorean ? '악세사리 상세' : 'Accessory details',
+                ),
+              ),
+              Expanded(
+                child: Center(child: Text(isKorean ? '항목을 찾을 수 없어요.' : 'Item not found.', style: T.body)),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
     return Scaffold(
-      backgroundColor: C.bg,
-      appBar: AppBar(
-        backgroundColor: C.bg,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(item.localizedTypeLabel(isKorean), style: T.h3),
-        actions: [
-          PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert, color: C.tx),
-            onSelected: (v) async {
-              if (v == 'edit') {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => AccessoryInputScreen(initialItem: item)));
-              } else if (v == 'delete') {
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: Text(isKorean ? '삭제하시겠어요?' : 'Delete?'),
-                    content: Text(isKorean ? '이 악세사리를 삭제해요.' : 'This accessory will be deleted.'),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(isKorean ? '취소' : 'Cancel')),
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        child: Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og)),
-                      ),
-                    ],
-                  ),
-                );
-                if (confirmed == true && context.mounted) {
-                  try {
-                    await runWithMoriLoadingDialog<void>(
-                      context,
-                      message: isKorean ? '삭제하는 중입니다.' : 'Deleting...',
-                      subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
-                      task: () => ref.read(accessoryRepositoryProvider).deleteAccessory(item.id),
-                    );
-                    if (context.mounted) Navigator.pop(context);
-                  } catch (e) {
-                    if (!context.mounted) return;
-                    final msg = e.toString();
-                    final friendly = (msg.contains('인터넷') || msg.contains('TimeoutException'))
-                        ? (isKorean ? '인터넷 연결을 확인해 주세요' : 'Check your internet connection')
-                        : msg;
-                    showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: friendly);
-                  }
-                }
-              }
-            },
-            itemBuilder: (_) => [
-              PopupMenuItem(value: 'edit', child: Text(isKorean ? '수정' : 'Edit')),
-              PopupMenuItem(value: 'delete', child: Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og))),
-            ],
-          ),
-        ],
-      ),
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           const BgOrbs(),
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
+          SafeArea(
+            child: Column(
+              children: [
+                MoriPageHeaderShell(
+                  child: MoriWideHeader(
+                    title: item.localizedTypeLabel(isKorean),
+                    subtitle: isKorean ? '악세사리 상세' : 'Accessory details',
+                    trailing: [
+                      PopupMenuButton<String>(
+                        icon: Icon(Icons.more_vert, color: C.tx),
+                        onSelected: (v) async {
+                          if (v == 'edit') {
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => AccessoryInputScreen(initialItem: item)));
+                          } else if (v == 'delete') {
+                            final confirmed = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: Text(isKorean ? '삭제하시겠어요?' : 'Delete?'),
+                                content: Text(isKorean ? '이 악세사리를 삭제해요.' : 'This accessory will be deleted.'),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(isKorean ? '취소' : 'Cancel')),
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx, true),
+                                    child: Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og)),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirmed == true && context.mounted) {
+                              try {
+                                await runWithMoriLoadingDialog<void>(
+                                  context,
+                                  message: isKorean ? '삭제하는 중입니다.' : 'Deleting...',
+                                  subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+                                  task: () => ref.read(accessoryRepositoryProvider).deleteAccessory(item.id),
+                                );
+                                if (context.mounted) Navigator.pop(context);
+                              } catch (e) {
+                                if (!context.mounted) return;
+                                final msg = e.toString();
+                                final friendly = (msg.contains('인터넷') || msg.contains('TimeoutException'))
+                                    ? (isKorean ? '인터넷 연결을 확인해 주세요' : 'Check your internet connection')
+                                    : msg;
+                                showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: friendly);
+                              }
+                            }
+                          }
+                        },
+                        itemBuilder: (_) => [
+                          PopupMenuItem(value: 'edit', child: Text(isKorean ? '수정' : 'Edit')),
+                          PopupMenuItem(value: 'delete', child: Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og))),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -183,6 +196,10 @@ class AccessoryDetailScreen extends ConsumerWidget {
                         _DetailRow(icon: Icons.edit_calendar_rounded, label: isKorean ? '수정일' : 'Updated',
                             value: DateFormat('yyyy.MM.dd').format(item.updatedAt!)),
                     ],
+                  ),
+                ),
+              ],
+            ),
                   ),
                 ),
               ],

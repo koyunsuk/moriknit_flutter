@@ -259,37 +259,36 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
 
     return Scaffold(
       backgroundColor: C.bg,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20),
-          color: C.tx,
-          onPressed: () => context.pop(),
-        ),
-        title: Text(
-          isKorean ? '변환 결과 확인' : 'Review Result',
-          style: T.h3,
-        ),
-        backgroundColor: C.bg,
-        elevation: 0,
-        actions: [
-          TextButton(
-            onPressed: _loading ? null : _save,
-            child: Text(
-              isKorean ? '저장하기' : 'Save',
-              style: T.sm.copyWith(
-                color: C.lv,
-                fontWeight: FontWeight.w700,
+      body: SafeArea(
+        child: Column(
+          children: [
+            MoriPageHeaderShell(
+              child: MoriWideHeader(
+                title: isKorean ? '변환 결과 확인' : 'Review Result',
+                subtitle: isKorean
+                    ? 'AI 변환 결과 검토 후 저장'
+                    : 'Review and save AI result',
+                trailing: [
+                  TextButton(
+                    onPressed: _loading ? null : _save,
+                    child: Text(
+                      isKorean ? '저장하기' : 'Save',
+                      style: T.sm.copyWith(
+                        color: C.lv,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : Stack(
-              children: [
-                const BgOrbs(),
-                SingleChildScrollView(
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : Stack(
+                      children: [
+                        const BgOrbs(),
+                        SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -399,6 +398,10 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
                 ),
               ],
             ),
+            ),
+          ],
+        ),
+      ),
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),

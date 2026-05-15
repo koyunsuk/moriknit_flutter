@@ -219,15 +219,6 @@ class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
 
     return Scaffold(
       backgroundColor: C.bg,
-      appBar: AppBar(
-        backgroundColor: C.bg,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(title, style: T.h3),
-      ),
       bottomNavigationBar: SafeArea(
         top: false,
         child: Padding(
@@ -244,11 +235,30 @@ class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
       body: Stack(
         children: [
           const BgOrbs(),
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+          SafeArea(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                MoriPageHeaderShell(
+                  child: MoriWideHeader(
+                    title: title,
+                    subtitle: isKorean
+                        ? '단계로그 청사진을 만들어요'
+                        : 'Design a step-log blueprint',
+                    trailing: [
+                      IconButton(
+                        icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
+                        onPressed: () => Navigator.of(context).pop(),
+                        tooltip: isKorean ? '뒤로' : 'Back',
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                 // ── 커버 이미지 ──
                 GestureDetector(
                   onTap: () => _showImageSourceDialog(isKorean),
@@ -315,6 +325,10 @@ class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
                     ),
                   ],
                 )),
+              ],
+            ),
+                  ),
+                ),
               ],
             ),
           ),

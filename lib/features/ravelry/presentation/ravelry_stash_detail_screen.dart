@@ -1,7 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -31,24 +30,23 @@ class RavelryStashDetailScreen extends ConsumerWidget {
         : const AsyncValue<RavelryYarnDetail?>.data(null);
 
     return Scaffold(
-      backgroundColor: C.bg,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20),
-          color: C.tx,
-          onPressed: () => context.pop(),
-        ),
-        title: Text(isKorean ? '스태시 상세' : 'Stash Detail', style: T.h3),
-      ),
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           const BgOrbs(),
           SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-              child: Column(
+            child: Column(
+              children: [
+                MoriPageHeaderShell(
+                  child: MoriWideHeader(
+                    title: isKorean ? '스태시 상세' : 'Stash Detail',
+                    subtitle: isKorean ? 'Ravelry 스태시 정보' : 'Ravelry stash info',
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                    child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _Header(item: item),
@@ -124,6 +122,9 @@ class RavelryStashDetailScreen extends ConsumerWidget {
                     ),
                 ],
               ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

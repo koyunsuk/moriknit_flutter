@@ -147,41 +147,36 @@ class _DropboxExplorerScreenState
 
     return Scaffold(
       backgroundColor: C.bg,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20),
-          color: C.tx,
-          onPressed: () {
-            if (_pathStack.length > 1) {
-              _goUp();
-            } else {
-              Navigator.pop(context);
-            }
-          },
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(isKorean ? 'Dropbox 탐색기' : 'Dropbox Explorer', style: T.h3),
-            Text(
-              displayPath,
-              style: T.caption.copyWith(color: C.mu, fontSize: 11),
-              overflow: TextOverflow.ellipsis,
+      body: Column(
+        children: [
+          MoriPageHeaderShell(
+            child: MoriWideHeader(
+              title: isKorean ? 'Dropbox 탐색기' : 'Dropbox Explorer',
+              subtitle: displayPath,
+              trailing: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back_ios, size: 20),
+                  color: C.tx,
+                  tooltip: isKorean ? '뒤로' : 'Back',
+                  onPressed: () {
+                    if (_pathStack.length > 1) {
+                      _goUp();
+                    } else {
+                      Navigator.pop(context);
+                    }
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh_rounded, size: 20),
+                  color: C.mu,
+                  tooltip: isKorean ? '새로고침' : 'Refresh',
+                  onPressed: _loading ? null : _reload,
+                ),
+              ],
             ),
-          ],
-        ),
-        backgroundColor: C.bg,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, size: 20),
-            color: C.mu,
-            tooltip: isKorean ? '새로고침' : 'Refresh',
-            onPressed: _loading ? null : _reload,
           ),
-        ],
-      ),
-      body: !auth.isLoggedIn
+          Expanded(
+            child: !auth.isLoggedIn
           ? Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
@@ -282,6 +277,9 @@ class _DropboxExplorerScreenState
                             },
                           ),
                         ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1227,110 +1227,106 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
     debugPrint('[PatternDetailScreen] BUILD id=${widget.chart.id} type=${widget.chart.type.name} title="${widget.chart.title}" isEditing=$_isEditing');
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: _isEditing
-          ? AppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              leading: TextButton(
-                onPressed: _cancelEdit,
-                child: Text(isKorean ? '취소' : 'Cancel', style: TextStyle(color: C.mu)),
-              ),
-              title: Text(isKorean ? '도안 수정' : 'Edit Pattern', style: T.h3),
-              actions: [
-                TextButton(
-                  onPressed: _isSaving ? null : () => _saveEdit(isKorean),
-                  child: Text(isKorean ? '저장' : 'Save', style: TextStyle(color: C.lv, fontWeight: FontWeight.w700)),
-                ),
-              ],
-            )
-          : AppBar(
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back_ios, size: 20),
-                onPressed: () => Navigator.pop(context),
-              ),
-              title: Text(widget.chart.title, style: T.h3),
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              actions: [
-                if (!_isOtherUser && widget.chart.id.isNotEmpty)
-                  PopupMenuButton<String>(
-                    icon: Icon(Icons.more_vert_rounded, color: C.tx),
-                    onSelected: (v) {
-                      if (v == 'edit') _enterEditMode();
-                      if (v == 'change_cover') _changeImage();
-                      if (v == 'copy') _duplicatePattern(isKorean);
-                      if (v == 'link_project') _linkToProject(context, isKorean);
-                      if (v == 'export_pdf') _sharePdfMagazine(context, isKorean);
-                      if (v == 'export_mori') _exportMori(context, isKorean);
-                      if (v == 'delete') _confirmDelete(isKorean);
-                    },
-                    itemBuilder: (_) => [
-                      PopupMenuItem(
-                        value: 'edit',
-                        child: Row(children: [
-                          Icon(Icons.edit_outlined, size: 18, color: C.lv),
-                          const SizedBox(width: 8),
-                          Text(isKorean ? '수정' : 'Edit'),
-                        ]),
-                      ),
-                      // 이슈 #648 — 커버 변경 (모든 도안 type)
-                      PopupMenuItem(
-                        value: 'change_cover',
-                        child: Row(children: [
-                          Icon(Icons.image_rounded, size: 18, color: C.lv),
-                          const SizedBox(width: 8),
-                          Text(isKorean ? '커버 변경' : 'Change cover'),
-                        ]),
-                      ),
-                      PopupMenuItem(
-                        value: 'copy',
-                        child: Row(children: [
-                          Icon(Icons.copy_rounded, size: 18, color: C.lv),
-                          const SizedBox(width: 8),
-                          Text(isKorean ? '복사' : 'Duplicate'),
-                        ]),
-                      ),
-                      PopupMenuItem(
-                        value: 'link_project',
-                        child: Row(children: [
-                          Icon(Icons.folder_outlined, size: 18, color: C.lv),
-                          const SizedBox(width: 8),
-                          Text(isKorean ? '프로젝트 연결' : 'Link to project'),
-                        ]),
-                      ),
-                      if (widget.chart.type == PatternType.chart) ...[
-                        PopupMenuItem(
-                          value: 'export_pdf',
-                          child: Row(children: [
-                            Icon(Icons.picture_as_pdf_rounded, size: 18, color: C.og),
-                            const SizedBox(width: 8),
-                            Text(isKorean ? 'PDF로 공유' : 'Share as PDF'),
-                          ]),
+      body: SafeArea(
+        child: Column(
+          children: [
+            MoriPageHeaderShell(
+              child: MoriWideHeader(
+                title: _isEditing ? (isKorean ? '도안 수정' : 'Edit Pattern') : widget.chart.title,
+                subtitle: isKorean ? '도안 상세' : 'Pattern details',
+                trailing: _isEditing
+                    ? [
+                        TextButton(
+                          onPressed: _cancelEdit,
+                          child: Text(isKorean ? '취소' : 'Cancel', style: TextStyle(color: C.mu)),
                         ),
-                        PopupMenuItem(
-                          value: 'export_mori',
-                          child: Row(children: [
-                            Icon(Icons.file_download_rounded, size: 18, color: C.lv),
-                            const SizedBox(width: 8),
-                            Text(isKorean ? '.mori 파일로 저장' : 'Save as .mori'),
-                          ]),
+                        TextButton(
+                          onPressed: _isSaving ? null : () => _saveEdit(isKorean),
+                          child: Text(isKorean ? '저장' : 'Save', style: TextStyle(color: C.lv, fontWeight: FontWeight.w700)),
                         ),
+                      ]
+                    : [
+                        if (!_isOtherUser && widget.chart.id.isNotEmpty)
+                          PopupMenuButton<String>(
+                            icon: Icon(Icons.more_vert_rounded, color: C.tx),
+                            onSelected: (v) {
+                              if (v == 'edit') _enterEditMode();
+                              if (v == 'change_cover') _changeImage();
+                              if (v == 'copy') _duplicatePattern(isKorean);
+                              if (v == 'link_project') _linkToProject(context, isKorean);
+                              if (v == 'export_pdf') _sharePdfMagazine(context, isKorean);
+                              if (v == 'export_mori') _exportMori(context, isKorean);
+                              if (v == 'delete') _confirmDelete(isKorean);
+                            },
+                            itemBuilder: (_) => [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Row(children: [
+                                  Icon(Icons.edit_outlined, size: 18, color: C.lv),
+                                  const SizedBox(width: 8),
+                                  Text(isKorean ? '수정' : 'Edit'),
+                                ]),
+                              ),
+                              // 이슈 #648 — 커버 변경 (모든 도안 type)
+                              PopupMenuItem(
+                                value: 'change_cover',
+                                child: Row(children: [
+                                  Icon(Icons.image_rounded, size: 18, color: C.lv),
+                                  const SizedBox(width: 8),
+                                  Text(isKorean ? '커버 변경' : 'Change cover'),
+                                ]),
+                              ),
+                              PopupMenuItem(
+                                value: 'copy',
+                                child: Row(children: [
+                                  Icon(Icons.copy_rounded, size: 18, color: C.lv),
+                                  const SizedBox(width: 8),
+                                  Text(isKorean ? '복사' : 'Duplicate'),
+                                ]),
+                              ),
+                              PopupMenuItem(
+                                value: 'link_project',
+                                child: Row(children: [
+                                  Icon(Icons.folder_outlined, size: 18, color: C.lv),
+                                  const SizedBox(width: 8),
+                                  Text(isKorean ? '프로젝트 연결' : 'Link to project'),
+                                ]),
+                              ),
+                              if (widget.chart.type == PatternType.chart) ...[
+                                PopupMenuItem(
+                                  value: 'export_pdf',
+                                  child: Row(children: [
+                                    Icon(Icons.picture_as_pdf_rounded, size: 18, color: C.og),
+                                    const SizedBox(width: 8),
+                                    Text(isKorean ? 'PDF로 공유' : 'Share as PDF'),
+                                  ]),
+                                ),
+                                PopupMenuItem(
+                                  value: 'export_mori',
+                                  child: Row(children: [
+                                    Icon(Icons.file_download_rounded, size: 18, color: C.lv),
+                                    const SizedBox(width: 8),
+                                    Text(isKorean ? '.mori 파일로 저장' : 'Save as .mori'),
+                                  ]),
+                                ),
+                              ],
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Row(children: [
+                                  Icon(Icons.delete_outline, size: 18, color: C.og),
+                                  const SizedBox(width: 8),
+                                  Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og)),
+                                ]),
+                              ),
+                            ],
+                          ),
                       ],
-                      PopupMenuItem(
-                        value: 'delete',
-                        child: Row(children: [
-                          Icon(Icons.delete_outline, size: 18, color: C.og),
-                          const SizedBox(width: 8),
-                          Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og)),
-                        ]),
-                      ),
-                    ],
-                  ),
-              ],
+              ),
             ),
-      body: _isEditing
-          ? _buildEditBody(isKorean)
-          : Stack(
+            Expanded(
+              child: _isEditing
+                  ? _buildEditBody(isKorean)
+                  : Stack(
         children: [
           const BgOrbs(),
           SingleChildScrollView(
@@ -1724,6 +1720,10 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
             ),
           ),
         ],
+      ),
+            ),
+          ],
+        ),
       ),
     );
   }

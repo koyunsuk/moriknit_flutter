@@ -622,111 +622,116 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
     final projectAsync = ref.watch(projectByIdProvider(widget.projectId));
 
     return Scaffold(
-      backgroundColor: C.bg,
-      appBar: AppBar(
-        backgroundColor: C.bg,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const MoriKnitTitle(fontSize: 18),
-        actions: _isEditing
-            ? [
-                IconButton(
-                  icon: Icon(Icons.close, color: C.tx),
-                  onPressed: () => setState(() { _isEditing = false; _isCardEditMode = false; }),
+      backgroundColor: Colors.transparent,
+      body: SafeArea(
+        child: Column(
+          children: [
+            MoriPageHeaderShell(
+              child: MoriWideHeader(
+                title: isKorean ? '프로젝트' : 'Project',
+                subtitle: isKorean ? '프로젝트 상세' : 'Project details',
+                trailing: _isEditing
+                    ? [
+                        IconButton(
+                          icon: Icon(Icons.close, color: C.tx),
+                          onPressed: () => setState(() { _isEditing = false; _isCardEditMode = false; }),
+                        ),
+                        projectAsync.whenOrNull(
+                              data: (project) => project == null
+                                  ? null
+                                  : TextButton(
+                                      onPressed: () => _saveEdit(project),
+                                      child: Text(isKorean ? '저장' : 'Save', style: TextStyle(color: C.lv, fontWeight: FontWeight.w700)),
+                                    ),
+                            ) ??
+                            const SizedBox.shrink(),
+                      ]
+                    : [
+                        projectAsync.whenOrNull(
+                              data: (project) => project == null
+                                  ? null
+                                  : PopupMenuButton<String>(
+                                      icon: Icon(Icons.more_vert, color: C.tx),
+                                      onSelected: (value) async {
+                                        if (value == 'edit') {
+                                          setState(() {
+                                            _isEditing = true;
+                                            _isCardEditMode = true;
+                                            _titleCtrl.text = project.title;
+                                            _descCtrl.text = project.description;
+                                            _editStatus = project.status;
+                                          });
+                                        } else if (value == 'copy') {
+                                          _duplicateProject(context, ref, project);
+                                        } else if (value == 'pdf') {
+                                          await _exportPdf(context, ref, project);
+                                        } else if (value == 'share_text') {
+                                          await _shareProjectText(context, ref, project);
+                                        } else if (value == 'share_card') {
+                                          await _showShareCardDialog(context, ref, project);
+                                        } else if (value == 'publish') {
+                                          await _publishToGallery(context, ref, project);
+                                        } else if (value == 'sell_pattern') {
+                                          await _showPatternSellSheet(context, ref, project);
+                                        } else if (value == 'delete') {
+                                          _confirmDelete(context, ref, project.id);
+                                        }
+                                      },
+                                      itemBuilder: (_) {
+                                        final isKorean = ref.read(appLanguageProvider).isKorean;
+                                        PopupMenuItem<String> menuItem(String value, IconData icon, Color iconColor, String label, {TextStyle? textStyle}) {
+                                          return PopupMenuItem<String>(
+                                            value: value,
+                                            child: Row(children: [
+                                              Icon(icon, size: 18, color: iconColor),
+                                              const SizedBox(width: 10),
+                                              Text(label, style: textStyle),
+                                            ]),
+                                          );
+                                        }
+                                        return [
+                                          menuItem('edit', Icons.edit_rounded, C.lv, isKorean ? '수정' : 'Edit'),
+                                          menuItem('copy', Icons.copy_rounded, C.mu, isKorean ? '복사' : 'Duplicate'),
+                                          menuItem('pdf', Icons.picture_as_pdf_outlined, C.lv, isKorean ? 'PDF 내보내기' : 'Export PDF'),
+                                          menuItem('share_text', Icons.share_rounded, C.mu, isKorean ? '외부 공유' : 'Share'),
+                                          if (project.isFinished)
+                                            menuItem('share_card', Icons.ios_share_rounded, C.pk, isKorean ? '완성 기록지 공유' : 'Share card'),
+                                          if (project.isFinished)
+                                            menuItem('publish', Icons.public_rounded, C.lv, isKorean ? '갤러리에 공개' : 'Publish to gallery'),
+                                          if (project.isFinished && project.originProjectId.isEmpty)
+                                            menuItem('sell_pattern', Icons.sell_rounded, C.lmD, isKorean ? '패턴 판매 등록' : 'Sell pattern'),
+                                          menuItem('delete', Icons.delete_rounded, C.og, isKorean ? '삭제' : 'Delete', textStyle: TextStyle(color: C.og)),
+                                        ];
+                                      },
+                                    ),
+                            ) ??
+                            const SizedBox.shrink(),
+                      ],
+              ),
+            ),
+            Expanded(
+              child: projectAsync.when(
+                data: (project) {
+                  if (project == null) {
+                    return Center(child: Text(t.projectNotFound, style: T.body));
+                  }
+                  return _ProjectBody(
+                    project: project,
+                    isEditing: _isEditing,
+                    isCardEditMode: _isCardEditMode,
+                    titleCtrl: _titleCtrl,
+                    descCtrl: _descCtrl,
+                    editStatus: _editStatus,
+                    onStatusChanged: (s) => setState(() => _editStatus = s),
+                  );
+                },
+                loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
+                error: (e, _) => Center(
+                  child: Text(t.failedToLoadProject(e.toString()), style: T.body),
                 ),
-                projectAsync.whenOrNull(
-                      data: (project) => project == null
-                          ? null
-                          : TextButton(
-                              onPressed: () => _saveEdit(project),
-                              child: Text(isKorean ? '저장' : 'Save', style: TextStyle(color: C.lv, fontWeight: FontWeight.w700)),
-                            ),
-                    ) ??
-                    const SizedBox.shrink(),
-              ]
-            : [
-                projectAsync.whenOrNull(
-                      data: (project) => project == null
-                          ? null
-                          : PopupMenuButton<String>(
-                              icon: Icon(Icons.more_vert, color: C.tx),
-                              onSelected: (value) async {
-                                if (value == 'edit') {
-                                  setState(() {
-                                    _isEditing = true;
-                                    _isCardEditMode = true;
-                                    _titleCtrl.text = project.title;
-                                    _descCtrl.text = project.description;
-                                    _editStatus = project.status;
-                                  });
-                                } else if (value == 'copy') {
-                                  _duplicateProject(context, ref, project);
-                                } else if (value == 'pdf') {
-                                  await _exportPdf(context, ref, project);
-                                } else if (value == 'share_text') {
-                                  await _shareProjectText(context, ref, project);
-                                } else if (value == 'share_card') {
-                                  await _showShareCardDialog(context, ref, project);
-                                } else if (value == 'publish') {
-                                  await _publishToGallery(context, ref, project);
-                                } else if (value == 'sell_pattern') {
-                                  await _showPatternSellSheet(context, ref, project);
-                                } else if (value == 'delete') {
-                                  _confirmDelete(context, ref, project.id);
-                                }
-                              },
-                              itemBuilder: (_) {
-                                final isKorean = ref.read(appLanguageProvider).isKorean;
-                                PopupMenuItem<String> menuItem(String value, IconData icon, Color iconColor, String label, {TextStyle? textStyle}) {
-                                  return PopupMenuItem<String>(
-                                    value: value,
-                                    child: Row(children: [
-                                      Icon(icon, size: 18, color: iconColor),
-                                      const SizedBox(width: 10),
-                                      Text(label, style: textStyle),
-                                    ]),
-                                  );
-                                }
-                                return [
-                                  menuItem('edit', Icons.edit_rounded, C.lv, isKorean ? '수정' : 'Edit'),
-                                  menuItem('copy', Icons.copy_rounded, C.mu, isKorean ? '복사' : 'Duplicate'),
-                                  menuItem('pdf', Icons.picture_as_pdf_outlined, C.lv, isKorean ? 'PDF 내보내기' : 'Export PDF'),
-                                  menuItem('share_text', Icons.share_rounded, C.mu, isKorean ? '외부 공유' : 'Share'),
-                                  if (project.isFinished)
-                                    menuItem('share_card', Icons.ios_share_rounded, C.pk, isKorean ? '완성 기록지 공유' : 'Share card'),
-                                  if (project.isFinished)
-                                    menuItem('publish', Icons.public_rounded, C.lv, isKorean ? '갤러리에 공개' : 'Publish to gallery'),
-                                  if (project.isFinished && project.originProjectId.isEmpty)
-                                    menuItem('sell_pattern', Icons.sell_rounded, C.lmD, isKorean ? '패턴 판매 등록' : 'Sell pattern'),
-                                  menuItem('delete', Icons.delete_rounded, C.og, isKorean ? '삭제' : 'Delete', textStyle: TextStyle(color: C.og)),
-                                ];
-                              },
-                            ),
-                    ) ??
-                    const SizedBox.shrink(),
-              ],
-      ),
-      body: projectAsync.when(
-        data: (project) {
-          if (project == null) {
-            return Center(child: Text(t.projectNotFound, style: T.body));
-          }
-          return _ProjectBody(
-            project: project,
-            isEditing: _isEditing,
-            isCardEditMode: _isCardEditMode,
-            titleCtrl: _titleCtrl,
-            descCtrl: _descCtrl,
-            editStatus: _editStatus,
-            onStatusChanged: (s) => setState(() => _editStatus = s),
-          );
-        },
-        loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
-        error: (e, _) => Center(
-          child: Text(t.failedToLoadProject(e.toString()), style: T.body),
+              ),
+            ),
+          ],
         ),
       ),
     );

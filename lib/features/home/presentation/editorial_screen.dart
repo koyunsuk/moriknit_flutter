@@ -26,32 +26,45 @@ class EditorialScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: C.bg,
-      appBar: AppBar(
-        title: Text(title, style: T.h3),
-        backgroundColor: C.bg,
-        elevation: 0,
-        foregroundColor: C.tx,
-      ),
-      body: postsAsync.when(
-        loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
-        error: (e, _) => Center(child: Text(isKorean ? '게시된 글이 아직 없어요.' : 'No posts yet.', style: T.caption.copyWith(color: C.mu))),
-        data: (posts) {
-          if (posts.isEmpty) {
-            return Center(
-              child: Text(
-                isKorean ? '게시된 글이 아직 없어요.' : 'No posts yet.',
-                style: T.caption.copyWith(color: C.mu),
+      body: SafeArea(
+        child: Column(
+          children: [
+            MoriPageHeaderShell(
+              child: MoriWideHeader(
+                title: title,
+                subtitle: isKorean ? '모리니트 뜨개소식' : 'MoriKnit news',
               ),
-            );
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: posts.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (_, i) =>
-                _EditorialPostCard(post: posts[i], isKorean: isKorean),
-          );
-        },
+            ),
+            Expanded(
+              child: postsAsync.when(
+                loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
+                error: (e, _) => Center(
+                  child: Text(
+                    isKorean ? '게시된 글이 아직 없어요.' : 'No posts yet.',
+                    style: T.caption.copyWith(color: C.mu),
+                  ),
+                ),
+                data: (posts) {
+                  if (posts.isEmpty) {
+                    return Center(
+                      child: Text(
+                        isKorean ? '게시된 글이 아직 없어요.' : 'No posts yet.',
+                        style: T.caption.copyWith(color: C.mu),
+                      ),
+                    );
+                  }
+                  return ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: posts.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    itemBuilder: (_, i) =>
+                        _EditorialPostCard(post: posts[i], isKorean: isKorean),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

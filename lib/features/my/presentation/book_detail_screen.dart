@@ -192,50 +192,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
 
     return Scaffold(
-      backgroundColor: C.bg,
-      appBar: AppBar(
-        backgroundColor: C.bg,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(isKorean ? '도서 상세' : 'Book Detail', style: T.h3),
-        actions: [
-          PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert, color: C.tx),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            onSelected: (value) async {
-              if (value == 'edit') {
-                final updated = await Navigator.push<BookModel>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => BookInputScreen(initialBook: _book),
-                  ),
-                );
-                if (updated != null && mounted) {
-                  setState(() => _book = updated);
-                }
-              } else if (value == 'delete') {
-                await _delete();
-              }
-            },
-            itemBuilder: (_) => [
-              PopupMenuItem(
-                value: 'edit',
-                child: Text(isKorean ? '수정' : 'Edit'),
-              ),
-              PopupMenuItem(
-                value: 'delete',
-                child: Text(
-                  isKorean ? '삭제' : 'Delete',
-                  style: TextStyle(color: C.og),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+      backgroundColor: Colors.transparent,
       bottomNavigationBar: SafeArea(
         top: false,
         child: Padding(
@@ -254,11 +211,55 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
       body: Stack(
         children: [
           const BgOrbs(),
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+          SafeArea(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                MoriPageHeaderShell(
+                  child: MoriWideHeader(
+                    title: isKorean ? '도서 상세' : 'Book Detail',
+                    subtitle: isKorean ? '참고 도서 정보' : 'Book reference details',
+                    trailing: [
+                      PopupMenuButton<String>(
+                        icon: Icon(Icons.more_vert, color: C.tx),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        onSelected: (value) async {
+                          if (value == 'edit') {
+                            final updated = await Navigator.push<BookModel>(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => BookInputScreen(initialBook: _book),
+                              ),
+                            );
+                            if (updated != null && mounted) {
+                              setState(() => _book = updated);
+                            }
+                          } else if (value == 'delete') {
+                            await _delete();
+                          }
+                        },
+                        itemBuilder: (_) => [
+                          PopupMenuItem(
+                            value: 'edit',
+                            child: Text(isKorean ? '수정' : 'Edit'),
+                          ),
+                          PopupMenuItem(
+                            value: 'delete',
+                            child: Text(
+                              isKorean ? '삭제' : 'Delete',
+                              style: TextStyle(color: C.og),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                 // 표지 이미지 (크게)
                 ClipRRect(
                   borderRadius: BorderRadius.circular(14),
@@ -400,6 +401,10 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                       ],
                     ),
                   ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),

@@ -331,97 +331,98 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
     );
 
     return Scaffold(
-      backgroundColor: C.bg,
-      appBar: AppBar(
-        backgroundColor: C.bg,
-        elevation: 0,
-        leading: _isEditing
-            ? TextButton(
-                onPressed: _cancelEdit,
-                child: Text(isKorean ? '취소' : 'Cancel', style: T.body.copyWith(color: C.mu)),
-              )
-            : IconButton(
-                icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-                onPressed: () => Navigator.pop(context),
+      backgroundColor: Colors.transparent,
+      body: SafeArea(
+        child: Column(
+          children: [
+            MoriPageHeaderShell(
+              child: MoriWideHeader(
+                title: _isEditing
+                    ? (isKorean ? '실 수정' : 'Edit Yarn')
+                    : (isKorean ? '실 정보' : 'Yarn Details'),
+                subtitle: isKorean ? '실 상세' : 'Yarn details',
+                trailing: _isEditing
+                    ? [
+                        TextButton(
+                          onPressed: _cancelEdit,
+                          child: Text(isKorean ? '취소' : 'Cancel', style: T.body.copyWith(color: C.mu)),
+                        ),
+                        TextButton(
+                          onPressed: _isSaving ? null : () => _save(context, isKorean),
+                          child: Text(isKorean ? '저장' : 'Save',
+                              style: T.bodyBold.copyWith(color: C.lv)),
+                        ),
+                      ]
+                    : [
+                        yarnAsync.whenOrNull(
+                              data: (yarn) => yarn == null
+                                  ? null
+                                  : PopupMenuButton<String>(
+                                      icon: Icon(Icons.more_vert_rounded, color: C.tx),
+                                      onSelected: (v) {
+                                        if (v == 'edit') _enterEditMode(yarn);
+                                        if (v == 'copy') _duplicateYarn(yarn, isKorean);
+                                        if (v == 'link_project') _linkToProject(context, yarn.id, isKorean);
+                                        if (v == 'delete') _confirmDelete(yarn, isKorean);
+                                      },
+                                      itemBuilder: (_) => [
+                                        PopupMenuItem(
+                                          value: 'edit',
+                                          child: Row(children: [
+                                            Icon(Icons.edit_outlined, size: 18, color: C.lv),
+                                            const SizedBox(width: 8),
+                                            Text(isKorean ? '수정' : 'Edit'),
+                                          ]),
+                                        ),
+                                        PopupMenuItem(
+                                          value: 'copy',
+                                          child: Row(children: [
+                                            Icon(Icons.copy_rounded, size: 18, color: C.lv),
+                                            const SizedBox(width: 8),
+                                            Text(isKorean ? '복사' : 'Duplicate'),
+                                          ]),
+                                        ),
+                                        PopupMenuItem(
+                                          value: 'link_project',
+                                          child: Row(children: [
+                                            Icon(Icons.folder_outlined, size: 18, color: C.lv),
+                                            const SizedBox(width: 8),
+                                            Text(isKorean ? '프로젝트 연결' : 'Link to project'),
+                                          ]),
+                                        ),
+                                        PopupMenuItem(
+                                          value: 'delete',
+                                          child: Row(children: [
+                                            Icon(Icons.delete_outline, size: 18, color: C.og),
+                                            const SizedBox(width: 8),
+                                            Text(isKorean ? '삭제' : 'Delete',
+                                                style: TextStyle(color: C.og)),
+                                          ]),
+                                        ),
+                                      ],
+                                    ),
+                            ) ??
+                            const SizedBox.shrink(),
+                      ],
               ),
-        title: Text(
-          _isEditing
-              ? (isKorean ? '실 수정' : 'Edit Yarn')
-              : (isKorean ? '실 정보' : 'Yarn Details'),
-          style: T.h3,
+            ),
+            Expanded(
+              child: yarnAsync.when(
+                data: (yarn) {
+                  if (yarn == null) {
+                    return Center(child: Text(isKorean ? '실 정보를 찾을 수 없어요.' : 'Yarn not found.', style: T.body.copyWith(color: C.mu)));
+                  }
+                  if (_isEditing) {
+                    return _buildEditBody(isKorean);
+                  }
+                  return _buildDetailBody(yarn, isKorean);
+                },
+                loading: () => Center(child: CircularProgressIndicator(color: C.lm)),
+                error: (e, _) => Center(child: Text('$e', style: T.body.copyWith(color: C.og))),
+              ),
+            ),
+          ],
         ),
-        actions: _isEditing
-            ? [
-                TextButton(
-                  onPressed: _isSaving ? null : () => _save(context, isKorean),
-                  child: Text(isKorean ? '저장' : 'Save',
-                      style: T.bodyBold.copyWith(color: C.lv)),
-                ),
-              ]
-            : [
-                yarnAsync.whenOrNull(
-                      data: (yarn) => yarn == null
-                          ? null
-                          : PopupMenuButton<String>(
-                              icon: Icon(Icons.more_vert_rounded, color: C.tx),
-                              onSelected: (v) {
-                                if (v == 'edit') _enterEditMode(yarn);
-                                if (v == 'copy') _duplicateYarn(yarn, isKorean);
-                                if (v == 'link_project') _linkToProject(context, yarn.id, isKorean);
-                                if (v == 'delete') _confirmDelete(yarn, isKorean);
-                              },
-                              itemBuilder: (_) => [
-                                PopupMenuItem(
-                                  value: 'edit',
-                                  child: Row(children: [
-                                    Icon(Icons.edit_outlined, size: 18, color: C.lv),
-                                    const SizedBox(width: 8),
-                                    Text(isKorean ? '수정' : 'Edit'),
-                                  ]),
-                                ),
-                                PopupMenuItem(
-                                  value: 'copy',
-                                  child: Row(children: [
-                                    Icon(Icons.copy_rounded, size: 18, color: C.lv),
-                                    const SizedBox(width: 8),
-                                    Text(isKorean ? '복사' : 'Duplicate'),
-                                  ]),
-                                ),
-                                PopupMenuItem(
-                                  value: 'link_project',
-                                  child: Row(children: [
-                                    Icon(Icons.folder_outlined, size: 18, color: C.lv),
-                                    const SizedBox(width: 8),
-                                    Text(isKorean ? '프로젝트 연결' : 'Link to project'),
-                                  ]),
-                                ),
-                                PopupMenuItem(
-                                  value: 'delete',
-                                  child: Row(children: [
-                                    Icon(Icons.delete_outline, size: 18, color: C.og),
-                                    const SizedBox(width: 8),
-                                    Text(isKorean ? '삭제' : 'Delete',
-                                        style: TextStyle(color: C.og)),
-                                  ]),
-                                ),
-                              ],
-                            ),
-                    ) ??
-                    const SizedBox.shrink(),
-              ],
-      ),
-      body: yarnAsync.when(
-        data: (yarn) {
-          if (yarn == null) {
-            return Center(child: Text(isKorean ? '실 정보를 찾을 수 없어요.' : 'Yarn not found.', style: T.body.copyWith(color: C.mu)));
-          }
-          if (_isEditing) {
-            return _buildEditBody(isKorean);
-          }
-          return _buildDetailBody(yarn, isKorean);
-        },
-        loading: () => Center(child: CircularProgressIndicator(color: C.lm)),
-        error: (e, _) => Center(child: Text('$e', style: T.body.copyWith(color: C.og))),
       ),
     );
   }

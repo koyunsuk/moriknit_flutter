@@ -3,7 +3,7 @@ import 'dart:math' show acos, pi, max;
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/common_widgets.dart';
 
 class MeasureToolScreen extends StatefulWidget {
   const MeasureToolScreen({super.key});
@@ -74,22 +74,22 @@ class _MeasureToolScreenState extends State<MeasureToolScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text('측정 도구', style: T.h3),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.refresh_rounded, color: C.mu),
-            tooltip: '초기화',
-            onPressed: _reset,
-          ),
-        ],
-      ),
-      body: Column(
+      body: SafeArea(
+        child: Column(
         children: [
+          MoriPageHeaderShell(
+            child: MoriWideHeader(
+              title: '측정 도구',
+              subtitle: '길이·각도·둘레 측정',
+              trailing: [
+                IconButton(
+                  icon: Icon(Icons.refresh_rounded, color: C.mu),
+                  tooltip: '초기화',
+                  onPressed: _reset,
+                ),
+              ],
+            ),
+          ),
           Expanded(
             child: Stack(
               children: [
@@ -194,6 +194,7 @@ class _MeasureToolScreenState extends State<MeasureToolScreen> {
             onToggleUnit: () => setState(() => _useInch = !_useInch),
           ),
         ],
+        ),
       ),
     );
   }

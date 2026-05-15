@@ -42,45 +42,49 @@ class RavelryPatternDetailScreen extends ConsumerWidget {
     final detailAsync = ref.watch(_patternDetailProvider(patternId));
 
     return Scaffold(
-      backgroundColor: C.bg,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20),
-          color: C.tx,
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(patternName, style: T.h3),
-        backgroundColor: C.bg,
-        elevation: 0,
-      ),
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           const BgOrbs(),
-          detailAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.error_outline_rounded, color: C.og, size: 48),
-                    const SizedBox(height: 12),
-                    Text('$e',
-                        style: T.caption.copyWith(color: C.og),
-                        textAlign: TextAlign.center),
-                    const SizedBox(height: 16),
-                    TextButton(
-                      onPressed: () => ref.invalidate(_patternDetailProvider(patternId)),
-                      child: Text(isKorean ? '다시 시도' : 'Retry'),
-                    ),
-                  ],
+          SafeArea(
+            child: Column(
+              children: [
+                MoriPageHeaderShell(
+                  child: MoriWideHeader(
+                    title: patternName,
+                    subtitle: isKorean ? 'Ravelry 도안 상세' : 'Ravelry pattern detail',
+                  ),
                 ),
-              ),
-            ),
-            data: (detail) => _PatternDetailBody(
-              detail: detail,
-              isKorean: isKorean,
+                Expanded(
+                  child: detailAsync.when(
+                    loading: () => const Center(child: CircularProgressIndicator()),
+                    error: (e, _) => Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.error_outline_rounded, color: C.og, size: 48),
+                            const SizedBox(height: 12),
+                            Text('$e',
+                                style: T.caption.copyWith(color: C.og),
+                                textAlign: TextAlign.center),
+                            const SizedBox(height: 16),
+                            TextButton(
+                              onPressed: () => ref.invalidate(_patternDetailProvider(patternId)),
+                              child: Text(isKorean ? '다시 시도' : 'Retry'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    data: (detail) => _PatternDetailBody(
+                      detail: detail,
+                      isKorean: isKorean,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

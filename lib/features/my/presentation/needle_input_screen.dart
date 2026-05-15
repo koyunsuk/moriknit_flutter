@@ -105,29 +105,7 @@ class _NeedleInputScreenState extends ConsumerState<NeedleInputScreen> {
         await _handleUnsavedBack(context, t);
       },
       child: Scaffold(
-      backgroundColor: C.bg,
-      appBar: AppBar(
-        backgroundColor: C.bg,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-          onPressed: () async {
-            if (!_isDirty) {
-              Navigator.pop(context);
-              return;
-            }
-            await _handleUnsavedBack(context, t);
-          },
-        ),
-        title: Text(
-          widget.initialNeedle == null
-              ? (widget.copyFrom != null
-                  ? (isKorean ? '바늘 복사' : 'Copy Needle')
-                  : (isKorean ? '바늘 추가' : 'Add Needle'))
-              : (isKorean ? '바늘 수정' : 'Edit Needle'),
-          style: T.h3,
-        ),
-      ),
+      backgroundColor: Colors.transparent,
       bottomNavigationBar: SafeArea(
         top: false,
         child: Padding(
@@ -151,11 +129,43 @@ class _NeedleInputScreenState extends ConsumerState<NeedleInputScreen> {
       body: Stack(
         children: [
           const BgOrbs(),
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+          SafeArea(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Stack(
+                  children: [
+                    MoriPageHeaderShell(
+                      child: MoriWideHeader(
+                        title: widget.initialNeedle == null
+                            ? (widget.copyFrom != null
+                                ? (isKorean ? '바늘 복사' : 'Copy Needle')
+                                : (isKorean ? '바늘 추가' : 'Add Needle'))
+                            : (isKorean ? '바늘 수정' : 'Edit Needle'),
+                        subtitle: isKorean ? '바늘 정보를 기록해요' : 'Record your needle info',
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: IconButton(
+                        icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
+                        onPressed: () async {
+                          if (!_isDirty) {
+                            Navigator.pop(context);
+                            return;
+                          }
+                          await _handleUnsavedBack(context, t);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                 // 이슈 #693 — 사진 영역 최상단 배치 (3개 화면 통일)
                 SectionTitle(title: t.needlePhoto),
                 const SizedBox(height: 8),
@@ -323,6 +333,10 @@ class _NeedleInputScreenState extends ConsumerState<NeedleInputScreen> {
                         else
                           Icon(Icons.calendar_today_rounded, color: C.mu, size: 18),
                       ],
+                    ),
+                  ),
+                ),
+              ],
                     ),
                   ),
                 ),

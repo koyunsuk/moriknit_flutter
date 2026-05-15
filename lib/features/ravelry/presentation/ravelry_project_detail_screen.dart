@@ -39,68 +39,72 @@ class _RavelryProjectDetailScreenState extends ConsumerState<RavelryProjectDetai
     final detailAsync = ref.watch(_projectDetailProvider(widget.projectId));
 
     return Scaffold(
-      backgroundColor: C.bg,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20),
-          color: C.tx,
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(widget.projectName, style: T.h3),
-        backgroundColor: C.bg,
-        elevation: 0,
-        actions: [
-          detailAsync.whenData((detail) => PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert, color: C.tx),
-            onSelected: (v) {
-              if (v == 'edit') {
-                showRavelryProjectUpdateSheet(
-                  context,
-                  ref,
-                  projectId: detail.id,
-                  projectName: detail.name,
-                  statusTypeId: detail.statusTypeId,
-                  notes: detail.notes,
-                  isKorean: isKorean,
-                  onUpdated: () => ref.invalidate(_projectDetailProvider(widget.projectId)),
-                );
-              }
-            },
-            itemBuilder: (_) => [
-              PopupMenuItem(
-                value: 'edit',
-                child: Text(isKorean ? '수정' : 'Edit'),
-              ),
-            ],
-          )).valueOrNull ?? const SizedBox.shrink(),
-        ],
-      ),
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           const BgOrbs(),
-          detailAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.error_outline_rounded, color: C.og, size: 48),
-                    const SizedBox(height: 12),
-                    Text('$e',
-                        style: T.caption.copyWith(color: C.og),
-                        textAlign: TextAlign.center),
-                    const SizedBox(height: 16),
-                    TextButton(
-                      onPressed: () => ref.invalidate(_projectDetailProvider(widget.projectId)),
-                      child: Text(isKorean ? '다시 시도' : 'Retry'),
-                    ),
-                  ],
+          SafeArea(
+            child: Column(
+              children: [
+                MoriPageHeaderShell(
+                  child: MoriWideHeader(
+                    title: widget.projectName,
+                    subtitle: isKorean ? 'Ravelry 프로젝트 상세' : 'Ravelry project detail',
+                    trailing: [
+                      detailAsync.whenData((detail) => PopupMenuButton<String>(
+                        icon: Icon(Icons.more_vert, color: C.tx),
+                        onSelected: (v) {
+                          if (v == 'edit') {
+                            showRavelryProjectUpdateSheet(
+                              context,
+                              ref,
+                              projectId: detail.id,
+                              projectName: detail.name,
+                              statusTypeId: detail.statusTypeId,
+                              notes: detail.notes,
+                              isKorean: isKorean,
+                              onUpdated: () => ref.invalidate(_projectDetailProvider(widget.projectId)),
+                            );
+                          }
+                        },
+                        itemBuilder: (_) => [
+                          PopupMenuItem(
+                            value: 'edit',
+                            child: Text(isKorean ? '수정' : 'Edit'),
+                          ),
+                        ],
+                      )).valueOrNull ?? const SizedBox.shrink(),
+                    ],
+                  ),
                 ),
-              ),
+                Expanded(
+                  child: detailAsync.when(
+                    loading: () => const Center(child: CircularProgressIndicator()),
+                    error: (e, _) => Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.error_outline_rounded, color: C.og, size: 48),
+                            const SizedBox(height: 12),
+                            Text('$e',
+                                style: T.caption.copyWith(color: C.og),
+                                textAlign: TextAlign.center),
+                            const SizedBox(height: 16),
+                            TextButton(
+                              onPressed: () => ref.invalidate(_projectDetailProvider(widget.projectId)),
+                              child: Text(isKorean ? '다시 시도' : 'Retry'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    data: (detail) => _ProjectDetailBody(detail: detail, isKorean: isKorean),
+                  ),
+                ),
+              ],
             ),
-            data: (detail) => _ProjectDetailBody(detail: detail, isKorean: isKorean),
           ),
         ],
       ),

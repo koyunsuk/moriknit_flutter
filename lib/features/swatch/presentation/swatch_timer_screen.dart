@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/common_widgets.dart';
 import '../data/swatch_timer_repository.dart';
 
 class SwatchTimerScreen extends ConsumerStatefulWidget {
@@ -112,50 +113,52 @@ class _SwatchTimerScreenState extends ConsumerState<SwatchTimerScreen> {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
     final async = ref.watch(swatchTimerStreamProvider(widget.swatchId));
 
+    final title = widget.swatchName.isEmpty
+        ? (isKorean ? '스와치 타이머' : 'Swatch Timer')
+        : widget.swatchName;
+
     return Scaffold(
       backgroundColor: C.bg,
-      appBar: AppBar(
-        backgroundColor: C.bg,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          widget.swatchName.isEmpty
-              ? (isKorean ? '스와치 타이머' : 'Swatch Timer')
-              : widget.swatchName,
-          style: T.h3,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        actions: [
-          PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert, color: C.tx),
-            onSelected: (value) {
-              if (value == 'reset') _confirmReset(context, isKorean);
-            },
-            itemBuilder: (_) => [
-              PopupMenuItem(
-                value: 'reset',
-                child: Text(
-                  isKorean ? '누적시간 초기화' : 'Reset Total',
-                  style: T.body.copyWith(color: C.og),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
       body: SafeArea(
-        child: async.when(
-          loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
-          error: (e, _) => Center(
-            child: Text(
-              isKorean ? '오류: $e' : 'Error: $e',
-              style: T.caption.copyWith(color: C.og),
+        child: Column(
+          children: [
+            MoriPageHeaderShell(
+              child: MoriWideHeader(
+                title: title,
+                subtitle: isKorean ? '스와치 작업 시간' : 'Swatch work time',
+                trailing: [
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert, color: C.tx),
+                    onSelected: (value) {
+                      if (value == 'reset') _confirmReset(context, isKorean);
+                    },
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        value: 'reset',
+                        child: Text(
+                          isKorean ? '누적시간 초기화' : 'Reset Total',
+                          style: T.body.copyWith(color: C.og),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          data: (state) => _buildBody(state, isKorean),
+            Expanded(
+              child: async.when(
+                loading: () =>
+                    Center(child: CircularProgressIndicator(color: C.lv)),
+                error: (e, _) => Center(
+                  child: Text(
+                    isKorean ? '오류: $e' : 'Error: $e',
+                    style: T.caption.copyWith(color: C.og),
+                  ),
+                ),
+                data: (state) => _buildBody(state, isKorean),
+              ),
+            ),
+          ],
         ),
       ),
     );

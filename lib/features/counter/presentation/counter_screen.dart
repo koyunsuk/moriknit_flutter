@@ -577,107 +577,118 @@ class _CounterScreenState extends ConsumerState<CounterScreen> {
 
     final counter = counterAsync.valueOrNull;
 
-    return Scaffold(
-      backgroundColor: C.bg,
-      appBar: AppBar(
-        backgroundColor: C.bg,
-        elevation: 0,
-        leading: _isEditing
-            ? TextButton(
-                onPressed: _cancelEdit,
-                child: Text(isKorean ? '취소' : 'Cancel', style: T.body.copyWith(color: C.mu)),
-              )
-            : IconButton(
-                icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-                onPressed: () => Navigator.pop(context),
-              ),
-        title: Text(
-          _isEditing
-              ? (isKorean ? '카운터 수정' : 'Edit Counter')
-              : (counter?.name ?? ''),
-          style: T.h3,
-        ),
-        actions: _isEditing
-            ? [
-                TextButton(
-                  onPressed: _isSaving || counter == null ? null : () => _saveEdit(counter, isKorean),
-                  child: Text(isKorean ? '저장' : 'Save', style: T.bodyBold.copyWith(color: C.lv)),
+    final headerTitle = _isEditing
+        ? (isKorean ? '카운터 수정' : 'Edit Counter')
+        : (counter?.name ?? '');
+    final headerSubtitle = _isEditing
+        ? (isKorean ? '카운터 정보 변경' : 'Edit counter info')
+        : (isKorean ? '카운터' : 'Counter');
+
+    final List<Widget> trailing = _isEditing
+        ? [
+            TextButton(
+              onPressed: _cancelEdit,
+              child: Text(isKorean ? '취소' : 'Cancel',
+                  style: T.body.copyWith(color: C.mu)),
+            ),
+            TextButton(
+              onPressed: _isSaving || counter == null
+                  ? null
+                  : () => _saveEdit(counter, isKorean),
+              child: Text(isKorean ? '저장' : 'Save',
+                  style: T.bodyBold.copyWith(color: C.lv)),
+            ),
+          ]
+        : [
+            PopupMenuButton<String>(
+              icon: Icon(Icons.more_vert_rounded, color: C.mu),
+              onSelected: (value) {
+                final c = counterAsync.valueOrNull;
+                if (c == null) return;
+                if (value == 'edit') {
+                  _enterEditMode(c);
+                } else if (value == 'copy') {
+                  _duplicateCounter(c, isKorean);
+                } else if (value == 'link_project') {
+                  _linkToProject(context, c.id, isKorean);
+                } else if (value == 'link_pattern') {
+                  _linkToPattern(context, c, isKorean);
+                } else if (value == 'delete') {
+                  _confirmDelete(isKorean);
+                }
+              },
+              itemBuilder: (ctx) => [
+                PopupMenuItem(
+                  value: 'edit',
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit_rounded, color: C.lv, size: 18),
+                      const SizedBox(width: 10),
+                      Text(isKorean ? '수정' : 'Edit', style: T.body),
+                    ],
+                  ),
                 ),
-              ]
-            : [
-                PopupMenuButton<String>(
-                  icon: Icon(Icons.more_vert_rounded, color: C.mu),
-                  onSelected: (value) {
-                    final c = counterAsync.valueOrNull;
-                    if (c == null) return;
-                    if (value == 'edit') {
-                      _enterEditMode(c);
-                    } else if (value == 'copy') {
-                      _duplicateCounter(c, isKorean);
-                    } else if (value == 'link_project') {
-                      _linkToProject(context, c.id, isKorean);
-                    } else if (value == 'link_pattern') {
-                      _linkToPattern(context, c, isKorean);
-                    } else if (value == 'delete') {
-                      _confirmDelete(isKorean);
-                    }
-                  },
-                  itemBuilder: (ctx) => [
-                    PopupMenuItem(
-                      value: 'edit',
-                      child: Row(
-                        children: [
-                          Icon(Icons.edit_rounded, color: C.lv, size: 18),
-                          const SizedBox(width: 10),
-                          Text(isKorean ? '수정' : 'Edit', style: T.body),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'copy',
-                      child: Row(
-                        children: [
-                          Icon(Icons.copy_rounded, color: C.lmD, size: 18),
-                          const SizedBox(width: 10),
-                          Text(isKorean ? '복사' : 'Duplicate', style: T.body),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'link_project',
-                      child: Row(
-                        children: [
-                          Icon(Icons.folder_outlined, color: C.lv, size: 18),
-                          const SizedBox(width: 10),
-                          Text(isKorean ? '프로젝트 연결' : 'Link to project', style: T.body),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'link_pattern',
-                      child: Row(
-                        children: [
-                          Icon(Icons.image_rounded, color: C.lmD, size: 18),
-                          const SizedBox(width: 10),
-                          Text(isKorean ? '도안 연결' : 'Link pattern', style: T.body),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete_outline, color: C.og, size: 18),
-                          const SizedBox(width: 10),
-                          Text(isKorean ? '삭제' : 'Delete', style: T.body.copyWith(color: C.og)),
-                        ],
-                      ),
-                    ),
-                  ],
+                PopupMenuItem(
+                  value: 'copy',
+                  child: Row(
+                    children: [
+                      Icon(Icons.copy_rounded, color: C.lmD, size: 18),
+                      const SizedBox(width: 10),
+                      Text(isKorean ? '복사' : 'Duplicate', style: T.body),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'link_project',
+                  child: Row(
+                    children: [
+                      Icon(Icons.folder_outlined, color: C.lv, size: 18),
+                      const SizedBox(width: 10),
+                      Text(isKorean ? '프로젝트 연결' : 'Link to project',
+                          style: T.body),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'link_pattern',
+                  child: Row(
+                    children: [
+                      Icon(Icons.image_rounded, color: C.lmD, size: 18),
+                      const SizedBox(width: 10),
+                      Text(isKorean ? '도안 연결' : 'Link pattern',
+                          style: T.body),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete_outline, color: C.og, size: 18),
+                      const SizedBox(width: 10),
+                      Text(isKorean ? '삭제' : 'Delete',
+                          style: T.body.copyWith(color: C.og)),
+                    ],
+                  ),
                 ),
               ],
-      ),
-      body: counterAsync.when(
+            ),
+          ];
+
+    return Scaffold(
+      backgroundColor: C.bg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            MoriPageHeaderShell(
+              child: MoriWideHeader(
+                title: headerTitle,
+                subtitle: headerSubtitle,
+                trailing: trailing,
+              ),
+            ),
+            Expanded(
+              child: counterAsync.when(
         data: (counter) {
           if (counter == null) {
             return Center(child: Text(isKorean ? '카운터를 찾을 수 없어요.' : 'Counter not found.', style: T.body));
@@ -896,6 +907,10 @@ class _CounterScreenState extends ConsumerState<CounterScreen> {
         },
         loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
         error: (e, _) => Center(child: Text('$e', style: T.body)),
+      ),
+            ),
+          ],
+        ),
       ),
     );
   }

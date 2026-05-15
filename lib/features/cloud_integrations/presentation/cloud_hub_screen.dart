@@ -27,40 +27,45 @@ class CloudHubScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(isKorean ? '클라우드 연결' : 'Cloud Connections', style: T.h3),
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-      ),
       body: Stack(
         children: [
           const BgOrbs(),
           SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isKorean
+            child: Column(
+              children: [
+                MoriPageHeaderShell(
+                  child: MoriWideHeader(
+                    title: isKorean ? '클라우드 연결' : 'Cloud Connections',
+                    subtitle: isKorean
                         ? '클라우드 저장소를 연결해 도안 파일을 앱에서 바로 탐색하세요.'
                         : 'Connect cloud storage to browse pattern files directly.',
-                    style: T.caption.copyWith(color: C.mu),
+                    trailing: [
+                      IconButton(
+                        icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
+                        onPressed: () => Navigator.pop(context),
+                        tooltip: isKorean ? '뒤로' : 'Back',
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  _DropboxCard(isKorean: isKorean),
-                  const SizedBox(height: 10),
-                  _GoogleDriveCard(isKorean: isKorean),
-                  const SizedBox(height: 10),
-                  _ICloudCard(isKorean: isKorean),
-                  const SizedBox(height: 10),
-                  _OneDriveCard(isKorean: isKorean),
-                ],
-              ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _DropboxCard(isKorean: isKorean),
+                        const SizedBox(height: 10),
+                        _GoogleDriveCard(isKorean: isKorean),
+                        const SizedBox(height: 10),
+                        _ICloudCard(isKorean: isKorean),
+                        const SizedBox(height: 10),
+                        _OneDriveCard(isKorean: isKorean),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

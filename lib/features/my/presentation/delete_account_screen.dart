@@ -81,24 +81,33 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
-          onPressed: () => context.pop(),
-        ),
-        title: Text(isKorean ? '회원 탈퇴' : 'Delete Account', style: T.h3),
-        centerTitle: true,
-      ),
       body: Stack(
         children: [
           const BgOrbs(),
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 48),
+          SafeArea(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                MoriPageHeaderShell(
+                  child: MoriWideHeader(
+                    title: isKorean ? '회원 탈퇴' : 'Delete Account',
+                    subtitle: isKorean
+                        ? '계정 삭제 전 안내를 확인해 주세요'
+                        : 'Please review before deleting your account',
+                    trailing: [
+                      IconButton(
+                        icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
+                        onPressed: () => context.pop(),
+                        tooltip: isKorean ? '뒤로' : 'Back',
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 48),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                 // 경고 배너
                 Container(
                   width: double.infinity,
@@ -254,6 +263,10 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
                       isKorean ? '취소하고 돌아가기' : 'Cancel',
                       style: T.caption.copyWith(color: C.mu),
                     ),
+                  ),
+                ),
+              ],
+            ),
                   ),
                 ),
               ],

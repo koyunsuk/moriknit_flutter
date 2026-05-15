@@ -176,20 +176,30 @@ class _FileExplorerScreenState extends ConsumerState<FileExplorerScreen> {
   Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(isKorean ? '파일 탐색기' : 'File Explorer', style: T.h3),
-        elevation: 0,
-        backgroundColor: C.bg,
-      ),
       body: Stack(
         children: [
           const BgOrbs(),
           SafeArea(
-            child: _buildBody(isKorean),
+            child: Column(
+              children: [
+                MoriPageHeaderShell(
+                  child: MoriWideHeader(
+                    title: isKorean ? '파일 탐색기' : 'File Explorer',
+                    subtitle: isKorean
+                        ? '외부 파일을 도안 라이브러리로 가져와요'
+                        : 'Import external files into the pattern library',
+                    trailing: [
+                      IconButton(
+                        icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
+                        onPressed: () => Navigator.pop(context),
+                        tooltip: isKorean ? '뒤로' : 'Back',
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(child: _buildBody(isKorean)),
+              ],
+            ),
           ),
         ],
       ),

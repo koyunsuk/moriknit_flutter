@@ -40,16 +40,17 @@ class CounterGroupScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
-          onPressed: () => context.canPop() ? context.pop() : null,
-        ),
-        title: Text(title, style: T.h3),
-      ),
-      body: counterListAsync.when(
+      body: SafeArea(
+        child: Column(
+          children: [
+            MoriPageHeaderShell(
+              child: MoriWideHeader(
+                title: title,
+                subtitle: isKorean ? '카운터 그룹' : 'Counter group',
+              ),
+            ),
+            Expanded(
+              child: counterListAsync.when(
         loading: () => Center(child: CircularProgressIndicator(color: C.lmD)),
         error: (e, _) => Center(child: Text('$e', style: T.body)),
         data: (all) {
@@ -105,6 +106,10 @@ class CounterGroupScreen extends ConsumerWidget {
             ],
           );
         },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

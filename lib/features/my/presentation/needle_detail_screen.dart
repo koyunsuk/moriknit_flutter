@@ -272,102 +272,103 @@ class _NeedleDetailScreenState extends ConsumerState<NeedleDetailScreen> {
     );
 
     return Scaffold(
-      backgroundColor: C.bg,
-      appBar: AppBar(
-        backgroundColor: C.bg,
-        elevation: 0,
-        leading: _isEditing
-            ? TextButton(
-                onPressed: _cancelEdit,
-                child: Text(isKorean ? '취소' : 'Cancel', style: T.body.copyWith(color: C.mu)),
-              )
-            : IconButton(
-                icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-                onPressed: () => Navigator.pop(context),
+      backgroundColor: Colors.transparent,
+      body: SafeArea(
+        child: Column(
+          children: [
+            MoriPageHeaderShell(
+              child: MoriWideHeader(
+                title: _isEditing
+                    ? (isKorean ? '바늘 수정' : 'Edit Needle')
+                    : (isKorean ? '바늘 정보' : 'Needle Details'),
+                subtitle: isKorean ? '바늘 상세' : 'Needle details',
+                trailing: _isEditing
+                    ? [
+                        TextButton(
+                          onPressed: _cancelEdit,
+                          child: Text(isKorean ? '취소' : 'Cancel', style: T.body.copyWith(color: C.mu)),
+                        ),
+                        TextButton(
+                          onPressed: _isSaving ? null : () => _save(context, isKorean, t),
+                          child: Text(isKorean ? '저장' : 'Save',
+                              style: T.bodyBold.copyWith(color: C.lv)),
+                        ),
+                      ]
+                    : [
+                        needleAsync.whenOrNull(
+                              data: (needle) => needle == null
+                                  ? null
+                                  : PopupMenuButton<String>(
+                                      icon: Icon(Icons.more_vert_rounded, color: C.tx),
+                                      onSelected: (v) {
+                                        if (v == 'edit') _enterEditMode(needle);
+                                        if (v == 'copy') _duplicateNeedle(needle, isKorean);
+                                        if (v == 'link_project') _linkToProject(context, needle.id, isKorean);
+                                        if (v == 'delete') _confirmDelete(needle, isKorean);
+                                      },
+                                      itemBuilder: (_) => [
+                                        PopupMenuItem(
+                                          value: 'edit',
+                                          child: Row(children: [
+                                            Icon(Icons.edit_outlined, size: 18, color: C.lv),
+                                            const SizedBox(width: 8),
+                                            Text(isKorean ? '수정' : 'Edit'),
+                                          ]),
+                                        ),
+                                        PopupMenuItem(
+                                          value: 'copy',
+                                          child: Row(children: [
+                                            Icon(Icons.copy_rounded, size: 18, color: C.lv),
+                                            const SizedBox(width: 8),
+                                            Text(isKorean ? '복사' : 'Duplicate'),
+                                          ]),
+                                        ),
+                                        PopupMenuItem(
+                                          value: 'link_project',
+                                          child: Row(children: [
+                                            Icon(Icons.folder_outlined, size: 18, color: C.lv),
+                                            const SizedBox(width: 8),
+                                            Text(isKorean ? '프로젝트 연결' : 'Link to project'),
+                                          ]),
+                                        ),
+                                        PopupMenuItem(
+                                          value: 'delete',
+                                          child: Row(children: [
+                                            Icon(Icons.delete_outline, size: 18, color: C.og),
+                                            const SizedBox(width: 8),
+                                            Text(isKorean ? '삭제' : 'Delete',
+                                                style: TextStyle(color: C.og)),
+                                          ]),
+                                        ),
+                                      ],
+                                    ),
+                            ) ??
+                            const SizedBox.shrink(),
+                      ],
               ),
-        title: Text(
-          _isEditing
-              ? (isKorean ? '바늘 수정' : 'Edit Needle')
-              : (isKorean ? '바늘 정보' : 'Needle Details'),
-          style: T.h3,
+            ),
+            Expanded(
+              child: needleAsync.when(
+                data: (needle) {
+                  if (needle == null) {
+                    return Center(
+                      child: Text(
+                        isKorean ? '바늘 정보를 찾을 수 없어요.' : 'Needle not found.',
+                        style: T.body.copyWith(color: C.mu),
+                      ),
+                    );
+                  }
+                  if (_isEditing) {
+                    return _buildEditBody(isKorean, t);
+                  }
+                  return _buildDetailBody(needle, isKorean);
+                },
+                loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
+                error: (e, _) => Center(child: Text('$e', style: T.body.copyWith(color: C.og))),
+              ),
+            ),
+          ],
         ),
-        actions: _isEditing
-            ? [
-                TextButton(
-                  onPressed: _isSaving ? null : () => _save(context, isKorean, t),
-                  child: Text(isKorean ? '저장' : 'Save',
-                      style: T.bodyBold.copyWith(color: C.lv)),
-                ),
-              ]
-            : [
-                needleAsync.whenOrNull(
-                      data: (needle) => needle == null
-                          ? null
-                          : PopupMenuButton<String>(
-                              icon: Icon(Icons.more_vert_rounded, color: C.tx),
-                              onSelected: (v) {
-                                if (v == 'edit') _enterEditMode(needle);
-                                if (v == 'copy') _duplicateNeedle(needle, isKorean);
-                                if (v == 'link_project') _linkToProject(context, needle.id, isKorean);
-                                if (v == 'delete') _confirmDelete(needle, isKorean);
-                              },
-                              itemBuilder: (_) => [
-                                PopupMenuItem(
-                                  value: 'edit',
-                                  child: Row(children: [
-                                    Icon(Icons.edit_outlined, size: 18, color: C.lv),
-                                    const SizedBox(width: 8),
-                                    Text(isKorean ? '수정' : 'Edit'),
-                                  ]),
-                                ),
-                                PopupMenuItem(
-                                  value: 'copy',
-                                  child: Row(children: [
-                                    Icon(Icons.copy_rounded, size: 18, color: C.lv),
-                                    const SizedBox(width: 8),
-                                    Text(isKorean ? '복사' : 'Duplicate'),
-                                  ]),
-                                ),
-                                PopupMenuItem(
-                                  value: 'link_project',
-                                  child: Row(children: [
-                                    Icon(Icons.folder_outlined, size: 18, color: C.lv),
-                                    const SizedBox(width: 8),
-                                    Text(isKorean ? '프로젝트 연결' : 'Link to project'),
-                                  ]),
-                                ),
-                                PopupMenuItem(
-                                  value: 'delete',
-                                  child: Row(children: [
-                                    Icon(Icons.delete_outline, size: 18, color: C.og),
-                                    const SizedBox(width: 8),
-                                    Text(isKorean ? '삭제' : 'Delete',
-                                        style: TextStyle(color: C.og)),
-                                  ]),
-                                ),
-                              ],
-                            ),
-                    ) ??
-                    const SizedBox.shrink(),
-              ],
-      ),
-      body: needleAsync.when(
-        data: (needle) {
-          if (needle == null) {
-            return Center(
-              child: Text(
-                isKorean ? '바늘 정보를 찾을 수 없어요.' : 'Needle not found.',
-                style: T.body.copyWith(color: C.mu),
-              ),
-            );
-          }
-          if (_isEditing) {
-            return _buildEditBody(isKorean, t);
-          }
-          return _buildDetailBody(needle, isKorean);
-        },
-        loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
-        error: (e, _) => Center(child: Text('$e', style: T.body.copyWith(color: C.og))),
       ),
     );
   }

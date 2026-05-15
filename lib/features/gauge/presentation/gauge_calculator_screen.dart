@@ -215,21 +215,24 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
 
     return Scaffold(
       backgroundColor: C.bg,
-      appBar: AppBar(
-        backgroundColor: C.bg,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(t.gaugeCalculator, style: T.h3),
-      ),
       body: Stack(
         children: [
           const BgOrbs(),
-          ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
-            children: [
+          SafeArea(
+            child: Column(
+              children: [
+                MoriPageHeaderShell(
+                  child: MoriWideHeader(
+                    title: t.gaugeCalculator,
+                    subtitle: isKorean
+                        ? '게이지 변환·도안 생성'
+                        : 'Gauge conversion & generator',
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+                    children: [
               // 모드 선택
               _ModeSelector(
                 mode: _mode,
@@ -270,6 +273,10 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
                 myRowsCtrl: _myRowsCtrl,
               ),
             ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

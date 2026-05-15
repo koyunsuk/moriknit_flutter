@@ -126,25 +126,20 @@ class _NeedleSizeConverterScreenState
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20),
-          color: C.tx,
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(
-          isKorean ? '바늘 크기 변환기' : 'Needle Size Converter',
-          style: T.h3,
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
       body: Stack(
         children: [
           const BgOrbs(),
           SafeArea(
             child: Column(
               children: [
+                MoriPageHeaderShell(
+                  child: MoriWideHeader(
+                    title: isKorean ? '바늘 크기 변환기' : 'Needle Size Converter',
+                    subtitle: isKorean
+                        ? '대바늘·코바늘 호수 환산'
+                        : 'Knit / crochet size lookup',
+                  ),
+                ),
                 // ── 탭 (대바늘 / 코바늘) ──
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
