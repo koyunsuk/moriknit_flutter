@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../domain/builtin_template.dart';
 import '../domain/user_template.dart';
 
+@Deprecated('Phase E3 (#687) — step_blueprints/kind=template 로 통합 (마이그레이션 완료). Phase E4에서 삭제 예정. 신규 호출자는 StepBlueprintRepository / blueprintsByKindProvider(BlueprintKind.template) 사용.')
 class TemplateRepository {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;

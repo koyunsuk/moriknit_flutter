@@ -252,7 +252,11 @@ class _NeedleDetailScreenState extends ConsumerState<NeedleDetailScreen> {
       showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '삭제됐어요.' : 'Deleted.');
     } catch (e) {
       if (!mounted) return;
-      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+      final msg = e.toString();
+      final friendly = (msg.contains('인터넷') || msg.contains('TimeoutException'))
+          ? (isKorean ? '인터넷 연결을 확인해 주세요' : 'Check your internet connection')
+          : msg;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: friendly);
     }
   }
 

@@ -1,3 +1,4 @@
+@Deprecated('Phase E3 (#687) — step_blueprints/kind=template 로 통합 (마이그레이션 완료). Phase E4에서 삭제 예정.')
 class UserTemplate {
   final String id;
   final String title;

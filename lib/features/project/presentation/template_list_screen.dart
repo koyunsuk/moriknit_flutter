@@ -1,16 +1,19 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/localization/app_language.dart';
-import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../providers/blueprint_provider.dart';
 import '../../../providers/template_provider.dart';
+import '../../blueprint/domain/step_blueprint.dart';
 import '../../blueprint/presentation/step_log_screen.dart';
+// ignore: deprecated_member_use_from_same_package
 import '../domain/builtin_template.dart';
-import '../domain/user_template.dart'; // ignore: unused_import — UserTemplate passed via extra
+// ignore: unused_import, deprecated_member_use_from_same_package
+import '../domain/user_template.dart'; // UserTemplate passed via extra
 
 // ---------------------------------------------------------------------------
 // 기본 템플릿 seed 데이터 (어드민 초기 데이터 입력용 — UI에는 미사용)
@@ -40,6 +43,40 @@ IconData _iconFromName(String name) {
 Color _colorFromHex(String hex) {
   final h = hex.replaceAll('#', '');
   return Color(int.parse('FF$h', radix: 16));
+}
+
+// ---------------------------------------------------------------------------
+// 신규 템플릿(=청사진 kind=template) 생성 후 step_log_screen 진입.
+// Phase E3 (#687) — TemplateEditorScreen 진입 경로 대체.
+// ---------------------------------------------------------------------------
+Future<void> _createTemplateBlueprintAndEdit(
+  BuildContext context,
+  WidgetRef ref,
+  bool isKorean,
+) async {
+  final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+  if (uid.isEmpty) return;
+  try {
+    final repo = ref.read(stepBlueprintRepositoryProvider);
+    final blueprint = StepBlueprint(
+      id: '',
+      ownerUid: uid,
+      title: isKorean ? '새 템플릿' : 'New Template',
+      kind: BlueprintKind.template,
+      visibility: BlueprintVisibility.draft,
+      createdAt: DateTime.now(),
+    );
+    final created = await repo.create(blueprint);
+    if (!context.mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => StepLogScreen(blueprintId: created.id),
+      ),
+    );
+  } catch (e) {
+    if (!context.mounted) return;
+    showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -179,7 +216,8 @@ class TemplateListScreen extends ConsumerWidget {
                               ),
                             ],
                             addLabel: isKorean ? '추가' : 'Add',
-                            onAdd: () => context.push(Routes.templateEditor),
+                            // Phase E3 (#687) — 빈 청사진(kind=template) 생성 후 step_log_screen 진입.
+                            onAdd: () => _createTemplateBlueprintAndEdit(context, ref, isKorean),
                           ),
                         ),
                         // 스크롤 목록
@@ -285,7 +323,8 @@ class _CustomTemplateSection extends ConsumerWidget {
               title: isKorean ? '아직 커스텀 템플릿이 없어요' : 'No custom templates yet',
               subtitle: isKorean ? "'새 템플릿' 버튼을 눌러 나만의 단계를 만들어보세요." : "Tap 'New Template' to create your own steps.",
               buttonLabel: isKorean ? '새 템플릿 만들기' : 'Create Template',
-              onAction: () => context.push(Routes.templateEditor),
+              // Phase E3 (#687) — 빈 청사진(kind=template) 생성 후 step_log_screen 진입.
+              onAction: () => _createTemplateBlueprintAndEdit(context, ref, isKorean),
             ),
           );
         }

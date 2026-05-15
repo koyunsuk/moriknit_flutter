@@ -887,7 +887,11 @@ class _SwatchDetailScreenState extends ConsumerState<SwatchDetailScreen> {
         );
       } catch (e) {
         if (!context.mounted) return;
-        showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+        final msg = e.toString();
+        final friendly = (msg.contains('인터넷') || msg.contains('TimeoutException'))
+            ? (isKorean ? '인터넷 연결을 확인해 주세요' : 'Check your internet connection')
+            : msg;
+        showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: friendly);
       }
     }
   }

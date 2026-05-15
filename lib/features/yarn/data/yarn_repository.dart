@@ -1,6 +1,8 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 
 import '../domain/yarn_model.dart';
@@ -93,7 +95,14 @@ class YarnRepository {
   Future<void> deleteYarn(String id) async {
     if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
     await _removeFromHive(id);
-    await _yarnsRef.doc(id).delete();
+    try {
+      await _yarnsRef.doc(id).delete().timeout(const Duration(seconds: 5));
+    } on TimeoutException {
+      throw Exception('인터넷 연결을 확인해 주세요');
+    } catch (e) {
+      debugPrint('[deleteYarn] error: $e');
+      rethrow;
+    }
   }
 
   // ── DUPLICATE ─────────────────────────────────────────────

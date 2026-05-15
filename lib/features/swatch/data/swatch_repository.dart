@@ -1,8 +1,10 @@
 // lib/features/swatch/data/swatch_repository.dart
 
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import '../domain/swatch_model.dart';
 import '../../../core/constants/subscription_constants.dart';
@@ -138,12 +140,19 @@ class SwatchRepository {
     await _removeFromHive(swatchId);
 
     // Firestore 삭제 + usage.swatchCount -1
-    await _db.runTransaction((transaction) async {
-      transaction.delete(_swatchesRef.doc(swatchId));
-      transaction.update(_userRef, {
-        'usage.swatchCount': FieldValue.increment(-1),
-      });
-    });
+    try {
+      await _db.runTransaction((transaction) async {
+        transaction.delete(_swatchesRef.doc(swatchId));
+        transaction.update(_userRef, {
+          'usage.swatchCount': FieldValue.increment(-1),
+        });
+      }).timeout(const Duration(seconds: 5));
+    } on TimeoutException {
+      throw Exception('인터넷 연결을 확인해 주세요');
+    } catch (e) {
+      debugPrint('[deleteSwatch] error: $e');
+      rethrow;
+    }
   }
 
   // ── Hive 로컬 저장 ───────────────────────────────────────

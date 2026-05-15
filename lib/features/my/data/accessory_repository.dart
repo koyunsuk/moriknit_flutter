@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import '../domain/accessory_model.dart';
 
@@ -48,7 +51,14 @@ class AccessoryRepository {
 
   Future<void> deleteAccessory(String id) async {
     if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
-    await _col.doc(id).delete();
+    try {
+      await _col.doc(id).delete().timeout(const Duration(seconds: 5));
+    } on TimeoutException {
+      throw Exception('인터넷 연결을 확인해 주세요');
+    } catch (e) {
+      debugPrint('[deleteAccessory] error: $e');
+      rethrow;
+    }
   }
 
   /// 이슈 #693 — 기존 악세사리 복사

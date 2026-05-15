@@ -1,5 +1,9 @@
 enum StepBlockType { text, stitchCount, patternLink }
 
+/// 이슈 #687 (Phase E2) — 옛 단계 모델.
+/// Phase E4 에서 완전히 제거 예정. 신규 코드는 StepUnit + StepRunProgress 사용.
+/// 기존 PDF/공유카드/프로젝트 복제 등 표시·복사 용도로만 잔존.
+@Deprecated('Phase E4에서 제거 예정. StepUnit + StepRunProgress 사용')
 class ProjectStep {
   final String id;
   final String name;

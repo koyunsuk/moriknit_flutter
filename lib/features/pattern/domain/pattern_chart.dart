@@ -238,6 +238,15 @@ class PatternChart {
   final PatternSourceType sourceType;
 
   /// AI 변환 도안 섹션 데이터 (aiConverted 타입에서 사용)
+  ///
+  /// #687 Phase E1 — 단계 데이터는 step_blueprints/units로 단방향 이전됨.
+  /// 이 필드는 다음 용도로만 유지됨:
+  ///   - 기존 Firestore 데이터의 fromJson 호환 (마이그레이션 전 도안 표시)
+  ///   - 메모리상 도안 객체에서 섹션 정보를 읽는 기존 호출자 호환
+  /// 신규 저장 시 toJson은 이 필드를 출력하지 않음 (pattern_charts에 aiSections=[]).
+  /// 단계 정보는 step_blueprints + units에서 직접 조회할 것.
+  @Deprecated('Use step_blueprints + units via StepBlueprintRepository. '
+      'This field is kept for legacy in-memory compatibility only and is no longer persisted to pattern_charts.')
   final List<AiSection>? aiSections;
 
   /// 최초 생성 시각 (NEW 뱃지용, 24시간 내 생성 도안 표시)
@@ -644,7 +653,9 @@ class PatternChart {
         if (sourcePatternId != null) 'sourcePatternId': sourcePatternId,
         if (sourceOwnerName != null) 'sourceOwnerName': sourceOwnerName,
         'sourceType': sourceType.name,
-        if (aiSections != null) 'aiSections': aiSections!.map((s) => s.toMap()).toList(),
+        // #687 Phase E1 — aiSections는 더 이상 pattern_charts에 저장하지 않는다.
+        // 단계 데이터는 step_blueprints + units 단방향 흐름.
+        // 기존 데이터 호환을 위해 fromJson은 그대로 읽음.
         if (linkedProjectId != null) 'linkedProjectId': linkedProjectId,
         'mirrorMode': mirrorMode,
         if (category != null) 'category': category,
@@ -759,7 +770,15 @@ class PatternChart {
   /// 이슈 #626 — 도안 내용 기반 완성 판정 (자동 판정, B안).
   /// 조건: 섹션 1개 이상 존재 + 섹션 중 하나라도 내용(steps 또는 연결 블록) 보유.
   /// 빈 섹션만 있는 도안은 draft로 간주.
+  ///
+  /// #687 Phase E1 — 단계 데이터가 step_blueprints/units로 분리되었으므로
+  /// 메모리상 aiSections 기반 판정은 곧 무력화될 예정. StepBlueprintRepository의
+  /// units 개수로 판정하는 경로로 마이그레이션 필요.
+  // ignore: deprecated_member_use_from_same_package
+  @Deprecated('Compute from step_blueprints/units instead. '
+      'aiSections is no longer persisted to pattern_charts (#687 Phase E1).')
   bool get isComplete {
+    // ignore: deprecated_member_use_from_same_package
     final sections = aiSections ?? const [];
     if (sections.isEmpty) return false;
     return sections.any((s) {

@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// - projectSteps: 단계로그 기반 템플릿 (탑다운/양말/모자/크롭레글런 등)
 /// - bodyMeasurement: 인형 치수 프리셋 (Barbie/Tammy/Paola/Disney/Mimi 등)
 ///   → 게이지 계산기로 이동 + 치수 자동 입력 트리거
+@Deprecated('Phase E3 (#687) — step_blueprints/kind=template 로 통합. Phase E4에서 삭제 예정.')
 enum BuiltinTemplateKind {
   projectSteps,
   bodyMeasurement;
@@ -20,6 +21,7 @@ enum BuiltinTemplateKind {
       };
 }
 
+@Deprecated('Phase E3 (#687) — step_blueprints/kind=template 로 통합 (마이그레이션 완료). Phase E4에서 삭제 예정.')
 class BuiltinTemplate {
   final String id;
   final BuiltinTemplateKind kind;

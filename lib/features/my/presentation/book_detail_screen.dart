@@ -74,7 +74,11 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
       Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
-      showSaveErrorSnackBar(messenger, message: '$e');
+      final msg = e.toString();
+      final friendly = (msg.contains('인터넷') || msg.contains('TimeoutException'))
+          ? (isKorean ? '인터넷 연결을 확인해 주세요' : 'Check your internet connection')
+          : msg;
+      showSaveErrorSnackBar(messenger, message: friendly);
     }
   }
 

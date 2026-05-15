@@ -55,9 +55,13 @@ class PatternRepository {
     );
     final isNew = chart.id.isEmpty;
 
-    // 1) pattern_charts 저장 (시각/메타 — 기존 그대로)
+    // 1) pattern_charts 저장 (시각/메타 — 기존 그대로).
+    //    #687 Phase E1 — 단계 데이터(aiSections)는 더 이상 pattern_charts에
+    //    저장하지 않는다. toJson에서 이미 제외되지만, merge:true 모드에서
+    //    기존 문서에 남아 있던 aiSections 잔재를 비우기 위해 빈 배열로 명시.
     await docRef.set({
       ...saved.toJson(),
+      'aiSections': const <Map<String, dynamic>>[],
       'updatedAt': FieldValue.serverTimestamp(),
       if (isNew) 'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
@@ -193,6 +197,8 @@ class PatternRepository {
     );
     await docRef.set({
       ...forked.toJson(),
+      // #687 Phase E1 — 단계 데이터는 step_blueprints/units에만.
+      'aiSections': const <Map<String, dynamic>>[],
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
@@ -350,6 +356,8 @@ class PatternRepository {
     // 1) pattern_charts 저장 (시각/메타)
     await docRef.set({
       ...chart.toJson(),
+      // #687 Phase E1 — 단계 데이터는 step_blueprints/units에만.
+      'aiSections': const <Map<String, dynamic>>[],
       'updatedAt': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
     });
@@ -381,6 +389,8 @@ class PatternRepository {
     // 1) pattern_charts 저장
     await docRef.set({
       ...chart.toJson(),
+      // #687 Phase E1 — 단계 데이터는 step_blueprints/units에만.
+      'aiSections': const <Map<String, dynamic>>[],
       'updatedAt': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
     });
@@ -446,6 +456,8 @@ class PatternRepository {
     // 1) pattern_charts 저장
     await docRef.set({
       ...chart.toJson(),
+      // #687 Phase E1 — 단계 데이터는 step_blueprints/units에만.
+      'aiSections': const <Map<String, dynamic>>[],
       'updatedAt': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
     });
@@ -478,6 +490,8 @@ class PatternRepository {
     // 1) pattern_charts 저장
     await docRef.set({
       ...chart.toJson(),
+      // #687 Phase E1 — 단계 데이터는 step_blueprints/units에만.
+      'aiSections': const <Map<String, dynamic>>[],
       'updatedAt': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
     });

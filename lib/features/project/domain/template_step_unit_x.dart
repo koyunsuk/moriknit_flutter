@@ -2,6 +2,9 @@
 //
 // 이슈 #687 (Phase B-3) — BuiltinTemplate · UserTemplate ↔ StepUnit/StepUnitGroup 어댑터.
 //
+// @Deprecated (Phase E3) — step_blueprints/kind=template 통합으로 어댑터 불필요.
+// Phase E4에서 삭제 예정.
+//
 // 원칙:
 // - 기존 `builtin_template.dart` / `user_template.dart`는 무수정.
 // - 템플릿은 청사진 (progress == null) — 사용자가 프로젝트에 적용 시 인스턴스화.
