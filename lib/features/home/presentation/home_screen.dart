@@ -170,12 +170,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     // 2. 공지사항
                     _HomeNoticesSection(isKorean: isKorean),
                     const SizedBox(height: 20),
-                    // 3. 커뮤니티 그룹 카드
+                    // 3. 커뮤니티 그룹 카드 (위·아래 핑크 보더 + 내부 스크롤)
                     _SectionGroupCard(
                       label: isKorean ? '커뮤니티' : 'Community',
                       icon: Icons.people_rounded,
                       color: C.pk,
                       onMoreTap: () => context.go(Routes.community),
+                      scrollHeight: 360,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -200,20 +201,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    // 4. 강의실
+                    // 4. 강의실 (위·아래 보라 보더 + 내부 스크롤)
                     _SectionGroupCard(
                       label: isKorean ? '강의실' : 'Course',
                       icon: Icons.play_lesson_rounded,
                       color: C.lv,
                       onMoreTap: () => context.push(Routes.toolsCourse),
+                      scrollHeight: 320,
                       child: const _PopularCourseSection(),
                     ),
                     const SizedBox(height: 20),
-                    // 5. 오늘의 뜨개 소식 (모리채널 포함)
+                    // 5. 오늘의 뜨개 소식 (모리채널 포함) — 위·아래 오렌지 보더 + 내부 스크롤
                     _SectionGroupCard(
                       label: isKorean ? '오늘의 Knitting 소식' : "Today's Knitting News",
                       icon: Icons.newspaper_rounded,
-                      color: C.pk,
+                      color: C.og,
+                      scrollHeight: 360,
                       child: _EditorialBoard(isKorean: isKorean, t: t),
                     ),
                   ],
@@ -1622,6 +1625,8 @@ class _SectionGroupCard extends StatelessWidget {
   final Color color;
   final VoidCallback? onMoreTap;
   final Widget child;
+  // 위·아래 강조 보더 + 내부 독립 스크롤 옵션
+  final double? scrollHeight;
 
   const _SectionGroupCard({
     required this.label,
@@ -1629,15 +1634,38 @@ class _SectionGroupCard extends StatelessWidget {
     required this.color,
     required this.child,
     this.onMoreTap,
+    this.scrollHeight,
   });
 
   @override
   Widget build(BuildContext context) {
+    // 본문: scrollHeight 지정 시 고정 높이 + Scrollbar + ListView
+    final Widget body = scrollHeight != null
+        ? SizedBox(
+            height: scrollHeight,
+            child: Scrollbar(
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+                child: child,
+              ),
+            ),
+          )
+        : Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+            child: child,
+          );
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.75),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.15)),
+        // 위·아래 강조 보더 (2px) + 좌우 옅은 보더
+        border: Border(
+          top: BorderSide(color: color, width: 2),
+          bottom: BorderSide(color: color, width: 2),
+          left: BorderSide(color: color.withValues(alpha: 0.15)),
+          right: BorderSide(color: color.withValues(alpha: 0.15)),
+        ),
         boxShadow: [
           BoxShadow(color: color.withValues(alpha: 0.08), blurRadius: 16, offset: const Offset(0, 6)),
         ],
@@ -1669,10 +1697,7 @@ class _SectionGroupCard extends StatelessWidget {
             ),
           ),
           Divider(height: 1, thickness: 0.5, color: color.withValues(alpha: 0.12)),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
-            child: child,
-          ),
+          body,
         ],
       ),
     );

@@ -126,21 +126,39 @@ class ToolsScreen extends ConsumerWidget {
                           ],
                         ),
                       )
-                    else ...[
-                      ...activeProjects.take(3).map((p) => _ProjectCard(
-                            project: p,
-                            isKorean: isKorean,
-                            onTap: () => context.push('/project/${p.id}'),
-                          )),
-                      if (activeProjects.length > 3)
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: () => context.push(Routes.projectList),
-                            child: Text(isKorean ? '전체 보기' : 'View all'),
+                    else
+                      // 위·아래 보더 + 내부 독립 스크롤 (진행중 프로젝트 강조색 C.lmD 라임)
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border(
+                            top: BorderSide(color: C.lmD, width: 2),
+                            bottom: BorderSide(color: C.lmD, width: 2),
                           ),
                         ),
-                    ],
+                        child: SizedBox(
+                          height: 300,
+                          child: Scrollbar(
+                            thumbVisibility: true,
+                            child: ListView(
+                              children: [
+                                ...activeProjects.map((p) => _ProjectCard(
+                                      project: p,
+                                      isKorean: isKorean,
+                                      onTap: () => context.push('/project/${p.id}'),
+                                    )),
+                                if (activeProjects.length > 3)
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: TextButton(
+                                      onPressed: () => context.push(Routes.projectList),
+                                      child: Text(isKorean ? '전체 보기' : 'View all'),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
                     const SizedBox(height: 8),
                     Divider(color: C.bd, thickness: 1, height: 20),
 

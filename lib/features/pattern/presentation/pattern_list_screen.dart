@@ -194,13 +194,22 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                                   style: T.bodyBold,
                                 ),
                                 const SizedBox(height: 8),
-                                SizedBox(
-                                  height: 400,
-                                  child: Scrollbar(
-                                    thumbVisibility: true,
-                                    child: ListView.builder(
-                                      itemCount: rowItems.length,
-                                      itemBuilder: (_, i) => rowItems[i],
+                                // 위·아래 보더 + 내부 독립 스크롤 (모리니트 강조색 C.lv)
+                                Container(
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      top: BorderSide(color: C.lv, width: 2),
+                                      bottom: BorderSide(color: C.lv, width: 2),
+                                    ),
+                                  ),
+                                  child: SizedBox(
+                                    height: 400,
+                                    child: Scrollbar(
+                                      thumbVisibility: true,
+                                      child: ListView.builder(
+                                        itemCount: rowItems.length,
+                                        itemBuilder: (_, i) => rowItems[i],
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -1798,13 +1807,22 @@ class _RavelryLibraryList extends ConsumerWidget {
               style: T.body.copyWith(color: C.mu));
         }
         // 이슈 #699 보완 — Ravelry 블록 내부 독립 스크롤
-        return SizedBox(
-          height: 400,
-          child: Scrollbar(
-            thumbVisibility: true,
-            child: ListView.builder(
-              itemCount: patterns.length,
-              itemBuilder: (_, i) => _RavelryPatternCard(pattern: patterns[i], isKorean: isKorean),
+        // 위·아래 보더 + 내부 독립 스크롤 (라벨리 강조색 C.pkD)
+        return Container(
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(color: C.pkD, width: 2),
+              bottom: BorderSide(color: C.pkD, width: 2),
+            ),
+          ),
+          child: SizedBox(
+            height: 400,
+            child: Scrollbar(
+              thumbVisibility: true,
+              child: ListView.builder(
+                itemCount: patterns.length,
+                itemBuilder: (_, i) => _RavelryPatternCard(pattern: patterns[i], isKorean: isKorean),
+              ),
             ),
           ),
         );
