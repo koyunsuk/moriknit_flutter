@@ -103,23 +103,14 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
                 children: [
-                  // 모리니트 도안 라이브러리
-                  GlassCard(
+                  // 모리니트 도안 라이브러리 — 통합 블록 디자인 (옅은 보라 톤, 양끝 보더)
+                  MoriBlockShell(
+                    label: isKorean ? '나의 도안 (MoriKnit)' : 'My Patterns (MoriKnit)',
+                    icon: Icons.grid_on_rounded,
+                    accent: C.lv,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(color: C.pk.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
-                              child: Text('MoriKnit', style: T.caption.copyWith(color: C.pkD, fontWeight: FontWeight.w700)),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(isKorean ? '📄 나의 도안' : '📄 My Patterns', style: T.bodyBold),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
                         blueprintsAsync.when(
                           loading: () => AsyncLoadingFriendly(
                             isKorean: isKorean,
@@ -194,22 +185,14 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                                   style: T.bodyBold,
                                 ),
                                 const SizedBox(height: 8),
-                                // 위·아래 보더 + 내부 독립 스크롤 (모리니트 강조색 C.lv)
-                                Container(
-                                  decoration: BoxDecoration(
-                                    border: Border(
-                                      top: BorderSide(color: C.lv, width: 2),
-                                      bottom: BorderSide(color: C.lv, width: 2),
-                                    ),
-                                  ),
-                                  child: SizedBox(
-                                    height: 400,
-                                    child: Scrollbar(
-                                      thumbVisibility: true,
-                                      child: ListView.builder(
-                                        itemCount: rowItems.length,
-                                        itemBuilder: (_, i) => rowItems[i],
-                                      ),
+                                // 통합 블록 셸이 양끝 옅은 보더 + 둥근 모서리를 제공 → 내부 독립 스크롤만 유지
+                                SizedBox(
+                                  height: 400,
+                                  child: Scrollbar(
+                                    thumbVisibility: true,
+                                    child: ListView.builder(
+                                      itemCount: rowItems.length,
+                                      itemBuilder: (_, i) => rowItems[i],
                                     ),
                                   ),
                                 ),
@@ -1741,29 +1724,20 @@ class _RavelryLibrarySection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(ravelryAuthProvider);
 
-    return GlassCard(
+    return MoriBlockShell(
+      label: isKorean ? '나의 도안 라이브러리 (Ravelry)' : 'My Pattern Library (Ravelry)',
+      icon: Icons.library_books_rounded,
+      accent: C.pk,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-                child: Text('Ravelry', style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w700)),
-              ),
-              const SizedBox(width: 8),
-              Text(isKorean ? '📚 나의 도안 라이브러리' : '📚 My Pattern Library', style: T.bodyBold),
-            ],
-          ),
-          const SizedBox(height: 12),
           if (!auth.isLoggedIn)
             Container(
               padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.07), borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(color: C.pk.withValues(alpha: 0.07), borderRadius: BorderRadius.circular(12)),
               child: Row(
                 children: [
-                  Icon(Icons.link_rounded, color: C.lv, size: 20),
+                  Icon(Icons.link_rounded, color: C.pk, size: 20),
                   const SizedBox(width: 10),
                   Expanded(child: Text(
                     isKorean ? 'Ravelry 연결 시 구입한 도안이 표시돼요' : 'Connect Ravelry to see your purchased patterns',
@@ -1806,23 +1780,14 @@ class _RavelryLibraryList extends ConsumerWidget {
           return Text(isKorean ? 'Ravelry 도안 라이브러리가 비어있어요.' : 'Your Ravelry library is empty.',
               style: T.body.copyWith(color: C.mu));
         }
-        // 이슈 #699 보완 — Ravelry 블록 내부 독립 스크롤
-        // 위·아래 보더 + 내부 독립 스크롤 (라벨리 강조색 C.pkD)
-        return Container(
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(color: C.pkD, width: 2),
-              bottom: BorderSide(color: C.pkD, width: 2),
-            ),
-          ),
-          child: SizedBox(
-            height: 400,
-            child: Scrollbar(
-              thumbVisibility: true,
-              child: ListView.builder(
-                itemCount: patterns.length,
-                itemBuilder: (_, i) => _RavelryPatternCard(pattern: patterns[i], isKorean: isKorean),
-              ),
+        // 통합 블록 셸이 양끝 옅은 보더 + 둥근 모서리를 제공 → 내부 독립 스크롤만 유지
+        return SizedBox(
+          height: 400,
+          child: Scrollbar(
+            thumbVisibility: true,
+            child: ListView.builder(
+              itemCount: patterns.length,
+              itemBuilder: (_, i) => _RavelryPatternCard(pattern: patterns[i], isKorean: isKorean),
             ),
           ),
         );

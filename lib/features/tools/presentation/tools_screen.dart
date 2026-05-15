@@ -90,365 +90,395 @@ class ToolsScreen extends ConsumerWidget {
                     // 나의 Asset 요약 카드 (2x2 그리드)
                     _AssetSummaryCard(isKorean: isKorean),
                     const SizedBox(height: 16),
-                    // 진행중 프로젝트
-                    SectionTitle(title: isKorean ? '진행중 프로젝트' : 'Active Projects'),
-                    const SizedBox(height: 10),
-                    if (activeProjects.isEmpty)
-                      GlassCard(
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 44, height: 44,
-                              decoration: BoxDecoration(color: C.lmD.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(12)),
-                              child: Icon(Icons.folder_open_rounded, color: C.lmD, size: 22),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(isKorean ? '진행 중인 프로젝트가 없어요' : 'No active projects', style: T.bodyBold),
-                                  const SizedBox(height: 2),
-                                  Text(isKorean ? '새 프로젝트를 시작해보세요' : 'Start a new project', style: T.caption.copyWith(color: C.mu)),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            ElevatedButton.icon(
-                              onPressed: () => showProjectStartSheet(context, ref),
-                              icon: const Icon(Icons.add_rounded, size: 16),
-                              label: Text(isKorean ? '추가' : 'Add'),
-                              style: ElevatedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      // 위·아래 보더 + 내부 독립 스크롤 (진행중 프로젝트 강조색 C.lmD 라임)
-                      Container(
-                        decoration: BoxDecoration(
-                          border: Border(
-                            top: BorderSide(color: C.lmD, width: 2),
-                            bottom: BorderSide(color: C.lmD, width: 2),
-                          ),
-                        ),
-                        child: SizedBox(
-                          height: 300,
-                          child: Scrollbar(
-                            thumbVisibility: true,
-                            child: ListView(
-                              children: [
-                                ...activeProjects.map((p) => _ProjectCard(
-                                      project: p,
-                                      isKorean: isKorean,
-                                      onTap: () => context.push('/project/${p.id}'),
-                                    )),
-                                if (activeProjects.length > 3)
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: TextButton(
-                                      onPressed: () => context.push(Routes.projectList),
-                                      child: Text(isKorean ? '전체 보기' : 'View all'),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    Divider(color: C.bd, thickness: 1, height: 20),
-
-                    // 3. 최근 강의실
-                    SectionTitle(title: isKorean ? '최근 강의실' : 'Recent Course'),
-                    const SizedBox(height: 10),
-                    coursesAsync.maybeWhen(
-                      data: (courses) {
-                        if (courses.isEmpty) {
-                          return GlassCard(
-                            onTap: () => context.push(Routes.toolsCourse),
-                            child: Row(
+                    // 진행중 프로젝트 (통합 블록 디자인)
+                    MoriBlockShell(
+                      label: isKorean ? '진행중 프로젝트' : 'Active Projects',
+                      icon: Icons.folder_open_rounded,
+                      accent: C.lmD,
+                      child: activeProjects.isEmpty
+                          ? Row(
                               children: [
                                 Container(
-                                  width: 48, height: 48,
-                                  decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(12)),
-                                  child: Icon(Icons.school_rounded, color: C.lvD, size: 24),
+                                  width: 44, height: 44,
+                                  decoration: BoxDecoration(color: C.lmD.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(12)),
+                                  child: Icon(Icons.folder_open_rounded, color: C.lmD, size: 22),
                                 ),
-                                const SizedBox(width: 12),
+                                const SizedBox(width: 14),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(isKorean ? '등록된 강의가 없어요' : 'No courses yet', style: T.bodyBold.copyWith(color: C.tx2)),
+                                      Text(isKorean ? '진행 중인 프로젝트가 없어요' : 'No active projects', style: T.bodyBold),
                                       const SizedBox(height: 2),
-                                      Text(isKorean ? '강의실 탭해서 추가하기' : 'Tap to add a course', style: T.caption.copyWith(color: C.mu)),
+                                      Text(isKorean ? '새 프로젝트를 시작해보세요' : 'Start a new project', style: T.caption.copyWith(color: C.mu)),
                                     ],
                                   ),
                                 ),
-                                Icon(Icons.chevron_right_rounded, color: C.mu),
+                                const SizedBox(width: 8),
+                                ElevatedButton.icon(
+                                  onPressed: () => showProjectStartSheet(context, ref),
+                                  icon: const Icon(Icons.add_rounded, size: 16),
+                                  label: Text(isKorean ? '추가' : 'Add'),
+                                  style: ElevatedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                                  ),
+                                ),
                               ],
+                            )
+                          : SizedBox(
+                              height: 300,
+                              child: Scrollbar(
+                                thumbVisibility: true,
+                                child: ListView(
+                                  children: [
+                                    ...activeProjects.map((p) => _ProjectCard(
+                                          project: p,
+                                          isKorean: isKorean,
+                                          onTap: () => context.push('/project/${p.id}'),
+                                        )),
+                                    if (activeProjects.length > 3)
+                                      Align(
+                                        alignment: Alignment.centerRight,
+                                        child: TextButton(
+                                          onPressed: () => context.push(Routes.projectList),
+                                          child: Text(isKorean ? '전체 보기' : 'View all'),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          );
-                        }
-                        return _CourseCard(course: courses.first, isKorean: isKorean, onTap: () => context.push(Routes.toolsCourse));
-                      },
-                      orElse: () => GlassCard(
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 48, height: 48,
-                              decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(12)),
-                              child: Icon(Icons.school_rounded, color: C.lvD, size: 24),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(child: Text(isKorean ? '강의를 불러오는 중...' : 'Loading courses...', style: T.body.copyWith(color: C.mu))),
-                          ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // 3. 최근 강의실 (통합 블록 디자인)
+                    MoriBlockShell(
+                      label: isKorean ? '최근 강의실' : 'Recent Course',
+                      icon: Icons.play_lesson_rounded,
+                      accent: C.lvD,
+                      onMoreTap: () => context.push(Routes.toolsCourse),
+                      child: coursesAsync.maybeWhen(
+                        data: (courses) {
+                          if (courses.isEmpty) {
+                            return GlassCard(
+                              onTap: () => context.push(Routes.toolsCourse),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 48, height: 48,
+                                    decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(12)),
+                                    child: Icon(Icons.school_rounded, color: C.lvD, size: 24),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(isKorean ? '등록된 강의가 없어요' : 'No courses yet', style: T.bodyBold.copyWith(color: C.tx2)),
+                                        const SizedBox(height: 2),
+                                        Text(isKorean ? '강의실 탭해서 추가하기' : 'Tap to add a course', style: T.caption.copyWith(color: C.mu)),
+                                      ],
+                                    ),
+                                  ),
+                                  Icon(Icons.chevron_right_rounded, color: C.mu),
+                                ],
+                              ),
+                            );
+                          }
+                          return _CourseCard(course: courses.first, isKorean: isKorean, onTap: () => context.push(Routes.toolsCourse));
+                        },
+                        orElse: () => GlassCard(
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 48, height: 48,
+                                decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(12)),
+                                child: Icon(Icons.school_rounded, color: C.lvD, size: 24),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(child: Text(isKorean ? '강의를 불러오는 중...' : 'Loading courses...', style: T.body.copyWith(color: C.mu))),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
 
-                    // ── 구분선 ──────────────────────────────────────────
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Divider(color: C.bd, thickness: 1),
+                    // 4. 나의 작업 관리 (재정렬: 스와치 → 나의 도안 → 프로젝트 → 템플릿 → 작업 앨범) — 통합 블록
+                    MoriBlockShell(
+                      label: isKorean ? '나의 작업 관리' : 'My Work Management',
+                      icon: Icons.work_outline_rounded,
+                      accent: C.lv,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _ToolCard(
+                            icon: Icons.grid_view_rounded,
+                            color: C.lmD,
+                            title: isKorean ? '스와치 라이브러리' : 'Swatch Library',
+                            description: isKorean ? '게이지와 실 정보를 기록해요' : 'Record gauge and yarn info',
+                            onTap: () => context.push(Routes.swatchList),
+                          ),
+                          const SizedBox(height: 10),
+                          _ToolCard(
+                            icon: Icons.grid_on_rounded,
+                            color: C.lvD,
+                            title: isKorean ? '나의 도안 라이브러리' : 'My Pattern Library',
+                            description: isKorean ? '컬러/기호 모드로 나만의 도안을 그려요' : 'Draw your own charts',
+                            onTap: () => context.push(Routes.toolsPatterns),
+                          ),
+                          const SizedBox(height: 10),
+                          _ToolCard(
+                            icon: Icons.folder_special_rounded,
+                            color: C.lv,
+                            title: isKorean ? '프로젝트 라이브러리' : 'Project Library',
+                            description: isKorean ? '진행 중인 작업을 한눈에 관리해요' : 'Manage all your ongoing projects',
+                            onTap: () => context.push(Routes.projectList),
+                          ),
+                          const SizedBox(height: 10),
+                          _ToolCard(
+                            icon: Icons.folder_copy_rounded,
+                            color: C.lv,
+                            title: isKorean ? '나의 템플릿 관리' : 'My Templates',
+                            description: isKorean ? '프로젝트 시작 단계를 템플릿으로 관리해요' : 'Manage project steps as templates',
+                            onTap: () => context.push(Routes.templateList),
+                          ),
+                          const SizedBox(height: 10),
+                          _ToolCard(
+                            icon: Icons.photo_library_rounded,
+                            color: C.pk,
+                            title: isKorean ? '나의 작업 앨범' : 'My Work Album',
+                            description: isKorean ? '프로젝트·스와치 사진을 날짜별로 모아봐요' : 'Browse project & swatch photos by date',
+                            onTap: () => context.push(Routes.photoAlbum),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 16),
 
-                    // 4. 나의 작업 관리 (재정렬: 스와치 → 나의 도안 → 프로젝트 → 템플릿 → 작업 앨범)
-                    SectionTitle(title: isKorean ? '나의 작업 관리' : 'My Work Management'),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.grid_view_rounded,
-                      color: C.lmD,
-                      title: isKorean ? '스와치 라이브러리' : 'Swatch Library',
-                      description: isKorean ? '게이지와 실 정보를 기록해요' : 'Record gauge and yarn info',
-                      onTap: () => context.push(Routes.swatchList),
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.grid_on_rounded,
-                      color: C.lvD,
-                      title: isKorean ? '나의 도안 라이브러리' : 'My Pattern Library',
-                      description: isKorean ? '컬러/기호 모드로 나만의 도안을 그려요' : 'Draw your own charts',
-                      onTap: () => context.push(Routes.toolsPatterns),
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.folder_special_rounded,
-                      color: C.lv,
-                      title: isKorean ? '프로젝트 라이브러리' : 'Project Library',
-                      description: isKorean ? '진행 중인 작업을 한눈에 관리해요' : 'Manage all your ongoing projects',
-                      onTap: () => context.push(Routes.projectList),
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.folder_copy_rounded,
-                      color: C.lv,
-                      title: isKorean ? '나의 템플릿 관리' : 'My Templates',
-                      description: isKorean ? '프로젝트 시작 단계를 템플릿으로 관리해요' : 'Manage project steps as templates',
-                      onTap: () => context.push(Routes.templateList),
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.photo_library_rounded,
-                      color: C.pk,
-                      title: isKorean ? '나의 작업 앨범' : 'My Work Album',
-                      description: isKorean ? '프로젝트·스와치 사진을 날짜별로 모아봐요' : 'Browse project & swatch photos by date',
-                      onTap: () => context.push(Routes.photoAlbum),
-                    ),
-                    const SizedBox(height: 8),
-                    Divider(color: C.bd, thickness: 1, height: 20),
-
-                    // 4-2. AI 작업 도구 (AI 기반 도구만 분리)
-                    SectionTitle(title: isKorean ? 'AI 작업 도구' : 'AI Tools'),
-                    const SizedBox(height: 10),
-                    _ToolCard(
+                    // 4-2. AI 작업 도구 (AI 기반 도구만 분리) — 통합 블록
+                    MoriBlockShell(
+                      label: isKorean ? 'AI 작업 도구' : 'AI Tools',
                       icon: Icons.auto_awesome_rounded,
-                      color: C.lv,
-                      title: isKorean ? 'AI 도안 변환기' : 'AI Pattern Converter',
-                      description: isKorean
-                          ? 'PDF·이미지 도안을 나의 도안 라이브러리로 변환'
-                          : 'Convert PDF/image patterns to your library',
-                      onTap: () => context.push(Routes.toolsPatternConverter),
+                      accent: C.lvD,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _ToolCard(
+                            icon: Icons.auto_awesome_rounded,
+                            color: C.lv,
+                            title: isKorean ? 'AI 도안 변환기' : 'AI Pattern Converter',
+                            description: isKorean
+                                ? 'PDF·이미지 도안을 나의 도안 라이브러리로 변환'
+                                : 'Convert PDF/image patterns to your library',
+                            onTap: () => context.push(Routes.toolsPatternConverter),
+                          ),
+                          const SizedBox(height: 10),
+                          _ToolCard(
+                            icon: Icons.calculate_rounded,
+                            color: C.pk,
+                            title: isKorean ? 'AI 게이지 계산기' : 'AI Gauge Calculator',
+                            description: t.gaugeHeaderSubtitle,
+                            onTap: () => context.push(Routes.toolsGauge),
+                          ),
+                          const SizedBox(height: 10),
+                          _ToolCard(
+                            icon: Icons.translate_rounded,
+                            color: C.lv,
+                            title: isKorean ? 'AI 영문도안 번역기' : 'Pattern Translator',
+                            description: isKorean
+                                ? 'Ravelry/Etsy 등 영문 도안을 한국어로 변환합니다'
+                                : 'Translate English patterns to Korean',
+                            onTap: () => context.push(Routes.toolsPatternTranslator),
+                          ),
+                          const SizedBox(height: 10),
+                          // 이슈 #664 — AI 패턴 생성기 (래글런 + 단계별 도식 + 출판용 PDF)
+                          _ToolCard(
+                            icon: Icons.auto_stories_rounded,
+                            color: C.lvD,
+                            title: isKorean ? 'AI 패턴 생성기' : 'AI Pattern Generator',
+                            description: isKorean
+                                ? '치수+게이지로 도안 자동 생성, 단계별 도식, 출판용 PDF'
+                                : 'Auto-build patterns with diagrams + print-ready PDF',
+                            onTap: () => context.push(Routes.toolsPatternGenerator),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.calculate_rounded,
-                      color: C.pk,
-                      title: isKorean ? 'AI 게이지 계산기' : 'AI Gauge Calculator',
-                      description: t.gaugeHeaderSubtitle,
-                      onTap: () => context.push(Routes.toolsGauge),
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.translate_rounded,
-                      color: C.lv,
-                      title: isKorean ? 'AI 영문도안 번역기' : 'Pattern Translator',
-                      description: isKorean
-                          ? 'Ravelry/Etsy 등 영문 도안을 한국어로 변환합니다'
-                          : 'Translate English patterns to Korean',
-                      onTap: () => context.push(Routes.toolsPatternTranslator),
-                    ),
-                    const SizedBox(height: 10),
-                    // 이슈 #664 — AI 패턴 생성기 (래글런 + 단계별 도식 + 출판용 PDF)
-                    _ToolCard(
-                      icon: Icons.auto_stories_rounded,
-                      color: C.lvD,
-                      title: isKorean ? 'AI 패턴 생성기' : 'AI Pattern Generator',
-                      description: isKorean
-                          ? '치수+게이지로 도안 자동 생성, 단계별 도식, 출판용 PDF'
-                          : 'Auto-build patterns with diagrams + print-ready PDF',
-                      onTap: () => context.push(Routes.toolsPatternGenerator),
-                    ),
-                    const SizedBox(height: 8),
-                    Divider(color: C.bd, thickness: 1, height: 20),
+                    const SizedBox(height: 16),
 
-                    // 5. 나의 Asset 관리
-                    SectionTitle(title: isKorean ? '나의 Asset 관리' : 'My Asset Management'),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.circle_outlined,
-                      color: C.lv,
-                      title: isKorean ? '나의 바늘 라이브러리' : 'My Needle Library',
-                      description: t.needleToolDescription,
-                      onTap: () => context.push(Routes.needles),
+                    // 5. 나의 Asset 관리 — 통합 블록
+                    MoriBlockShell(
+                      label: isKorean ? '나의 Asset 관리' : 'My Asset Management',
+                      icon: Icons.inventory_2_rounded,
+                      accent: C.pk,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _ToolCard(
+                            icon: Icons.circle_outlined,
+                            color: C.lv,
+                            title: isKorean ? '나의 바늘 라이브러리' : 'My Needle Library',
+                            description: t.needleToolDescription,
+                            onTap: () => context.push(Routes.needles),
+                          ),
+                          const SizedBox(height: 10),
+                          _ToolCard(
+                            icon: Icons.texture,
+                            color: C.pk,
+                            title: isKorean ? '나의 실 라이브러리' : 'My Yarn Library',
+                            description: isKorean ? '실 보유 현황과 실 정보를 관리해요' : 'Manage your yarn stash and info',
+                            onTap: () => context.push('/yarn-list'),
+                          ),
+                          const SizedBox(height: 10),
+                          _ToolCard(
+                            icon: Icons.build_rounded,
+                            color: C.pkD,
+                            title: isKorean ? '나의 악세사리 라이브러리' : 'My Accessory Library',
+                            description: isKorean ? '니팅 도구 및 악세사리를 관리해요' : 'Manage your knitting tools & accessories',
+                            onTap: () => context.push(Routes.accessories),
+                          ),
+                          const SizedBox(height: 10),
+                          _ToolCard(
+                            icon: Icons.menu_book_rounded,
+                            color: C.lmD,
+                            title: isKorean ? '나의 도서 라이브러리' : 'My Book Library',
+                            description: isKorean ? '참고 도서 목록을 관리해요' : 'Manage your reference books',
+                            onTap: () => context.push(Routes.books),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.texture,
-                      color: C.pk,
-                      title: isKorean ? '나의 실 라이브러리' : 'My Yarn Library',
-                      description: isKorean ? '실 보유 현황과 실 정보를 관리해요' : 'Manage your yarn stash and info',
-                      onTap: () => context.push('/yarn-list'),
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.build_rounded,
-                      color: C.pkD,
-                      title: isKorean ? '나의 악세사리 라이브러리' : 'My Accessory Library',
-                      description: isKorean ? '니팅 도구 및 악세사리를 관리해요' : 'Manage your knitting tools & accessories',
-                      onTap: () => context.push(Routes.accessories),
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.menu_book_rounded,
-                      color: C.lmD,
-                      title: isKorean ? '나의 도서 라이브러리' : 'My Book Library',
-                      description: isKorean ? '참고 도서 목록을 관리해요' : 'Manage your reference books',
-                      onTap: () => context.push(Routes.books),
-                    ),
-                    const SizedBox(height: 8),
-                    Divider(color: C.bd, thickness: 1, height: 20),
+                    const SizedBox(height: 16),
 
-                    // 6. 나의 학습관리
-                    SectionTitle(title: isKorean ? '나의 학습관리' : 'My Learning'),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.menu_book_rounded,
-                      color: C.pkD,
-                      title: t.myEncyclopedia,
-                      description: t.encyclopediaToolDescription,
-                      onTap: () => context.push(Routes.toolsEncyclopedia),
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
+                    // 6. 나의 학습관리 — 통합 블록
+                    MoriBlockShell(
+                      label: isKorean ? '나의 학습관리' : 'My Learning',
                       icon: Icons.school_rounded,
-                      color: C.lvD,
-                      title: isKorean ? '클라스' : 'Class',
-                      description: t.coursesToolDescription,
-                      onTap: () => context.push(Routes.toolsCourse),
+                      accent: C.pkD,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _ToolCard(
+                            icon: Icons.menu_book_rounded,
+                            color: C.pkD,
+                            title: t.myEncyclopedia,
+                            description: t.encyclopediaToolDescription,
+                            onTap: () => context.push(Routes.toolsEncyclopedia),
+                          ),
+                          const SizedBox(height: 10),
+                          _ToolCard(
+                            icon: Icons.school_rounded,
+                            color: C.lvD,
+                            title: isKorean ? '클라스' : 'Class',
+                            description: t.coursesToolDescription,
+                            onTap: () => context.push(Routes.toolsCourse),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    Divider(color: C.bd, thickness: 1, height: 20),
+                    const SizedBox(height: 16),
 
-                    // 7. 기타 도구·자산 (AI가 아닌 모든 도구. 카운터/메모장 포함)
-                    SectionTitle(title: isKorean ? '기타 도구·자산' : 'Other Tools'),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.add_task_rounded,
-                      color: C.pkD,
-                      title: isKorean ? '카운터 라이브러리' : 'Counter Library',
-                      description: t.counterTools,
-                      onTap: () => context.push(Routes.counterList),
+                    // 7. 기타 도구·자산 (AI가 아닌 모든 도구. 카운터/메모장 포함) — 통합 블록
+                    MoriBlockShell(
+                      label: isKorean ? '기타 도구·자산' : 'Other Tools',
+                      icon: Icons.handyman_rounded,
+                      accent: C.og,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _ToolCard(
+                            icon: Icons.add_task_rounded,
+                            color: C.pkD,
+                            title: isKorean ? '카운터 라이브러리' : 'Counter Library',
+                            description: t.counterTools,
+                            onTap: () => context.push(Routes.counterList),
+                          ),
+                          const SizedBox(height: 10),
+                          _ToolCard(
+                            icon: Icons.edit_note_rounded,
+                            color: C.pk,
+                            title: t.memoPad,
+                            description: t.toolsMemoDescription,
+                            onTap: () => context.push(Routes.toolsMemo),
+                            showLock: true,
+                          ),
+                          const SizedBox(height: 10),
+                          _ToolCard(
+                            icon: Icons.timer_rounded,
+                            color: C.lv,
+                            title: isKorean ? '뜨개 타이머' : 'Knitting Timer',
+                            description: isKorean ? '전체 뜨개 시간 누적 기록' : 'Accumulate total knitting time',
+                            onTap: () => context.push(Routes.toolsFreeTimer),
+                          ),
+                          const SizedBox(height: 10),
+                          _ToolCard(
+                            icon: Icons.dashboard_rounded,
+                            color: C.lvD,
+                            title: isKorean ? '뜨개시간 대시보드' : 'Time Dashboard',
+                            description: isKorean ? '자유·도안·스와치 누적시간 통합' : 'Free + pattern + swatch totals',
+                            onTap: () => context.push(Routes.toolsTimeDashboard),
+                          ),
+                          const SizedBox(height: 10),
+                          // 이슈 #660 Phase 2 — 파일 탐색기 (외부 PDF/이미지 다중 임포트)
+                          _ToolCard(
+                            icon: Icons.folder_open_rounded,
+                            color: C.pkD,
+                            title: isKorean ? '파일 탐색기' : 'File Explorer',
+                            description: isKorean
+                                ? '폰의 PDF·이미지 파일을 한번에 도안 라이브러리로'
+                                : 'Bulk import PDFs/images from your phone',
+                            onTap: () => context.push(Routes.toolsFileExplorer),
+                          ),
+                          const SizedBox(height: 10),
+                          // 이슈 #665/#668 — 도안 에디터 (Gate 화면 진입 → 도안 목록 + 사각/원형/자유 path 모달)
+                          _ToolCard(
+                            icon: Icons.edit_note_rounded,
+                            color: C.pk,
+                            title: isKorean ? '도안 에디터' : 'Pattern Editor',
+                            description: isKorean
+                                ? '내 도안 목록 + 사각/원형/자유 path 새 도안'
+                                : 'My charts + new (rect/round/path)',
+                            onTap: () => context.push(Routes.toolsPatternGate),
+                          ),
+                          const SizedBox(height: 10),
+                          _ToolCard(
+                            icon: Icons.straighten_rounded,
+                            color: C.lvD,
+                            title: isKorean ? '바늘 크기 변환기' : 'Needle Size Converter',
+                            description: isKorean ? '대바늘/코바늘 Metric ↔ US ↔ JP 변환' : 'Knitting & Crochet: Metric ↔ US ↔ JP',
+                            onTap: () => context.push(Routes.toolsNeedleSize),
+                          ),
+                          const SizedBox(height: 10),
+                          _ToolCard(
+                            icon: Icons.square_foot_rounded,
+                            color: C.lv,
+                            title: isKorean ? '측정 도구' : 'Measure Tool',
+                            description: isKorean ? '격자·각도·원·실바늘 두께를 화면으로 측정' : 'Measure grid, angle, circle & yarn/needle',
+                            onTap: () => context.push(Routes.toolsMeasure),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.edit_note_rounded,
-                      color: C.pk,
-                      title: t.memoPad,
-                      description: t.toolsMemoDescription,
-                      onTap: () => context.push(Routes.toolsMemo),
-                      showLock: true,
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.timer_rounded,
-                      color: C.lv,
-                      title: isKorean ? '뜨개 타이머' : 'Knitting Timer',
-                      description: isKorean ? '전체 뜨개 시간 누적 기록' : 'Accumulate total knitting time',
-                      onTap: () => context.push(Routes.toolsFreeTimer),
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.dashboard_rounded,
-                      color: C.lvD,
-                      title: isKorean ? '뜨개시간 대시보드' : 'Time Dashboard',
-                      description: isKorean ? '자유·도안·스와치 누적시간 통합' : 'Free + pattern + swatch totals',
-                      onTap: () => context.push(Routes.toolsTimeDashboard),
-                    ),
-                    const SizedBox(height: 10),
-                    // 이슈 #660 Phase 2 — 파일 탐색기 (외부 PDF/이미지 다중 임포트)
-                    _ToolCard(
-                      icon: Icons.folder_open_rounded,
-                      color: C.pkD,
-                      title: isKorean ? '파일 탐색기' : 'File Explorer',
-                      description: isKorean
-                          ? '폰의 PDF·이미지 파일을 한번에 도안 라이브러리로'
-                          : 'Bulk import PDFs/images from your phone',
-                      onTap: () => context.push(Routes.toolsFileExplorer),
-                    ),
-                    const SizedBox(height: 10),
-                    // 이슈 #665/#668 — 도안 에디터 (Gate 화면 진입 → 도안 목록 + 사각/원형/자유 path 모달)
-                    _ToolCard(
-                      icon: Icons.edit_note_rounded,
-                      color: C.pk,
-                      title: isKorean ? '도안 에디터' : 'Pattern Editor',
-                      description: isKorean
-                          ? '내 도안 목록 + 사각/원형/자유 path 새 도안'
-                          : 'My charts + new (rect/round/path)',
-                      onTap: () => context.push(Routes.toolsPatternGate),
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.straighten_rounded,
-                      color: C.lvD,
-                      title: isKorean ? '바늘 크기 변환기' : 'Needle Size Converter',
-                      description: isKorean ? '대바늘/코바늘 Metric ↔ US ↔ JP 변환' : 'Knitting & Crochet: Metric ↔ US ↔ JP',
-                      onTap: () => context.push(Routes.toolsNeedleSize),
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.square_foot_rounded,
-                      color: C.lv,
-                      title: isKorean ? '측정 도구' : 'Measure Tool',
-                      description: isKorean ? '격자·각도·원·실바늘 두께를 화면으로 측정' : 'Measure grid, angle, circle & yarn/needle',
-                      onTap: () => context.push(Routes.toolsMeasure),
-                    ),
-                    const SizedBox(height: 8),
-                    Divider(color: C.bd, thickness: 1, height: 20),
+                    const SizedBox(height: 16),
 
-                    // 8. 외부 연결 (3개: 라벨리 / 엣시 / 클라우드 허브)
-                    SectionTitle(title: isKorean ? '외부 연결' : 'External Links'),
-                    const SizedBox(height: 10),
-                    _RavelryCard(isKorean: isKorean),
-                    const SizedBox(height: 10),
-                    _EtsyCard(isKorean: isKorean),
-                    const SizedBox(height: 10),
-                    _CloudHubCard(isKorean: isKorean),
+                    // 8. 외부 연결 (3개: 라벨리 / 엣시 / 클라우드 허브) — 통합 블록
+                    MoriBlockShell(
+                      label: isKorean ? '외부 연결' : 'External Links',
+                      icon: Icons.link_rounded,
+                      accent: C.pkD,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _RavelryCard(isKorean: isKorean),
+                          const SizedBox(height: 10),
+                          _EtsyCard(isKorean: isKorean),
+                          const SizedBox(height: 10),
+                          _CloudHubCard(isKorean: isKorean),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),

@@ -620,11 +620,11 @@ class MoriBrandHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // #660 헤더 비율 축소: compact 90→62, non-compact 150→104 (30~35% 축소)
+    // 헤더 비율 확대 (사용자 요청): compact 90→108, non-compact 150→180. 로고/문구/흰색 블록도 비례 확대.
     if (compact) {
       return Container(
         width: double.infinity,
-        height: 90,
+        height: 108,
         color: Colors.transparent,
         child: Stack(
           fit: StackFit.expand,
@@ -635,31 +635,31 @@ class MoriBrandHeader extends StatelessWidget {
                 const SizedBox(height: 2),
                 Image.asset(
                   'assets/login_logo.png',
-                  width: 50,
-                  height: 50,
+                  width: 60,
+                  height: 60,
                   fit: BoxFit.contain,
                 ),
                 const SizedBox(height: 1),
-                MoriKnitTitle(fontSize: 14, width: 92),
+                MoriKnitTitle(fontSize: 16, width: 108),
               ],
             ),
             if (subtitle != null)
               Positioned(
-                bottom: 2,
+                bottom: 3,
                 left: 0,
                 right: 0,
                 child: Container(
                   margin: const EdgeInsets.fromLTRB(12, 0, 12, 0),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.84),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(9),
                     border: Border.all(color: C.tint(C.lv, 0.18)),
-                    boxShadow: [BoxShadow(color: C.tint(C.lv, 0.06), blurRadius: 6, offset: const Offset(0, 1))],
+                    boxShadow: [BoxShadow(color: C.tint(C.lv, 0.06), blurRadius: 7, offset: const Offset(0, 1))],
                   ),
                   child: Text(
                     subtitle!,
-                    style: T.caption.copyWith(color: C.tx2, height: 1.25, fontSize: 10, fontWeight: FontWeight.w600),
+                    style: T.caption.copyWith(color: C.tx2, height: 1.3, fontSize: 12, fontWeight: FontWeight.w600),
                     textAlign: TextAlign.center,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -672,7 +672,7 @@ class MoriBrandHeader extends StatelessWidget {
     }
     return Container(
       width: double.infinity,
-      height: 150,
+      height: 180,
       color: Colors.transparent,
       child: Stack(
         fit: StackFit.expand,
@@ -680,34 +680,34 @@ class MoriBrandHeader extends StatelessWidget {
           Column(
             mainAxisAlignment: MainAxisAlignment.start,
             children: [
-              const SizedBox(height: 2),
+              const SizedBox(height: 4),
               Image.asset(
                 'assets/login_logo.png',
-                width: 94,
-                height: 94,
+                width: 112,
+                height: 112,
                 fit: BoxFit.contain,
               ),
-              const SizedBox(height: 0),
-              MoriKnitTitle(fontSize: 19, width: 174),
+              const SizedBox(height: 2),
+              MoriKnitTitle(fontSize: 22, width: 200),
             ],
           ),
           if (subtitle != null)
             Positioned(
-              bottom: 3,
+              bottom: 4,
               left: 0,
               right: 0,
               child: Container(
                 margin: const EdgeInsets.fromLTRB(12, 0, 12, 0),
-                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
                 decoration: BoxDecoration(
                   // B&W: 연회색 헤더 위 흰 카드 → 구분 명확
                   color: Colors.white.withValues(alpha: 0.84),
-                  borderRadius: BorderRadius.circular(9),
+                  borderRadius: BorderRadius.circular(11),
                   border: Border.all(color: C.tint(C.lv, 0.18)),
                   boxShadow: [
                     BoxShadow(
                       color: C.tint(C.lv, 0.06),
-                      blurRadius: 7,
+                      blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
                   ],
@@ -717,7 +717,7 @@ class MoriBrandHeader extends StatelessWidget {
                   style: T.caption.copyWith(
                     color: C.tx2,
                     height: 1.3,
-                    fontSize: 11,
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
                   textAlign: TextAlign.center,
@@ -1552,6 +1552,107 @@ class DualSourceSummaryBar extends StatelessWidget {
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 공통 블록 셸 — 도안 라이브러리·홈·내 작업실 블록 통일 디자인
+/// - 둥근 모서리 (GlassCard 컨테이너)
+/// - 위·아래 보더는 양끝까지 닿음 (padding: zero 컨테이너 안 stretch)
+/// - 보더는 옅은 헤더 톤 (accent.withValues(alpha: 0.25))
+/// - 스크롤 영역 옵션 (scrollHeight 지정 시 내부 Scrollbar + ListView/SingleChildScrollView)
+class MoriBlockShell extends StatelessWidget {
+  final String label;
+  final IconData? icon;
+  final Color accent;
+  final VoidCallback? onMoreTap;
+  final String? moreLabel;
+  final Widget child;
+  final double? scrollHeight;
+  final EdgeInsetsGeometry? bodyPadding;
+
+  const MoriBlockShell({
+    super.key,
+    required this.label,
+    required this.accent,
+    required this.child,
+    this.icon,
+    this.onMoreTap,
+    this.moreLabel,
+    this.scrollHeight,
+    this.bodyPadding,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Color borderTone = accent.withValues(alpha: 0.25); // 옅은 헤더 톤
+    final Color titleDividerTone = accent.withValues(alpha: 0.18);
+
+    final EdgeInsetsGeometry effectiveBodyPadding =
+        bodyPadding ?? const EdgeInsets.fromLTRB(14, 12, 14, 14);
+
+    final Widget body = scrollHeight != null
+        ? SizedBox(
+            height: scrollHeight,
+            child: Scrollbar(
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                padding: effectiveBodyPadding,
+                child: child,
+              ),
+            ),
+          )
+        : Padding(
+            padding: effectiveBodyPadding,
+            child: child,
+          );
+
+    return GlassCard(
+      padding: EdgeInsets.zero,
+      borderColor: borderTone,
+      radius: 18,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 블록 제목 (padding 내부)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 12, 10),
+            child: Row(
+              children: [
+                if (icon != null) ...[
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(icon, color: accent, size: 17),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(child: Text(label, style: T.bodyBold)),
+                if (onMoreTap != null)
+                  GestureDetector(
+                    onTap: onMoreTap,
+                    child: Text(
+                      moreLabel ?? '더보기',
+                      style: T.caption.copyWith(color: accent, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          // 위쪽 보더 (양끝까지 닿음)
+          Container(height: 1.5, color: borderTone),
+          // 본문
+          body,
+          // 아래쪽 보더 (양끝까지 닿음)
+          Container(height: 1.5, color: borderTone),
+          // 내부 미세 디바이더 라인(시각적 안정감)
+          Container(height: 0.5, color: titleDividerTone.withValues(alpha: 0.0)),
         ],
       ),
     );

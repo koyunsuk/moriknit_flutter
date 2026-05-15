@@ -59,16 +59,26 @@ class PatternRepository {
     //    #687 Phase E1 — 단계 데이터(aiSections)는 더 이상 pattern_charts에
     //    저장하지 않는다. toJson에서 이미 제외되지만, merge:true 모드에서
     //    기존 문서에 남아 있던 aiSections 잔재를 비우기 위해 빈 배열로 명시.
+    //    #720 — 무한로딩 방지: 15초 timeout. 실패 시 친화 메시지로 fallthrow.
     await docRef.set({
       ...saved.toJson(),
       'aiSections': const <Map<String, dynamic>>[],
       'updatedAt': FieldValue.serverTimestamp(),
       if (isNew) 'createdAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    }, SetOptions(merge: true)).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => throw Exception('저장이 지연되고 있어요. 잠시 후 다시 시도해 주세요.'),
+    );
 
     // 2) step_blueprints + units 동시 저장 (#687 — 단계 영역 분리).
     //    동일 id로 짝 — 호출자는 PatternChart.id로 양쪽 모두 조회 가능.
-    await _mirrorToBlueprint(saved);
+    //    #720 — 청사진 미러링 실패가 도안 저장 자체를 막지 않도록 try/catch.
+    //    pattern_charts 는 이미 저장 완료 — 청사진은 다음 진입 시 어댑터로 폴백.
+    try {
+      await _mirrorToBlueprint(saved).timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('[PatternRepository.save] mirror to blueprint failed: $e');
+    }
 
     return saved;
   }
@@ -359,15 +369,24 @@ class PatternRepository {
       imageUrl: imageUrl,
     );
     // 1) pattern_charts 저장 (시각/메타)
+    //    #720 — 무한로딩 방지: 15초 timeout.
     await docRef.set({
       ...chart.toJson(),
       // #687 Phase E1 — 단계 데이터는 step_blueprints/units에만.
       'aiSections': const <Map<String, dynamic>>[],
       'updatedAt': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
-    });
+    }).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => throw Exception('저장이 지연되고 있어요. 잠시 후 다시 시도해 주세요.'),
+    );
     // 2) step_blueprints 미러 (#687) — units 없음 (단계 미생성 상태)
-    await _mirrorToBlueprint(chart);
+    //    #720 — 미러 실패 무음 처리 (도안 본체는 이미 저장 완료).
+    try {
+      await _mirrorToBlueprint(chart).timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('[PatternRepository.saveImagePattern] mirror failed: $e');
+    }
     return chart;
   }
 
@@ -392,15 +411,24 @@ class PatternRepository {
       imageUrl: '', // 커버는 백그라운드 추출 후 updateCover로 채워짐
     );
     // 1) pattern_charts 저장
+    //    #720 — 무한로딩 방지: 15초 timeout.
     await docRef.set({
       ...chart.toJson(),
       // #687 Phase E1 — 단계 데이터는 step_blueprints/units에만.
       'aiSections': const <Map<String, dynamic>>[],
       'updatedAt': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
-    });
+    }).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => throw Exception('저장이 지연되고 있어요. 잠시 후 다시 시도해 주세요.'),
+    );
     // 2) step_blueprints 미러 (#687) — units 없음
-    await _mirrorToBlueprint(chart);
+    //    #720 — 미러 실패 무음 처리.
+    try {
+      await _mirrorToBlueprint(chart).timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('[PatternRepository.savePdfPattern] mirror failed: $e');
+    }
     // 백그라운드 fire-and-forget — 사용자 흐름 차단 X
     _extractAndSetPdfCover(chart.id, pdfFile);
     return chart;
@@ -459,15 +487,24 @@ class PatternRepository {
       imageUrl: imageUrl,
     );
     // 1) pattern_charts 저장
+    //    #720 — 무한로딩 방지: 15초 timeout.
     await docRef.set({
       ...chart.toJson(),
       // #687 Phase E1 — 단계 데이터는 step_blueprints/units에만.
       'aiSections': const <Map<String, dynamic>>[],
       'updatedAt': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
-    });
+    }).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => throw Exception('저장이 지연되고 있어요. 잠시 후 다시 시도해 주세요.'),
+    );
     // 2) step_blueprints 미러 (#687)
-    await _mirrorToBlueprint(chart);
+    //    #720 — 미러 실패 무음 처리.
+    try {
+      await _mirrorToBlueprint(chart).timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('[PatternRepository.saveImagePatternFromBytes] mirror failed: $e');
+    }
     return chart;
   }
 
@@ -493,15 +530,24 @@ class PatternRepository {
       imageUrl: '', // 커버는 백그라운드 추출 후 채워짐
     );
     // 1) pattern_charts 저장
+    //    #720 — 무한로딩 방지: 15초 timeout.
     await docRef.set({
       ...chart.toJson(),
       // #687 Phase E1 — 단계 데이터는 step_blueprints/units에만.
       'aiSections': const <Map<String, dynamic>>[],
       'updatedAt': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
-    });
+    }).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => throw Exception('저장이 지연되고 있어요. 잠시 후 다시 시도해 주세요.'),
+    );
     // 2) step_blueprints 미러 (#687)
-    await _mirrorToBlueprint(chart);
+    //    #720 — 미러 실패 무음 처리.
+    try {
+      await _mirrorToBlueprint(chart).timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('[PatternRepository.savePdfPatternFromBytes] mirror failed: $e');
+    }
     // 백그라운드 fire-and-forget — 사용자 흐름 차단 X
     _extractAndSetPdfCoverFromBytes(chart.id, bytes);
     return chart;

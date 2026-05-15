@@ -26,6 +26,11 @@ import 'blueprint_migration.dart';
 /// 신규 마이그레이션이 추가되면 키를 늘려 재실행 유도.
 const String _kMigrationFlagKey = 'v687_completed';
 
+/// 시도 횟수 누적 카운터 키 — 영구 실패 루프 차단용.
+/// 일정 횟수 초과 시 강제 완료 마킹 (BlueprintMigration 자체가 멱등이라 안전).
+const String _kMigrationAttemptKey = 'v687_attempts';
+const int _kMaxMigrationAttempts = 3;
+
 /// 사용자별 1회 자동 실행을 보장하는 가드.
 class MigrationGuard {
   MigrationGuard({FirebaseFirestore? db})
@@ -68,10 +73,35 @@ class MigrationGuard {
     }
   }
 
+  /// 시도 횟수 조회 (영구 실패 루프 차단용).
+  Future<int> _readAttempts(String uid) async {
+    try {
+      final doc = await _metaDoc(uid).get();
+      return (doc.data()?[_kMigrationAttemptKey] as num?)?.toInt() ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// 시도 횟수 +1 누적.
+  Future<void> _bumpAttempts(String uid, int current) async {
+    try {
+      await _metaDoc(uid).set({
+        _kMigrationAttemptKey: current + 1,
+        'lastAttemptAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {
+      // 누적 실패는 무음 — 다음 세션에서 재시도.
+    }
+  }
+
   /// 필요 시 마이그레이션 실행 (비동기, 백그라운드 fire-and-forget 안전).
   /// - 이미 완료된 사용자는 즉시 return.
   /// - 동시 실행 중인 동일 uid 호출은 중복 발사하지 않음.
-  /// - 모든 결과 errors == 0 이면 markCompleted 호출.
+  /// - 모든 결과 errors == 0 → markCompleted.
+  /// - migrated == 0 이면서 skipped 만 있으면 → markCompleted (멱등성: 더 할 일 없음).
+  /// - 최대 시도 횟수(_kMaxMigrationAttempts) 초과 → 강제 markCompleted
+  ///   (BlueprintMigration 자체가 migrationVersion 체크로 멱등이므로 안전).
   Future<void> runIfNeeded(String uid) async {
     if (_inFlight.contains(uid)) return;
     _inFlight.add(uid);
@@ -82,12 +112,27 @@ class MigrationGuard {
         }
         return;
       }
-      if (kDebugMode) {
-        debugPrint('[MigrationGuard] starting auto migration for $uid');
+      final attempts = await _readAttempts(uid);
+      if (attempts >= _kMaxMigrationAttempts) {
+        // 영구 실패 루프 차단 — 강제 완료 마킹.
+        // migration 자체는 멱등이므로 어드민이 수동으로 다시 돌릴 수 있음.
+        if (kDebugMode) {
+          debugPrint(
+              '[MigrationGuard] attempts $attempts >= $_kMaxMigrationAttempts — force mark completed.');
+        }
+        await markCompleted(uid);
+        return;
       }
+      if (kDebugMode) {
+        debugPrint(
+            '[MigrationGuard] starting auto migration for $uid (attempt ${attempts + 1})');
+      }
+      await _bumpAttempts(uid, attempts);
       final migration = BlueprintMigration(uid: uid, db: _db);
       final result = await migration.migrateAll();
       final allOk = result.values.every((r) => r.errors == 0);
+      final nothingMigrated =
+          result.values.every((r) => r.migrated == 0 && r.errors == 0);
 
       if (kDebugMode) {
         result.forEach((k, v) {
@@ -98,10 +143,11 @@ class MigrationGuard {
         });
       }
 
-      if (allOk) {
+      if (allOk || nothingMigrated) {
         await markCompleted(uid);
         if (kDebugMode) {
-          debugPrint('[MigrationGuard] completed flag saved for $uid');
+          debugPrint(
+              '[MigrationGuard] completed flag saved for $uid (allOk=$allOk, nothingMigrated=$nothingMigrated)');
         }
       } else {
         if (kDebugMode) {

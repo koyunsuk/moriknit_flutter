@@ -446,11 +446,18 @@ class StepBlueprintRepository {
     var latestCharts = <pat.PatternChart>[];
     // 이슈 #700 — emit 게이트 제거. 어느 stream 이 먼저 와도 즉시 노출.
     // 이전: hasCharts/hasBlueprints 양쪽 게이트로 한쪽 hang 시 무한로딩.
-    // 현재: 첫 emit 보장(빈 리스트) + 매 stream tick 마다 결합 결과 즉시 노출.
+    // 현재: 첫 emit 보장 + 매 stream tick 마다 결합 결과 즉시 노출.
     // 이슈 #701 — distinct 시그니처로 동일 결과 반복 emit 차단 (UI freeze 방지).
+    // 이슈 #720 — synthetic 빈 리스트 emit 제거. 진짜 데이터 첫 도착 시점부터 emit.
+    //   기존: 마이크로태스크로 [] emit → 빈상태 잠시 노출 → 이후 데이터 도착 시 '다시 나타남' 회귀.
+    //   현재: 첫 실제 도착 후에만 emit, 그 전에는 AsyncLoading 상태 유지.
     String? lastSignature;
+    bool sawAnySource = false;
 
-    void emit() {
+    void emit({bool fromSource = true}) {
+      if (fromSource) sawAnySource = true;
+      // 첫 실제 데이터 도착 전에는 emit 안 함 (loading 상태 유지).
+      if (!sawAnySource) return;
       // step_blueprints는 우선권 (이미 마이그레이션된 데이터).
       // ownerUid 가 자신인 청사진 + 협업자로 참여중인 청사진 결합.
       final ownerIds = latestBlueprints.map((b) => b.id).toSet();
@@ -492,14 +499,10 @@ class StepBlueprintRepository {
       if (!controller.isClosed) controller.add(merged);
     }
 
-    // 이슈 #700 — 무한로딩 차단: 첫 emit 보장(빈 리스트).
-    // Stream 가 still hot 상태가 되기 전 listener 등록 → microtask 로 push.
-    scheduleMicrotask(() {
-      if (!controller.isClosed && lastSignature == null) {
-        lastSignature = '';
-        controller.add(const <StepBlueprint>[]);
-      }
-    });
+    // 이슈 #720 — synthetic 빈 리스트 emit 제거.
+    //   기존: scheduleMicrotask로 [] emit → 빈상태 → 이후 데이터 도착 시 갑자기 '다시 나타남' 회귀.
+    //   현재: 첫 실제 도착 시점부터 emit (sawAnySource 게이트).
+    //   무한로딩 차단은 onError 콜백에서 빈 리스트로 폴백(에러 시에도 sawAnySource=true)으로 보장.
 
     final subBlueprints = watchByOwner(ownerUid).listen(
       (list) {

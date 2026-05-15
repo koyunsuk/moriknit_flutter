@@ -1619,13 +1619,14 @@ class _HomeGalleryVerticalSection extends ConsumerWidget {
 }
 
 // ── 섹션 그룹 카드 (헤더 + 내용 + 더보기) ─────────────────────
+/// 홈 화면 그룹카드 — 공통 MoriBlockShell 으로 위임.
+/// 둥근 모서리 + 양끝 끝까지 닿는 위·아래 옅은 보더 + 옅은 헤더 톤(블록 일관성 표준).
 class _SectionGroupCard extends StatelessWidget {
   final String label;
   final IconData icon;
   final Color color;
   final VoidCallback? onMoreTap;
   final Widget child;
-  // 위·아래 강조 보더 + 내부 독립 스크롤 옵션
   final double? scrollHeight;
 
   const _SectionGroupCard({
@@ -1639,67 +1640,13 @@ class _SectionGroupCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 본문: scrollHeight 지정 시 고정 높이 + Scrollbar + ListView
-    final Widget body = scrollHeight != null
-        ? SizedBox(
-            height: scrollHeight,
-            child: Scrollbar(
-              thumbVisibility: true,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
-                child: child,
-              ),
-            ),
-          )
-        : Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
-            child: child,
-          );
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.75),
-        // 위·아래 강조 보더 (2px) + 좌우 옅은 보더
-        border: Border(
-          top: BorderSide(color: color, width: 2),
-          bottom: BorderSide(color: color, width: 2),
-          left: BorderSide(color: color.withValues(alpha: 0.15)),
-          right: BorderSide(color: color.withValues(alpha: 0.15)),
-        ),
-        boxShadow: [
-          BoxShadow(color: color.withValues(alpha: 0.08), blurRadius: 16, offset: const Offset(0, 6)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
-            child: Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(icon, color: color, size: 18),
-                ),
-                const SizedBox(width: 10),
-                Expanded(child: Text(label, style: T.bodyBold)),
-                if (onMoreTap != null)
-                  GestureDetector(
-                    onTap: onMoreTap,
-                    child: Text('더보기', style: T.caption.copyWith(color: color, fontWeight: FontWeight.w600)),
-                  ),
-              ],
-            ),
-          ),
-          Divider(height: 1, thickness: 0.5, color: color.withValues(alpha: 0.12)),
-          body,
-        ],
-      ),
+    return MoriBlockShell(
+      label: label,
+      icon: icon,
+      accent: color,
+      onMoreTap: onMoreTap,
+      scrollHeight: scrollHeight,
+      child: child,
     );
   }
 }
@@ -1898,11 +1845,18 @@ class _HomeNoticesSectionState extends ConsumerState<_HomeNoticesSection> {
   Widget build(BuildContext context) {
     final noticesAsync = ref.watch(landingNoticesProvider);
 
+    return MoriBlockShell(
+      label: isKorean ? '공지사항' : 'Notices',
+      icon: Icons.campaign_rounded,
+      accent: C.lv,
+      child: _buildBody(context, noticesAsync),
+    );
+  }
+
+  Widget _buildBody(BuildContext context, AsyncValue noticesAsync) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SectionTitle(title: isKorean ? '공지사항' : 'Notices'),
-        const SizedBox(height: 10),
         noticesAsync.when(
           loading: () => const SizedBox.shrink(),
           error: (e, _) => const SizedBox.shrink(),
