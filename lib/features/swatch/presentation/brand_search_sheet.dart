@@ -1,4 +1,6 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -63,62 +65,103 @@ class _BrandSearchSheetState extends ConsumerState<BrandSearchSheet> {
     super.dispose();
   }
 
+  /// #695 — 캐시 우선 + 짧은 서버 timeout + 빈 폴백 (#685 패턴 적용)
+  /// 이전: 단순 `.get()` 호출이 오프라인·네트워크 지연 시 무한 대기 → 사용자에게 "DB 로딩 안 됨"으로 보임.
+  Future<QuerySnapshot<Map<String, dynamic>>?> _fetchSnapshot() async {
+    final col = FirebaseFirestore.instance.collection(_collectionName).limit(500);
+
+    // 1) Source.cache 우선 (Firestore SDK 영속 캐시 — #685)
+    try {
+      final cached = await col.get(const GetOptions(source: Source.cache));
+      if (cached.docs.isNotEmpty) {
+        debugPrint('[BrandSearch] HIT cache $_collectionName (${cached.docs.length}개)');
+        // 백그라운드로 서버 갱신 trigger
+        unawaited(_refreshFromServer());
+        return cached;
+      }
+    } catch (_) {
+      // 캐시 없음 — server 폴백
+    }
+
+    // 2) 서버 fetch — 5초 timeout, 실패 시 null (빈 폴백)
+    try {
+      return await col
+          .get(const GetOptions(source: Source.serverAndCache))
+          .timeout(const Duration(seconds: 5));
+    } on TimeoutException {
+      debugPrint('[BrandSearch] TIMEOUT 5s → 빈 폴백 ($_collectionName)');
+      return null;
+    } catch (e) {
+      debugPrint('[BrandSearch] 서버 fetch 실패 ($_collectionName): $e');
+      return null;
+    }
+  }
+
+  Future<void> _refreshFromServer() async {
+    try {
+      await FirebaseFirestore.instance
+          .collection(_collectionName)
+          .limit(500)
+          .get(const GetOptions(source: Source.server))
+          .timeout(const Duration(seconds: 10));
+    } catch (_) {
+      // 백그라운드 실패 무음
+    }
+  }
+
   Future<void> _search(String query) async {
     final currentToken = ++_searchToken;
     setState(() => _loading = true);
 
-    try {
-      // #650 — 모든 문서 조회 후 클라이언트에서 정렬·필터.
-      // 이전: orderBy('name')은 name 필드가 없는 문서를 자동 제외해서 결과 0건 발생.
-      final lower = query.trim().toLowerCase();
-      final snapshot = await FirebaseFirestore.instance
-          .collection(_collectionName)
-          .limit(500)
-          .get();
+    // #650 — 모든 문서 조회 후 클라이언트에서 정렬·필터.
+    // 이전: orderBy('name')은 name 필드가 없는 문서를 자동 제외해서 결과 0건 발생.
+    final lower = query.trim().toLowerCase();
+    final snapshot = await _fetchSnapshot();
 
-      if (!mounted || currentToken != _searchToken) return;
+    if (!mounted || currentToken != _searchToken) return;
 
-      debugPrint('[BrandSearch] $_collectionName 문서 ${snapshot.docs.length}개 로드됨');
-
-      final all = snapshot.docs
-          .where((doc) {
-            final data = doc.data();
-            final isActive = data['isActive'];
-            return isActive == null || isActive == true;
-          })
-          .map((doc) {
-            final data = doc.data();
-            final n = (data['name'] as String?)?.trim() ?? '';
-            // name 없으면 nameKo, nameEn, brandName 등 다른 필드 폴백
-            final fallback = (data['nameKo'] as String?)?.trim()
-                ?? (data['nameEn'] as String?)?.trim()
-                ?? (data['brandName'] as String?)?.trim()
-                ?? '';
-            return _BrandItem(
-              id: doc.id,
-              name: n.isNotEmpty ? n : (fallback.isNotEmpty ? fallback : doc.id),
-            );
-          })
-          .toList()
-        ..sort((a, b) => a.name.compareTo(b.name));
-
-      // 검색어 있으면 클라이언트 contains 필터 (대소문자 무관)
-      final remote = lower.isEmpty
-          ? all
-          : all.where((b) => b.name.toLowerCase().contains(lower)).toList();
-
-      setState(() {
-        _results = remote;
-        _loading = false;
-      });
-    } catch (e) {
-      debugPrint('[BrandSearch] 검색 오류 ($_collectionName): $e');
-      if (!mounted || currentToken != _searchToken) return;
+    if (snapshot == null) {
+      // 캐시·서버 모두 실패 → 빈 결과 (UI에 직접 입력 옵션 노출됨)
       setState(() {
         _results = const [];
         _loading = false;
       });
+      return;
     }
+
+    debugPrint('[BrandSearch] $_collectionName 문서 ${snapshot.docs.length}개 로드됨');
+
+    final all = snapshot.docs
+        .where((doc) {
+          final data = doc.data();
+          final isActive = data['isActive'];
+          return isActive == null || isActive == true;
+        })
+        .map((doc) {
+          final data = doc.data();
+          final n = (data['name'] as String?)?.trim() ?? '';
+          // name 없으면 nameKo, nameEn, brandName 등 다른 필드 폴백
+          final fallback = (data['nameKo'] as String?)?.trim()
+              ?? (data['nameEn'] as String?)?.trim()
+              ?? (data['brandName'] as String?)?.trim()
+              ?? '';
+          return _BrandItem(
+            id: doc.id,
+            name: n.isNotEmpty ? n : (fallback.isNotEmpty ? fallback : doc.id),
+          );
+        })
+        .toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+
+    // 검색어 있으면 클라이언트 contains 필터 (대소문자 무관)
+    final remote = lower.isEmpty
+        ? all
+        : all.where((b) => b.name.toLowerCase().contains(lower)).toList();
+
+    setState(() {
+      _results = remote;
+      _loading = false;
+    });
   }
 
   void _selectBrand(_BrandItem item) {

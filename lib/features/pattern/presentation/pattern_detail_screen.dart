@@ -651,6 +651,7 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
 
     final nameCtrl = TextEditingController(text: widget.chart.title);
     final memoCtrl = TextEditingController();
+    final isDraft = !widget.chart.isComplete;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -666,6 +667,32 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                   : 'Create a new project with this pattern.',
               style: T.caption.copyWith(color: C.mu),
             ),
+            if (isDraft) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: C.og.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: C.og.withValues(alpha: 0.25)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.info_outline_rounded, size: 16, color: C.og),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        isKorean
+                            ? '도안에 섹션이 없어 단계로그는 비어 있어요. 도안 완성 후 자동 연결됩니다.'
+                            : 'No sections yet — step log will be empty. Sync after the pattern is complete.',
+                        style: T.caption.copyWith(color: C.og),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             TextField(
               controller: nameCtrl,
@@ -706,6 +733,7 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
     final memo = memoCtrl.text.trim();
 
     ProjectModel? created;
+    Object? mirrorError;
     try {
       await runWithMoriLoadingDialog<void>(
         context,
@@ -718,13 +746,18 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
             sourcePatternId: widget.chart.id,
           );
           created = await ref.read(projectRepositoryProvider).createProject(draft);
-          // 도안이 complete 상태이면 단계로그 자동 미러링
+          // 도안이 complete 상태이면 단계로그 자동 미러링.
+          // 미러링 실패는 프로젝트 생성 자체를 막지 않도록 별도 캐치.
           if (created != null && widget.chart.isComplete) {
-            await ref.read(stepUnitRepositoryProvider).mirrorGroupsToProject(
-                  projectId: created!.id,
-                  chart: widget.chart,
-                  isKorean: isKorean,
-                );
+            try {
+              await ref.read(stepUnitRepositoryProvider).mirrorGroupsToProject(
+                    projectId: created!.id,
+                    chart: widget.chart,
+                    isKorean: isKorean,
+                  );
+            } catch (e) {
+              mirrorError = e;
+            }
           }
         },
       );
@@ -733,9 +766,13 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            isKorean
-                ? '프로젝트가 만들어졌고 도안이 연결됐어요.'
-                : 'Project created and pattern linked.',
+            mirrorError != null
+                ? (isKorean
+                    ? '프로젝트는 만들어졌지만 단계로그 동기화에 실패했어요.'
+                    : 'Project created, but step log sync failed.')
+                : (isKorean
+                    ? '프로젝트가 만들어졌고 도안이 연결됐어요.'
+                    : 'Project created and pattern linked.'),
           ),
           action: SnackBarAction(
             label: isKorean ? '이동' : 'Open',
