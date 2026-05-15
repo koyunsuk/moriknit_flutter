@@ -14,8 +14,10 @@ import '../domain/accessory_model.dart';
 
 class AccessoryInputScreen extends ConsumerStatefulWidget {
   final AccessoryModel? initialItem;
+  // 이슈 #698 — 기존 악세사리 복사 시작 (즉시 doc 생성 금지)
+  final AccessoryModel? copyFrom;
 
-  const AccessoryInputScreen({super.key, this.initialItem});
+  const AccessoryInputScreen({super.key, this.initialItem, this.copyFrom});
 
   @override
   ConsumerState<AccessoryInputScreen> createState() => _AccessoryInputScreenState();
@@ -27,23 +29,39 @@ class _AccessoryInputScreenState extends ConsumerState<AccessoryInputScreen> {
   late final TextEditingController _priceCtrl;
   late final TextEditingController _purchasePlaceCtrl;
   late final TextEditingController _memoCtrl;
+  // 이슈 #698 — 미저장 변경 추적
+  bool _isDirty = false;
+  bool _prefillInProgress = false;
   String? _localPhotoPath;
   String? _photoUrl;
+
+  void _markDirty() {
+    if (!_isDirty) setState(() => _isDirty = true);
+  }
 
   @override
   void initState() {
     super.initState();
-    final item = widget.initialItem;
-    _nameCtrl = TextEditingController(text: item?.name ?? '');
-    _brandCtrl = TextEditingController(text: item?.brandName ?? '');
-    _priceCtrl = TextEditingController(text: item != null && item.price > 0 ? '${item.price}' : '');
-    _purchasePlaceCtrl = TextEditingController(text: item?.purchasePlace ?? '');
-    _memoCtrl = TextEditingController(text: item?.memo ?? '');
-    _photoUrl = item?.photoUrl.isNotEmpty == true ? item!.photoUrl : null;
+    // 이슈 #698 — initialItem(수정) 또는 copyFrom(복사)로 prefill
+    final source = widget.initialItem ?? widget.copyFrom;
+    _nameCtrl = TextEditingController(text: source?.name ?? '');
+    _brandCtrl = TextEditingController(text: source?.brandName ?? '');
+    _priceCtrl = TextEditingController(text: source != null && source.price > 0 ? '${source.price}' : '');
+    _purchasePlaceCtrl = TextEditingController(text: source?.purchasePlace ?? '');
+    _memoCtrl = TextEditingController(text: source?.memo ?? '');
+    _photoUrl = source?.photoUrl.isNotEmpty == true ? source!.photoUrl : null;
 
-    if (item != null) {
+    if (source != null) {
+      _prefillInProgress = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(accessoryInputProvider.notifier).load(item);
+        // 복사 모드: id 비우고 load → 저장 시 createAccessory 분기
+        final loaded = widget.copyFrom != null && widget.initialItem == null
+            ? source.copyWith(id: '')
+            : source;
+        ref.read(accessoryInputProvider.notifier).load(loaded);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _prefillInProgress = false;
+        });
       });
     }
   }
@@ -133,6 +151,8 @@ class _AccessoryInputScreenState extends ConsumerState<AccessoryInputScreen> {
       );
       if (!mounted) return;
       showSavedSnackBar(sm, message: isKorean ? '저장됐어요.' : 'Saved.');
+      // 이슈 #698 — 저장 성공 시 dirty 해제
+      setState(() => _isDirty = false);
       navigator.pop();
     } catch (e) {
       if (!mounted) return;
@@ -146,18 +166,41 @@ class _AccessoryInputScreenState extends ConsumerState<AccessoryInputScreen> {
     final notifier = ref.read(accessoryInputProvider.notifier);
     final isKorean = ref.watch(appLanguageProvider).isKorean;
 
-    return Scaffold(
+    // 이슈 #698 — accessoryInputProvider 변경 감지 → dirty 마킹
+    // prefill 도중 발생하는 load() 변경은 제외.
+    ref.listen<AccessoryModel>(accessoryInputProvider, (prev, next) {
+      if (_prefillInProgress) return;
+      if (prev != null && prev != next) {
+        _markDirty();
+      }
+    });
+
+    return PopScope(
+      canPop: !_isDirty,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        await _handleUnsavedBack(context);
+      },
+      child: Scaffold(
       backgroundColor: C.bg,
       appBar: AppBar(
         backgroundColor: C.bg,
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () async {
+            if (!_isDirty) {
+              Navigator.pop(context);
+              return;
+            }
+            await _handleUnsavedBack(context);
+          },
         ),
         title: Text(
           widget.initialItem == null
-              ? (isKorean ? '악세사리 추가' : 'Add Accessory')
+              ? (widget.copyFrom != null
+                  ? (isKorean ? '악세사리 복사' : 'Copy Accessory')
+                  : (isKorean ? '악세사리 추가' : 'Add Accessory'))
               : (isKorean ? '악세사리 수정' : 'Edit Accessory'),
           style: T.h3,
         ),
@@ -315,7 +358,38 @@ class _AccessoryInputScreenState extends ConsumerState<AccessoryInputScreen> {
           ),
         ],
       ),
+    ),
     );
+  }
+
+  // 이슈 #698 — 미저장 변경 뒤로가기 가드
+  Future<void> _handleUnsavedBack(BuildContext context) async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final navigator = Navigator.of(context);
+    final action = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isKorean ? '저장하지 않은 변경 사항' : 'Unsaved changes', style: T.h3),
+        content: Text(isKorean ? '저장하지 않고 나가시겠어요?' : 'Leave without saving?', style: T.body),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, 'cancel'), child: Text(isKorean ? '취소' : 'Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, 'save'), child: Text(isKorean ? '저장하고 나가기' : 'Save & Leave')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'discard'),
+            style: TextButton.styleFrom(foregroundColor: C.og),
+            child: Text(isKorean ? '저장 안 함' : 'Discard'),
+          ),
+        ],
+      ),
+    );
+    if (action == 'discard') {
+      if (!mounted) return;
+      setState(() => _isDirty = false);
+      navigator.pop();
+    } else if (action == 'save') {
+      if (!mounted) return;
+      await _save(context);
+    }
   }
 }
 

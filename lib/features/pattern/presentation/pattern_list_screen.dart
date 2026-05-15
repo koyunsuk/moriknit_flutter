@@ -126,7 +126,37 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                               child: CircularProgressIndicator(color: C.lv),
                             ),
                           ),
-                          error: (e, _) => Text('$e', style: T.caption.copyWith(color: C.og)),
+                          // 이슈 #699 — raw Firestore 에러 노출 금지. 친화 메시지 + 재시도 버튼.
+                          error: (e, _) {
+                            final msg = e.toString();
+                            final isIndexMissing = msg.contains('failed-precondition') || msg.contains('requires an index');
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 20),
+                              child: Column(
+                                children: [
+                                  Icon(Icons.cloud_off_rounded, size: 48, color: C.mu),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    isIndexMissing
+                                        ? (isKorean ? '도안을 준비하는 중이에요.\n잠시 후 다시 시도해 주세요.' : 'Preparing patterns...\nPlease try again shortly.')
+                                        : (isKorean ? '도안을 불러오지 못했어요.' : 'Failed to load patterns.'),
+                                    style: T.body.copyWith(color: C.mu),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  ElevatedButton.icon(
+                                    onPressed: () {
+                                      ref.invalidate(myBlueprintsWithLegacyProvider);
+                                      ref.invalidate(patternListProvider);
+                                      ref.invalidate(patternFilesProvider);
+                                    },
+                                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                                    label: Text(isKorean ? '다시 시도' : 'Retry'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                           // 이슈 #687 (Phase I-B) — 신규 청사진 + legacy 어댑터 합산 데이터.
                           // 카드 표시는 PatternChart 기반 _PatternRow 그대로 사용하기 위해
                           // patternListProvider 의 PatternChart 로 lookup, 없으면 어댑터로 합성.
@@ -145,6 +175,26 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                                 onAction: () => _showPatternStartSheet(context, ref),
                               );
                             }
+                            // 이슈 #699 보완 — 모리니트 블록 내부 독립 스크롤 (높이 고정 + Scrollbar).
+                            // 페이지 전체 ListView 는 헤더/요약카드/모리니트블록/라벨리블록 컨테이너 단위로만 스크롤.
+                            final rowItems = <Widget>[
+                              ...blueprints.map((bp) {
+                                final chart = chartById[bp.id]
+                                    ?? (bp.sourcePatternChartId != null ? chartById[bp.sourcePatternChartId!] : null)
+                                    ?? (bp.chartAssetId != null ? chartById[bp.chartAssetId!] : null)
+                                    ?? _blueprintToChart(bp);
+                                return _PatternRow(
+                                  chart: chart,
+                                  isKorean: isKorean,
+                                  onTap: () => _openPattern(context, chart, filesAsync),
+                                );
+                              }),
+                              ...files.map((f) => _FileRow(
+                                file: f,
+                                isKorean: isKorean,
+                                onTap: () => _openFile(context, f),
+                              )),
+                            ];
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -155,24 +205,16 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                                   style: T.bodyBold,
                                 ),
                                 const SizedBox(height: 8),
-                                ...blueprints.map((bp) {
-                                  // PatternChart lookup (id 또는 sourcePatternChartId/chartAssetId).
-                                  // 없으면 _blueprintToChart() 어댑터로 합성 — 표시에는 충분.
-                                  final chart = chartById[bp.id]
-                                      ?? (bp.sourcePatternChartId != null ? chartById[bp.sourcePatternChartId!] : null)
-                                      ?? (bp.chartAssetId != null ? chartById[bp.chartAssetId!] : null)
-                                      ?? _blueprintToChart(bp);
-                                  return _PatternRow(
-                                    chart: chart,
-                                    isKorean: isKorean,
-                                    onTap: () => _openPattern(context, chart, filesAsync),
-                                  );
-                                }),
-                                ...files.map((f) => _FileRow(
-                                  file: f,
-                                  isKorean: isKorean,
-                                  onTap: () => _openFile(context, f),
-                                )),
+                                SizedBox(
+                                  height: 400,
+                                  child: Scrollbar(
+                                    thumbVisibility: true,
+                                    child: ListView.builder(
+                                      itemCount: rowItems.length,
+                                      itemBuilder: (_, i) => rowItems[i],
+                                    ),
+                                  ),
+                                ),
                               ],
                             );
                           },
@@ -370,6 +412,9 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         },
       );
       if (!context.mounted || saved == null) return;
+      // #687 — 저장 직후 라이선스·visibility 즉시 선택 (건너뛰기 가능, 기본값 Reserved+Draft).
+      await _promptLicenseAndVisibility(context, ref, saved!.id, isKorean);
+      if (!context.mounted) return;
       Navigator.push(context, MaterialPageRoute(builder: (_) => PatternDetailScreen(chart: saved!)));
     } catch (e) {
       if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
@@ -420,6 +465,9 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         },
       );
       if (!context.mounted || saved == null) return;
+      // #687 — 저장 직후 라이선스·visibility 선택.
+      await _promptLicenseAndVisibility(context, ref, saved!.id, isKorean);
+      if (!context.mounted) return;
       Navigator.push(context, MaterialPageRoute(builder: (_) => PatternDetailScreen(chart: saved!)));
     } catch (e) {
       if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
@@ -455,6 +503,9 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         },
       );
       if (!context.mounted || saved == null) return;
+      // #687 — 저장 직후 라이선스·visibility 선택.
+      await _promptLicenseAndVisibility(context, ref, saved!.id, isKorean);
+      if (!context.mounted) return;
       Navigator.push(context, MaterialPageRoute(builder: (_) => PatternDetailScreen(chart: saved!)));
     } catch (e) {
       if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
@@ -490,6 +541,9 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         },
       );
       if (!context.mounted || saved == null) return;
+      // #687 — 저장 직후 라이선스·visibility 선택.
+      await _promptLicenseAndVisibility(context, ref, saved!.id, isKorean);
+      if (!context.mounted) return;
       Navigator.push(context, MaterialPageRoute(builder: (_) => PatternDetailScreen(chart: saved!)));
     } catch (e) {
       if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
@@ -565,6 +619,139 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
     // TextField가 이미 disposed된 controller를 사용하여 크래쉬 발생.
     // 로컬 변수이므로 GC가 처리하도록 dispose 생략.
     return result;
+  }
+
+  /// 이슈 #687 — 도안 저장 직후 라이선스·visibility 즉시 선택 다이얼로그.
+  /// 기본값(Reserved + Draft) 그대로 두어도 되며, "건너뛰기" 누르면 스킵.
+  /// 선택 시 stepBlueprintRepositoryProvider.update() 로 step_blueprints 갱신.
+  Future<void> _promptLicenseAndVisibility(
+    BuildContext context,
+    WidgetRef ref,
+    String chartId,
+    bool isKorean,
+  ) async {
+    if (chartId.isEmpty) return;
+    var visibility = BlueprintVisibility.draft;
+    var license = LicenseType.reserved;
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: C.bd2,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Text(
+                  isKorean ? '라이선스 · 공개 범위' : 'License & Visibility',
+                  style: T.h3,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  isKorean
+                      ? '도안의 권리·공개 범위를 지정해요. 나중에 도안 상세에서 변경할 수 있어요.'
+                      : 'Set your pattern\'s rights and visibility. You can change later.',
+                  style: T.caption.copyWith(color: C.mu),
+                ),
+                const SizedBox(height: 18),
+                Text(isKorean ? '공개 범위' : 'Visibility',
+                    style: T.bodyBold.copyWith(color: C.lvD, fontSize: 13)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: kBlueprintVisibilityOptions.map((v) {
+                    return BlueprintSelectableChip(
+                      label: blueprintVisibilityLabel(v, isKorean),
+                      selected: v == visibility,
+                      onTap: () => setSheet(() => visibility = v),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+                Text(isKorean ? '라이선스' : 'License',
+                    style: T.bodyBold.copyWith(color: C.lvD, fontSize: 13)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: kBlueprintLicenseOptions.map((t) {
+                    return BlueprintSelectableChip(
+                      label: blueprintLicenseLabel(t, isKorean),
+                      selected: t == license,
+                      onTap: () => setSheet(() => license = t),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: Text(isKorean ? '건너뛰기' : 'Skip'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: C.lv,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: Text(isKorean ? '적용' : 'Apply'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final repo = ref.read(stepBlueprintRepositoryProvider);
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () async {
+          await repo.update(chartId, {
+            'visibility': visibility.name,
+            'license': BlueprintLicense(type: license).toMap(),
+          });
+        },
+      );
+      ref.invalidate(blueprintByIdWithLegacyProvider(chartId));
+      if (!context.mounted) return;
+      showSavedSnackBar(
+        ScaffoldMessenger.of(context),
+        message: isKorean ? '저장됐어요.' : 'Saved.',
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
   }
 
   /// 이슈 #665 — 사각/원형 도안 형태 선택 모달.
@@ -956,7 +1143,7 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
 
 }
 
-class _PatternRow extends StatelessWidget {
+class _PatternRow extends ConsumerWidget {
   final PatternChart chart;
   final bool isKorean;
   final VoidCallback onTap;
@@ -996,8 +1183,61 @@ class _PatternRow extends StatelessWidget {
     return DateTime.now().difference(created).inHours < 24;
   }
 
+  /// #687 — 청사진 visibility 배지 (없으면 null). 라이브러리 카드 좌측에 표시.
+  /// blueprintByIdWithLegacyProvider 가 어댑터로도 청사진을 만들어주므로 항상 시도.
+  Widget? _visibilityBadge(WidgetRef ref) {
+    if (chart.id.isEmpty) return null;
+    final async = ref.watch(blueprintByIdWithLegacyProvider(chart.id));
+    final bp = async.valueOrNull;
+    if (bp == null) return null;
+    final v = bp.visibility;
+    // draft 배지는 chart.isComplete 기반으로 이미 표시 중 → 중복 방지.
+    if (v == BlueprintVisibility.draft) return null;
+    final (Color bg, Color fg, String label) = switch (v) {
+      BlueprintVisibility.private => (
+          C.mu.withValues(alpha: 0.12),
+          C.mu,
+          isKorean ? '비공개' : 'PRIVATE',
+        ),
+      BlueprintVisibility.unlisted => (
+          C.lv.withValues(alpha: 0.10),
+          C.lvD,
+          isKorean ? '링크' : 'UNLISTED',
+        ),
+      BlueprintVisibility.public => (
+          C.lm.withValues(alpha: 0.18),
+          C.lmD,
+          isKorean ? '공개' : 'PUBLIC',
+        ),
+      BlueprintVisibility.marketplace => (
+          C.pkD,
+          Colors.white,
+          isKorean ? '마켓' : 'MARKET',
+        ),
+      _ => (C.mu.withValues(alpha: 0.10), C.mu, v.name.toUpperCase()),
+    };
+    return Container(
+      margin: const EdgeInsets.only(right: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          color: fg,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final visibilityBadge = _visibilityBadge(ref);
     return MoriLibraryCard(
       title: chart.title,
       subtitle1: _subtitleText(isKorean),
@@ -1011,6 +1251,8 @@ class _PatternRow extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // 이슈 #687 — 청사진 visibility 배지 (private/unlisted/public/marketplace)
+          ?visibilityBadge,
           // 이슈 #626 — draft 배지 (초안)
           if (!chart.isComplete)
             Container(
@@ -1542,15 +1784,42 @@ class _RavelryLibraryList extends ConsumerWidget {
     final libraryAsync = ref.watch(ravelryLibraryProvider);
     return libraryAsync.when(
       loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
-      error: (e, _) => Text(isKorean ? '도안을 불러올 수 없어요: $e' : 'Failed to load: $e',
-          style: T.caption.copyWith(color: C.og)),
+      // 이슈 #699 — 친화 메시지 + 재시도 버튼
+      error: (e, _) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: Column(
+          children: [
+            Icon(Icons.cloud_off_rounded, size: 40, color: C.mu),
+            const SizedBox(height: 8),
+            Text(
+              isKorean ? 'Ravelry 도안을 불러오지 못했어요.' : 'Failed to load Ravelry patterns.',
+              style: T.body.copyWith(color: C.mu),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 10),
+            ElevatedButton.icon(
+              onPressed: () => ref.invalidate(ravelryLibraryProvider),
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: Text(isKorean ? '다시 시도' : 'Retry'),
+            ),
+          ],
+        ),
+      ),
       data: (patterns) {
         if (patterns.isEmpty) {
           return Text(isKorean ? 'Ravelry 도안 라이브러리가 비어있어요.' : 'Your Ravelry library is empty.',
               style: T.body.copyWith(color: C.mu));
         }
-        return Column(
-          children: patterns.map((p) => _RavelryPatternCard(pattern: p, isKorean: isKorean)).toList(),
+        // 이슈 #699 보완 — Ravelry 블록 내부 독립 스크롤
+        return SizedBox(
+          height: 400,
+          child: Scrollbar(
+            thumbVisibility: true,
+            child: ListView.builder(
+              itemCount: patterns.length,
+              itemBuilder: (_, i) => _RavelryPatternCard(pattern: patterns[i], isKorean: isKorean),
+            ),
+          ),
         );
       },
     );

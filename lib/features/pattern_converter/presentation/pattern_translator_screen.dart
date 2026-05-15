@@ -15,6 +15,7 @@ import '../../dropbox/data/dropbox_auth_provider.dart';
 import '../../dropbox/domain/dropbox_file_entry.dart';
 import '../../../providers/dropbox_provider.dart';
 import '../../../providers/parsed_pattern_provider.dart';
+import '../../blueprint/presentation/step_log_screen.dart';
 import '../data/ai_error_mapper.dart';
 import '../data/pattern_converter_repository.dart';
 import 'ai_pattern_edit_screen.dart';
@@ -659,8 +660,9 @@ class _InlineTranslatedList extends ConsumerWidget {
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 child: InkWell(
+                  // Phase D1 (#687): 저장된 도안 진입 → 단계로그 통일 화면
                   onTap: () => Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => AiPatternEditScreen(patternId: p.id),
+                    builder: (_) => StepLogScreen(blueprintId: p.id),
                   )),
                   child: Row(
                     children: [

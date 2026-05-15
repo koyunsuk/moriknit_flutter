@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../features/blueprint/presentation/step_log_screen.dart';
 import '../../features/pattern/domain/pattern_chart.dart';
 import '../../features/pattern/presentation/pattern_editor_screen.dart';
-import '../../features/pattern_converter/presentation/ai_pattern_edit_screen.dart';
 import '../../features/pattern_converter/presentation/pattern_converter_screen.dart';
 
 /// 이슈 #687 (Phase F) — 도안 섹션 편집 진입점 분기 라우터.
@@ -13,7 +13,7 @@ import '../../features/pattern_converter/presentation/pattern_converter_screen.d
 /// 분기 규칙:
 /// - `PatternType.chart` → [PatternEditorScreen] (도안에디터)
 /// - `PatternType.pdf` / `image`
-///   - `aiSections` 있음 → [AiPatternEditScreen] (AI 섹션 편집)
+///   - `aiSections` 있음 → [StepLogScreen] (Phase D1: 단계로그 통일 화면)
 ///   - `aiSections` 없음 → [PatternConverterScreen] (AI 변환기)
 class StepUnitEntryRouter {
   const StepUnitEntryRouter._();
@@ -36,10 +36,13 @@ class StepUnitEntryRouter {
       case PatternType.pdf:
       case PatternType.image:
         if (hasAi) {
+          // Phase D1 (#687): AI 섹션은 step_blueprints/{chart.id}/units 로
+          // 자동 미러링됨 (Phase B). blueprintId = chart.id 로 단계로그 통일
+          // 화면 진입.
           return Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => AiPatternEditScreen(patternId: chart.id),
+              builder: (_) => StepLogScreen(blueprintId: chart.id),
             ),
           );
         }

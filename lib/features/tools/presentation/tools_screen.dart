@@ -271,6 +271,17 @@ class ToolsScreen extends ConsumerWidget {
                           : 'Translate English patterns to Korean',
                       onTap: () => context.push(Routes.toolsPatternTranslator),
                     ),
+                    const SizedBox(height: 10),
+                    // 이슈 #664 — AI 패턴 생성기 (래글런 + 단계별 도식 + 출판용 PDF)
+                    _ToolCard(
+                      icon: Icons.auto_stories_rounded,
+                      color: C.lvD,
+                      title: isKorean ? 'AI 패턴 생성기' : 'AI Pattern Generator',
+                      description: isKorean
+                          ? '치수+게이지로 도안 자동 생성, 단계별 도식, 출판용 PDF'
+                          : 'Auto-build patterns with diagrams + print-ready PDF',
+                      onTap: () => context.push(Routes.toolsPatternGenerator),
+                    ),
                     const SizedBox(height: 8),
                     Divider(color: C.bd, thickness: 1, height: 20),
 
@@ -379,17 +390,6 @@ class ToolsScreen extends ConsumerWidget {
                       onTap: () => context.push(Routes.toolsFileExplorer),
                     ),
                     const SizedBox(height: 10),
-                    // 이슈 #664 — 패턴 생성기 (래글런 + 단계별 도식 + 출판용 PDF)
-                    _ToolCard(
-                      icon: Icons.auto_stories_rounded,
-                      color: C.lvD,
-                      title: isKorean ? '패턴 생성기' : 'Pattern Generator',
-                      description: isKorean
-                          ? '치수+게이지로 도안 자동 생성, 단계별 도식, 출판용 PDF'
-                          : 'Auto-build patterns with diagrams + print-ready PDF',
-                      onTap: () => context.push(Routes.toolsPatternGenerator),
-                    ),
-                    const SizedBox(height: 10),
                     // 이슈 #665/#668 — 도안 에디터 (Gate 화면 진입 → 도안 목록 + 사각/원형/자유 path 모달)
                     _ToolCard(
                       icon: Icons.edit_note_rounded,
@@ -415,22 +415,6 @@ class ToolsScreen extends ConsumerWidget {
                       title: isKorean ? '측정 도구' : 'Measure Tool',
                       description: isKorean ? '격자·각도·원·실바늘 두께를 화면으로 측정' : 'Measure grid, angle, circle & yarn/needle',
                       onTap: () => context.push(Routes.toolsMeasure),
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.add_task_rounded,
-                      color: C.pkD,
-                      title: isKorean ? '카운터 전체보기' : 'All Counters',
-                      description: t.counterTools,
-                      onTap: () => context.push(Routes.counterList),
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.grid_view_rounded,
-                      color: C.lmD,
-                      title: isKorean ? '스와치' : 'Swatch',
-                      description: isKorean ? '게이지와 실 정보를 기록해요' : 'Record gauge and yarn info',
-                      onTap: () => context.push(Routes.swatchList),
                     ),
                     const SizedBox(height: 8),
                     Divider(color: C.bd, thickness: 1, height: 20),

@@ -16,6 +16,7 @@ import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../blueprint/presentation/step_log_screen.dart';
 import '../data/pattern_export_service.dart';
 import '../data/pattern_repository.dart';
 import '../domain/guide_path_chart.dart';
@@ -1025,6 +1026,27 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
     );
   }
 
+  /// 이슈 #687 (Phase D2) — 도안에디터에서 단계로그(StepLogScreen) 진입.
+  /// 저장되지 않은 도안(id 비어있음)은 먼저 저장 안내.
+  void _openStepLog(bool isKorean) {
+    if (_chart.id.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isKorean
+              ? '먼저 도안을 저장한 뒤 단계로그를 열어 주세요.'
+              : 'Please save the pattern before opening the step log.'),
+        ),
+      );
+      return;
+    }
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StepLogScreen(blueprintId: _chart.id),
+      ),
+    );
+  }
+
   void _showProjectLinkSheet() {
     final isKorean = ref.read(appLanguageProvider).isKorean;
     showModalBottomSheet<void>(
@@ -1214,8 +1236,19 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
           backgroundColor: C.bg,
           elevation: 0,
           actions: widget.readOnly
-              ? null
+              ? [
+                  IconButton(
+                    icon: Icon(Icons.list_alt_rounded, color: C.lv),
+                    tooltip: isKorean ? '단계로그 보기' : 'Step Log',
+                    onPressed: () => _openStepLog(isKorean),
+                  ),
+                ]
               : [
+                  IconButton(
+                    icon: Icon(Icons.list_alt_rounded, color: C.lv),
+                    tooltip: isKorean ? '단계로그 보기' : 'Step Log',
+                    onPressed: () => _openStepLog(isKorean),
+                  ),
                   IconButton(
                     icon: Icon(Icons.save_rounded, color: C.lv),
                     tooltip: isKorean ? '저장' : 'Save',
@@ -1250,8 +1283,19 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
           backgroundColor: C.bg,
           elevation: 0,
           actions: widget.readOnly
-              ? null
+              ? [
+                  IconButton(
+                    icon: Icon(Icons.list_alt_rounded, color: C.lv),
+                    tooltip: isKorean ? '단계로그 보기' : 'Step Log',
+                    onPressed: () => _openStepLog(isKorean),
+                  ),
+                ]
               : [
+                  IconButton(
+                    icon: Icon(Icons.list_alt_rounded, color: C.lv),
+                    tooltip: isKorean ? '단계로그 보기' : 'Step Log',
+                    onPressed: () => _openStepLog(isKorean),
+                  ),
                   IconButton(
                     icon: Icon(Icons.save_rounded, color: C.lv),
                     tooltip: isKorean ? '저장' : 'Save',
@@ -1442,6 +1486,8 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
                   _copyChart();
                 case 'link_project':
                   _showProjectLinkSheet();
+                case 'step_log':
+                  _openStepLog(isKorean);
                 case 'delete':
                   _deleteChart();
               }
@@ -1452,6 +1498,7 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
                     PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_rounded, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '수정하기' : 'Edit')])),
                     PopupMenuItem(value: 'copy', child: Row(children: [Icon(Icons.copy_rounded, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '복사' : 'Duplicate')])),
                     PopupMenuItem(value: 'link_project', child: Row(children: [Icon(Icons.folder_outlined, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '프로젝트에 연결' : 'Link to project')])),
+                    PopupMenuItem(value: 'step_log', child: Row(children: [Icon(Icons.list_alt_rounded, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '단계로그 보기' : 'Step Log')])),
                     PopupMenuItem(value: 'pdf', child: Row(children: [Icon(Icons.picture_as_pdf_rounded, size: 18, color: C.og), const SizedBox(width: 8), Text(isKorean ? 'PDF로 내보내기' : 'Export as PDF')])),
                     PopupMenuItem(value: 'image', child: Row(children: [Icon(Icons.image_rounded, size: 18, color: C.lmD), const SizedBox(width: 8), Text(isKorean ? '이미지로 내보내기' : 'Export as image')])),
                     PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_rounded, size: 18, color: C.og), const SizedBox(width: 8), Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og))])),
@@ -1464,6 +1511,7 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
                     PopupMenuItem(value: 'repeat', child: Row(children: [Icon(Icons.repeat_rounded, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '반복 구간 지정' : 'Set Repeat Region')])),
                     PopupMenuItem(value: 'copy', child: Row(children: [Icon(Icons.copy_rounded, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '복사' : 'Duplicate')])),
                     PopupMenuItem(value: 'link_project', child: Row(children: [Icon(Icons.folder_outlined, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '프로젝트에 연결' : 'Link to project')])),
+                    PopupMenuItem(value: 'step_log', child: Row(children: [Icon(Icons.list_alt_rounded, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '단계로그 보기' : 'Step Log')])),
                     PopupMenuItem(value: 'pdf', child: Row(children: [Icon(Icons.picture_as_pdf_rounded, size: 18, color: C.og), const SizedBox(width: 8), Text(isKorean ? 'PDF로 내보내기' : 'Export as PDF')])),
                     PopupMenuItem(value: 'image', child: Row(children: [Icon(Icons.image_rounded, size: 18, color: C.lmD), const SizedBox(width: 8), Text(isKorean ? '이미지로 내보내기' : 'Export as image')])),
                     PopupMenuItem(value: 'mori', child: Row(children: [Icon(Icons.download_rounded, size: 18, color: C.lv), const SizedBox(width: 8), Text(isKorean ? '.mori 파일로 내보내기' : 'Export as .mori')])),

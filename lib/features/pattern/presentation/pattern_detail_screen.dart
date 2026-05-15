@@ -1611,6 +1611,13 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                     chartId: widget.chart.id,
                     isKorean: isKorean,
                   ),
+                  const SizedBox(height: 10),
+                  // 이슈 #687 — 협업(members) 카드.
+                  _BlueprintCollaboratorsCard(
+                    chartId: widget.chart.id,
+                    isKorean: isKorean,
+                    currentUid: _uid,
+                  ),
                 ],
                 // 이슈 #649 Phase 3 — 도안 작업시간 통계
                 const SizedBox(height: 10),
@@ -1834,65 +1841,27 @@ class _InfoChip extends StatelessWidget {
   }
 }
 
-/// 이슈 #687 (Phase I-B) — 신규 청사진 메타 카드.
+/// 이슈 #687 (Phase I-B / 본격 UI 연결) — 신규 청사진 메타 카드.
 ///
 /// blueprintByIdWithLegacyProvider 로 신규 step_blueprints 컬렉션 우선 조회.
 /// 없으면 PatternChart → StepBlueprint 어댑터(메모리 변환)로 표시.
-/// 마이그레이션 안 한 데이터도 정상 표시되며, blueprint == null 이면 빈 위젯.
+/// 작자(ownerUid == current uid)만 라이선스·visibility 칩을 탭해 편집 가능.
 class _BlueprintMetaCard extends ConsumerWidget {
   final String chartId;
   final bool isKorean;
 
   const _BlueprintMetaCard({required this.chartId, required this.isKorean});
 
-  String _visibilityLabel(BlueprintVisibility v, bool ko) {
-    switch (v) {
-      case BlueprintVisibility.draft:
-        return ko ? '초안' : 'Draft';
-      case BlueprintVisibility.private:
-        return ko ? '비공개' : 'Private';
-      case BlueprintVisibility.team:
-        return ko ? '팀 공개' : 'Team';
-      case BlueprintVisibility.friends:
-        return ko ? '친구 공개' : 'Friends';
-      case BlueprintVisibility.unlisted:
-        return ko ? '링크 공개' : 'Unlisted';
-      case BlueprintVisibility.public:
-        return ko ? '공개' : 'Public';
-      case BlueprintVisibility.marketplace:
-        return ko ? '마켓' : 'Marketplace';
-      case BlueprintVisibility.community_showcase:
-        return ko ? '쇼케이스' : 'Showcase';
-    }
-  }
-
-  String _licenseLabel(LicenseType t, bool ko) {
-    switch (t) {
-      case LicenseType.reserved:
-        return ko ? '모든 권리 보유' : 'All rights reserved';
-      case LicenseType.cc0:
-        return 'CC0';
-      case LicenseType.cc_by:
-        return 'CC BY';
-      case LicenseType.cc_by_nc:
-        return 'CC BY-NC';
-      case LicenseType.cc_by_sa:
-        return 'CC BY-SA';
-      case LicenseType.moriknit_official:
-        return ko ? '모리니트 공식' : 'MoriKnit Official';
-      case LicenseType.custom:
-        return ko ? '사용자 정의' : 'Custom';
-    }
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final blueprintAsync = ref.watch(blueprintByIdWithLegacyProvider(chartId));
+    final currentUid = ref.watch(authStateProvider).valueOrNull?.uid;
     return blueprintAsync.when(
       loading: () => const SizedBox.shrink(),
       error: (_, _) => const SizedBox.shrink(),
       data: (bp) {
         if (bp == null) return const SizedBox.shrink();
+        final canEdit = currentUid != null && bp.ownerUid == currentUid;
         return GlassCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1907,16 +1876,27 @@ class _BlueprintMetaCard extends ConsumerWidget {
                         T.caption.copyWith(color: C.lvD, fontWeight: FontWeight.w700),
                   ),
                   const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: C.lv.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      _visibilityLabel(bp.visibility, isKorean),
-                      style: T.caption.copyWith(color: C.lvD, fontWeight: FontWeight.w700),
-                    ),
+                  if (canEdit)
+                    Icon(Icons.edit_rounded, size: 12, color: C.mu),
+                ],
+              ),
+              const SizedBox(height: 10),
+              // 공개 범위 — 작자만 편집. 비작자는 onTap=null 로 표시만.
+              Row(
+                children: [
+                  Icon(Icons.visibility_rounded, size: 14, color: C.mu),
+                  const SizedBox(width: 6),
+                  Text(
+                    isKorean ? '공개 범위' : 'Visibility',
+                    style: T.caption.copyWith(color: C.mu),
+                  ),
+                  const Spacer(),
+                  BlueprintVisibilityChip(
+                    visibility: bp.visibility,
+                    isKorean: isKorean,
+                    onTap: canEdit
+                        ? () => _pickVisibility(context, ref, bp)
+                        : null,
                   ),
                 ],
               ),
@@ -1925,16 +1905,22 @@ class _BlueprintMetaCard extends ConsumerWidget {
                 children: [
                   Icon(Icons.verified_user_rounded, size: 14, color: C.mu),
                   const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      _licenseLabel(bp.license.type, isKorean),
-                      style: T.caption.copyWith(color: C.tx),
-                    ),
+                  Text(
+                    isKorean ? '라이선스' : 'License',
+                    style: T.caption.copyWith(color: C.mu),
+                  ),
+                  const Spacer(),
+                  BlueprintLicenseChip(
+                    license: bp.license.type,
+                    isKorean: isKorean,
+                    onTap: canEdit
+                        ? () => _pickLicense(context, ref, bp)
+                        : null,
                   ),
                 ],
               ),
               if (bp.tags.isNotEmpty) ...[
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Wrap(
                   spacing: 6,
                   runSpacing: 4,
@@ -1957,8 +1943,8 @@ class _BlueprintMetaCard extends ConsumerWidget {
                 const SizedBox(height: 6),
                 Text(
                   isKorean
-                      ? '※ 옛 도안 자동 변환 — 청사진을 저장하면 신규 컬렉션에 기록돼요'
-                      : '※ Adapted from legacy data — save to migrate',
+                      ? '※ 옛 도안 자동 변환 — 라이선스·공개범위를 선택하면 청사진에 저장돼요'
+                      : '※ Adapted from legacy data — pick license/visibility to migrate',
                   style: T.caption.copyWith(color: C.mu, fontSize: 11),
                 ),
               ],
@@ -1966,6 +1952,445 @@ class _BlueprintMetaCard extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+
+  // ── 편집 시트 ─────────────────────────────────────────────────────────────
+
+  Future<void> _pickVisibility(
+    BuildContext context,
+    WidgetRef ref,
+    StepBlueprint bp,
+  ) async {
+    final picked = await showBlueprintVisibilityPicker(
+      context: context,
+      current: bp.visibility,
+      isKorean: isKorean,
+    );
+    if (picked == null || picked == bp.visibility) return;
+    if (!context.mounted) return;
+    await _persistBlueprint(context, ref, bp, patch: {'visibility': picked.name});
+  }
+
+  Future<void> _pickLicense(
+    BuildContext context,
+    WidgetRef ref,
+    StepBlueprint bp,
+  ) async {
+    final picked = await showBlueprintLicensePicker(
+      context: context,
+      current: bp.license.type,
+      isKorean: isKorean,
+    );
+    if (picked == null || picked == bp.license.type) return;
+    if (!context.mounted) return;
+    final nextLicense = bp.license.copyWith(type: picked);
+    await _persistBlueprint(context, ref, bp, patch: {'license': nextLicense.toMap()});
+  }
+
+  /// 어댑터(legacy) 청사진은 step_blueprints에 아직 없을 수 있으므로
+  /// repository.get() 으로 존재 확인 후 없으면 create로 fallback.
+  Future<void> _persistBlueprint(
+    BuildContext context,
+    WidgetRef ref,
+    StepBlueprint bp, {
+    required Map<String, dynamic> patch,
+  }) async {
+    final repo = ref.read(stepBlueprintRepositoryProvider);
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () async {
+          final existing = await repo.get(bp.id);
+          if (existing == null) {
+            final license = patch['license'] is Map
+                ? BlueprintLicense.fromMap(
+                    Map<String, dynamic>.from(patch['license'] as Map),
+                  )
+                : bp.license;
+            final visibility = patch['visibility'] is String
+                ? BlueprintVisibility.fromName(patch['visibility'] as String)
+                : bp.visibility;
+            await repo.create(bp.copyWith(
+              license: license,
+              visibility: visibility,
+            ));
+          } else {
+            await repo.update(bp.id, patch);
+          }
+        },
+      );
+      ref.invalidate(blueprintByIdWithLegacyProvider(chartId));
+      if (!context.mounted) return;
+      showSavedSnackBar(
+        ScaffoldMessenger.of(context),
+        message: isKorean ? '저장됐어요.' : 'Saved.',
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+}
+
+// ── 공용 라벨/칩/picker 헬퍼 (#687) — 같은 파일 내 다른 위젯·pattern_list에서도 사용 ──
+
+String blueprintVisibilityLabel(BlueprintVisibility v, bool ko) {
+  switch (v) {
+    case BlueprintVisibility.draft:
+      return ko ? '초안' : 'Draft';
+    case BlueprintVisibility.private:
+      return ko ? '비공개' : 'Private';
+    case BlueprintVisibility.team:
+      return ko ? '팀 공개' : 'Team';
+    case BlueprintVisibility.friends:
+      return ko ? '친구 공개' : 'Friends';
+    case BlueprintVisibility.unlisted:
+      return ko ? '링크 공개' : 'Unlisted';
+    case BlueprintVisibility.public:
+      return ko ? '공개' : 'Public';
+    case BlueprintVisibility.marketplace:
+      return ko ? '마켓' : 'Marketplace';
+    case BlueprintVisibility.community_showcase:
+      return ko ? '쇼케이스' : 'Showcase';
+  }
+}
+
+String blueprintLicenseLabel(LicenseType t, bool ko) {
+  switch (t) {
+    case LicenseType.reserved:
+      return ko ? '모든 권리 보유' : 'All rights reserved';
+    case LicenseType.cc0:
+      return 'CC0';
+    case LicenseType.cc_by:
+      return 'CC BY';
+    case LicenseType.cc_by_nc:
+      return 'CC BY-NC';
+    case LicenseType.cc_by_sa:
+      return 'CC BY-SA';
+    case LicenseType.moriknit_official:
+      return ko ? '모리니트 공식' : 'MoriKnit Official';
+    case LicenseType.custom:
+      return ko ? '사용자 정의' : 'Custom';
+  }
+}
+
+/// CLAUDE.md 칩 스타일 표준(선택=C.lv/white/w700, 미선택=C.lvL/C.lvD/w500) 준수.
+/// onTap == null 이면 단순 표시(읽기 전용 — 비작자/배지).
+class BlueprintSelectableChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  const BlueprintSelectableChip({
+    super.key,
+    required this.label,
+    required this.selected,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = selected ? C.lv : C.lvL;
+    final fg = selected ? Colors.white : C.lvD;
+    final border = selected ? C.lv : C.lv.withValues(alpha: 0.20);
+    final fw = selected ? FontWeight.w700 : FontWeight.w500;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: T.caption.copyWith(color: fg, fontWeight: fw),
+            ),
+            if (onTap != null) ...[
+              const SizedBox(width: 4),
+              Icon(Icons.expand_more_rounded, size: 14, color: fg),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class BlueprintVisibilityChip extends StatelessWidget {
+  final BlueprintVisibility visibility;
+  final bool isKorean;
+  final VoidCallback? onTap;
+
+  const BlueprintVisibilityChip({
+    super.key,
+    required this.visibility,
+    required this.isKorean,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return BlueprintSelectableChip(
+      label: blueprintVisibilityLabel(visibility, isKorean),
+      selected: true,
+      onTap: onTap,
+    );
+  }
+}
+
+class BlueprintLicenseChip extends StatelessWidget {
+  final LicenseType license;
+  final bool isKorean;
+  final VoidCallback? onTap;
+
+  const BlueprintLicenseChip({
+    super.key,
+    required this.license,
+    required this.isKorean,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return BlueprintSelectableChip(
+      label: blueprintLicenseLabel(license, isKorean),
+      selected: true,
+      onTap: onTap,
+    );
+  }
+}
+
+const List<BlueprintVisibility> kBlueprintVisibilityOptions = [
+  BlueprintVisibility.draft,
+  BlueprintVisibility.private,
+  BlueprintVisibility.unlisted,
+  BlueprintVisibility.public,
+  BlueprintVisibility.marketplace,
+];
+
+const List<LicenseType> kBlueprintLicenseOptions = [
+  LicenseType.reserved,
+  LicenseType.cc0,
+  LicenseType.cc_by,
+  LicenseType.cc_by_nc,
+  LicenseType.cc_by_sa,
+  LicenseType.custom,
+];
+
+Future<BlueprintVisibility?> showBlueprintVisibilityPicker({
+  required BuildContext context,
+  required BlueprintVisibility current,
+  required bool isKorean,
+}) async {
+  return showModalBottomSheet<BlueprintVisibility>(
+    context: context,
+    backgroundColor: C.bg,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) =>
+        _BlueprintVisibilityPickerSheet(current: current, isKorean: isKorean),
+  );
+}
+
+Future<LicenseType?> showBlueprintLicensePicker({
+  required BuildContext context,
+  required LicenseType current,
+  required bool isKorean,
+}) async {
+  return showModalBottomSheet<LicenseType>(
+    context: context,
+    backgroundColor: C.bg,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) =>
+        _BlueprintLicensePickerSheet(current: current, isKorean: isKorean),
+  );
+}
+
+class _BlueprintVisibilityPickerSheet extends StatelessWidget {
+  final BlueprintVisibility current;
+  final bool isKorean;
+  const _BlueprintVisibilityPickerSheet({
+    required this.current,
+    required this.isKorean,
+  });
+
+  String _description(BlueprintVisibility v) {
+    if (isKorean) {
+      switch (v) {
+        case BlueprintVisibility.draft:
+          return '저장은 되지만 공유·판매 불가';
+        case BlueprintVisibility.private:
+          return '나만 볼 수 있어요';
+        case BlueprintVisibility.unlisted:
+          return '링크가 있는 사람만 볼 수 있어요';
+        case BlueprintVisibility.public:
+          return '누구나 볼 수 있어요';
+        case BlueprintVisibility.marketplace:
+          return '마켓에 노출돼요 (유료 도안)';
+        default:
+          return '';
+      }
+    }
+    switch (v) {
+      case BlueprintVisibility.draft:
+        return 'Saved but not shareable';
+      case BlueprintVisibility.private:
+        return 'Only you can see';
+      case BlueprintVisibility.unlisted:
+        return 'Anyone with the link';
+      case BlueprintVisibility.public:
+        return 'Anyone can view';
+      case BlueprintVisibility.marketplace:
+        return 'Listed on marketplace (paid)';
+      default:
+        return '';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: C.bd2,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Text(isKorean ? '공개 범위 선택' : 'Visibility', style: T.h3),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: kBlueprintVisibilityOptions.map((v) {
+                final isCurrent = v == current;
+                return BlueprintSelectableChip(
+                  label: blueprintVisibilityLabel(v, isKorean),
+                  selected: isCurrent,
+                  onTap: () => Navigator.pop(context, v),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _description(current),
+              style: T.caption.copyWith(color: C.mu),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BlueprintLicensePickerSheet extends StatelessWidget {
+  final LicenseType current;
+  final bool isKorean;
+  const _BlueprintLicensePickerSheet({
+    required this.current,
+    required this.isKorean,
+  });
+
+  String _description(LicenseType t) {
+    if (isKorean) {
+      switch (t) {
+        case LicenseType.reserved:
+          return '저작권 보호 — 무단 사용·재배포 금지';
+        case LicenseType.cc0:
+          return '저작권 포기 — 자유 사용';
+        case LicenseType.cc_by:
+          return '출처 표시 시 사용 허용';
+        case LicenseType.cc_by_nc:
+          return '비영리 + 출처 표시';
+        case LicenseType.cc_by_sa:
+          return '동일 조건 + 출처 표시';
+        case LicenseType.moriknit_official:
+          return '모리니트 공식 라이선스';
+        case LicenseType.custom:
+          return '직접 작성한 라이선스';
+      }
+    }
+    switch (t) {
+      case LicenseType.reserved:
+        return 'All rights reserved';
+      case LicenseType.cc0:
+        return 'Public domain';
+      case LicenseType.cc_by:
+        return 'Attribution required';
+      case LicenseType.cc_by_nc:
+        return 'Non-commercial + attribution';
+      case LicenseType.cc_by_sa:
+        return 'Share-alike + attribution';
+      case LicenseType.moriknit_official:
+        return 'MoriKnit Official';
+      case LicenseType.custom:
+        return 'Custom license';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: C.bd2,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Text(isKorean ? '라이선스 선택' : 'License', style: T.h3),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: kBlueprintLicenseOptions.map((t) {
+                final isCurrent = t == current;
+                return BlueprintSelectableChip(
+                  label: blueprintLicenseLabel(t, isKorean),
+                  selected: isCurrent,
+                  onTap: () => Navigator.pop(context, t),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _description(current),
+              style: T.caption.copyWith(color: C.mu),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -2166,6 +2591,640 @@ class _PatternTimeStatsCard extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── 협업자 카드 (이슈 #687) ───────────────────────────────────────────────────
+
+/// 협업자 표시 + 초대/제거 UI.
+///
+/// - 작자(ownerUid == currentUid)만 "협업자 초대" 버튼 노출.
+/// - 작자: 협업자 칩 long press / tap → 역할 변경 / 제거 메뉴.
+/// - 협업자: 본인 역할 표시 + 다른 협업자 read-only.
+/// - 비참여자: 빈 위젯 (라이브러리에 표시되지 않으므로 사실상 도달 불가).
+class _BlueprintCollaboratorsCard extends ConsumerWidget {
+  final String chartId;
+  final bool isKorean;
+  final String? currentUid;
+
+  const _BlueprintCollaboratorsCard({
+    required this.chartId,
+    required this.isKorean,
+    required this.currentUid,
+  });
+
+  String _roleLabel(BlueprintMemberRole role, bool ko) {
+    switch (role) {
+      case BlueprintMemberRole.admin:
+        return ko ? '관리자' : 'Admin';
+      case BlueprintMemberRole.editor:
+        return ko ? '편집자' : 'Editor';
+      case BlueprintMemberRole.tester:
+        return ko ? '테스터' : 'Tester';
+      case BlueprintMemberRole.commenter:
+        return ko ? '코멘터' : 'Commenter';
+      case BlueprintMemberRole.viewer:
+        return ko ? '뷰어' : 'Viewer';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final blueprintAsync = ref.watch(blueprintByIdWithLegacyProvider(chartId));
+    return blueprintAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (bp) {
+        if (bp == null) return const SizedBox.shrink();
+        final isOwner = currentUid != null && bp.ownerUid == currentUid;
+        final members = bp.members;
+        // legacy adapter (pattern_charts) 는 members 가 비어 있고 신규 컬렉션 저장 전.
+        final isLegacyAdapter =
+            bp.tags.contains('adapter:legacy_pattern_chart');
+
+        return GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.group_outlined, size: 16, color: C.lvD),
+                  const SizedBox(width: 6),
+                  Text(
+                    isKorean ? '협업자' : 'Collaborators',
+                    style: T.caption.copyWith(
+                        color: C.lvD, fontWeight: FontWeight.w700),
+                  ),
+                  const Spacer(),
+                  Text(
+                    isKorean
+                        ? '${members.length}명'
+                        : '${members.length}',
+                    style: T.caption.copyWith(color: C.tx2),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              if (members.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    isKorean
+                        ? '아직 협업자가 없어요. 함께 작업할 사람을 초대해 보세요.'
+                        : 'No collaborators yet. Invite people to collaborate.',
+                    style: T.caption.copyWith(color: C.mu),
+                  ),
+                )
+              else
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final entry in members.entries)
+                      _CollaboratorChip(
+                        uid: entry.key,
+                        role: entry.value,
+                        roleLabel: _roleLabel(entry.value, isKorean),
+                        isOwner: isOwner,
+                        isKorean: isKorean,
+                        onTap: isOwner
+                            ? () => _showMemberActions(
+                                  context,
+                                  ref,
+                                  bp.id,
+                                  entry.key,
+                                  entry.value,
+                                )
+                            : null,
+                      ),
+                  ],
+                ),
+              if (isOwner && !isLegacyAdapter) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 42,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _openInviteSheet(context, ref, bp.id),
+                    icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                    label: Text(
+                        isKorean ? '협업자 초대' : 'Invite collaborator'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: C.lvD,
+                      side: BorderSide(color: C.lv),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
+              if (isOwner && isLegacyAdapter) ...[
+                const SizedBox(height: 6),
+                Text(
+                  isKorean
+                      ? '※ 협업자 초대를 사용하려면 먼저 청사진을 저장해 주세요.'
+                      : '※ Save this blueprint first to invite collaborators.',
+                  style: T.caption.copyWith(color: C.mu, fontSize: 11),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _openInviteSheet(BuildContext context, WidgetRef ref, String bid) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CollaboratorInviteSheet(
+        blueprintId: bid,
+        isKorean: isKorean,
+      ),
+    );
+  }
+
+  Future<void> _showMemberActions(
+    BuildContext context,
+    WidgetRef ref,
+    String bid,
+    String memberUid,
+    BlueprintMemberRole currentRole,
+  ) async {
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => SafeArea(
+        child: Container(
+          margin: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(Icons.swap_horiz_rounded, color: C.lvD),
+                title: Text(isKorean ? '역할 변경' : 'Change role'),
+                onTap: () => Navigator.pop(ctx, 'role'),
+              ),
+              ListTile(
+                leading: Icon(Icons.person_remove_alt_1_rounded, color: C.og),
+                title: Text(
+                  isKorean ? '협업자 제거' : 'Remove collaborator',
+                  style: TextStyle(color: C.og),
+                ),
+                onTap: () => Navigator.pop(ctx, 'remove'),
+              ),
+              ListTile(
+                leading: Icon(Icons.close_rounded, color: C.mu),
+                title: Text(isKorean ? '취소' : 'Cancel',
+                    style: TextStyle(color: C.mu)),
+                onTap: () => Navigator.pop(ctx),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (!context.mounted) return;
+
+    if (result == 'role') {
+      final newRole = await _pickRole(context, current: currentRole);
+      if (newRole == null || !context.mounted) return;
+      if (newRole == currentRole) return;
+      try {
+        await runWithMoriLoadingDialog<void>(
+          context,
+          message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+          subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+          task: () => ref
+              .read(stepBlueprintRepositoryProvider)
+              .upsertMember(
+                blueprintId: bid,
+                memberUid: memberUid,
+                role: newRole,
+              ),
+        );
+        if (!context.mounted) return;
+        showSavedSnackBar(ScaffoldMessenger.of(context),
+            message: isKorean ? '역할을 변경했어요.' : 'Role updated.');
+      } catch (e) {
+        if (!context.mounted) return;
+        showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+      }
+    } else if (result == 'remove') {
+      try {
+        await runWithMoriLoadingDialog<void>(
+          context,
+          message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+          subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+          task: () => ref
+              .read(stepBlueprintRepositoryProvider)
+              .removeMember(blueprintId: bid, memberUid: memberUid),
+        );
+        if (!context.mounted) return;
+        showSavedSnackBar(ScaffoldMessenger.of(context),
+            message: isKorean ? '협업자를 제거했어요.' : 'Removed.');
+      } catch (e) {
+        if (!context.mounted) return;
+        showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+      }
+    }
+  }
+
+  Future<BlueprintMemberRole?> _pickRole(
+    BuildContext context, {
+    required BlueprintMemberRole current,
+  }) async {
+    return showModalBottomSheet<BlueprintMemberRole>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => SafeArea(
+        child: Container(
+          margin: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(isKorean ? '역할 선택' : 'Pick role',
+                  style: T.h3),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final role in BlueprintMemberRole.values)
+                    _RoleChip(
+                      label: _roleLabel(role, isKorean),
+                      selected: role == current,
+                      onTap: () => Navigator.pop(ctx, role),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(isKorean ? '취소' : 'Cancel',
+                      style: TextStyle(color: C.mu)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CollaboratorChip extends ConsumerWidget {
+  final String uid;
+  final BlueprintMemberRole role;
+  final String roleLabel;
+  final bool isOwner;
+  final bool isKorean;
+  final VoidCallback? onTap;
+
+  const _CollaboratorChip({
+    required this.uid,
+    required this.role,
+    required this.roleLabel,
+    required this.isOwner,
+    required this.isKorean,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final repo = ref.watch(stepBlueprintRepositoryProvider);
+    return FutureBuilder<Map<String, String>?>(
+      future: repo.getUserProfile(uid),
+      builder: (context, snap) {
+        final displayName = (snap.data?['displayName'] ?? '').toString();
+        final fallback =
+            displayName.isNotEmpty ? displayName : uid.substring(0, uid.length.clamp(0, 6));
+        return GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: C.lvL,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: C.lv.withValues(alpha: 0.20)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.person_rounded, size: 14, color: C.lvD),
+                const SizedBox(width: 6),
+                Text(
+                  fallback,
+                  style: T.caption.copyWith(
+                    color: C.lvD,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    roleLabel,
+                    style: T.caption
+                        .copyWith(color: C.lvD, fontSize: 10),
+                  ),
+                ),
+                if (isOwner) ...[
+                  const SizedBox(width: 4),
+                  Icon(Icons.expand_more_rounded,
+                      size: 14, color: C.lvD),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _RoleChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _RoleChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? C.lv : C.lvL,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? C.lv : C.lv.withValues(alpha: 0.20),
+          ),
+        ),
+        child: Text(
+          label,
+          style: T.caption.copyWith(
+            color: selected ? Colors.white : C.lvD,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 협업자 초대 시트 — 사용자 검색 + 역할 선택 + 초대.
+class _CollaboratorInviteSheet extends ConsumerStatefulWidget {
+  final String blueprintId;
+  final bool isKorean;
+
+  const _CollaboratorInviteSheet({
+    required this.blueprintId,
+    required this.isKorean,
+  });
+
+  @override
+  ConsumerState<_CollaboratorInviteSheet> createState() =>
+      _CollaboratorInviteSheetState();
+}
+
+class _CollaboratorInviteSheetState
+    extends ConsumerState<_CollaboratorInviteSheet> {
+  final _searchCtrl = TextEditingController();
+  List<Map<String, String>> _results = const [];
+  bool _searching = false;
+  String? _selectedUid;
+  String? _selectedDisplayName;
+  BlueprintMemberRole _role = BlueprintMemberRole.viewer;
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _runSearch() async {
+    final q = _searchCtrl.text.trim();
+    if (q.isEmpty) {
+      setState(() => _results = const []);
+      return;
+    }
+    setState(() => _searching = true);
+    try {
+      final currentUid =
+          ref.read(authStateProvider).valueOrNull?.uid ?? '';
+      final list = await ref
+          .read(stepBlueprintRepositoryProvider)
+          .searchUsersByDisplayName(q, excludeUid: currentUid);
+      if (!mounted) return;
+      setState(() {
+        _results = list;
+        _searching = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _results = const [];
+        _searching = false;
+      });
+    }
+  }
+
+  String _roleLabel(BlueprintMemberRole role, bool ko) {
+    switch (role) {
+      case BlueprintMemberRole.admin:
+        return ko ? '관리자' : 'Admin';
+      case BlueprintMemberRole.editor:
+        return ko ? '편집자' : 'Editor';
+      case BlueprintMemberRole.tester:
+        return ko ? '테스터' : 'Tester';
+      case BlueprintMemberRole.commenter:
+        return ko ? '코멘터' : 'Commenter';
+      case BlueprintMemberRole.viewer:
+        return ko ? '뷰어' : 'Viewer';
+    }
+  }
+
+  Future<void> _invite() async {
+    final ko = widget.isKorean;
+    final uid = _selectedUid;
+    if (uid == null) return;
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: ko ? '저장하는 중입니다.' : 'Saving...',
+        subtitle: ko ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () => ref
+            .read(stepBlueprintRepositoryProvider)
+            .upsertMember(
+              blueprintId: widget.blueprintId,
+              memberUid: uid,
+              role: _role,
+            ),
+      );
+      if (!mounted) return;
+      showSavedSnackBar(ScaffoldMessenger.of(context),
+          message: ko
+              ? '${_selectedDisplayName ?? '협업자'}님을 초대했어요.'
+              : 'Invited ${_selectedDisplayName ?? 'user'}.');
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ko = widget.isKorean;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: Container(
+          margin: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.person_add_alt_1_rounded,
+                      size: 18, color: C.lvD),
+                  const SizedBox(width: 6),
+                  Text(ko ? '협업자 초대' : 'Invite collaborator',
+                      style: T.h3),
+                ],
+              ),
+              const SizedBox(height: 14),
+              SectionTitle(title: ko ? '사용자 검색' : 'Find user'),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _searchCtrl,
+                onSubmitted: (_) => _runSearch(),
+                decoration: InputDecoration(
+                  hintText: ko ? '닉네임으로 검색' : 'Search by display name',
+                  filled: true,
+                  fillColor: C.gx,
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.search_rounded),
+                    onPressed: _runSearch,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              if (_searching)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_results.isEmpty && _searchCtrl.text.trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    ko ? '검색 결과가 없어요.' : 'No results.',
+                    style: T.caption.copyWith(color: C.mu),
+                  ),
+                )
+              else
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: _results.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (_, i) {
+                      final u = _results[i];
+                      final selected = u['uid'] == _selectedUid;
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: C.lvL,
+                          child: Icon(Icons.person_rounded, color: C.lvD),
+                        ),
+                        title: Text(u['displayName'] ?? ''),
+                        subtitle: Text(u['email'] ?? '',
+                            style: T.caption.copyWith(color: C.mu)),
+                        trailing: selected
+                            ? Icon(Icons.check_circle_rounded, color: C.lv)
+                            : null,
+                        onTap: () => setState(() {
+                          _selectedUid = u['uid'];
+                          _selectedDisplayName = u['displayName'];
+                        }),
+                      );
+                    },
+                  ),
+                ),
+              const SizedBox(height: 14),
+              SectionTitle(title: ko ? '역할' : 'Role'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final role in BlueprintMemberRole.values)
+                    _RoleChip(
+                      label: _roleLabel(role, ko),
+                      selected: role == _role,
+                      onTap: () => setState(() => _role = role),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: _selectedUid == null ? null : _invite,
+                  icon: const Icon(Icons.send_rounded, size: 18),
+                  label: Text(ko ? '초대' : 'Invite'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: C.lv,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: C.bd,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

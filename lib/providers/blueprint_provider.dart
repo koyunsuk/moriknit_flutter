@@ -67,6 +67,7 @@ final blueprintByIdWithLegacyProvider =
 ///
 /// 도안 라이브러리 화면에서 사용. step_blueprints의 청사진과 마이그레이션 안 된
 /// pattern_charts의 어댑터를 합쳐 단일 리스트로 노출한다. 같은 id는 신규가 우선.
+/// 협업자(members) 로 참여중인 청사진도 함께 포함된다(#687).
 final myBlueprintsWithLegacyProvider =
     StreamProvider<List<StepBlueprint>>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
@@ -77,4 +78,33 @@ final myBlueprintsWithLegacyProvider =
     ownerUid: user.uid,
     patternRepo: patternRepo,
   );
+});
+
+/// 협업자 본인이 들어가 있는 청사진 (members 키에 uid).
+///
+/// 라이브러리 노출 검증·디버그용. myBlueprintsWithLegacyProvider 가 이미 포함하지만
+/// 별도 화면(예: 협업 도안 모음)에서 호출 가능.
+final blueprintsAsMemberProvider =
+    StreamProvider<List<StepBlueprint>>((ref) {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return Stream.value(const []);
+  return ref.watch(stepBlueprintRepositoryProvider).watchByMember(user.uid);
+});
+
+/// 협업자 본인의 역할 조회 — 도안 상세에서 편집 가능 여부 판별.
+///
+/// 작자(ownerUid == self) → null 반환 (역할 개념 외, 모든 권한 보유).
+/// 협업자 → BlueprintMemberRole.
+/// 비참여자 → null.
+final blueprintMyRoleProvider =
+    FutureProvider.family<BlueprintMemberRole?, String>(
+        (ref, blueprintId) async {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return null;
+  final bp = await ref
+      .watch(stepBlueprintRepositoryProvider)
+      .get(blueprintId);
+  if (bp == null) return null;
+  if (bp.ownerUid == user.uid) return null; // owner — 별도 처리
+  return bp.members[user.uid];
 });

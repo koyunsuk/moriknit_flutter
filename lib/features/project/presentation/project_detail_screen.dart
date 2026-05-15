@@ -44,6 +44,7 @@ import '../../pattern/data/pattern_repository.dart';
 import '../../pattern/data/pattern_session_repository.dart';
 import '../../pattern/domain/pattern_chart.dart';
 import '../../pattern/presentation/pattern_detail_screen.dart';
+import '../../blueprint/presentation/step_log_view.dart';
 import 'widgets/project_progress_section.dart';
 import 'widgets/project_share_card.dart';
 import 'widgets/project_time_summary_card.dart';
@@ -1632,6 +1633,37 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
             ),
             const SizedBox(height: 12),
             _StepsSection(project: project, isCardEditMode: isCardEditMode, lastAnchorKey: _stepsAnchorKey, onScrollToLastStep: _scrollToLastStep),
+            // 이슈 #687 (Phase D4) — 단계로그 통일 view (신규). 옛 _StepsSection과 공존.
+            // project.id == StepRun.id 정책으로 멱등성 보장 (Phase D 마이그레이션).
+            if (project.sourcePatternId.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              GlassCard(
+                color: C.bg,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.checklist_rounded, color: C.lmD, size: 18),
+                        const SizedBox(width: 6),
+                        Text(
+                          isKorean ? '단계로그 (신규)' : 'Step Log (New)',
+                          style: T.bodyBold,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 400,
+                      child: StepLogView(
+                        blueprintId: project.sourcePatternId,
+                        runId: project.id,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             if (project.memo.isNotEmpty) ...[
               const SizedBox(height: 12),
               GlassCard(

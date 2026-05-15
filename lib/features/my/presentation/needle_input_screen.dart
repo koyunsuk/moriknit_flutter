@@ -18,8 +18,11 @@ import '../domain/needle_model.dart';
 
 class NeedleInputScreen extends ConsumerStatefulWidget {
   final NeedleModel? initialNeedle;
+  // 이슈 #698 — 기존 자산 복사로 시작. 즉시 새 doc 생성하지 않고 입력 화면에 prefill만.
+  // 사용자가 색상/사이즈 등을 수정 후 저장 시점에만 새 doc 생성.
+  final NeedleModel? copyFrom;
 
-  const NeedleInputScreen({super.key, this.initialNeedle});
+  const NeedleInputScreen({super.key, this.initialNeedle, this.copyFrom});
 
   @override
   ConsumerState<NeedleInputScreen> createState() => _NeedleInputScreenState();
@@ -27,6 +30,10 @@ class NeedleInputScreen extends ConsumerStatefulWidget {
 
 class _NeedleInputScreenState extends ConsumerState<NeedleInputScreen> {
   bool _isSaving = false;
+  // 이슈 #698 — 미저장 변경 추적 (PopScope 가드용)
+  bool _isDirty = false;
+  // 이슈 #698 — prefill 도중 발생하는 provider 변경은 dirty 마킹 제외용 가드
+  bool _prefillInProgress = false;
   late final TextEditingController _memoCtrl;
   late final TextEditingController _priceCtrl;
   late final TextEditingController _purchasePlaceCtrl;
@@ -37,19 +44,33 @@ class _NeedleInputScreenState extends ConsumerState<NeedleInputScreen> {
   @override
   void initState() {
     super.initState();
-    final needle = widget.initialNeedle;
-    _memoCtrl = TextEditingController(text: needle?.memo ?? '');
-    _priceCtrl = TextEditingController(text: needle != null && needle.price > 0 ? '${needle.price}' : '');
-    _purchasePlaceCtrl = TextEditingController(text: needle?.purchasePlace ?? '');
-    _nameCtrl = TextEditingController(text: needle?.name ?? '');
-    // 버그 수정: 기존 사진 URL 초기화
-    _photoUrl = needle?.photoUrl.isNotEmpty == true ? needle!.photoUrl : null;
+    // 이슈 #698 — copyFrom prefill (id 제외). initialNeedle 우선 (수정 모드).
+    final source = widget.initialNeedle ?? widget.copyFrom;
+    _memoCtrl = TextEditingController(text: source?.memo ?? '');
+    _priceCtrl = TextEditingController(text: source != null && source.price > 0 ? '${source.price}' : '');
+    _purchasePlaceCtrl = TextEditingController(text: source?.purchasePlace ?? '');
+    _nameCtrl = TextEditingController(text: source?.name ?? '');
+    // 버그 수정: 기존 사진 URL 초기화 (복사 시에도 사진은 가져옴 — 사용자가 변경 가능)
+    _photoUrl = source?.photoUrl.isNotEmpty == true ? source!.photoUrl : null;
 
-    if (needle != null) {
+    if (source != null) {
+      _prefillInProgress = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(needleInputProvider.notifier).load(needle);
+        // copyFrom 모드: id 비우고 load → 저장 시 createNeedle 분기
+        final loaded = widget.copyFrom != null && widget.initialNeedle == null
+            ? source.copyWith(id: '', isDirty: false)
+            : source;
+        ref.read(needleInputProvider.notifier).load(loaded);
+        // load() 가 listener 를 거친 다음 frame 부터 dirty 추적 활성화
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _prefillInProgress = false;
+        });
       });
     }
+  }
+
+  void _markDirty() {
+    if (!_isDirty) setState(() => _isDirty = true);
   }
 
   @override
@@ -68,18 +89,41 @@ class _NeedleInputScreenState extends ConsumerState<NeedleInputScreen> {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
     final t = ref.watch(appStringsProvider);
 
-    return Scaffold(
+    // 이슈 #698 — needleInputProvider 변경 감지 → dirty 마킹
+    // prefill 도중 발생하는 load() 변경은 제외.
+    ref.listen<NeedleModel>(needleInputProvider, (prev, next) {
+      if (_prefillInProgress) return;
+      if (prev != null && prev != next) {
+        _markDirty();
+      }
+    });
+
+    return PopScope(
+      canPop: !_isDirty,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        await _handleUnsavedBack(context, t);
+      },
+      child: Scaffold(
       backgroundColor: C.bg,
       appBar: AppBar(
         backgroundColor: C.bg,
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () async {
+            if (!_isDirty) {
+              Navigator.pop(context);
+              return;
+            }
+            await _handleUnsavedBack(context, t);
+          },
         ),
         title: Text(
           widget.initialNeedle == null
-              ? (isKorean ? '바늘 추가' : 'Add Needle')
+              ? (widget.copyFrom != null
+                  ? (isKorean ? '바늘 복사' : 'Copy Needle')
+                  : (isKorean ? '바늘 추가' : 'Add Needle'))
               : (isKorean ? '바늘 수정' : 'Edit Needle'),
           style: T.h3,
         ),
@@ -287,7 +331,41 @@ class _NeedleInputScreenState extends ConsumerState<NeedleInputScreen> {
           ),
         ],
       ),
+    ),
     );
+  }
+
+  // 이슈 #698 — 미저장 변경 뒤로가기 가드
+  Future<void> _handleUnsavedBack(BuildContext context, AppStrings t) async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final navigator = Navigator.of(context);
+    final action = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isKorean ? '저장하지 않은 변경 사항' : 'Unsaved changes', style: T.h3),
+        content: Text(isKorean ? '저장하지 않고 나가시겠어요?' : 'Leave without saving?', style: T.body),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, 'cancel'), child: Text(isKorean ? '취소' : 'Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, 'save'), child: Text(isKorean ? '저장하고 나가기' : 'Save & Leave')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'discard'),
+            style: TextButton.styleFrom(foregroundColor: C.og),
+            child: Text(isKorean ? '저장 안 함' : 'Discard'),
+          ),
+        ],
+      ),
+    );
+    if (action == 'discard') {
+      if (!mounted) return;
+      // dirty 풀고 강제 pop
+      setState(() => _isDirty = false);
+      navigator.pop();
+    } else if (action == 'save') {
+      await _save(context, t);
+      if (!mounted) return;
+      // _save 가 정상 종료되면 이미 pop 한 상태 — 추가 pop 불필요
+    }
+    // cancel: 아무것도 안 함
   }
 
   Future<void> _pickNeedlePhoto() async {
@@ -352,6 +430,7 @@ class _NeedleInputScreenState extends ConsumerState<NeedleInputScreen> {
           final needle = ref.read(needleInputProvider);
           final repository = ref.read(needleRepositoryProvider);
 
+          // 이슈 #698 — copyFrom 모드는 id 비어있어 createNeedle 로 분기됨.
           if (widget.initialNeedle != null) {
             await repository.updateNeedle(needle, photoUrl: _photoUrl);
           } else {
@@ -366,7 +445,11 @@ class _NeedleInputScreenState extends ConsumerState<NeedleInputScreen> {
         },
       );
 
-      if (mounted) navigator.pop();
+      if (mounted) {
+        // 이슈 #698 — 저장 성공 시 PopScope canPop=true 보장
+        setState(() => _isDirty = false);
+        navigator.pop();
+      }
     } catch (_) {
       // runWithSaveFeedback handles error snackbar
     } finally {

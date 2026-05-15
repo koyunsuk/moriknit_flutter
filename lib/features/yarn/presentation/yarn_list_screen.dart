@@ -269,19 +269,13 @@ class _YarnListScreenState extends ConsumerState<YarnListScreen> {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: GlassCard(
-                      onTap: () async {
+                      onTap: () {
+                        // 이슈 #698 — 즉시 duplicate 호출 금지. 입력화면 진입 + prefill.
                         Navigator.pop(ctx);
-                        try {
-                          await runWithMoriLoadingDialog<void>(
-                            context,
-                            message: isKorean ? '복사하는 중입니다.' : 'Duplicating...',
-                            subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
-                            task: () => ref.read(yarnRepositoryProvider).duplicateYarn(y),
-                          );
-                          if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '복사됐어요.' : 'Duplicated.');
-                        } catch (e) {
-                          if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
-                        }
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => YarnInputScreen(copyFrom: y)),
+                        );
                       },
                       child: Row(
                         children: [

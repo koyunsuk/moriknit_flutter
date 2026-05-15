@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/template_provider.dart';
+import '../../blueprint/presentation/step_log_screen.dart';
 import '../domain/builtin_template.dart';
 import '../domain/user_template.dart'; // ignore: unused_import — UserTemplate passed via extra
 
@@ -108,11 +109,17 @@ class TemplateListScreen extends ConsumerWidget {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    final route = Routes.templateEditor;
-                    final extra = {'mode': 'view_builtin', 'title': title, 'steps': isKorean ? tmpl.stepsKo : tmpl.stepsEn};
+                    // 이슈 #687 Phase D3 — 빌트인 템플릿 → step_log_screen 진입.
+                    // 마이그레이션으로 step_blueprints에 'tmpl_builtin_{id}'로 이식됨.
+                    final blueprintId = 'tmpl_builtin_${tmpl.id}';
                     Navigator.pop(ctx);
                     Future.microtask(() {
-                      if (context.mounted) context.push(route, extra: extra);
+                      if (!context.mounted) return;
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => StepLogScreen(blueprintId: blueprintId),
+                        ),
+                      );
                     });
                   },
                   child: Text(isKorean ? '이 템플릿으로 만들기' : 'Use this template'),
@@ -288,7 +295,16 @@ class _CustomTemplateSection extends ConsumerWidget {
               margin: const EdgeInsets.only(bottom: 4),
               child: ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                onTap: () => context.push(Routes.templateDetail, extra: tmpl),
+                // 이슈 #687 Phase D3 — 커스텀 템플릿 → step_log_screen 진입.
+                // 마이그레이션으로 step_blueprints에 'tmpl_user_{id}'로 이식됨.
+                onTap: () {
+                  final blueprintId = 'tmpl_user_${tmpl.id}';
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => StepLogScreen(blueprintId: blueprintId),
+                    ),
+                  );
+                },
                 leading: tmpl.photoUrl.isNotEmpty
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(10),

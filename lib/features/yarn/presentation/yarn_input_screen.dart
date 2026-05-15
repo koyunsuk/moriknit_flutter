@@ -22,8 +22,10 @@ import 'yarn_material_sheet.dart';
 class YarnInputScreen extends ConsumerStatefulWidget {
   final String? yarnId;
   final YarnModel? initialYarn;
+  // 이슈 #698 — 기존 실 복사로 시작. 즉시 새 doc 생성하지 않고 prefill만.
+  final YarnModel? copyFrom;
 
-  const YarnInputScreen({super.key, this.yarnId, this.initialYarn});
+  const YarnInputScreen({super.key, this.yarnId, this.initialYarn, this.copyFrom});
 
   @override
   ConsumerState<YarnInputScreen> createState() => _YarnInputScreenState();
@@ -43,8 +45,15 @@ class _YarnInputScreenState extends ConsumerState<YarnInputScreen> {
   bool _isSaving = false;
   bool _uploading = false;
   bool _uploadingLabel = false;
+  // 이슈 #698 — 미저장 변경 추적
+  bool _isDirty = false;
+  bool _prefillInProgress = false;
   String? _localPhotoPath;
   String? _localLabelPhotoPath;
+
+  void _markDirty() {
+    if (!_isDirty) setState(() => _isDirty = true);
+  }
 
   static const List<String> _weightOptions = [
     'Lace', 'Fingering', 'Sport', 'DK', 'Worsted', 'Bulky', 'Super Bulky',
@@ -53,22 +62,31 @@ class _YarnInputScreenState extends ConsumerState<YarnInputScreen> {
   @override
   void initState() {
     super.initState();
-    final initial = widget.initialYarn;
-    if (initial != null) {
+    // 이슈 #698 — initialYarn(수정) 또는 copyFrom(복사)로 prefill.
+    final source = widget.initialYarn ?? widget.copyFrom;
+    if (source != null) {
+      _prefillInProgress = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        ref.read(yarnInputProvider.notifier).loadYarn(initial);
+        // 복사 모드: id 비우고 load → 저장 시 createYarn 분기 (yarnId == null).
+        final loaded = widget.copyFrom != null && widget.initialYarn == null
+            ? source.copyWith(id: '')
+            : source;
+        ref.read(yarnInputProvider.notifier).loadYarn(loaded);
         setState(() {});
-        _nameController.text = initial.name;
-        _colorController.text = initial.color;
-        _amountController.text = initial.amountGrams > 0 ? '${initial.amountGrams}' : '';
-        _memoController.text = initial.memo;
-        _yarnLengthController.text = initial.yarnLength;
-        _lotNumberController.text = initial.lotNumber;
-        _priceController.text = initial.price > 0 ? '${initial.price}' : '';
-        _purchasePlaceController.text = initial.purchasePlace;
-        _quantityController.text = initial.quantity > 0 ? '${initial.quantity}' : '';
-        _lengthController.text = initial.lengthMeters > 0 ? '${initial.lengthMeters}' : '';
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _prefillInProgress = false;
+        });
+        _nameController.text = source.name;
+        _colorController.text = source.color;
+        _amountController.text = source.amountGrams > 0 ? '${source.amountGrams}' : '';
+        _memoController.text = source.memo;
+        _yarnLengthController.text = source.yarnLength;
+        _lotNumberController.text = source.lotNumber;
+        _priceController.text = source.price > 0 ? '${source.price}' : '';
+        _purchasePlaceController.text = source.purchasePlace;
+        _quantityController.text = source.quantity > 0 ? '${source.quantity}' : '';
+        _lengthController.text = source.lengthMeters > 0 ? '${source.lengthMeters}' : '';
       });
     }
   }
@@ -94,18 +112,41 @@ class _YarnInputScreenState extends ConsumerState<YarnInputScreen> {
     final yarn = ref.watch(yarnInputProvider);
     final notifier = ref.read(yarnInputProvider.notifier);
 
-    return Scaffold(
+    // 이슈 #698 — yarnInputProvider 변경 감지 → dirty 마킹
+    // prefill 도중 발생하는 loadYarn() 변경은 제외.
+    ref.listen<YarnModel>(yarnInputProvider, (prev, next) {
+      if (_prefillInProgress) return;
+      if (prev != null && prev != next) {
+        _markDirty();
+      }
+    });
+
+    return PopScope(
+      canPop: !_isDirty,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        await _handleUnsavedBack(context);
+      },
+      child: Scaffold(
       backgroundColor: C.bg,
       appBar: AppBar(
         backgroundColor: C.bg,
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () async {
+            if (!_isDirty) {
+              Navigator.pop(context);
+              return;
+            }
+            await _handleUnsavedBack(context);
+          },
         ),
         title: Text(
           widget.yarnId == null
-              ? (isKorean ? '실 추가' : 'Add Yarn')
+              ? (widget.copyFrom != null
+                  ? (isKorean ? '실 복사' : 'Copy Yarn')
+                  : (isKorean ? '실 추가' : 'Add Yarn'))
               : (isKorean ? '실 수정' : 'Edit Yarn'),
           style: T.h3,
         ),
@@ -481,7 +522,38 @@ class _YarnInputScreenState extends ConsumerState<YarnInputScreen> {
           ),
         ],
       ),
+    ),
     );
+  }
+
+  // 이슈 #698 — 미저장 변경 뒤로가기 가드
+  Future<void> _handleUnsavedBack(BuildContext context) async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final navigator = Navigator.of(context);
+    final action = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isKorean ? '저장하지 않은 변경 사항' : 'Unsaved changes', style: T.h3),
+        content: Text(isKorean ? '저장하지 않고 나가시겠어요?' : 'Leave without saving?', style: T.body),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, 'cancel'), child: Text(isKorean ? '취소' : 'Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, 'save'), child: Text(isKorean ? '저장하고 나가기' : 'Save & Leave')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'discard'),
+            style: TextButton.styleFrom(foregroundColor: C.og),
+            child: Text(isKorean ? '저장 안 함' : 'Discard'),
+          ),
+        ],
+      ),
+    );
+    if (action == 'discard') {
+      if (!mounted) return;
+      setState(() => _isDirty = false);
+      navigator.pop();
+    } else if (action == 'save') {
+      if (!mounted) return;
+      await _save(context);
+    }
   }
 
   Future<ImageSource?> _showImageSourceDialog() async {
@@ -623,6 +695,8 @@ class _YarnInputScreenState extends ConsumerState<YarnInputScreen> {
             ? (isKorean ? '저장됐어요.' : 'Saved.')
             : (isKorean ? '수정됐어요.' : 'Updated.'),
       );
+      // 이슈 #698 — 저장 성공 시 dirty 해제
+      if (mounted) setState(() => _isDirty = false);
       navigator.pop();
     } catch (e) {
       if (!ctx.mounted) return;
