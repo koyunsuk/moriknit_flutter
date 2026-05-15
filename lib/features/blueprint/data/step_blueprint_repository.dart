@@ -282,16 +282,15 @@ class StepBlueprintRepository {
 
   // ── Query — visibility / kind / owner ─────────────────────────────────────
 
+  // 이슈 #701 재발 fix — 기존 `.timeout(5s)` 는 Stream inactivity 기반이라
+  //   첫 emit 후 5초간 변경 없으면 빈 리스트로 강제 reset → 도안이 사라지는 회귀 원인.
+  //   Firestore snapshots 는 정상 상태에서 첫 도착 후 침묵하므로 timeout 부적합.
+  //   인덱스 빌드/네트워크 지연은 error 콜백(AsyncDelayedFriendly)로 별도 처리.
   Stream<List<StepBlueprint>> watchByOwner(String ownerUid) => _root
       .where('ownerUid', isEqualTo: ownerUid)
       .orderBy('updatedAt', descending: true)
       .snapshots()
-      .map((s) => s.docs.map(_readBlueprint).toList())
-      // 이슈 #700 — 인덱스 빌드/네트워크 지연 시 무한로딩 차단. 5초 후 빈 폴백.
-      .timeout(
-        const Duration(seconds: 5),
-        onTimeout: (sink) => sink.add(const <StepBlueprint>[]),
-      );
+      .map((s) => s.docs.map(_readBlueprint).toList());
 
   /// 협업자(members 맵의 key)로 참여 중인 청사진 스트림.
   ///

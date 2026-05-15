@@ -229,6 +229,10 @@ class PatternRepository {
   Stream<List<PatternChart>> watchAll() {
     // 이슈 #700 — 비로그인/지연 시에도 빈 리스트 첫 emit 보장 (무한로딩 차단).
     if (_uid.isEmpty) return Stream.value(const <PatternChart>[]);
+    // 이슈 #701 재발 fix — 기존 `.timeout(5s)` 는 Stream inactivity 기반이라
+    //   첫 emit 후 5초간 변경 없으면 빈 리스트로 강제 reset → 도안이 사라지는 회귀 원인.
+    //   Firestore snapshots 는 정상 상태에서 첫 도착 후 침묵하므로 timeout 부적합.
+    //   인덱스 빌드/네트워크 지연은 error 콜백(AsyncDelayedFriendly)로 별도 처리.
     return _ref
         .orderBy('updatedAt', descending: true)
         .snapshots()
@@ -237,12 +241,7 @@ class PatternRepository {
               // id 필드가 없는 구버전 문서는 doc.id로 보완
               if ((data['id'] as String?)?.isEmpty != false) data['id'] = d.id;
               return PatternChart.fromJson(data);
-            }).toList())
-        // 이슈 #700 — 인덱스 빌드/네트워크 지연 시 무한로딩 차단. 5초 후 빈 폴백.
-        .timeout(
-          const Duration(seconds: 5),
-          onTimeout: (sink) => sink.add(const <PatternChart>[]),
-        );
+            }).toList());
   }
 
   /// id 필드가 없는 구버전 도안에 id 필드를 자동 등록합니다.
