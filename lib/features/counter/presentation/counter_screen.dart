@@ -715,10 +715,16 @@ class _CounterScreenState extends ConsumerState<CounterScreen> {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: GlassCard(
+                          // 이슈 #696 — Navigator GlobalKey 크래시 fix.
+                          // settings.name을 유일하게 부여하여 restoration scope key 충돌 방지.
                           onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                                builder: (_) => PatternViewerScreen(chart: linked)),
+                              settings: RouteSettings(
+                                name: 'pattern-viewer/${linked.id}-${DateTime.now().millisecondsSinceEpoch}',
+                              ),
+                              builder: (_) => PatternViewerScreen(chart: linked),
+                            ),
                           ),
                           child: Row(
                             children: [

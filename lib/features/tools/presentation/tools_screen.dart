@@ -196,8 +196,8 @@ class ToolsScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
 
-                    // 4. 나의 작업관리
-                    SectionTitle(title: isKorean ? '나의 작업관리' : 'My Work Management'),
+                    // 4. 나의 작업 관리 (재정렬: 스와치 → 나의 도안 → 프로젝트 → 템플릿 → 작업 앨범)
+                    SectionTitle(title: isKorean ? '나의 작업 관리' : 'My Work Management'),
                     const SizedBox(height: 10),
                     _ToolCard(
                       icon: Icons.grid_view_rounded,
@@ -208,36 +208,19 @@ class ToolsScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 10),
                     _ToolCard(
-                      icon: Icons.folder_special_rounded,
-                      color: C.lv,
-                      title: isKorean ? '프로젝트 라이브러리' : 'Project Library',
-                      description: isKorean ? '진행 중인 작업을 한눈에 관리해요' : 'Manage all your ongoing projects',
-                      onTap: () => context.push(Routes.projectList),
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.add_task_rounded,
-                      color: C.pkD,
-                      title: isKorean ? '카운터 라이브러리' : 'Counter Library',
-                      description: t.counterTools,
-                      onTap: () => context.push(Routes.counterList),
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.edit_note_rounded,
-                      color: C.pk,
-                      title: t.memoPad,
-                      description: t.toolsMemoDescription,
-                      onTap: () => context.push(Routes.toolsMemo),
-                      showLock: true,
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
                       icon: Icons.grid_on_rounded,
                       color: C.lvD,
                       title: isKorean ? '나의 도안 라이브러리' : 'My Pattern Library',
                       description: isKorean ? '컬러/기호 모드로 나만의 도안을 그려요' : 'Draw your own charts',
                       onTap: () => context.push(Routes.toolsPatterns),
+                    ),
+                    const SizedBox(height: 10),
+                    _ToolCard(
+                      icon: Icons.folder_special_rounded,
+                      color: C.lv,
+                      title: isKorean ? '프로젝트 라이브러리' : 'Project Library',
+                      description: isKorean ? '진행 중인 작업을 한눈에 관리해요' : 'Manage all your ongoing projects',
+                      onTap: () => context.push(Routes.projectList),
                     ),
                     const SizedBox(height: 10),
                     _ToolCard(
@@ -254,6 +237,39 @@ class ToolsScreen extends ConsumerWidget {
                       title: isKorean ? '나의 작업 앨범' : 'My Work Album',
                       description: isKorean ? '프로젝트·스와치 사진을 날짜별로 모아봐요' : 'Browse project & swatch photos by date',
                       onTap: () => context.push(Routes.photoAlbum),
+                    ),
+                    const SizedBox(height: 8),
+                    Divider(color: C.bd, thickness: 1, height: 20),
+
+                    // 4-2. AI 작업 도구 (AI 기반 도구만 분리)
+                    SectionTitle(title: isKorean ? 'AI 작업 도구' : 'AI Tools'),
+                    const SizedBox(height: 10),
+                    _ToolCard(
+                      icon: Icons.auto_awesome_rounded,
+                      color: C.lv,
+                      title: isKorean ? 'AI 도안 변환기' : 'AI Pattern Converter',
+                      description: isKorean
+                          ? 'PDF·이미지 도안을 나의 도안 라이브러리로 변환'
+                          : 'Convert PDF/image patterns to your library',
+                      onTap: () => context.push(Routes.toolsPatternConverter),
+                    ),
+                    const SizedBox(height: 10),
+                    _ToolCard(
+                      icon: Icons.calculate_rounded,
+                      color: C.pk,
+                      title: isKorean ? 'AI 게이지 계산기' : 'AI Gauge Calculator',
+                      description: t.gaugeHeaderSubtitle,
+                      onTap: () => context.push(Routes.toolsGauge),
+                    ),
+                    const SizedBox(height: 10),
+                    _ToolCard(
+                      icon: Icons.translate_rounded,
+                      color: C.lv,
+                      title: isKorean ? 'AI 영문도안 번역기' : 'Pattern Translator',
+                      description: isKorean
+                          ? 'Ravelry/Etsy 등 영문 도안을 한국어로 변환합니다'
+                          : 'Translate English patterns to Korean',
+                      onTap: () => context.push(Routes.toolsPatternTranslator),
                     ),
                     const SizedBox(height: 8),
                     Divider(color: C.bd, thickness: 1, height: 20),
@@ -316,10 +332,26 @@ class ToolsScreen extends ConsumerWidget {
                     const SizedBox(height: 8),
                     Divider(color: C.bd, thickness: 1, height: 20),
 
-                    // 7. 모든 도구
-                    SectionTitle(title: isKorean ? '모든 도구' : 'All Tools'),
+                    // 7. 기타 도구·자산 (AI가 아닌 모든 도구. 카운터/메모장 포함)
+                    SectionTitle(title: isKorean ? '기타 도구·자산' : 'Other Tools'),
                     const SizedBox(height: 10),
-                    // 사용자 요청 — 작업관리에서 모든 도구로 이동
+                    _ToolCard(
+                      icon: Icons.add_task_rounded,
+                      color: C.pkD,
+                      title: isKorean ? '카운터 라이브러리' : 'Counter Library',
+                      description: t.counterTools,
+                      onTap: () => context.push(Routes.counterList),
+                    ),
+                    const SizedBox(height: 10),
+                    _ToolCard(
+                      icon: Icons.edit_note_rounded,
+                      color: C.pk,
+                      title: t.memoPad,
+                      description: t.toolsMemoDescription,
+                      onTap: () => context.push(Routes.toolsMemo),
+                      showLock: true,
+                    ),
+                    const SizedBox(height: 10),
                     _ToolCard(
                       icon: Icons.timer_rounded,
                       color: C.lv,
@@ -334,24 +366,6 @@ class ToolsScreen extends ConsumerWidget {
                       title: isKorean ? '뜨개시간 대시보드' : 'Time Dashboard',
                       description: isKorean ? '자유·도안·스와치 누적시간 통합' : 'Free + pattern + swatch totals',
                       onTap: () => context.push(Routes.toolsTimeDashboard),
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.calculate_rounded,
-                      color: C.pk,
-                      title: isKorean ? 'AI 게이지 계산기' : 'AI Gauge Calculator',
-                      description: t.gaugeHeaderSubtitle,
-                      onTap: () => context.push(Routes.toolsGauge),
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.auto_awesome_rounded,
-                      color: C.lv,
-                      title: isKorean ? 'AI 도안 변환기' : 'AI Pattern Converter',
-                      description: isKorean
-                          ? 'PDF·이미지 도안을 나의 도안 라이브러리로 변환'
-                          : 'Convert PDF/image patterns to your library',
-                      onTap: () => context.push(Routes.toolsPatternConverter),
                     ),
                     const SizedBox(height: 10),
                     // 이슈 #660 Phase 2 — 파일 탐색기 (외부 PDF/이미지 다중 임포트)
@@ -374,16 +388,6 @@ class ToolsScreen extends ConsumerWidget {
                           ? '치수+게이지로 도안 자동 생성, 단계별 도식, 출판용 PDF'
                           : 'Auto-build patterns with diagrams + print-ready PDF',
                       onTap: () => context.push(Routes.toolsPatternGenerator),
-                    ),
-                    const SizedBox(height: 10),
-                    _ToolCard(
-                      icon: Icons.translate_rounded,
-                      color: C.lv,
-                      title: isKorean ? 'AI 영문도안 번역기' : 'Pattern Translator',
-                      description: isKorean
-                          ? 'Ravelry/Etsy 등 영문 도안을 한국어로 변환합니다'
-                          : 'Translate English patterns to Korean',
-                      onTap: () => context.push(Routes.toolsPatternTranslator),
                     ),
                     const SizedBox(height: 10),
                     // 이슈 #665/#668 — 도안 에디터 (Gate 화면 진입 → 도안 목록 + 사각/원형/자유 path 모달)

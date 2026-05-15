@@ -877,9 +877,16 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
                           );
                           return;
                         }
+                        // 이슈 #696 — MaterialPageRoute에 유일한 settings.name 부여하여
+                        // restoration scope key 충돌(_debugCheckDuplicatedPageKeys) 회피.
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => PatternDetailScreen(chart: chart)),
+                          MaterialPageRoute(
+                            settings: RouteSettings(
+                              name: 'pattern-detail/${chart.id}-${DateTime.now().millisecondsSinceEpoch}',
+                            ),
+                            builder: (_) => PatternDetailScreen(chart: chart),
+                          ),
                         );
                       }
                     : null,
@@ -1362,6 +1369,14 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
                         ? allPatterns.where((p) => p.id == project.sourcePatternId).firstOrNull
                         : null;
 
+                    // 이슈 #696 — sourcePatternId가 있는데 patternListProvider 로딩 중인 경우
+                    // 잘못된 "연결된 도안 없어요" 깜빡임 방지: 로딩 인디케이터 표시.
+                    if (linked == null && project.sourcePatternId.isNotEmpty && patternsAsync.isLoading) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Center(child: CircularProgressIndicator(color: C.lv, strokeWidth: 2)),
+                      );
+                    }
                     if (linked == null) {
                       return Center(
                         child: Text(
@@ -1374,9 +1389,17 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
                     return InkWell(
                       borderRadius: BorderRadius.circular(12),
                       onTap: isCardEditMode ? null : () {
+                        // 이슈 #696 — Navigator GlobalKey 크래시 fix.
+                        // settings.name을 유일하게 부여하여 restoration scope key 충돌 방지.
+                        // (PatternDetailScreen이 짧은 시간에 여러 번 push되어도 안전.)
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => PatternDetailScreen(chart: linked)),
+                          MaterialPageRoute(
+                            settings: RouteSettings(
+                              name: 'pattern-detail/${linked.id}-${DateTime.now().millisecondsSinceEpoch}',
+                            ),
+                            builder: (_) => PatternDetailScreen(chart: linked),
+                          ),
                         );
                       },
                       child: Container(

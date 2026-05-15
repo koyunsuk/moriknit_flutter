@@ -234,7 +234,11 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
       ));
     } else {
       debugPrint('[OpenPattern] → PatternDetailScreen (image/pdf type)');
+      // 이슈 #696 — settings.name 유일화로 restoration key 충돌 방지
       Navigator.push(context, MaterialPageRoute(
+        settings: RouteSettings(
+          name: 'pattern-detail/${chart.id}-${DateTime.now().millisecondsSinceEpoch}',
+        ),
         builder: (_) => PatternDetailScreen(chart: chart),
       ));
     }
@@ -270,7 +274,11 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
       createdAt: f.createdAt,
     );
     debugPrint('[OpenFile] → PatternDetailScreen via PatternChart bridge');
+    // 이슈 #696 — settings.name 유일화로 restoration key 충돌 방지
     Navigator.push(context, MaterialPageRoute(
+      settings: RouteSettings(
+        name: 'pattern-detail/${chart.id}-${DateTime.now().millisecondsSinceEpoch}',
+      ),
       builder: (_) => PatternDetailScreen(chart: chart),
     ));
   }
