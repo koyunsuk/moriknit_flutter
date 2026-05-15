@@ -1853,7 +1853,7 @@ class _HomeNoticesSectionState extends ConsumerState<_HomeNoticesSection> {
     );
   }
 
-  Widget _buildBody(BuildContext context, AsyncValue noticesAsync) {
+  Widget _buildBody(BuildContext context, AsyncValue<List<LandingPost>> noticesAsync) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

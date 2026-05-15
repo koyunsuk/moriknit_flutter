@@ -1588,7 +1588,6 @@ class MoriBlockShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color borderTone = accent.withValues(alpha: 0.25); // 옅은 헤더 톤
-    final Color titleDividerTone = accent.withValues(alpha: 0.18);
 
     final EdgeInsetsGeometry effectiveBodyPadding =
         bodyPadding ?? const EdgeInsets.fromLTRB(14, 12, 14, 14);
@@ -1649,10 +1648,6 @@ class MoriBlockShell extends StatelessWidget {
           Container(height: 1.5, color: borderTone),
           // 본문
           body,
-          // 아래쪽 보더 (양끝까지 닿음)
-          Container(height: 1.5, color: borderTone),
-          // 내부 미세 디바이더 라인(시각적 안정감)
-          Container(height: 0.5, color: titleDividerTone.withValues(alpha: 0.0)),
         ],
       ),
     );
