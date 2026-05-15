@@ -112,63 +112,71 @@ class CommunityScreen extends ConsumerWidget {
               ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 12)),
-            postsAsync.when(
-              loading: () => SliverToBoxAdapter(
-                child: Center(child: CircularProgressIndicator(color: C.lv)),
-              ),
-              error: (_, _) => SliverToBoxAdapter(
-                child: Center(child: Text(isKorean ? '게시글을 불러오지 못했어요.' : 'Unable to load posts.', style: T.body)),
-              ),
-              data: (posts) {
-                if (posts.isEmpty) {
-                  return SliverToBoxAdapter(
-                    child: _EmptyCommunity(
-                      isKorean: isKorean,
-                      onWrite: !communityWriteEnabled
-                          ? () => ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(isKorean ? '현재 글쓰기가 제한됐어요.' : 'Writing is currently restricted.')),
-                              )
-                          : user == null
-                              ? () => showLoginRequiredDialog(context, isKorean: isKorean, fromRoute: '/community')
-                              : () => _showWriteSheet(context, ref, user.uid, resolvedDisplayName),
+            // 이슈 #715 — 게시글을 MoriBlockShell로 감싸 플레이스홀더 + 내부 스크롤 적용.
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 140),
+              sliver: SliverToBoxAdapter(
+                child: postsAsync.when(
+                  loading: () => MoriBlockShell(
+                    label: isKorean ? '게시글' : 'Posts',
+                    icon: Icons.forum_outlined,
+                    accent: C.lvD,
+                    scrollHeight: 380,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 40),
+                        child: CircularProgressIndicator(color: C.lv),
+                      ),
                     ),
-                  );
-                }
-                return SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 140),
-                  sliver: SliverList.separated(
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemCount: posts.length + 1,
-                    itemBuilder: (_, index) {
-                      if (index == 0) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Row(
-                            children: [
-                              Expanded(child: Text(isKorean ? '게시글 ${posts.length}' : '${posts.length} posts', style: T.bodyBold)),
-                              TextButton.icon(
-                                onPressed: !communityWriteEnabled
-                                    ? () => ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(content: Text(isKorean ? '현재 글쓰기가 제한됐어요.' : 'Writing is currently restricted.')),
-                                        )
-                                    : user == null
-                                        ? () => showLoginRequiredDialog(context, isKorean: isKorean, fromRoute: '/community')
-                                        : () => _showWriteSheet(context, ref, user.uid, resolvedDisplayName),
-                                icon: Icon(Icons.add_circle_outline_rounded, size: 18, color: communityWriteEnabled ? null : C.tx2),
-                                label: Text(isKorean ? '글쓰기' : 'Write', style: communityWriteEnabled ? null : T.sm.copyWith(color: C.tx2)),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-                      return GlassCard(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        child: _PostRow(post: posts[index - 1], isKorean: isKorean),
-                      );
-                    },
                   ),
-                );
-              },
+                  error: (_, _) => MoriBlockShell(
+                    label: isKorean ? '게시글' : 'Posts',
+                    icon: Icons.forum_outlined,
+                    accent: C.lvD,
+                    scrollHeight: 380,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 40),
+                        child: Text(
+                          isKorean ? '게시글을 불러오지 못했어요.' : 'Unable to load posts.',
+                          style: T.body,
+                        ),
+                      ),
+                    ),
+                  ),
+                  data: (posts) {
+                    final onWrite = !communityWriteEnabled
+                        ? () => ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(isKorean ? '현재 글쓰기가 제한됐어요.' : 'Writing is currently restricted.')),
+                            )
+                        : user == null
+                            ? () => showLoginRequiredDialog(context, isKorean: isKorean, fromRoute: '/community')
+                            : () => _showWriteSheet(context, ref, user.uid, resolvedDisplayName);
+                    return MoriBlockShell(
+                      label: isKorean ? '게시글 ${posts.length}' : '${posts.length} posts',
+                      icon: Icons.forum_outlined,
+                      accent: C.lvD,
+                      moreLabel: isKorean ? '글쓰기' : 'Write',
+                      onMoreTap: onWrite,
+                      scrollHeight: 380,
+                      bodyPadding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                      child: posts.isEmpty
+                          ? _CommunityPostsPlaceholder(isKorean: isKorean, onWrite: onWrite)
+                          : Column(
+                              children: [
+                                for (var i = 0; i < posts.length; i++) ...[
+                                  if (i > 0) const SizedBox(height: 8),
+                                  GlassCard(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                    child: _PostRow(post: posts[i], isKorean: isKorean),
+                                  ),
+                                ],
+                              ],
+                            ),
+                    );
+                  },
+                ),
+              ),
             ),
           ],
         ),
@@ -353,20 +361,91 @@ class CommunityScreen extends ConsumerWidget {
   }
 }
 
-class _EmptyCommunity extends StatelessWidget {
+// 이슈 #715 — 게시글 블록 플레이스홀더 (빈 행 2~3개 + 안내 + 글쓰기 버튼).
+class _CommunityPostsPlaceholder extends StatelessWidget {
   final bool isKorean;
   final VoidCallback onWrite;
-  const _EmptyCommunity({required this.isKorean, required this.onWrite});
+  const _CommunityPostsPlaceholder({required this.isKorean, required this.onWrite});
 
   @override
   Widget build(BuildContext context) {
-    return MoriEmptyState(
-      icon: Icons.forum_outlined,
-      iconColor: C.lvD,
-      title: isKorean ? '아직 게시글이 없어요' : 'No posts yet',
-      subtitle: isKorean ? '첫 글을 남겨보세요.' : 'Be the first to post!',
-      buttonLabel: isKorean ? '글 작성하기' : 'Write a post',
-      onAction: onWrite,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < 3; i++) ...[
+          if (i > 0) const SizedBox(height: 8),
+          Container(
+            height: 56,
+            decoration: BoxDecoration(
+              color: C.gx,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: C.bd),
+            ),
+            child: Row(
+              children: [
+                const SizedBox(width: 12),
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: C.lvL,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        height: 10,
+                        width: 120,
+                        decoration: BoxDecoration(
+                          color: C.bd2,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        height: 8,
+                        width: 200,
+                        decoration: BoxDecoration(
+                          color: C.bd2.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 14),
+        Text(
+          isKorean ? '아직 게시글이 없어요. 첫 글을 남겨보세요.' : 'No posts yet. Be the first to write.',
+          textAlign: TextAlign.center,
+          style: T.caption.copyWith(color: C.mu),
+        ),
+        const SizedBox(height: 10),
+        Center(
+          child: OutlinedButton.icon(
+            onPressed: onWrite,
+            icon: Icon(Icons.edit_rounded, size: 16, color: C.lvD),
+            label: Text(
+              isKorean ? '글 작성하기' : 'Write a post',
+              style: T.sm.copyWith(color: C.lvD, fontWeight: FontWeight.w700),
+            ),
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: C.lv.withValues(alpha: 0.4)),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

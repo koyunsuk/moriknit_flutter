@@ -64,6 +64,14 @@ class _PatternConverterScreenState
     }
   }
 
+  @override
+  void dispose() {
+    // 이슈 #714 — 화면 이탈 시 진행 중인 SnackBar(AI 사용량 알림 등) 강제 제거.
+    // ScaffoldMessenger는 루트에 살아있어 페이지 전환에도 SnackBar가 남는 문제 방지.
+    ScaffoldMessenger.maybeOf(context)?.removeCurrentSnackBar();
+    super.dispose();
+  }
+
   Future<void> _showSourceSheet() async {
     final isKorean = ref.read(appLanguageProvider).isKorean;
     // 이슈 #628 (B-7) — AI 자동 분석 토글 (closure로 시트 세션 내 유지)
@@ -442,13 +450,17 @@ class _PatternConverterScreenState
   }) {
     final info = AiErrorMapper.map(error, isKorean: isKorean);
     if (info.action == AiErrorAction.upgradeSubscription) {
+      // 이슈 #714 — 이전 SnackBar 즉시 제거 후 짧은 duration으로 표시. 액션 탭/내비 시 강제 dismiss.
+      messenger.removeCurrentSnackBar();
       messenger.showSnackBar(
         SnackBar(
           content: Text(info.message),
-          duration: const Duration(seconds: 6),
+          duration: const Duration(seconds: 4),
+          behavior: SnackBarBehavior.floating,
           action: SnackBarAction(
             label: isKorean ? '구독' : 'Upgrade',
             onPressed: () {
+              messenger.hideCurrentSnackBar();
               if (!mounted) return;
               context.push(Routes.my);
             },

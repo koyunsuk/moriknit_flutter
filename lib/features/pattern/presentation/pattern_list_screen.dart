@@ -740,6 +740,205 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
   Future<String?> _pickChartShape(BuildContext context, bool isKorean) =>
       showChartShapePicker(context, isKorean);
 
+  /// 이슈 #716 — "내 핸드폰" 하위 시트: 사진 / PDF / 내 폰 파일 3가지 옵션 통합.
+  Future<void> _showMyDeviceSubSheet(
+    BuildContext context,
+    WidgetRef ref,
+    bool isKorean, {
+    required bool aiAnalysis,
+  }) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: C.bd2,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Text(isKorean ? '내 핸드폰에서 가져오기' : 'Import from device', style: T.h3),
+              const SizedBox(height: 12),
+              // 사진에서 만들기 (갤러리 + 카메라)
+              GlassCard(
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await Future.microtask(() {});
+                  if (context.mounted) {
+                    _showImageSourceDialog(context, ref, isKorean, aiAnalysis: aiAnalysis);
+                  }
+                },
+                child: Row(children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: C.lv.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(Icons.photo_library_rounded, color: C.lv),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(isKorean ? '사진에서 만들기' : 'From photo', style: T.bodyBold),
+                        const SizedBox(height: 4),
+                        Text(
+                          isKorean ? '갤러리나 카메라로 사진을 찍어요' : 'Take or pick a photo',
+                          style: T.caption.copyWith(color: C.mu),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: C.mu),
+                ]),
+              ),
+              const SizedBox(height: 10),
+              // PDF에서 만들기
+              GlassCard(
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await Future.microtask(() {});
+                  if (kIsWeb) {
+                    final result = await FilePicker.platform.pickFiles(
+                      type: FileType.custom,
+                      allowedExtensions: ['pdf'],
+                      withData: true,
+                    );
+                    if (result == null || result.files.isEmpty) return;
+                    final f = result.files.first;
+                    if (f.bytes == null || !context.mounted) return;
+                    await _savePdfBytes(context, ref, f.bytes!, f.name, isKorean, aiAnalysis: aiAnalysis);
+                    return;
+                  }
+                  final result = await FilePicker.platform.pickFiles(
+                    type: FileType.custom,
+                    allowedExtensions: ['pdf'],
+                  );
+                  if (result != null && result.files.first.path != null && context.mounted) {
+                    await _savePdfFile(context, ref, File(result.files.first.path!), isKorean, aiAnalysis: aiAnalysis);
+                  }
+                },
+                child: Row(children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: C.og.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(Icons.picture_as_pdf_rounded, color: C.og),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(isKorean ? 'PDF에서 만들기' : 'From PDF', style: T.bodyBold),
+                        const SizedBox(height: 4),
+                        Text(
+                          isKorean ? 'PDF 파일에서 도안을 가져와요' : 'Import pattern from PDF',
+                          style: T.caption.copyWith(color: C.mu),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: C.mu),
+                ]),
+              ),
+              const SizedBox(height: 10),
+              // 내 폰 파일에서 가져오기 (PDF·이미지 통합)
+              GlassCard(
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await Future.microtask(() {});
+                  if (kIsWeb) {
+                    final result = await FilePicker.platform.pickFiles(
+                      type: FileType.custom,
+                      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
+                      withData: true,
+                    );
+                    if (result == null || result.files.isEmpty) return;
+                    final f = result.files.first;
+                    if (f.bytes == null || !context.mounted) return;
+                    final ext = f.name.split('.').last.toLowerCase();
+                    if (ext == 'pdf') {
+                      await _savePdfBytes(context, ref, f.bytes!, f.name, isKorean, aiAnalysis: aiAnalysis);
+                    } else {
+                      await _saveImageBytes(context, ref, f.bytes!, f.name, isKorean, aiAnalysis: aiAnalysis);
+                    }
+                    return;
+                  }
+                  final result = await FilePicker.platform.pickFiles(
+                    type: FileType.custom,
+                    allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
+                  );
+                  if (result == null || result.files.first.path == null) return;
+                  if (!context.mounted) return;
+                  final path = result.files.first.path!;
+                  final ext = path.split('.').last.toLowerCase();
+                  final file = File(path);
+                  if (ext == 'pdf') {
+                    await _savePdfFile(context, ref, file, isKorean, aiAnalysis: aiAnalysis);
+                  } else {
+                    await _saveImageFile(context, ref, file, isKorean, aiAnalysis: aiAnalysis);
+                  }
+                },
+                child: Row(children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: C.lv.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(Icons.folder_open_rounded, color: C.lv),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isKorean ? '내 폰 파일에서 가져오기' : 'Import from device files',
+                          style: T.bodyBold,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          isKorean
+                              ? '다운로드 폴더 등에서 PDF·이미지 파일을 골라요'
+                              : 'Pick PDF or image from downloads/files',
+                          style: T.caption.copyWith(color: C.mu),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: C.mu),
+                ]),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _showPatternStartSheet(BuildContext context, WidgetRef ref) async {
     final isKorean = ref.read(appLanguageProvider).isKorean;
     // #628 — AI 자동 분석 토글 (closure로 시트 세션 내 유지, 기본 ON)
@@ -810,138 +1009,13 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                 ]),
               ),
               const SizedBox(height: 12),
-              // 1. 사진에서 만들기
+              // 이슈 #716 — 정렬 1: 내 핸드폰 (사진 / PDF / 내 폰 파일 통합 하위 시트).
               GlassCard(
                 onTap: () async {
                   Navigator.pop(ctx);
                   await Future.microtask(() {});
-                  if (context.mounted) _showImageSourceDialog(context, ref, isKorean, aiAnalysis: aiAnalysis);
-                },
-                child: Row(children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: C.lv.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(Icons.photo_library_rounded, color: C.lv),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          isKorean ? '사진에서 만들기' : 'From photo',
-                          style: T.bodyBold,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          isKorean ? '갤러리나 카메라로 사진을 찍어요' : 'Take or pick a photo',
-                          style: T.caption.copyWith(color: C.mu),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(Icons.chevron_right_rounded, color: C.mu),
-                ]),
-              ),
-              const SizedBox(height: 10),
-              // 2. PDF에서 만들기
-              GlassCard(
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  await Future.microtask(() {});
-                  if (kIsWeb) {
-                    // 이슈 #683 — 웹 분기: bytes로 업로드
-                    final result = await FilePicker.platform.pickFiles(
-                      type: FileType.custom,
-                      allowedExtensions: ['pdf'],
-                      withData: true,
-                    );
-                    if (result == null || result.files.isEmpty) return;
-                    final f = result.files.first;
-                    if (f.bytes == null || !context.mounted) return;
-                    await _savePdfBytes(context, ref, f.bytes!, f.name, isKorean, aiAnalysis: aiAnalysis);
-                    return;
-                  }
-                  final result = await FilePicker.platform.pickFiles(
-                    type: FileType.custom,
-                    allowedExtensions: ['pdf'],
-                  );
-                  if (result != null && result.files.first.path != null && context.mounted) {
-                    await _savePdfFile(context, ref, File(result.files.first.path!), isKorean, aiAnalysis: aiAnalysis);
-                  }
-                },
-                child: Row(children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: C.og.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(Icons.picture_as_pdf_rounded, color: C.og),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          isKorean ? 'PDF에서 만들기' : 'From PDF',
-                          style: T.bodyBold,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          isKorean ? 'PDF 파일에서 도안을 가져와요' : 'Import pattern from PDF',
-                          style: T.caption.copyWith(color: C.mu),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(Icons.chevron_right_rounded, color: C.mu),
-                ]),
-              ),
-              const SizedBox(height: 10),
-              // 이슈 #660 Phase 1 — 내 폰 파일에서 가져오기 (PDF + 이미지 통합)
-              // 이슈 #683 — 웹에서도 PC 파일 업로드 지원 (bytes 경로)
-              GlassCard(
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  await Future.microtask(() {});
-                  if (kIsWeb) {
-                    final result = await FilePicker.platform.pickFiles(
-                      type: FileType.custom,
-                      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
-                      withData: true,
-                    );
-                    if (result == null || result.files.isEmpty) return;
-                    final f = result.files.first;
-                    if (f.bytes == null || !context.mounted) return;
-                    final ext = f.name.split('.').last.toLowerCase();
-                    if (ext == 'pdf') {
-                      await _savePdfBytes(context, ref, f.bytes!, f.name, isKorean, aiAnalysis: aiAnalysis);
-                    } else {
-                      await _saveImageBytes(context, ref, f.bytes!, f.name, isKorean, aiAnalysis: aiAnalysis);
-                    }
-                    return;
-                  }
-                  final result = await FilePicker.platform.pickFiles(
-                    type: FileType.custom,
-                    allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
-                  );
-                  if (result == null || result.files.first.path == null) return;
                   if (!context.mounted) return;
-                  final path = result.files.first.path!;
-                  final ext = path.split('.').last.toLowerCase();
-                  final file = File(path);
-                  if (ext == 'pdf') {
-                    await _savePdfFile(context, ref, file, isKorean, aiAnalysis: aiAnalysis);
-                  } else {
-                    await _saveImageFile(context, ref, file, isKorean, aiAnalysis: aiAnalysis);
-                  }
+                  await _showMyDeviceSubSheet(context, ref, isKorean, aiAnalysis: aiAnalysis);
                 },
                 child: Row(children: [
                   Container(
@@ -951,7 +1025,7 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                       color: C.lv.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: Icon(Icons.folder_open_rounded, color: C.lv),
+                    child: Icon(Icons.smartphone_rounded, color: C.lv),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -959,14 +1033,12 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          isKorean ? '내 폰 파일에서 가져오기' : 'Import from device',
+                          isKorean ? '내 핸드폰' : 'My device',
                           style: T.bodyBold,
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          isKorean
-                              ? '다운로드 폴더 등에서 PDF·이미지 파일을 골라요'
-                              : 'Pick PDF or image from downloads/files',
+                          isKorean ? '사진 · PDF · 내 폰 파일에서 가져와요' : 'Photos · PDF · files on device',
                           style: T.caption.copyWith(color: C.mu),
                         ),
                       ],
@@ -976,7 +1048,7 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                 ]),
               ),
               const SizedBox(height: 10),
-              // 도안에디터로 만들기 (이슈 #665 — 사각 / 원형 분기)
+              // 이슈 #716 — 정렬 2: 도안에디터로 만들기 (이슈 #665 — 사각/원형 분기).
               GlassCard(
                 onTap: () async {
                   Navigator.pop(ctx);
@@ -1023,7 +1095,62 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                 ]),
               ),
               const SizedBox(height: 10),
-              // 4. .mori 파일에서 가져오기 (신규)
+              // 이슈 #716 — 정렬 3: 클라우드 (Dropbox·Google Drive·iCloud·OneDrive 통합 허브).
+              GlassCard(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push(Routes.cloudHub);
+                },
+                child: Row(children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0061FF).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(Icons.cloud_rounded, color: Color(0xFF0061FF)),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              isKorean ? '클라우드' : 'Cloud',
+                              style: T.bodyBold,
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: C.lv,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                'AI',
+                                style: T.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 10),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          isKorean
+                              ? 'Dropbox · Google Drive · iCloud · OneDrive 에서 가져오기'
+                              : 'Import from Dropbox · Google Drive · iCloud · OneDrive',
+                          style: T.caption.copyWith(color: C.mu),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: C.mu),
+                ]),
+              ),
+              const SizedBox(height: 10),
+              // 유지: .mori 파일 가져오기.
               GlassCard(
                 onTap: () {
                   Navigator.pop(ctx);
@@ -1060,50 +1187,34 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                 ]),
               ),
               const SizedBox(height: 10),
-              // 5. 드롭박스에서 가져오기
+              // 유지: AI 변환기 (외부 진입점 보존).
               GlassCard(
                 onTap: () {
                   Navigator.pop(ctx);
-                  context.push(Routes.dropbox);
+                  context.push(Routes.toolsPatternConverter);
                 },
                 child: Row(children: [
                   Container(
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0061FF).withValues(alpha: 0.12),
+                      color: C.pkD.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: const Icon(Icons.cloud_rounded, color: Color(0xFF0061FF)),
+                    child: Icon(Icons.auto_awesome_rounded, color: C.pkD),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Text(
-                              isKorean ? '드롭박스에서 가져오기' : 'Import from Dropbox',
-                              style: T.bodyBold,
-                            ),
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: C.lv,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                'AI',
-                                style: T.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 10),
-                              ),
-                            ),
-                          ],
+                        Text(
+                          isKorean ? 'AI 변환기' : 'AI converter',
+                          style: T.bodyBold,
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          isKorean ? 'AI가 단계별로 도안을 분석해드려요' : 'AI analyzes pattern step by step',
+                          isKorean ? '복잡한 도안을 AI가 단계별로 분석해드려요' : 'AI breaks complex patterns into steps',
                           style: T.caption.copyWith(color: C.mu),
                         ),
                       ],

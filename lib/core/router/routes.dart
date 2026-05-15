@@ -22,6 +22,8 @@ class Routes {
   static const swatchTimer = '/swatch/:id/timer';
   static const community = '/community';
   static const market = '/market';
+  // 이슈 #713 — 내 마켓 대시보드 (Shell 내부 경로로 하단 탭바 유지)
+  static const marketDashboard = '/market/dashboard';
   static const my = '/my';
   static const needles = '/my/needles';
   static const accessories = '/my/accessories';

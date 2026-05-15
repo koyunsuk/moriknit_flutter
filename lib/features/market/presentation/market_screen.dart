@@ -28,7 +28,6 @@ import '../domain/market_item.dart';
 import '../domain/market_review.dart';
 import 'pdf_viewer_screen.dart';
 import 'seller_items_screen.dart';
-import 'my_market_dashboard_screen.dart';
 
 class MarketScreen extends ConsumerStatefulWidget {
   const MarketScreen({super.key});
@@ -118,7 +117,8 @@ class _MarketScreenState extends ConsumerState<MarketScreen> {
                           isAdmin: isAdmin,
                           canCreate: canCreate,
                           onCreate: canCreate ? () => _showCreateItemSheet(context, ref, user.uid, user.displayName ?? user.email ?? '') : null,
-                          onDashboard: user != null ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyMarketDashboardScreen())) : null,
+                          // 이슈 #713 — Shell 내부 경로로 이동해 하단 탭바 유지.
+                          onDashboard: user != null ? () => context.push(Routes.marketDashboard) : null,
                         ),
                       const SizedBox(height: 16),
                       // ── 검색바 ───────────────────────────────────────

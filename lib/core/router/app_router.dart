@@ -17,6 +17,7 @@ import 'package:moriknit_flutter/features/encyclopedia/presentation/encyclopedia
 import 'package:moriknit_flutter/features/gauge/presentation/gauge_calculator_screen.dart';
 import 'package:moriknit_flutter/features/home/presentation/home_screen.dart';
 import 'package:moriknit_flutter/features/market/presentation/market_screen.dart';
+import 'package:moriknit_flutter/features/market/presentation/my_market_dashboard_screen.dart';
 import 'package:moriknit_flutter/features/my/presentation/book_list_screen.dart';
 import 'package:moriknit_flutter/features/my/presentation/photo_album_screen.dart';
 import 'package:moriknit_flutter/features/my/presentation/delete_account_screen.dart';
@@ -267,7 +268,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(path: ':roomId', pageBuilder: (_, state) => _fadePage(DmChatScreen(roomId: state.pathParameters['roomId']!))),
             ],
           ),
-          GoRoute(path: Routes.market, pageBuilder: (_, _) => _noTransitionPage(const MarketScreen())),
+          GoRoute(
+            path: Routes.market,
+            pageBuilder: (_, _) => _noTransitionPage(const MarketScreen()),
+            routes: [
+              // 이슈 #713 — 내 마켓 대시보드를 ShellRoute 안에 포함시켜 하단 탭바 유지.
+              GoRoute(
+                path: 'dashboard',
+                pageBuilder: (_, _) => _fadePage(const MyMarketDashboardScreen()),
+              ),
+            ],
+          ),
           GoRoute(
             path: Routes.my,
             pageBuilder: (_, _) => _noTransitionPage(const MyPageScreen()),

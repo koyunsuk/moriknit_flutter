@@ -62,6 +62,13 @@ class _PatternTranslatorScreenState
     }
   }
 
+  @override
+  void dispose() {
+    // 이슈 #714 — 화면 이탈 시 진행 중인 SnackBar(AI 사용량 알림 등) 강제 제거.
+    ScaffoldMessenger.maybeOf(context)?.removeCurrentSnackBar();
+    super.dispose();
+  }
+
   // 소스 선택 bottom sheet
   Future<void> _showSourceSheet() async {
     final isKorean = ref.read(appLanguageProvider).isKorean;
@@ -258,13 +265,17 @@ class _PatternTranslatorScreenState
       if (!mounted) return;
       final info = AiErrorMapper.map(e, isKorean: isKorean);
       if (info.action == AiErrorAction.upgradeSubscription) {
+        // 이슈 #714 — 이전 SnackBar 즉시 제거 후 짧은 duration으로 표시. 액션 탭/내비 시 강제 dismiss.
+        messenger.removeCurrentSnackBar();
         messenger.showSnackBar(
           SnackBar(
             content: Text(info.message),
-            duration: const Duration(seconds: 6),
+            duration: const Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
             action: SnackBarAction(
               label: isKorean ? '구독' : 'Upgrade',
               onPressed: () {
+                messenger.hideCurrentSnackBar();
                 if (!mounted) return;
                 context.push(Routes.my);
               },
