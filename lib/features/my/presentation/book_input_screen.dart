@@ -284,21 +284,7 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
 
     return Scaffold(
-      backgroundColor: C.bg,
-      appBar: AppBar(
-        backgroundColor: C.bg,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          widget.initialBook == null
-              ? (isKorean ? '도서 추가' : 'Add Book')
-              : (isKorean ? '도서 수정' : 'Edit Book'),
-          style: T.h3,
-        ),
-      ),
+      backgroundColor: Colors.transparent,
       bottomNavigationBar: SafeArea(
         top: false,
         child: Padding(
@@ -316,11 +302,35 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
       body: Stack(
         children: [
           const BgOrbs(),
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+          SafeArea(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Stack(
+                  children: [
+                    MoriPageHeaderShell(
+                      child: MoriWideHeader(
+                        title: widget.initialBook == null
+                            ? (isKorean ? '도서 추가' : 'Add Book')
+                            : (isKorean ? '도서 수정' : 'Edit Book'),
+                        subtitle: isKorean ? '도서 정보를 기록해요' : 'Record your book info',
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: IconButton(
+                        icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ),
+                  ],
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                 // ISBN 입력 + 검색
                 SectionTitle(title: isKorean ? 'ISBN *' : 'ISBN *'),
                 const SizedBox(height: 8),
@@ -498,6 +508,10 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
                       setState(() => _newPhotoFiles.removeAt(i)),
                 ),
                 const SizedBox(height: 8),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),

@@ -78,16 +78,7 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
     }
 
     return Scaffold(
-      backgroundColor: C.bg,
-      appBar: AppBar(
-        backgroundColor: C.bg,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(widget.swatchId == null ? t.newSwatch : t.editSwatch, style: T.h3),
-      ),
+      backgroundColor: Colors.transparent,
       bottomNavigationBar: SafeArea(
         top: false,
         child: Padding(
@@ -110,13 +101,33 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
       body: Stack(
         children: [
           const BgOrbs(),
-          SingleChildScrollView(
+          SafeArea(
+            child: Column(
+              children: [
+                Stack(
+                  children: [
+                    MoriPageHeaderShell(
+                      child: MoriWideHeader(
+                        title: widget.swatchId == null ? t.newSwatch : t.editSwatch,
+                        subtitle: t.swatchHeaderSubtitle,
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: IconButton(
+                        icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ),
+                  ],
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                MoriBrandHeader(subtitle: t.swatchHeaderSubtitle),
-                const SizedBox(height: 18),
                 _TopPhotoDualCard(
                   yarnPhotoUrl: swatch.myYarnPhotoUrl,
                   swatchPhotoUrl: swatch.beforePhotoUrl,
@@ -505,6 +516,10 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
                       ],
                     ],
                   ),
+                ),
+              ],
+            ),
+          ),
                 ),
               ],
             ),

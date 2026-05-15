@@ -128,29 +128,7 @@ class _YarnInputScreenState extends ConsumerState<YarnInputScreen> {
         await _handleUnsavedBack(context);
       },
       child: Scaffold(
-      backgroundColor: C.bg,
-      appBar: AppBar(
-        backgroundColor: C.bg,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-          onPressed: () async {
-            if (!_isDirty) {
-              Navigator.pop(context);
-              return;
-            }
-            await _handleUnsavedBack(context);
-          },
-        ),
-        title: Text(
-          widget.yarnId == null
-              ? (widget.copyFrom != null
-                  ? (isKorean ? '실 복사' : 'Copy Yarn')
-                  : (isKorean ? '실 추가' : 'Add Yarn'))
-              : (isKorean ? '실 수정' : 'Edit Yarn'),
-          style: T.h3,
-        ),
-      ),
+      backgroundColor: Colors.transparent,
       bottomNavigationBar: SafeArea(
         top: false,
         child: Padding(
@@ -175,7 +153,39 @@ class _YarnInputScreenState extends ConsumerState<YarnInputScreen> {
       body: Stack(
         children: [
           const BgOrbs(),
-          SingleChildScrollView(
+          SafeArea(
+            child: Column(
+              children: [
+                Stack(
+                  children: [
+                    MoriPageHeaderShell(
+                      child: MoriWideHeader(
+                        title: widget.yarnId == null
+                            ? (widget.copyFrom != null
+                                ? (isKorean ? '실 복사' : 'Copy Yarn')
+                                : (isKorean ? '실 추가' : 'Add Yarn'))
+                            : (isKorean ? '실 수정' : 'Edit Yarn'),
+                        subtitle: isKorean ? '실 정보를 기록해요' : 'Record your yarn info',
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: IconButton(
+                        icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
+                        onPressed: () async {
+                          if (!_isDirty) {
+                            Navigator.pop(context);
+                            return;
+                          }
+                          await _handleUnsavedBack(context);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -516,6 +526,10 @@ class _YarnInputScreenState extends ConsumerState<YarnInputScreen> {
                       ),
                     ],
                   ),
+                ),
+              ],
+            ),
+          ),
                 ),
               ],
             ),

@@ -663,24 +663,34 @@ class _PatternConverterScreenState
     final isKorean = ref.watch(appLanguageProvider).isKorean;
 
     return Scaffold(
-      backgroundColor: C.bg,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20),
-          color: C.tx,
-          onPressed: () => context.pop(),
-        ),
-        title: Text(
-          isKorean ? '도안 변환기' : 'Pattern Converter',
-          style: T.h3,
-        ),
-        backgroundColor: C.bg,
-        elevation: 0,
-      ),
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           const BgOrbs(),
-          SingleChildScrollView(
+          SafeArea(
+            child: Column(
+              children: [
+                Stack(
+                  children: [
+                    MoriPageHeaderShell(
+                      child: MoriWideHeader(
+                        title: isKorean ? '도안 변환기' : 'Pattern Converter',
+                        subtitle: isKorean ? 'PDF/이미지 도안을 AI로 변환' : 'AI converts PDF/image patterns',
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back_ios, size: 20),
+                        color: C.tx,
+                        onPressed: () => context.pop(),
+                      ),
+                    ),
+                  ],
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -752,6 +762,10 @@ class _PatternConverterScreenState
 
                 // 변환된 도안 리스트 인라인 표시
                 _InlinePatternList(isKorean: isKorean),
+              ],
+            ),
+          ),
+                ),
               ],
             ),
           ),

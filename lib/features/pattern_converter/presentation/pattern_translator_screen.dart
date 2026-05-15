@@ -284,24 +284,34 @@ class _PatternTranslatorScreenState
     final isKorean = ref.watch(appLanguageProvider).isKorean;
 
     return Scaffold(
-      backgroundColor: C.bg,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20),
-          color: C.tx,
-          onPressed: () => context.pop(),
-        ),
-        title: Text(
-          isKorean ? 'AI 영문도안 번역기' : 'Pattern Translator',
-          style: T.h3,
-        ),
-        backgroundColor: C.bg,
-        elevation: 0,
-      ),
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           const BgOrbs(),
-          SingleChildScrollView(
+          SafeArea(
+            child: Column(
+              children: [
+                Stack(
+                  children: [
+                    MoriPageHeaderShell(
+                      child: MoriWideHeader(
+                        title: isKorean ? 'AI 영문도안 번역기' : 'Pattern Translator',
+                        subtitle: isKorean ? '영문 도안을 한국어로 번역' : 'Translate English patterns',
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back_ios, size: 20),
+                        color: C.tx,
+                        onPressed: () => context.pop(),
+                      ),
+                    ),
+                  ],
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -372,6 +382,10 @@ class _PatternTranslatorScreenState
                   _UploadButton(onTap: _showSourceSheet, isKorean: isKorean),
                 const SizedBox(height: 32),
                 _InlineTranslatedList(isKorean: isKorean),
+              ],
+            ),
+          ),
+                ),
               ],
             ),
           ),

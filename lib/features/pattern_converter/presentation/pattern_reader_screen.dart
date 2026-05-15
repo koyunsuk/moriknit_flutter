@@ -77,30 +77,42 @@ class _PatternReaderView extends StatelessWidget {
     final pct = (_progress * 100).toInt();
 
     return Scaffold(
-      backgroundColor: C.bg,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20),
-          color: C.tx,
-          onPressed: () => context.pop(),
-        ),
-        title: Text(pattern.title,
-            style: T.h3, overflow: TextOverflow.ellipsis),
-        backgroundColor: C.bg,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.menu_book_rounded, size: 22),
-            color: C.lv,
-            tooltip: isKorean ? '텍스트 뷰어' : 'Text Viewer',
-            onPressed: () => context.push('/tools/my-parsed-patterns/${pattern.id}/text'),
-          ),
-        ],
-      ),
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           const BgOrbs(),
-          CustomScrollView(
+          SafeArea(
+            child: Column(
+              children: [
+                Stack(
+                  children: [
+                    MoriPageHeaderShell(
+                      child: MoriWideHeader(
+                        title: pattern.title,
+                        subtitle: isKorean ? '단계별로 진행해요' : 'Step by step',
+                        trailing: [
+                          IconButton(
+                            icon: const Icon(Icons.menu_book_rounded, size: 22),
+                            color: C.lv,
+                            tooltip: isKorean ? '텍스트 뷰어' : 'Text Viewer',
+                            onPressed: () => context.push('/tools/my-parsed-patterns/${pattern.id}/text'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back_ios, size: 20),
+                        color: C.tx,
+                        onPressed: () => context.pop(),
+                      ),
+                    ),
+                  ],
+                ),
+                Expanded(
+                  child: CustomScrollView(
             slivers: [
               // 진행률 헤더
               SliverToBoxAdapter(
@@ -179,6 +191,10 @@ class _PatternReaderView extends StatelessWidget {
 
               const SliverToBoxAdapter(child: SizedBox(height: 40)),
             ],
+          ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

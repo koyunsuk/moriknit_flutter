@@ -124,46 +124,56 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
     final notifier = ref.read(projectInputProvider.notifier);
 
     return Scaffold(
-      backgroundColor: C.bg,
-      appBar: AppBar(
-        backgroundColor: C.bg,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          widget.projectId != null
-              ? t.editProject
-              : widget.templateType != null
-                  ? _templateName(widget.templateType!)
-                  : t.newProject,
-          style: T.h3,
-        ),
-        actions: [
-          if (_isSaving)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Center(
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ),
-            )
-          else
-            TextButton.icon(
-              onPressed: _isSaving ? null : () => _save(context),
-              icon: Icon(Icons.save_rounded, size: 18, color: C.lvD),
-              label: Text('저장', style: TextStyle(color: C.lvD)),
-            ),
-        ],
-      ),
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           const BgOrbs(),
-          SingleChildScrollView(
+          SafeArea(
+            child: Column(
+              children: [
+                Stack(
+                  children: [
+                    MoriPageHeaderShell(
+                      child: MoriWideHeader(
+                        title: widget.projectId != null
+                            ? t.editProject
+                            : widget.templateType != null
+                                ? _templateName(widget.templateType!)
+                                : t.newProject,
+                        subtitle: isKorean ? '프로젝트 정보를 기록해요' : 'Record your project info',
+                        trailing: [
+                          if (_isSaving)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 16),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              ),
+                            )
+                          else
+                            TextButton.icon(
+                              onPressed: _isSaving ? null : () => _save(context),
+                              icon: Icon(Icons.save_rounded, size: 18, color: C.lvD),
+                              label: Text('저장', style: TextStyle(color: C.lvD)),
+                            ),
+                        ],
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: IconButton(
+                        icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ),
+                  ],
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -359,6 +369,10 @@ class _ProjectInputScreenState extends ConsumerState<ProjectInputScreen> {
                   selectedBookId: project.referenceBookId,
                   isKorean: isKorean,
                   onChanged: notifier.setReferenceBookId,
+                ),
+              ],
+            ),
+          ),
                 ),
               ],
             ),

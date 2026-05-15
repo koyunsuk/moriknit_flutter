@@ -19,30 +19,40 @@ class MyParsedPatternsScreen extends ConsumerWidget {
     final patternsAsync = ref.watch(aiPatternsProvider);
 
     return Scaffold(
-      backgroundColor: C.bg,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20),
-          color: C.tx,
-          onPressed: () => context.pop(),
-        ),
-        title: Text(
-          isKorean ? '변환된 도안' : 'Converted Patterns',
-          style: T.h3,
-        ),
-        backgroundColor: C.bg,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.add_rounded, color: C.lv),
-            onPressed: () => context.push(Routes.toolsPatternConverter),
-          ),
-        ],
-      ),
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           const BgOrbs(),
-          patternsAsync.when(
+          SafeArea(
+            child: Column(
+              children: [
+                Stack(
+                  children: [
+                    MoriPageHeaderShell(
+                      child: MoriWideHeader(
+                        title: isKorean ? '변환된 도안' : 'Converted Patterns',
+                        subtitle: isKorean ? 'AI로 변환한 도안 목록' : 'AI converted patterns',
+                        trailing: [
+                          IconButton(
+                            icon: Icon(Icons.add_rounded, color: C.lv),
+                            onPressed: () => context.push(Routes.toolsPatternConverter),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back_ios, size: 20),
+                        color: C.tx,
+                        onPressed: () => context.pop(),
+                      ),
+                    ),
+                  ],
+                ),
+                Expanded(
+                  child: patternsAsync.when(
             loading: () =>
                 const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(child: Text('$e')),
@@ -64,6 +74,10 @@ class MyParsedPatternsScreen extends ConsumerWidget {
                 ),
               );
             },
+          ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

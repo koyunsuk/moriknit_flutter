@@ -265,20 +265,33 @@ class _PatternGeneratorScreenState extends ConsumerState<PatternGeneratorScreen>
   Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(isKorean ? '패턴 생성기 (래글런)' : 'Pattern Generator (Raglan)', style: T.h3),
-        elevation: 0,
-        backgroundColor: C.bg,
-      ),
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           const BgOrbs(),
           SafeArea(
-            child: SingleChildScrollView(
+            child: Column(
+              children: [
+                Stack(
+                  children: [
+                    MoriPageHeaderShell(
+                      child: MoriWideHeader(
+                        title: isKorean ? '패턴 생성기 (래글런)' : 'Pattern Generator (Raglan)',
+                        subtitle: isKorean ? '치수와 게이지로 도안 자동 생성' : 'Auto-generate from measurements',
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: IconButton(
+                        icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ),
+                  ],
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -302,6 +315,9 @@ class _PatternGeneratorScreenState extends ConsumerState<PatternGeneratorScreen>
                   ],
                 ],
               ),
+            ),
+                ),
+              ],
             ),
           ),
         ],
