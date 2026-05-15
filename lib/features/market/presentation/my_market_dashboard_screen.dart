@@ -8,6 +8,7 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/market_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../core/localization/app_language.dart';
+import '../domain/market_item.dart';
 
 class MyMarketDashboardScreen extends ConsumerWidget {
   const MyMarketDashboardScreen({super.key});
@@ -22,186 +23,221 @@ class MyMarketDashboardScreen extends ConsumerWidget {
 
     if (user == null) {
       return Scaffold(
-        backgroundColor: C.bg,
-        appBar: AppBar(
-          backgroundColor: C.bg,
-          leading: IconButton(
-            icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
-            onPressed: () => Navigator.of(context).maybePop(),
-          ),
-          title: Text(isKorean ? '내 마켓' : 'My Market', style: T.h3),
-        ),
-        body: Center(
-          child: Text(
-            isKorean ? '로그인이 필요해요.' : 'Login required.',
-            style: T.body.copyWith(color: C.mu),
-          ),
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          children: [
+            const BgOrbs(),
+            SafeArea(
+              child: Column(
+                children: [
+                  MoriPageHeaderShell(
+                    child: MoriWideHeader(
+                      title: isKorean ? '내 마켓' : 'My Market',
+                      subtitle: isKorean ? '판매·구매 한눈에 보기' : 'Sales and purchases at a glance',
+                    ),
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        isKorean ? '로그인이 필요해요.' : 'Login required.',
+                        style: T.body.copyWith(color: C.mu),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       );
     }
 
     final sales = salesAsync.valueOrNull ?? const [];
     final myItems = myItemsAsync.valueOrNull ?? const [];
+    final purchases = purchasesAsync.valueOrNull ?? const [];
+    final pendingItems = myItems.where((i) => !i.isSoldOut).toList();
+    final soldItems = myItems.where((i) => i.isSoldOut).toList();
     final totalRevenue = sales.fold<int>(0, (sum, s) => sum + s.price);
 
     return Scaffold(
-      backgroundColor: C.bg,
-      appBar: AppBar(
-        backgroundColor: C.bg,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-        title: Text(isKorean ? '내 마켓' : 'My Market', style: T.h3),
-        centerTitle: false,
-      ),
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           const BgOrbs(),
-          ListView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-            children: [
-              _SummaryCards(
-                isKorean: isKorean,
-                salesCount: sales.length,
-                totalRevenue: totalRevenue,
-                itemCount: myItems.length,
-              ),
-              const SizedBox(height: 24),
-              SectionTitle(title: isKorean ? '내 상품 목록' : 'My Items'),
-              const SizedBox(height: 10),
-              myItemsAsync.when(
-                loading: () => AsyncLoadingFriendly(
-                  isKorean: isKorean,
-                  onRetry: () => ref.invalidate(myMarketItemsProvider),
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                ),
-                error: (e, _) => AsyncDelayedFriendly(
-                  isKorean: isKorean,
-                  onRetry: () => ref.invalidate(myMarketItemsProvider),
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                ),
-                data: (items) => items.isEmpty
-                    ? _ItemsEmptyPlaceholder(isKorean: isKorean)
-                    : Column(
-                        children: items
-                            .map((item) => _MyItemRow(item: item, isKorean: isKorean))
-                            .toList(),
-                      ),
-              ),
-              const SizedBox(height: 24),
-              SectionTitle(title: isKorean ? '구매 내역' : 'Purchase History'),
-              const SizedBox(height: 10),
-              purchasesAsync.when(
-                loading: () => AsyncLoadingFriendly(
-                  isKorean: isKorean,
-                  onRetry: () => ref.invalidate(myPurchasesProvider),
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                ),
-                error: (e, _) => AsyncDelayedFriendly(
-                  isKorean: isKorean,
-                  onRetry: () => ref.invalidate(myPurchasesProvider),
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                ),
-                data: (purchases) => purchases.isEmpty
-                    ? _PurchasesEmptyPlaceholder(isKorean: isKorean)
-                    : Column(
-                        children: purchases
-                            .map((p) => _PurchaseRow(
-                                  title: p.title,
-                                  price: p.price,
-                                  purchasedAt: p.purchasedAt,
-                                  isKorean: isKorean,
-                                ))
-                            .toList(),
-                      ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SummaryCards extends StatelessWidget {
-  final bool isKorean;
-  final int salesCount;
-  final int totalRevenue;
-  final int itemCount;
-
-  const _SummaryCards({
-    required this.isKorean,
-    required this.salesCount,
-    required this.totalRevenue,
-    required this.itemCount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _StatCard(
-            label: isKorean ? '총 판매' : 'Sales',
-            value: '$salesCount',
-            unit: isKorean ? '건' : '',
-            color: C.lv,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _StatCard(
-            label: isKorean ? '총 수익' : 'Revenue',
-            value: '$totalRevenue',
-            unit: isKorean ? ' 모리' : ' M',
-            color: C.pk,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _StatCard(
-            label: isKorean ? '내 상품' : 'Items',
-            value: '$itemCount',
-            unit: isKorean ? '개' : '',
-            color: C.lm.withValues(alpha: 1.0),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final String unit;
-  final Color color;
-
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.unit,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GlassCard(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          RichText(
-            text: TextSpan(
+          SafeArea(
+            child: Column(
               children: [
-                TextSpan(text: value, style: T.h2.copyWith(color: color)),
-                TextSpan(text: unit, style: T.caption.copyWith(color: color)),
+                // 공통 헤더 (상단 고정)
+                MoriPageHeaderShell(
+                  child: MoriWideHeader(
+                    title: isKorean ? '내 마켓' : 'My Market',
+                    subtitle: isKorean ? '판매 대기·구매 도안' : 'Pending sales & purchases',
+                  ),
+                ),
+                // 상단 요약카드 (나의 실 라이브러리 패턴)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: LibrarySummaryCard(
+                    headers: [
+                      isKorean ? '판매대기' : 'Pending',
+                      isKorean ? '판매완료' : 'Sold',
+                      isKorean ? '구매' : 'Bought',
+                    ],
+                    rows: [
+                      LibrarySummaryRowData(
+                        badge: isKorean ? '내 마켓' : 'My Market',
+                        badgeColor: C.lv,
+                        values: [
+                          '${pendingItems.length}',
+                          '${soldItems.length}',
+                          '${purchases.length}',
+                        ],
+                        valueColors: [C.lvD, C.pkD, C.og],
+                      ),
+                      LibrarySummaryRowData(
+                        badge: isKorean ? '수익' : 'Revenue',
+                        badgeColor: C.pkD,
+                        values: [
+                          '${myItems.length}${isKorean ? '개' : ''}',
+                          '$totalRevenue M',
+                          '-',
+                        ],
+                        valueColors: [C.lvD, C.pkD, C.mu],
+                      ),
+                    ],
+                  ),
+                ),
+                // 스크롤 바디
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+                    children: [
+                      // 섹션 1: 판매 대기중
+                      GlassCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: C.lv.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    isKorean ? '판매 대기' : 'Pending',
+                                    style: T.caption.copyWith(color: C.lvD, fontWeight: FontWeight.w700),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(isKorean ? '🛍️ 내가 올린 도안' : '🛍️ My Listings', style: T.bodyBold),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            myItemsAsync.when(
+                              loading: () => AsyncLoadingFriendly(
+                                isKorean: isKorean,
+                                onRetry: () => ref.invalidate(myMarketItemsProvider),
+                                padding: const EdgeInsets.symmetric(vertical: 20),
+                                compact: true,
+                              ),
+                              error: (e, _) => AsyncDelayedFriendly(
+                                isKorean: isKorean,
+                                onRetry: () => ref.invalidate(myMarketItemsProvider),
+                                padding: const EdgeInsets.symmetric(vertical: 20),
+                                compact: true,
+                              ),
+                              data: (items) {
+                                if (items.isEmpty) {
+                                  return MoriEmptyState(
+                                    icon: Icons.storefront_rounded,
+                                    iconColor: C.lv,
+                                    title: isKorean ? '아직 판매 중인 도안이 없어요' : 'No items listed yet',
+                                    subtitle: isKorean
+                                        ? '도안을 만들어 마켓에 올려보세요.\n도안에디터에서 시작할 수 있어요.'
+                                        : 'Create a pattern and list it in the market.\nStart from the pattern editor.',
+                                  );
+                                }
+                                return Column(
+                                  children: items
+                                      .map((item) => _MyItemRow(item: item, isKorean: isKorean))
+                                      .toList(),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // 섹션 2: 구매한 아이템
+                      GlassCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: C.og.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    isKorean ? '구매' : 'Purchases',
+                                    style: T.caption.copyWith(color: C.og, fontWeight: FontWeight.w700),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(isKorean ? '🧾 구매한 도안' : '🧾 My Purchases', style: T.bodyBold),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            purchasesAsync.when(
+                              loading: () => AsyncLoadingFriendly(
+                                isKorean: isKorean,
+                                onRetry: () => ref.invalidate(myPurchasesProvider),
+                                padding: const EdgeInsets.symmetric(vertical: 20),
+                                compact: true,
+                              ),
+                              error: (e, _) => AsyncDelayedFriendly(
+                                isKorean: isKorean,
+                                onRetry: () => ref.invalidate(myPurchasesProvider),
+                                padding: const EdgeInsets.symmetric(vertical: 20),
+                                compact: true,
+                              ),
+                              data: (purchases) {
+                                if (purchases.isEmpty) {
+                                  return MoriEmptyState(
+                                    icon: Icons.shopping_bag_rounded,
+                                    iconColor: C.og,
+                                    title: isKorean ? '아직 구매한 도안이 없어요' : 'No purchases yet',
+                                    subtitle: isKorean
+                                        ? '마켓에서 마음에 드는 도안을 찾아보세요.\n구매한 도안은 여기에서 확인할 수 있어요.'
+                                        : 'Browse the market for patterns you love.\nPurchases will appear here.',
+                                  );
+                                }
+                                return Column(
+                                  children: purchases
+                                      .map((p) => _PurchaseRow(
+                                            title: p.title,
+                                            price: p.price,
+                                            purchasedAt: p.purchasedAt,
+                                            isKorean: isKorean,
+                                          ))
+                                      .toList(),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 4),
-          Text(label, style: T.caption, textAlign: TextAlign.center),
         ],
       ),
     );
@@ -209,15 +245,15 @@ class _StatCard extends StatelessWidget {
 }
 
 class _MyItemRow extends StatelessWidget {
-  final dynamic item;
+  final MarketItem item;
   final bool isKorean;
 
   const _MyItemRow({required this.item, required this.isKorean});
 
   @override
   Widget build(BuildContext context) {
-    final isSoldOut = item.isSoldOut as bool;
-    final createdAt = item.createdAt as DateTime?;
+    final isSoldOut = item.isSoldOut;
+    final createdAt = item.createdAt;
     final dateStr = createdAt != null
         ? '${createdAt.year}.${createdAt.month.toString().padLeft(2, '0')}.${createdAt.day.toString().padLeft(2, '0')}'
         : '';
@@ -246,7 +282,7 @@ class _MyItemRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.title as String, style: T.bodyBold, overflow: TextOverflow.ellipsis),
+                Text(item.title, style: T.bodyBold, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 2),
                 Text(
                   '${item.category}  •  ${item.price} 모리',
@@ -327,72 +363,6 @@ class _PurchaseRow extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ItemsEmptyPlaceholder extends StatelessWidget {
-  final bool isKorean;
-
-  const _ItemsEmptyPlaceholder({required this.isKorean});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 28),
-      decoration: BoxDecoration(
-        color: C.gx,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: C.bd),
-      ),
-      child: Column(
-        children: [
-          Icon(Icons.store_outlined, color: C.mu, size: 32),
-          const SizedBox(height: 10),
-          Text(
-            isKorean ? '등록된 상품이 없어요' : 'No items listed',
-            style: T.sm.copyWith(color: C.mu),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            isKorean ? '마켓에서 상품을 등록해 보세요.' : 'Add your first item to the market.',
-            style: T.caption.copyWith(color: C.mu),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PurchasesEmptyPlaceholder extends StatelessWidget {
-  final bool isKorean;
-
-  const _PurchasesEmptyPlaceholder({required this.isKorean});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 28),
-      decoration: BoxDecoration(
-        color: C.gx,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: C.bd),
-      ),
-      child: Column(
-        children: [
-          Icon(Icons.receipt_long_outlined, color: C.mu, size: 32),
-          const SizedBox(height: 10),
-          Text(
-            isKorean ? '구매 내역이 없어요' : 'No purchases yet',
-            style: T.sm.copyWith(color: C.mu),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            isKorean ? '마켓에서 도안을 구매해 보세요.' : 'Browse the market to find patterns.',
-            style: T.caption.copyWith(color: C.mu),
           ),
         ],
       ),
