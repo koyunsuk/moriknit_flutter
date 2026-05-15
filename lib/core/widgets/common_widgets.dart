@@ -620,11 +620,11 @@ class MoriBrandHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 헤더 비율 확대 (사용자 요청): compact 90→108, non-compact 150→180. 로고/문구/흰색 블록도 비례 확대.
+    // 헤더 축소 (#717): 화면설명 높이/문구 축소.
     if (compact) {
       return Container(
         width: double.infinity,
-        height: 90,
+        height: 72,
         color: Colors.transparent,
         child: Stack(
           fit: StackFit.expand,
@@ -635,31 +635,30 @@ class MoriBrandHeader extends StatelessWidget {
                 const SizedBox(height: 2),
                 Image.asset(
                   'assets/login_logo.png',
-                  width: 50,
-                  height: 50,
+                  width: 40,
+                  height: 40,
                   fit: BoxFit.contain,
                 ),
                 const SizedBox(height: 1),
-                MoriKnitTitle(fontSize: 14, width: 92),
+                MoriKnitTitle(fontSize: 12, width: 78),
               ],
             ),
             if (subtitle != null)
               Positioned(
-                bottom: 3,
+                bottom: 2,
                 left: 0,
                 right: 0,
                 child: Container(
                   margin: const EdgeInsets.fromLTRB(12, 0, 12, 0),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.84),
-                    borderRadius: BorderRadius.circular(9),
+                    borderRadius: BorderRadius.circular(7),
                     border: Border.all(color: C.tint(C.lv, 0.18)),
-                    boxShadow: [BoxShadow(color: C.tint(C.lv, 0.06), blurRadius: 7, offset: const Offset(0, 1))],
                   ),
                   child: Text(
                     subtitle!,
-                    style: T.caption.copyWith(color: C.tx2, height: 1.25, fontSize: 10, fontWeight: FontWeight.w600),
+                    style: T.caption.copyWith(color: C.tx2, height: 1.2, fontSize: 9, fontWeight: FontWeight.w600),
                     textAlign: TextAlign.center,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -672,7 +671,7 @@ class MoriBrandHeader extends StatelessWidget {
     }
     return Container(
       width: double.infinity,
-      height: 150,
+      height: 120,
       color: Colors.transparent,
       child: Stack(
         fit: StackFit.expand,
@@ -680,35 +679,35 @@ class MoriBrandHeader extends StatelessWidget {
           Column(
             mainAxisAlignment: MainAxisAlignment.start,
             children: [
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Image.asset(
                 'assets/login_logo.png',
-                width: 94,
-                height: 94,
+                width: 72,
+                height: 72,
                 fit: BoxFit.contain,
               ),
-              const SizedBox(height: 2),
-              MoriKnitTitle(fontSize: 19, width: 174),
+              const SizedBox(height: 1),
+              MoriKnitTitle(fontSize: 16, width: 144),
             ],
           ),
           if (subtitle != null)
             Positioned(
-              bottom: 4,
+              bottom: 3,
               left: 0,
               right: 0,
               child: Container(
                 margin: const EdgeInsets.fromLTRB(12, 0, 12, 0),
-                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
                 decoration: BoxDecoration(
                   // B&W: 연회색 헤더 위 흰 카드 → 구분 명확
                   color: Colors.white.withValues(alpha: 0.84),
-                  borderRadius: BorderRadius.circular(11),
+                  borderRadius: BorderRadius.circular(9),
                   border: Border.all(color: C.tint(C.lv, 0.18)),
                   boxShadow: [
                     BoxShadow(
                       color: C.tint(C.lv, 0.06),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
+                      blurRadius: 6,
+                      offset: const Offset(0, 1),
                     ),
                   ],
                 ),
@@ -716,8 +715,8 @@ class MoriBrandHeader extends StatelessWidget {
                   subtitle!,
                   style: T.caption.copyWith(
                     color: C.tx2,
-                    height: 1.3,
-                    fontSize: 14,
+                    height: 1.25,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
                   textAlign: TextAlign.center,
