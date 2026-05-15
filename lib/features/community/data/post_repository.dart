@@ -33,10 +33,15 @@ class PostRepository {
       case '전체':
       case 'All':
         return const <String>[];
+      case 'daily':
+      case '일상':
+      case 'Daily':
+        return const <String>['daily', '일상', 'Daily'];
       case 'showcase':
       case '작품':
       case 'Showcase':
-        return const <String>['showcase', '작품', 'Showcase'];
+      case '작품자랑':
+        return const <String>['showcase', '작품', 'Showcase', '작품자랑'];
       case 'questions':
       case '질문':
       case 'Questions':

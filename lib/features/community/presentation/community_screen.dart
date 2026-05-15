@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -27,7 +28,7 @@ import '../domain/guestbook_entry.dart';
 import 'gallery_detail_page.dart';
 import '../domain/post_model.dart';
 
-const _categoryKeys = ['all', 'showcase', 'questions', 'pattern_share'];
+const _categoryKeys = ['all', 'daily', 'showcase', 'questions', 'pattern_share'];
 
 class CommunityScreen extends ConsumerWidget {
   const CommunityScreen({super.key});
@@ -44,8 +45,6 @@ class CommunityScreen extends ConsumerWidget {
       key: 'community_header_subtitle',
       fallback: t.communityHeaderSubtitle,
     );
-    final selectedCategory = ref.watch(selectedCategoryProvider);
-    final postsAsync = ref.watch(postsProvider(selectedCategory));
     final user = ref.watch(authStateProvider).valueOrNull;
     final currentUserModel = ref.watch(currentUserProvider).valueOrNull;
     final resolvedDisplayName = (currentUserModel?.displayName.isNotEmpty == true)
@@ -69,116 +68,34 @@ class CommunityScreen extends ConsumerWidget {
               child: CustomScrollView(
                 slivers: [
                   const SliverToBoxAdapter(child: SizedBox(height: 8)),
-            SliverToBoxAdapter(child: _GuestbookSection(isKorean: isKorean)),
-            const SliverToBoxAdapter(child: SizedBox(height: 8)),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _GalleryPreviewSection(isKorean: isKorean),
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 8)),
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: 36,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  separatorBuilder: (_, _) => const SizedBox(width: 8),
-                  itemCount: _categoryKeys.length,
-                  itemBuilder: (_, index) {
-                    final categoryKey = _categoryKeys[index];
-                    final isSelected = categoryKey == selectedCategory;
-                    return GestureDetector(
-                      onTap: () => ref.read(selectedCategoryProvider.notifier).state = categoryKey,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: isSelected ? C.lvD : Colors.white.withValues(alpha: 0.7),
-                          borderRadius: BorderRadius.circular(99),
-                          border: Border.all(color: isSelected ? C.lvD : C.bd),
-                        ),
-                        child: Text(
-                          _categoryLabel(categoryKey, isKorean),
-                          style: T.sm.copyWith(
-                            color: isSelected ? Colors.white : C.tx2,
-                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 12)),
-            // 이슈 #715 — 게시글을 MoriBlockShell로 감싸 플레이스홀더 + 내부 스크롤 적용.
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 140),
-              sliver: SliverToBoxAdapter(
-                child: postsAsync.when(
-                  loading: () => MoriBlockShell(
-                    label: isKorean ? '게시글' : 'Posts',
-                    icon: Icons.forum_outlined,
-                    accent: C.lvD,
-                    scrollHeight: 380,
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 40),
-                        child: CircularProgressIndicator(color: C.lv),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _GuestbookSection(isKorean: isKorean),
+                    ),
+                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _GalleryPreviewSection(isKorean: isKorean),
+                    ),
+                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                  // 이슈 #722 — 카테고리 칩 가로 스크롤 삭제 → 게시글 블록 내부 TabBar로 통합.
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 140),
+                    sliver: SliverToBoxAdapter(
+                      child: _CommunityPostsBlock(
+                        isKorean: isKorean,
+                        communityWriteEnabled: communityWriteEnabled,
+                        user: user,
+                        resolvedDisplayName: resolvedDisplayName,
+                        onWriteSheet: (ctx, uid, name) =>
+                            _showWriteSheet(ctx, ref, uid, name),
                       ),
                     ),
                   ),
-                  error: (_, _) => MoriBlockShell(
-                    label: isKorean ? '게시글' : 'Posts',
-                    icon: Icons.forum_outlined,
-                    accent: C.lvD,
-                    scrollHeight: 380,
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 40),
-                        child: Text(
-                          isKorean ? '게시글을 불러오지 못했어요.' : 'Unable to load posts.',
-                          style: T.body,
-                        ),
-                      ),
-                    ),
-                  ),
-                  data: (posts) {
-                    final onWrite = !communityWriteEnabled
-                        ? () => ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(isKorean ? '현재 글쓰기가 제한됐어요.' : 'Writing is currently restricted.')),
-                            )
-                        : user == null
-                            ? () => showLoginRequiredDialog(context, isKorean: isKorean, fromRoute: '/community')
-                            : () => _showWriteSheet(context, ref, user.uid, resolvedDisplayName);
-                    return MoriBlockShell(
-                      label: isKorean ? '게시글 ${posts.length}' : '${posts.length} posts',
-                      icon: Icons.forum_outlined,
-                      accent: C.lvD,
-                      moreLabel: isKorean ? '글쓰기' : 'Write',
-                      onMoreTap: onWrite,
-                      scrollHeight: 380,
-                      bodyPadding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-                      child: posts.isEmpty
-                          ? _CommunityPostsPlaceholder(isKorean: isKorean, onWrite: onWrite)
-                          : Column(
-                              children: [
-                                for (var i = 0; i < posts.length; i++) ...[
-                                  if (i > 0) const SizedBox(height: 8),
-                                  GlassCard(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                    child: _PostRow(post: posts[i], isKorean: isKorean),
-                                  ),
-                                ],
-                              ],
-                            ),
-                    );
-                  },
-                ),
-              ),
-            ),
                 ],
               ),
             ),
@@ -365,6 +282,137 @@ class CommunityScreen extends ConsumerWidget {
   }
 }
 
+// 이슈 #722 — 게시글 블록 + 4탭 (전체/일상/작품자랑/질문) + 내부 ListView 스크롤.
+class _CommunityPostsBlock extends ConsumerWidget {
+  final bool isKorean;
+  final bool communityWriteEnabled;
+  final dynamic user;
+  final String resolvedDisplayName;
+  final void Function(BuildContext, String, String) onWriteSheet;
+
+  const _CommunityPostsBlock({
+    required this.isKorean,
+    required this.communityWriteEnabled,
+    required this.user,
+    required this.resolvedDisplayName,
+    required this.onWriteSheet,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final onWrite = !communityWriteEnabled
+        ? () => ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(isKorean
+                    ? '현재 글쓰기가 제한됐어요.'
+                    : 'Writing is currently restricted.'),
+              ),
+            )
+        : user == null
+            ? () => showLoginRequiredDialog(context,
+                isKorean: isKorean, fromRoute: '/community')
+            : () => onWriteSheet(context, user.uid as String, resolvedDisplayName);
+
+    // 4개 탭: 전체 / 일상 / 작품자랑(완성=showcase) / 질문
+    final tabKeys = const ['all', 'daily', 'showcase', 'questions'];
+    final tabLabels = isKorean
+        ? const ['전체', '일상', '작품자랑', '질문']
+        : const ['All', 'Daily', 'Showcase', 'Questions'];
+
+    return MoriBlockShell(
+      label: isKorean ? '게시글' : 'Posts',
+      icon: Icons.forum_rounded,
+      accent: C.pkD,
+      moreLabel: isKorean ? '글쓰기' : 'Write',
+      onMoreTap: onWrite,
+      bodyPadding: EdgeInsets.zero,
+      child: DefaultTabController(
+        length: tabKeys.length,
+        child: Column(
+          children: [
+            TabBar(
+              tabs: [for (final l in tabLabels) Tab(text: l)],
+              indicatorColor: C.pkD,
+              labelColor: C.pkD,
+              unselectedLabelColor: C.mu,
+              labelStyle: T.sm.copyWith(fontWeight: FontWeight.w700),
+              unselectedLabelStyle: T.sm.copyWith(fontWeight: FontWeight.w500),
+              isScrollable: false,
+              dividerColor: C.bd.withValues(alpha: 0.4),
+            ),
+            SizedBox(
+              height: 480,
+              child: TabBarView(
+                children: [
+                  for (final key in tabKeys)
+                    _PostsList(
+                      filter: key,
+                      isKorean: isKorean,
+                      onWrite: onWrite,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// 이슈 #722 — 탭별 게시글 ListView + 내부 스크롤 + 빈 상태 플레이스홀더.
+class _PostsList extends ConsumerWidget {
+  final String filter;
+  final bool isKorean;
+  final VoidCallback onWrite;
+
+  const _PostsList({
+    required this.filter,
+    required this.isKorean,
+    required this.onWrite,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final postsAsync = ref.watch(postsProvider(filter));
+    return postsAsync.when(
+      loading: () => Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 40),
+          child: CircularProgressIndicator(color: C.lv),
+        ),
+      ),
+      error: (_, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 40),
+          child: Text(
+            isKorean ? '게시글을 불러오지 못했어요.' : 'Unable to load posts.',
+            style: T.body,
+          ),
+        ),
+      ),
+      data: (posts) {
+        if (posts.isEmpty) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+            child: _CommunityPostsPlaceholder(
+                isKorean: isKorean, onWrite: onWrite),
+          );
+        }
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+          itemCount: posts.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
+          itemBuilder: (_, i) => GlassCard(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            child: _PostRow(post: posts[i], isKorean: isKorean),
+          ),
+        );
+      },
+    );
+  }
+}
+
 // 이슈 #715 — 게시글 블록 플레이스홀더 (빈 행 2~3개 + 안내 + 글쓰기 버튼).
 class _CommunityPostsPlaceholder extends StatelessWidget {
   final bool isKorean;
@@ -458,106 +506,148 @@ class _CommunityPostsPlaceholder extends StatelessWidget {
 // 방명록 섹션
 // ────────────────────────────────────────────
 
-class _GuestbookSection extends ConsumerWidget {
+// 이슈 #722 — 방명록 MoriBlockShell + 자동 가로 스크롤 (Timer.periodic).
+class _GuestbookSection extends ConsumerStatefulWidget {
   final bool isKorean;
   const _GuestbookSection({required this.isKorean});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_GuestbookSection> createState() => _GuestbookSectionState();
+}
+
+class _GuestbookSectionState extends ConsumerState<_GuestbookSection> {
+  final ScrollController _scrollCtrl = ScrollController();
+  Timer? _autoTimer;
+  Timer? _resumeTimer;
+  bool _userInteracting = false;
+
+  static const Duration _tickInterval = Duration(seconds: 3);
+  static const Duration _resumeDelay = Duration(seconds: 5);
+  static const double _stepPixels = 140;
+
+  @override
+  void initState() {
+    super.initState();
+    _startAutoScroll();
+  }
+
+  @override
+  void dispose() {
+    _autoTimer?.cancel();
+    _resumeTimer?.cancel();
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  void _startAutoScroll() {
+    _autoTimer?.cancel();
+    _autoTimer = Timer.periodic(_tickInterval, (_) {
+      if (!mounted || _userInteracting) return;
+      if (!_scrollCtrl.hasClients) return;
+      final pos = _scrollCtrl.position;
+      if (pos.maxScrollExtent <= 0) return;
+      final next = pos.pixels + _stepPixels;
+      final target = next >= pos.maxScrollExtent ? 0.0 : next;
+      _scrollCtrl.animateTo(
+        target,
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  void _onUserInteract() {
+    _userInteracting = true;
+    _resumeTimer?.cancel();
+    _resumeTimer = Timer(_resumeDelay, () {
+      if (!mounted) return;
+      _userInteracting = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final entriesAsync = ref.watch(guestbookListProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     final currentUserModel = ref.watch(currentUserProvider).valueOrNull;
+    final isKorean = widget.isKorean;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: GlassCard(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 헤더 행
-            Row(
-              children: [
-                Icon(Icons.auto_awesome_rounded, size: 15, color: C.pkD),
-                const SizedBox(width: 6),
-                Text(
-                  isKorean ? '방명록 · 한 줄 인사' : 'Guestbook',
-                  style: T.bodyBold.copyWith(color: C.tx),
-                ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: () {
-                    if (user == null) {
-                      showLoginRequiredDialog(
-                        context,
-                        isKorean: isKorean,
-                        fromRoute: '/community',
-                      );
-                      return;
-                    }
-                    _showWriteSheet(context, ref, user.uid, currentUserModel);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: C.lv.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(99),
-                      border: Border.all(color: C.lv.withValues(alpha: 0.3)),
-                    ),
-                    child: Text(
-                      isKorean ? '작성하기' : 'Write',
-                      style: T.sm.copyWith(color: C.lvD, fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            const Divider(height: 1),
-            const SizedBox(height: 8),
-            // 항목 목록
-            entriesAsync.when(
-              loading: () => Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: CircularProgressIndicator(color: C.lv, strokeWidth: 2),
-                ),
-              ),
-              error: (_, _) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  isKorean ? '불러오지 못했어요.' : 'Unable to load.',
-                  style: T.caption.copyWith(color: C.mu),
-                ),
-              ),
-              data: (entries) {
-                if (entries.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    child: Text(
-                      isKorean ? '첫 번째 인사를 남겨보세요!' : 'Leave the first greeting!',
-                      style: T.caption.copyWith(color: C.mu),
-                    ),
-                  );
-                }
-                return Column(
-                  children: entries
-                      .map((e) => _GuestbookEntryTile(
-                            entry: e,
-                            isKorean: isKorean,
-                            isOwn: user?.uid == e.uid,
-                            onDelete: () async {
-                              await ref
-                                  .read(guestbookRepositoryProvider)
-                                  .deleteEntry(e.id);
-                            },
-                          ))
-                      .toList(),
-                );
-              },
-            ),
-          ],
+    return MoriBlockShell(
+      label: isKorean ? '방명록 · 한 줄 인사' : 'Guestbook',
+      icon: Icons.auto_awesome_rounded,
+      accent: C.pkD,
+      moreLabel: isKorean ? '작성하기' : 'Write',
+      onMoreTap: () {
+        if (user == null) {
+          showLoginRequiredDialog(
+            context,
+            isKorean: isKorean,
+            fromRoute: '/community',
+          );
+          return;
+        }
+        _showWriteSheet(context, ref, user.uid, currentUserModel);
+      },
+      bodyPadding: const EdgeInsets.fromLTRB(0, 10, 0, 12),
+      child: entriesAsync.when(
+        loading: () => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          child: Center(
+            child: CircularProgressIndicator(color: C.lv, strokeWidth: 2),
+          ),
         ),
+        error: (_, _) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Text(
+            isKorean ? '불러오지 못했어요.' : 'Unable to load.',
+            style: T.caption.copyWith(color: C.mu),
+          ),
+        ),
+        data: (entries) {
+          if (entries.isEmpty) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              child: Text(
+                isKorean ? '첫 번째 인사를 남겨보세요!' : 'Leave the first greeting!',
+                style: T.caption.copyWith(color: C.mu),
+              ),
+            );
+          }
+          return SizedBox(
+            height: 44,
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (n) {
+                if (n is UserScrollNotification ||
+                    n is ScrollStartNotification) {
+                  _onUserInteract();
+                }
+                return false;
+              },
+              child: ListView.separated(
+                controller: _scrollCtrl,
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                itemCount: entries.length,
+                separatorBuilder: (_, _) => Container(
+                  width: 1,
+                  margin: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 10),
+                  color: C.bd2.withValues(alpha: 0.6),
+                ),
+                itemBuilder: (_, i) => _GuestbookEntryChip(
+                  entry: entries[i],
+                  isKorean: isKorean,
+                  isOwn: user?.uid == entries[i].uid,
+                  onDelete: () async {
+                    await ref
+                        .read(guestbookRepositoryProvider)
+                        .deleteEntry(entries[i].id);
+                  },
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -568,7 +658,7 @@ class _GuestbookSection extends ConsumerWidget {
     String uid,
     dynamic userModel,
   ) {
-    final isKoreanLocal = isKorean;
+    final isKoreanLocal = widget.isKorean;
     final displayName = (userModel?.displayName as String?) ?? '';
     final avatarUrl = (userModel?.photoURL as String?) ?? '';
     final ctrl = TextEditingController();
@@ -589,13 +679,14 @@ class _GuestbookSection extends ConsumerWidget {
   }
 }
 
-class _GuestbookEntryTile extends StatelessWidget {
+// 이슈 #722 — 가로 스크롤에 들어가는 방명록 한 줄 칩 형태 (기존 세로 Tile 대체).
+class _GuestbookEntryChip extends StatelessWidget {
   final GuestbookEntry entry;
   final bool isKorean;
   final bool isOwn;
   final VoidCallback onDelete;
 
-  const _GuestbookEntryTile({
+  const _GuestbookEntryChip({
     required this.entry,
     required this.isKorean,
     required this.isOwn,
@@ -604,14 +695,14 @@ class _GuestbookEntryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+    return Container(
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // 아바타
           CircleAvatar(
-            radius: 16,
+            radius: 12,
             backgroundColor: C.lvL,
             backgroundImage: entry.avatarUrl.isNotEmpty
                 ? NetworkImage(entry.avatarUrl)
@@ -622,23 +713,24 @@ class _GuestbookEntryTile extends StatelessWidget {
                         ? entry.displayName.characters.first.toUpperCase()
                         : '?',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 10,
                       color: C.lvD,
                       fontWeight: FontWeight.w700,
                     ),
                   )
                 : null,
           ),
-          const SizedBox(width: 8),
-          // 이름 + 메시지
-          Expanded(
+          const SizedBox(width: 6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 240),
             child: RichText(
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               text: TextSpan(
                 children: [
                   TextSpan(
-                    text: '${entry.displayName.isNotEmpty ? entry.displayName : (isKorean ? '익명' : 'Anonymous')}: ',
+                    text:
+                        '${entry.displayName.isNotEmpty ? entry.displayName : (isKorean ? '익명' : 'Anonymous')}: ',
                     style: T.captionBold.copyWith(color: C.tx),
                   ),
                   TextSpan(
@@ -650,12 +742,10 @@ class _GuestbookEntryTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 6),
-          // 시간
           Text(
             entry.timeAgoLocalized(isKorean: isKorean),
             style: T.caption.copyWith(color: C.mu, fontSize: 11),
           ),
-          // 본인 글 삭제
           if (isOwn) ...[
             const SizedBox(width: 4),
             GestureDetector(
@@ -823,8 +913,10 @@ String _categoryLabel(String key, bool isKorean) {
   switch (key) {
     case 'all':
       return isKorean ? '전체' : 'All';
+    case 'daily':
+      return isKorean ? '일상' : 'Daily';
     case 'showcase':
-      return isKorean ? '작품' : 'Showcase';
+      return isKorean ? '작품자랑' : 'Showcase';
     case 'questions':
       return isKorean ? '질문' : 'Questions';
     case 'pattern_share':
@@ -1930,6 +2022,7 @@ class _PublicProjectsSectionState extends ConsumerState<_PublicProjectsSection> 
   }
 }
 
+// 이슈 #722 — 완성 갤러리 MoriBlockShell + 확장된 플레이스홀더.
 class _GalleryPreviewSection extends ConsumerWidget {
   final bool isKorean;
   const _GalleryPreviewSection({required this.isKorean});
@@ -1937,62 +2030,138 @@ class _GalleryPreviewSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final projectsAsync = ref.watch(publicProjectsProvider);
+    final count = projectsAsync.maybeWhen(
+      data: (p) => p.length,
+      orElse: () => 0,
+    );
 
-    return GlassCard(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.photo_library_rounded, color: C.lv, size: 18),
-              const SizedBox(width: 6),
-              Text(isKorean ? '완성 갤러리' : 'Gallery', style: T.bodyBold),
-              const Spacer(),
-              Text(
-                projectsAsync.maybeWhen(
-                  data: (p) => '${p.length}',
-                  orElse: () => '',
-                ),
-                style: T.caption.copyWith(color: C.mu),
-              ),
-            ],
+    return MoriBlockShell(
+      label: isKorean ? '완성 갤러리 $count' : '$count Gallery',
+      icon: Icons.photo_library_rounded,
+      accent: C.lv,
+      bodyPadding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      child: projectsAsync.when(
+        loading: () => const Center(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: CircularProgressIndicator(),
           ),
-          const SizedBox(height: 10),
-          projectsAsync.when(
-            loading: () => const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(),
-              ),
+        ),
+        error: (e, _) => Text('$e', style: T.caption.copyWith(color: C.mu)),
+        data: (entries) {
+          if (entries.isEmpty) {
+            return _GalleryEmptyPlaceholder(isKorean: isKorean);
+          }
+          return SizedBox(
+            height: 120,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: entries.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (ctx, i) =>
+                  _GalleryCard(entry: entries[i], isKorean: isKorean),
             ),
-            error: (e, _) => Text('$e', style: T.caption.copyWith(color: C.mu)),
-            data: (entries) {
-              if (entries.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Center(
-                    child: Text(
-                      isKorean ? '아직 공개된 작품이 없어요.' : 'No public projects yet.',
-                      style: T.caption.copyWith(color: C.mu),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// 이슈 #722 — 완성 갤러리 빈 플레이스홀더 (확장된 영역 + 풍부 안내).
+class _GalleryEmptyPlaceholder extends StatelessWidget {
+  final bool isKorean;
+  const _GalleryEmptyPlaceholder({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 140,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: 4,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (_, _) => Container(
+              width: 110,
+              decoration: BoxDecoration(
+                color: C.gx,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: C.bd),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    width: 110,
+                    height: 90,
+                    decoration: BoxDecoration(
+                      color: C.lvL,
+                      borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(12)),
+                    ),
+                    child: Icon(
+                      Icons.image_outlined,
+                      color: C.lv.withValues(alpha: 0.6),
+                      size: 28,
                     ),
                   ),
-                );
-              }
-              return SizedBox(
-                height: 120,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: entries.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 8),
-                  itemBuilder: (ctx, i) =>
-                      _GalleryCard(entry: entries[i], isKorean: isKorean),
-                ),
-              );
-            },
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          height: 8,
+                          width: 70,
+                          decoration: BoxDecoration(
+                            color: C.bd2,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          height: 6,
+                          width: 40,
+                          decoration: BoxDecoration(
+                            color: C.bd2.withValues(alpha: 0.6),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 14),
+        Center(
+          child: Icon(
+            Icons.auto_awesome_rounded,
+            color: C.lv.withValues(alpha: 0.7),
+            size: 22,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          isKorean ? '아직 공개된 작품이 없어요' : 'No public projects yet',
+          textAlign: TextAlign.center,
+          style: T.bodyBold.copyWith(color: C.tx2),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          isKorean
+              ? '프로젝트를 완성하면 갤러리에 자랑할 수 있어요.\n첫 작품의 주인공이 되어보세요!'
+              : 'Complete a project to showcase it here.\nBe the first to share!',
+          textAlign: TextAlign.center,
+          style: T.caption.copyWith(color: C.mu, height: 1.4),
+        ),
+        const SizedBox(height: 8),
+      ],
     );
   }
 }
