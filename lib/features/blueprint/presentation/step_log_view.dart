@@ -21,6 +21,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/async_loading_state.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/blueprint_provider.dart';
@@ -56,12 +57,13 @@ class StepLogView extends ConsumerWidget {
         : const AsyncValue<List<StepRunProgress>>.data(<StepRunProgress>[]);
 
     return blueprintAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(
-        child: Text(
-          isKorean ? '단계로그를 불러오지 못했어요.' : 'Failed to load step log.',
-          style: T.body,
-        ),
+      loading: () => AsyncLoadingFriendly(
+        isKorean: isKorean,
+        onRetry: () => ref.invalidate(blueprintByIdProvider(blueprintId)),
+      ),
+      error: (e, _) => AsyncDelayedFriendly(
+        isKorean: isKorean,
+        onRetry: () => ref.invalidate(blueprintByIdProvider(blueprintId)),
       ),
       data: (blueprint) {
         if (blueprint == null) {
@@ -77,12 +79,13 @@ class StepLogView extends ConsumerWidget {
                 myRole == BlueprintMemberRole.editor);
 
         return unitsAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(
-            child: Text(
-              isKorean ? '단계를 불러오지 못했어요.' : 'Failed to load steps.',
-              style: T.body,
-            ),
+          loading: () => AsyncLoadingFriendly(
+            isKorean: isKorean,
+            onRetry: () => ref.invalidate(blueprintUnitsProvider(blueprintId)),
+          ),
+          error: (e, _) => AsyncDelayedFriendly(
+            isKorean: isKorean,
+            onRetry: () => ref.invalidate(blueprintUnitsProvider(blueprintId)),
           ),
           data: (units) {
             final progress = progressAsync.valueOrNull ??

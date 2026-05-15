@@ -12,6 +12,7 @@ import 'package:record/record.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/async_loading_state.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/memo_lock_provider.dart';
@@ -212,8 +213,14 @@ class _ToolMemoScreenState extends ConsumerState<ToolMemoScreen> {
                   : _isLocked
                       ? _buildLockScreen()
                       : memosAsync.when(
-                          loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
-                          error: (e, _) => Center(child: Text('오류: $e', style: T.caption.copyWith(color: C.og))),
+                          loading: () => AsyncLoadingFriendly(
+                            isKorean: true,
+                            onRetry: () => ref.invalidate(memoListProvider),
+                          ),
+                          error: (e, _) => AsyncDelayedFriendly(
+                            isKorean: true,
+                            onRetry: () => ref.invalidate(memoListProvider),
+                          ),
                           data: (memos) => _buildList(memos),
                         ),
             ),

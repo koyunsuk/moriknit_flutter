@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/async_loading_state.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/book_provider.dart';
 import '../domain/book_model.dart';
@@ -57,13 +58,18 @@ class BookListScreen extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (booksAsync.isLoading)
-                          Center(
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 20),
-                              child:
-                                  CircularProgressIndicator(color: C.lv),
-                            ),
+                          AsyncLoadingFriendly(
+                            isKorean: isKorean,
+                            onRetry: () => ref.invalidate(bookListProvider),
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            compact: true,
+                          )
+                        else if (booksAsync.hasError)
+                          AsyncDelayedFriendly(
+                            isKorean: isKorean,
+                            onRetry: () => ref.invalidate(bookListProvider),
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            compact: true,
                           )
                         else if (books.isEmpty)
                           MoriEmptyState(

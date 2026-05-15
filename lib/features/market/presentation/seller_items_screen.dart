@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/async_loading_state.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/market_provider.dart';
 import '../../../core/localization/app_language.dart';
@@ -38,8 +39,14 @@ class SellerItemsScreen extends ConsumerWidget {
         children: [
           const BgOrbs(),
           itemsAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => _ErrorState(isKorean: isKorean, error: e),
+            loading: () => AsyncLoadingFriendly(
+              isKorean: isKorean,
+              onRetry: () => ref.invalidate(sellerItemsProvider(sellerUid)),
+            ),
+            error: (e, _) => AsyncDelayedFriendly(
+              isKorean: isKorean,
+              onRetry: () => ref.invalidate(sellerItemsProvider(sellerUid)),
+            ),
             data: (items) {
               if (items.isEmpty) {
                 return _EmptyState(isKorean: isKorean);
@@ -210,38 +217,3 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-class _ErrorState extends StatelessWidget {
-  final bool isKorean;
-  final Object error;
-
-  const _ErrorState({required this.isKorean, required this.error});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline, color: C.og, size: 48),
-            const SizedBox(height: 16),
-            Text(
-              isKorean ? '불러오기 실패' : 'Failed to load',
-              style: T.bodyBold,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '$error',
-              style: T.caption.copyWith(color: C.mu),
-              textAlign: TextAlign.center,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

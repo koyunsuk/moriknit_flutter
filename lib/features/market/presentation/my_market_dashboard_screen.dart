@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/async_loading_state.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/market_provider.dart';
 import '../../../providers/auth_provider.dart';
@@ -70,11 +71,16 @@ class MyMarketDashboardScreen extends ConsumerWidget {
               SectionTitle(title: isKorean ? '내 상품 목록' : 'My Items'),
               const SizedBox(height: 10),
               myItemsAsync.when(
-                loading: () => const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(child: CircularProgressIndicator()),
+                loading: () => AsyncLoadingFriendly(
+                  isKorean: isKorean,
+                  onRetry: () => ref.invalidate(myMarketItemsProvider),
+                  padding: const EdgeInsets.symmetric(vertical: 24),
                 ),
-                error: (e, _) => _ErrorRow(message: '$e'),
+                error: (e, _) => AsyncDelayedFriendly(
+                  isKorean: isKorean,
+                  onRetry: () => ref.invalidate(myMarketItemsProvider),
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                ),
                 data: (items) => items.isEmpty
                     ? _ItemsEmptyPlaceholder(isKorean: isKorean)
                     : Column(
@@ -87,11 +93,16 @@ class MyMarketDashboardScreen extends ConsumerWidget {
               SectionTitle(title: isKorean ? '구매 내역' : 'Purchase History'),
               const SizedBox(height: 10),
               purchasesAsync.when(
-                loading: () => const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(child: CircularProgressIndicator()),
+                loading: () => AsyncLoadingFriendly(
+                  isKorean: isKorean,
+                  onRetry: () => ref.invalidate(myPurchasesProvider),
+                  padding: const EdgeInsets.symmetric(vertical: 24),
                 ),
-                error: (e, _) => _ErrorRow(message: '$e'),
+                error: (e, _) => AsyncDelayedFriendly(
+                  isKorean: isKorean,
+                  onRetry: () => ref.invalidate(myPurchasesProvider),
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                ),
                 data: (purchases) => purchases.isEmpty
                     ? _PurchasesEmptyPlaceholder(isKorean: isKorean)
                     : Column(
@@ -389,29 +400,3 @@ class _PurchasesEmptyPlaceholder extends StatelessWidget {
   }
 }
 
-class _ErrorRow extends StatelessWidget {
-  final String message;
-
-  const _ErrorRow({required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: C.og.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: C.og.withValues(alpha: 0.22)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.error_outline, color: C.og, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(message, style: T.caption.copyWith(color: C.og), maxLines: 2, overflow: TextOverflow.ellipsis),
-          ),
-        ],
-      ),
-    );
-  }
-}

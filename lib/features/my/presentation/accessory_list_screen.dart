@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/async_loading_state.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/accessory_provider.dart';
 import '../domain/accessory_model.dart';
@@ -53,10 +54,19 @@ class AccessoryListScreen extends ConsumerWidget {
                 children: [
                   GlassCard(
                     child: listAsync.isLoading
-                        ? Center(child: Padding(
+                        ? AsyncLoadingFriendly(
+                            isKorean: isKorean,
+                            onRetry: () => ref.invalidate(accessoryListProvider),
                             padding: const EdgeInsets.symmetric(vertical: 20),
-                            child: CircularProgressIndicator(color: C.lv),
-                          ))
+                            compact: true,
+                          )
+                        : listAsync.hasError
+                            ? AsyncDelayedFriendly(
+                                isKorean: isKorean,
+                                onRetry: () => ref.invalidate(accessoryListProvider),
+                                padding: const EdgeInsets.symmetric(vertical: 20),
+                                compact: true,
+                              )
                         : items.isEmpty
                             ? MoriEmptyState(
                                 icon: Icons.build_rounded,

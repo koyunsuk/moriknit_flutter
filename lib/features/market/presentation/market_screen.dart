@@ -12,6 +12,7 @@ import '../../../core/localization/app_language.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/async_loading_state.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/market_provider.dart';
@@ -203,8 +204,16 @@ class _MarketScreenState extends ConsumerState<MarketScreen> {
                         },
                       );
                     },
-                    loading: () => Center(child: Padding(padding: const EdgeInsets.all(24), child: CircularProgressIndicator(color: C.lv))),
-                    error: (e, _) => Text('${isKorean ? '마켓을 불러오지 못했어요: ' : 'Market load failed: '}$e', style: T.body.copyWith(color: C.og)),
+                    loading: () => AsyncLoadingFriendly(
+                      isKorean: isKorean,
+                      onRetry: () => ref.invalidate(marketItemsProvider),
+                      padding: const EdgeInsets.all(24),
+                    ),
+                    error: (e, _) => AsyncDelayedFriendly(
+                      isKorean: isKorean,
+                      onRetry: () => ref.invalidate(marketItemsProvider),
+                      padding: const EdgeInsets.all(24),
+                    ),
                       ),
                           ],
                         ),
@@ -1719,8 +1728,14 @@ class _PatternPickerScreen extends ConsumerWidget {
             },
           );
         },
-        loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
-        error: (e, _) => Center(child: Text('$e', style: T.body.copyWith(color: C.mu))),
+        loading: () => AsyncLoadingFriendly(
+          isKorean: isKorean,
+          onRetry: () => ref.invalidate(patternListProvider),
+        ),
+        error: (e, _) => AsyncDelayedFriendly(
+          isKorean: isKorean,
+          onRetry: () => ref.invalidate(patternListProvider),
+        ),
       ),
     );
   }
@@ -1797,8 +1812,14 @@ class _TemplatePickerScreen extends ConsumerWidget {
             },
           );
         },
-        loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
-        error: (e, _) => Center(child: Text('$e', style: T.body.copyWith(color: C.mu))),
+        loading: () => AsyncLoadingFriendly(
+          isKorean: isKorean,
+          onRetry: () => ref.invalidate(userTemplateListProvider),
+        ),
+        error: (e, _) => AsyncDelayedFriendly(
+          isKorean: isKorean,
+          onRetry: () => ref.invalidate(userTemplateListProvider),
+        ),
       ),
     );
   }

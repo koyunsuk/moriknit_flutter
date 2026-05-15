@@ -7,6 +7,7 @@ import 'package:moriknit_flutter/core/router/app_router.dart';
 import 'package:moriknit_flutter/core/router/routes.dart';
 import 'package:moriknit_flutter/core/theme/app_colors.dart';
 import 'package:moriknit_flutter/core/theme/app_theme.dart';
+import 'package:moriknit_flutter/core/widgets/async_loading_state.dart';
 import 'package:moriknit_flutter/core/widgets/common_widgets.dart';
 import 'package:moriknit_flutter/features/project/presentation/project_detail_screen.dart';
 import 'package:moriknit_flutter/features/project/presentation/project_input_screen.dart';
@@ -174,28 +175,14 @@ class ProjectListScreen extends ConsumerWidget {
                               onDelete: (project) => _confirmDeleteFromList(context, ref, project, isKorean),
                             );
                           },
-                          loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
-                          error: (e, _) {
-                            final isKorean = ref.watch(appLanguageProvider).isKorean;
-                            return Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.error_outline_rounded, color: C.mu, size: 40),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    isKorean ? '프로젝트를 불러오지 못했어요.' : 'Failed to load projects.',
-                                    style: T.body.copyWith(color: C.mu),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  TextButton(
-                                    onPressed: () => ref.invalidate(projectListProvider),
-                                    child: Text(isKorean ? '다시 시도' : 'Retry', style: T.body.copyWith(color: C.lv)),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
+                          loading: () => AsyncLoadingFriendly(
+                            isKorean: isKorean,
+                            onRetry: () => ref.invalidate(projectListProvider),
+                          ),
+                          error: (e, _) => AsyncDelayedFriendly(
+                            isKorean: isKorean,
+                            onRetry: () => ref.invalidate(projectListProvider),
+                          ),
                         ),
                 ),
               ),
@@ -1047,28 +1034,14 @@ class ProjectAllListScreen extends ConsumerWidget {
             ),
             Expanded(
               child: projectsAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) {
-                  final isKorean = ref.watch(appLanguageProvider).isKorean;
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.error_outline_rounded, color: C.mu, size: 40),
-                        const SizedBox(height: 12),
-                        Text(
-                          isKorean ? '프로젝트를 불러오지 못했어요.' : 'Failed to load projects.',
-                          style: T.body.copyWith(color: C.mu),
-                        ),
-                        const SizedBox(height: 8),
-                        TextButton(
-                          onPressed: () => ref.invalidate(projectListProvider),
-                          child: Text(isKorean ? '다시 시도' : 'Retry', style: T.body.copyWith(color: C.lv)),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+                loading: () => AsyncLoadingFriendly(
+                  isKorean: isKorean,
+                  onRetry: () => ref.invalidate(projectListProvider),
+                ),
+                error: (e, _) => AsyncDelayedFriendly(
+                  isKorean: isKorean,
+                  onRetry: () => ref.invalidate(projectListProvider),
+                ),
                 data: (_) => ListView(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
                   children: [

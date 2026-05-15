@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/async_loading_state.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/needle_provider.dart';
 import '../domain/needle_model.dart';
@@ -65,11 +66,18 @@ class NeedleListScreen extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (needlesAsync.isLoading)
-                          Center(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 20),
-                              child: CircularProgressIndicator(color: C.lv),
-                            ),
+                          AsyncLoadingFriendly(
+                            isKorean: isKorean,
+                            onRetry: () => ref.invalidate(needleListProvider),
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            compact: true,
+                          )
+                        else if (needlesAsync.hasError)
+                          AsyncDelayedFriendly(
+                            isKorean: isKorean,
+                            onRetry: () => ref.invalidate(needleListProvider),
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            compact: true,
                           )
                         else if (needles.isEmpty)
                           MoriEmptyState(

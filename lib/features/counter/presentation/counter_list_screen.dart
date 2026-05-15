@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/async_loading_state.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/counter_provider.dart';
 import '../../../providers/project_provider.dart';
@@ -39,9 +40,14 @@ class CounterListScreen extends ConsumerWidget {
             ),
             Expanded(
               child: counterListAsync.when(
-                loading: () =>
-                    Center(child: CircularProgressIndicator(color: C.lmD)),
-                error: (e, _) => Center(child: Text('$e', style: T.body)),
+                loading: () => AsyncLoadingFriendly(
+                  isKorean: isKorean,
+                  onRetry: () => ref.invalidate(counterListProvider),
+                ),
+                error: (e, _) => AsyncDelayedFriendly(
+                  isKorean: isKorean,
+                  onRetry: () => ref.invalidate(counterListProvider),
+                ),
                 data: (counters) {
                   final projects = projectListAsync.valueOrNull ?? [];
 

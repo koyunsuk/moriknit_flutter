@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/async_loading_state.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/yarn_provider.dart';
 import '../../ravelry/data/ravelry_auth_provider.dart';
@@ -88,20 +89,17 @@ class _YarnListScreenState extends ConsumerState<YarnListScreen> {
                             ),
                             const SizedBox(height: 12),
                             yarnListAsync.when(
-                          loading: () => Center(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 20),
-                              child: CircularProgressIndicator(color: C.lm),
-                            ),
+                          loading: () => AsyncLoadingFriendly(
+                            isKorean: isKorean,
+                            onRetry: () => ref.invalidate(yarnListProvider),
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            compact: true,
                           ),
-                          error: (e, _) => Center(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 20),
-                              child: Text(
-                                'Failed to load yarns: $e',
-                                style: T.body.copyWith(color: C.mu),
-                              ),
-                            ),
+                          error: (e, _) => AsyncDelayedFriendly(
+                            isKorean: isKorean,
+                            onRetry: () => ref.invalidate(yarnListProvider),
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            compact: true,
                           ),
                           data: (yarns) {
                             if (yarns.isEmpty) {
@@ -344,9 +342,18 @@ class _RavelryStashList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final stashAsync = ref.watch(ravelryStashProvider);
     return stashAsync.when(
-      loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
-      error: (e, _) => Text(isKorean ? '스태시를 불러올 수 없어요: $e' : 'Failed to load stash: $e',
-          style: T.caption.copyWith(color: C.og)),
+      loading: () => AsyncLoadingFriendly(
+        isKorean: isKorean,
+        onRetry: () => ref.invalidate(ravelryStashProvider),
+        padding: const EdgeInsets.all(16),
+        compact: true,
+      ),
+      error: (e, _) => AsyncDelayedFriendly(
+        isKorean: isKorean,
+        onRetry: () => ref.invalidate(ravelryStashProvider),
+        padding: const EdgeInsets.all(16),
+        compact: true,
+      ),
       data: (entries) {
         if (entries.isEmpty) {
           return Text(isKorean ? 'Ravelry 스태시가 비어있어요.' : 'Your Ravelry stash is empty.',

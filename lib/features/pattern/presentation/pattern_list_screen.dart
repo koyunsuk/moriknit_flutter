@@ -13,6 +13,7 @@ import '../../../core/localization/app_language.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/async_loading_state.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/blueprint_provider.dart';
 import '../../../providers/pattern_library_provider.dart';
@@ -120,43 +121,27 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                         ),
                         const SizedBox(height: 12),
                         blueprintsAsync.when(
-                          loading: () => Center(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 20),
-                              child: CircularProgressIndicator(color: C.lv),
-                            ),
+                          loading: () => AsyncLoadingFriendly(
+                            isKorean: isKorean,
+                            onRetry: () {
+                              ref.invalidate(myBlueprintsWithLegacyProvider);
+                              ref.invalidate(patternListProvider);
+                              ref.invalidate(patternFilesProvider);
+                            },
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            compact: true,
                           ),
                           // 이슈 #699 — raw Firestore 에러 노출 금지. 친화 메시지 + 재시도 버튼.
-                          error: (e, _) {
-                            final msg = e.toString();
-                            final isIndexMissing = msg.contains('failed-precondition') || msg.contains('requires an index');
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 20),
-                              child: Column(
-                                children: [
-                                  Icon(Icons.cloud_off_rounded, size: 48, color: C.mu),
-                                  const SizedBox(height: 10),
-                                  Text(
-                                    isIndexMissing
-                                        ? (isKorean ? '도안을 준비하는 중이에요.\n잠시 후 다시 시도해 주세요.' : 'Preparing patterns...\nPlease try again shortly.')
-                                        : (isKorean ? '도안을 불러오지 못했어요.' : 'Failed to load patterns.'),
-                                    style: T.body.copyWith(color: C.mu),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                  const SizedBox(height: 12),
-                                  ElevatedButton.icon(
-                                    onPressed: () {
-                                      ref.invalidate(myBlueprintsWithLegacyProvider);
-                                      ref.invalidate(patternListProvider);
-                                      ref.invalidate(patternFilesProvider);
-                                    },
-                                    icon: const Icon(Icons.refresh_rounded, size: 18),
-                                    label: Text(isKorean ? '다시 시도' : 'Retry'),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
+                          error: (e, _) => AsyncDelayedFriendly(
+                            isKorean: isKorean,
+                            onRetry: () {
+                              ref.invalidate(myBlueprintsWithLegacyProvider);
+                              ref.invalidate(patternListProvider);
+                              ref.invalidate(patternFilesProvider);
+                            },
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            compact: true,
+                          ),
                           // 이슈 #687 (Phase I-B) — 신규 청사진 + legacy 어댑터 합산 데이터.
                           // 카드 표시는 PatternChart 기반 _PatternRow 그대로 사용하기 위해
                           // patternListProvider 의 PatternChart 로 lookup, 없으면 어댑터로 합성.
@@ -1783,27 +1768,18 @@ class _RavelryLibraryList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final libraryAsync = ref.watch(ravelryLibraryProvider);
     return libraryAsync.when(
-      loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
-      // 이슈 #699 — 친화 메시지 + 재시도 버튼
-      error: (e, _) => Padding(
+      loading: () => AsyncLoadingFriendly(
+        isKorean: isKorean,
+        onRetry: () => ref.invalidate(ravelryLibraryProvider),
+        padding: const EdgeInsets.all(16),
+        compact: true,
+      ),
+      // 이슈 #699 — 친화 메시지 + 재시도 버튼 (통일 헬퍼)
+      error: (e, _) => AsyncDelayedFriendly(
+        isKorean: isKorean,
+        onRetry: () => ref.invalidate(ravelryLibraryProvider),
         padding: const EdgeInsets.symmetric(vertical: 20),
-        child: Column(
-          children: [
-            Icon(Icons.cloud_off_rounded, size: 40, color: C.mu),
-            const SizedBox(height: 8),
-            Text(
-              isKorean ? 'Ravelry 도안을 불러오지 못했어요.' : 'Failed to load Ravelry patterns.',
-              style: T.body.copyWith(color: C.mu),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton.icon(
-              onPressed: () => ref.invalidate(ravelryLibraryProvider),
-              icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: Text(isKorean ? '다시 시도' : 'Retry'),
-            ),
-          ],
-        ),
+        compact: true,
       ),
       data: (patterns) {
         if (patterns.isEmpty) {
