@@ -57,17 +57,18 @@ class CommunityScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: MoriPageHeaderShell(
-                child: MoriWideHeader(
-                  title: isKorean ? '커뮤니티' : 'Community',
-                  subtitle: subtitle,
-                ),
+        child: Column(
+          children: [
+            MoriPageHeaderShell(
+              child: MoriWideHeader(
+                title: isKorean ? '커뮤니티' : 'Community',
+                subtitle: subtitle,
               ),
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: 8)),
+            Expanded(
+              child: CustomScrollView(
+                slivers: [
+                  const SliverToBoxAdapter(child: SizedBox(height: 8)),
             SliverToBoxAdapter(child: _GuestbookSection(isKorean: isKorean)),
             const SliverToBoxAdapter(child: SizedBox(height: 8)),
             SliverToBoxAdapter(
@@ -176,6 +177,9 @@ class CommunityScreen extends ConsumerWidget {
                     );
                   },
                 ),
+              ),
+            ),
+                ],
               ),
             ),
           ],

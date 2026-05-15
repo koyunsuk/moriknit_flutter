@@ -624,7 +624,7 @@ class MoriBrandHeader extends StatelessWidget {
     if (compact) {
       return Container(
         width: double.infinity,
-        height: 108,
+        height: 90,
         color: Colors.transparent,
         child: Stack(
           fit: StackFit.expand,
@@ -635,12 +635,12 @@ class MoriBrandHeader extends StatelessWidget {
                 const SizedBox(height: 2),
                 Image.asset(
                   'assets/login_logo.png',
-                  width: 60,
-                  height: 60,
+                  width: 50,
+                  height: 50,
                   fit: BoxFit.contain,
                 ),
                 const SizedBox(height: 1),
-                MoriKnitTitle(fontSize: 16, width: 108),
+                MoriKnitTitle(fontSize: 14, width: 92),
               ],
             ),
             if (subtitle != null)
@@ -659,7 +659,7 @@ class MoriBrandHeader extends StatelessWidget {
                   ),
                   child: Text(
                     subtitle!,
-                    style: T.caption.copyWith(color: C.tx2, height: 1.3, fontSize: 12, fontWeight: FontWeight.w600),
+                    style: T.caption.copyWith(color: C.tx2, height: 1.25, fontSize: 10, fontWeight: FontWeight.w600),
                     textAlign: TextAlign.center,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -672,7 +672,7 @@ class MoriBrandHeader extends StatelessWidget {
     }
     return Container(
       width: double.infinity,
-      height: 180,
+      height: 150,
       color: Colors.transparent,
       child: Stack(
         fit: StackFit.expand,
@@ -683,12 +683,12 @@ class MoriBrandHeader extends StatelessWidget {
               const SizedBox(height: 4),
               Image.asset(
                 'assets/login_logo.png',
-                width: 112,
-                height: 112,
+                width: 94,
+                height: 94,
                 fit: BoxFit.contain,
               ),
               const SizedBox(height: 2),
-              MoriKnitTitle(fontSize: 22, width: 200),
+              MoriKnitTitle(fontSize: 19, width: 174),
             ],
           ),
           if (subtitle != null)
