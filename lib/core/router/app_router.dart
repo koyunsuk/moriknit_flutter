@@ -51,6 +51,7 @@ import 'package:moriknit_flutter/features/ravelry/presentation/ravelry_screen.da
 import 'package:moriknit_flutter/features/etsy/presentation/etsy_screen.dart';
 import 'package:moriknit_flutter/features/dropbox/presentation/dropbox_screen.dart';
 import 'package:moriknit_flutter/features/dropbox/presentation/dropbox_explorer_screen.dart';
+import 'package:moriknit_flutter/features/cloud_integrations/presentation/cloud_hub_screen.dart';
 import 'package:moriknit_flutter/features/cloud_integrations/presentation/google_drive_screen.dart';
 import 'package:moriknit_flutter/features/cloud_integrations/presentation/icloud_screen.dart';
 import 'package:moriknit_flutter/features/cloud_integrations/presentation/onedrive_screen.dart';
@@ -212,6 +213,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                         _fadePage(const DropboxExplorerScreen()),
                   ),
                 ],
+              ),
+              // 외부 연결 UI 단계 정리 — 클라우드 통합 허브
+              GoRoute(
+                path: 'cloud-hub',
+                pageBuilder: (_, _) => _fadePage(const CloudHubScreen()),
               ),
               // 이슈 #703 — 외부 클라우드 확장
               GoRoute(

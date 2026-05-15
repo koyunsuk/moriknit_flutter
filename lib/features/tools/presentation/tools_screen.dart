@@ -423,21 +423,14 @@ class ToolsScreen extends ConsumerWidget {
                     const SizedBox(height: 8),
                     Divider(color: C.bd, thickness: 1, height: 20),
 
-                    // 8. 외부 연결
+                    // 8. 외부 연결 (3개: 라벨리 / 엣시 / 클라우드 허브)
                     SectionTitle(title: isKorean ? '외부 연결' : 'External Links'),
                     const SizedBox(height: 10),
                     _RavelryCard(isKorean: isKorean),
                     const SizedBox(height: 10),
                     _EtsyCard(isKorean: isKorean),
                     const SizedBox(height: 10),
-                    _DropboxCard(isKorean: isKorean),
-                    const SizedBox(height: 10),
-                    // 이슈 #703 — 외부 클라우드 확장
-                    _GoogleDriveCard(isKorean: isKorean),
-                    const SizedBox(height: 10),
-                    _ICloudCard(isKorean: isKorean),
-                    const SizedBox(height: 10),
-                    _OneDriveCard(isKorean: isKorean),
+                    _CloudHubCard(isKorean: isKorean),
                   ],
                 ),
               ),
@@ -649,189 +642,64 @@ class _EtsyCard extends ConsumerWidget {
   }
 }
 
-class _DropboxCard extends ConsumerWidget {
-  const _DropboxCard({required this.isKorean});
+// 외부 연결 UI 단계 정리 — Dropbox/GDrive/iCloud/OneDrive 4개를 1개 "클라우드" 카드로 통합
+class _CloudHubCard extends ConsumerWidget {
+  const _CloudHubCard({required this.isKorean});
   final bool isKorean;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final auth = ref.watch(dropboxAuthProvider);
+    final dropbox = ref.watch(dropboxAuthProvider);
+    final gdrive = ref.watch(googleDriveAuthProvider);
+    final icloud = ref.watch(iCloudAuthProvider);
+    final onedrive = ref.watch(oneDriveAuthProvider);
+    final connectedCount = [dropbox.isLoggedIn, gdrive.isLoggedIn, icloud.isLoggedIn, onedrive.isLoggedIn]
+        .where((c) => c)
+        .length;
     return GlassCard(
-      onTap: () => context.push(Routes.dropbox),
+      onTap: () => context.push(Routes.cloudHub),
       child: Row(
         children: [
           Container(
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: const Color(0xFF0061FF).withValues(alpha: 0.12),
+              color: C.lv.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.cloud_rounded, color: Color(0xFF0061FF)),
+            child: Icon(Icons.cloud_rounded, color: C.lv),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Dropbox', style: TextStyle(fontWeight: FontWeight.w700)),
+                Text(isKorean ? '클라우드' : 'Cloud', style: T.bodyBold),
                 const SizedBox(height: 4),
                 Text(
-                  auth.isLoggedIn
-                      ? (isKorean ? '${auth.email ?? ''} 연결됨' : 'Connected as ${auth.email ?? ''}')
-                      : (isKorean ? '드롭박스 도안 파일을 앱에서 탐색해요' : 'Browse your Dropbox pattern files'),
-                  style: T.caption.copyWith(
-                      color: auth.isLoggedIn ? const Color(0xFF0061FF) : C.mu),
+                  isKorean
+                      ? 'Dropbox · Google Drive · iCloud · OneDrive'
+                      : 'Dropbox · Google Drive · iCloud · OneDrive',
+                  style: T.caption.copyWith(color: C.mu),
                 ),
               ],
             ),
           ),
-          if (auth.isLoggedIn)
-            const Icon(Icons.check_circle_rounded, color: Color(0xFF0061FF), size: 18)
-          else
-            Icon(Icons.chevron_right_rounded, color: C.mu),
-        ],
-      ),
-    );
-  }
-}
-
-// 이슈 #703 — 외부 클라우드 확장 (Google Drive·iCloud·OneDrive)
-class _GoogleDriveCard extends ConsumerWidget {
-  const _GoogleDriveCard({required this.isKorean});
-  final bool isKorean;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final auth = ref.watch(googleDriveAuthProvider);
-    const color = Color(0xFF1A73E8);
-    return GlassCard(
-      onTap: () => context.push(Routes.googleDrive),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
+          if (connectedCount > 0) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: C.lv.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                isKorean ? '$connectedCount개 연결됨' : '$connectedCount connected',
+                style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w700),
+              ),
             ),
-            child: const Icon(Icons.cloud_rounded, color: color),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Google Drive', style: TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 4),
-                Text(
-                  auth.isLoggedIn
-                      ? (isKorean ? '${auth.email ?? ''} 연결됨' : 'Connected as ${auth.email ?? ''}')
-                      : (isKorean ? 'Google 드라이브 도안 파일을 앱에서 탐색해요' : 'Browse your Google Drive pattern files'),
-                  style: T.caption.copyWith(color: auth.isLoggedIn ? color : C.mu),
-                ),
-              ],
-            ),
-          ),
-          if (auth.isLoggedIn)
-            const Icon(Icons.check_circle_rounded, color: color, size: 18)
-          else
-            Icon(Icons.chevron_right_rounded, color: C.mu),
-        ],
-      ),
-    );
-  }
-}
-
-class _ICloudCard extends ConsumerWidget {
-  const _ICloudCard({required this.isKorean});
-  final bool isKorean;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final auth = ref.watch(iCloudAuthProvider);
-    const color = Color(0xFF1D1D1F);
-    return GlassCard(
-      onTap: () => context.push(Routes.iCloud),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(Icons.cloud_rounded, color: color),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('iCloud Drive', style: TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 4),
-                Text(
-                  auth.isLoggedIn
-                      ? (isKorean ? '${auth.email ?? ''} 연결됨' : 'Connected as ${auth.email ?? ''}')
-                      : (isKorean ? 'iCloud 도안 파일을 앱에서 탐색해요 (iOS 전용)' : 'Browse iCloud pattern files (iOS only)'),
-                  style: T.caption.copyWith(color: auth.isLoggedIn ? color : C.mu),
-                ),
-              ],
-            ),
-          ),
-          if (auth.isLoggedIn)
-            const Icon(Icons.check_circle_rounded, color: color, size: 18)
-          else
-            Icon(Icons.chevron_right_rounded, color: C.mu),
-        ],
-      ),
-    );
-  }
-}
-
-class _OneDriveCard extends ConsumerWidget {
-  const _OneDriveCard({required this.isKorean});
-  final bool isKorean;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final auth = ref.watch(oneDriveAuthProvider);
-    const color = Color(0xFF0078D4);
-    return GlassCard(
-      onTap: () => context.push(Routes.oneDrive),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(Icons.cloud_rounded, color: color),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('OneDrive', style: TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 4),
-                Text(
-                  auth.isLoggedIn
-                      ? (isKorean ? '${auth.email ?? ''} 연결됨' : 'Connected as ${auth.email ?? ''}')
-                      : (isKorean ? 'OneDrive 도안 파일을 앱에서 탐색해요' : 'Browse your OneDrive pattern files'),
-                  style: T.caption.copyWith(color: auth.isLoggedIn ? color : C.mu),
-                ),
-              ],
-            ),
-          ),
-          if (auth.isLoggedIn)
-            const Icon(Icons.check_circle_rounded, color: color, size: 18)
-          else
-            Icon(Icons.chevron_right_rounded, color: C.mu),
+            const SizedBox(width: 4),
+          ],
+          Icon(Icons.chevron_right_rounded, color: C.mu),
         ],
       ),
     );

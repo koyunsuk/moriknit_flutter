@@ -47,6 +47,8 @@ class Routes {
   static const googleDrive = '/tools/google-drive';
   static const iCloud = '/tools/icloud';
   static const oneDrive = '/tools/onedrive';
+  // 외부 연결 UI 단계 정리 — 클라우드 통합 허브
+  static const cloudHub = '/tools/cloud-hub';
   static const toolsNeedleSize = '/tools/needle-size';
   static const toolsMeasure = '/tools/measure';
   static const toolsPatternConverter = '/tools/pattern-converter';
