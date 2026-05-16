@@ -11,9 +11,9 @@
 //
 // 초기 로드(unknown → online/offline) 시에는 SnackBar 표시하지 않음.
 
+import 'package:app_settings/app_settings.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../localization/app_language.dart';
@@ -64,6 +64,13 @@ class _OfflineListenerState extends ConsumerState<OfflineListener> {
                   : 'No internet connection.',
               style: T.body,
             ),
+            const SizedBox(height: 6),
+            Text(
+              isKorean
+                  ? '인터넷이 연결되면 작업이 동기화됩니다.'
+                  : 'Your work will sync when connected.',
+              style: T.caption.copyWith(color: C.mu),
+            ),
             const SizedBox(height: 12),
             _OfflineBullet(
               icon: Icons.menu_book_rounded,
@@ -109,15 +116,18 @@ class _OfflineListenerState extends ConsumerState<OfflineListener> {
     );
   }
 
-  /// 안드로이드 WiFi 설정 화면 열기 (intent). iOS는 일반 설정.
+  /// 안드로이드/ iOS 의 Wi-Fi 설정 화면을 엽니다.
+  /// #735 (재수정) — url_launcher의 intent URI는 일부 Android 버전에서 동작 안 함.
+  /// app_settings 패키지로 안정적 호출.
   Future<void> _openWifiSettings() async {
     if (kIsWeb) return;
     try {
-      const platform = MethodChannel('flutter/platform');
-      // Android intent for WiFi settings via system channels
-      await platform.invokeMethod('SystemNavigator.openWifiSettings');
+      await AppSettings.openAppSettings(type: AppSettingsType.wifi);
     } catch (_) {
-      // 폴백: 무음. 사용자가 직접 설정으로 이동 필요.
+      // 폴백: 일반 설정창 열기
+      try {
+        await AppSettings.openAppSettings();
+      } catch (_) {}
     }
   }
 

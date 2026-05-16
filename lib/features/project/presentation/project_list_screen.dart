@@ -59,24 +59,9 @@ class ProjectListScreen extends ConsumerWidget {
               maxWidth: contentMaxWidth,
               child: isPublicWeb
                   ? const SizedBox.shrink()
-                  : Column(
-                      children: [
-                        MoriWideHeader(
-                          title: t.projects,
-                          subtitle: headerSubtitle,
-                        ),
-                        if (gates.isFree)
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
-                            child: LimitBar(
-                              label: isKorean ? '프로젝트' : 'Projects',
-                              current: count,
-                              max: 3,
-                              isReached: limitReached,
-                              onUpgrade: () {},
-                            ),
-                          ),
-                      ],
+                  : MoriWideHeader(
+                      title: t.projects,
+                      subtitle: headerSubtitle,
                     ),
             ),
             Expanded(

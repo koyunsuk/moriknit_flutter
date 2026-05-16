@@ -31,6 +31,8 @@ import '../../project/data/public_project_service.dart';
 import '../../project/presentation/widgets/project_start_sheet.dart';
 import '../../tools/presentation/widgets/knit_dashboard_card.dart';
 import '../../../providers/template_provider.dart';
+import '../../favorites/data/favorites_provider.dart';
+import '../../favorites/data/favorites_repository.dart';
 import '../domain/editorial_post.dart';
 
 // 공지사항 Provider
@@ -45,16 +47,25 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with SingleTickerProviderStateMixin {
   bool _bannerDismissed = false;
   bool _popupShown = false;
   bool _migrationKicked = false;
+  late final TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     // 이슈 #687 — 로그인 완료 후 첫 홈 진입 시 자동 마이그레이션 1회 실행 (백그라운드).
     WidgetsBinding.instance.addPostFrameCallback((_) => _kickOffMigration());
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   void _kickOffMigration() {
@@ -148,85 +159,374 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 message: appConfig!.maintenanceNotice,
                 onDismiss: () => setState(() => _bannerDismissed = true),
               ),
+            // 홈/즐겨찾기 2탭 (이슈 #723 Phase B — 즐겨찾기 시스템)
+            _HomeTabBar(
+              controller: _tabController,
+              isKorean: isKorean,
+            ),
             Expanded(
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 1. 오늘 요약
-                    _EcosystemHero(
-                      t: t,
-                      isKorean: isKorean,
-                      projectCount: projectCount,
-                      postsAsync: postsAsync,
-                      itemsAsync: itemsAsync,
-                      publicProjectsAsync: publicProjectsAsync,
-                    ),
-                    const SizedBox(height: 20),
-                    // 1-b. 뜨개 대시보드 (이슈 #649 Phase 2)
-                    KnitDashboardCard(isKorean: isKorean),
-                    const SizedBox(height: 20),
-                    // 2. 공지사항
-                    _HomeNoticesSection(isKorean: isKorean),
-                    const SizedBox(height: 20),
-                    // 3. 커뮤니티 그룹 카드 (위·아래 핑크 보더 + 내부 스크롤)
-                    _SectionGroupCard(
-                      label: isKorean ? '커뮤니티' : 'Community',
-                      icon: Icons.people_rounded,
-                      color: C.pk,
-                      onMoreTap: () => context.go(Routes.community),
-                      scrollHeight: 360,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _SubSectionLabel(title: isKorean ? '방명록' : 'Guestbook', color: C.pkD),
-                          const SizedBox(height: 8),
-                          _HomeGuestbookFadeTicker(isKorean: isKorean),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 14),
-                            child: Divider(height: 1, thickness: 0.5),
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  // [홈] 탭 — 기존 콘텐츠 그대로 보존
+                  SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 1. 오늘 요약
+                        _EcosystemHero(
+                          t: t,
+                          isKorean: isKorean,
+                          projectCount: projectCount,
+                          postsAsync: postsAsync,
+                          itemsAsync: itemsAsync,
+                          publicProjectsAsync: publicProjectsAsync,
+                        ),
+                        const SizedBox(height: 20),
+                        // 1-b. 뜨개 대시보드 (이슈 #649 Phase 2)
+                        KnitDashboardCard(isKorean: isKorean),
+                        const SizedBox(height: 20),
+                        // 2. 공지사항
+                        _HomeNoticesSection(isKorean: isKorean),
+                        const SizedBox(height: 20),
+                        // 3. 커뮤니티 그룹 카드 (위·아래 핑크 보더 + 내부 스크롤)
+                        _SectionGroupCard(
+                          label: isKorean ? '커뮤니티' : 'Community',
+                          icon: Icons.people_rounded,
+                          color: C.pk,
+                          onMoreTap: () => context.go(Routes.community),
+                          scrollHeight: 360,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _SubSectionLabel(title: isKorean ? '방명록' : 'Guestbook', color: C.pkD),
+                              const SizedBox(height: 8),
+                              _HomeGuestbookFadeTicker(isKorean: isKorean),
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 14),
+                                child: Divider(height: 1, thickness: 0.5),
+                              ),
+                              _SubSectionLabel(title: isKorean ? '커뮤니티 게시글' : 'Posts', color: C.pk),
+                              const SizedBox(height: 8),
+                              _CommunityPreview(isKorean: isKorean),
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 14),
+                                child: Divider(height: 1, thickness: 0.5),
+                              ),
+                              _SubSectionLabel(title: isKorean ? '완성 갤러리' : 'Gallery', color: C.lv),
+                              const SizedBox(height: 8),
+                              _HomeGalleryVerticalSection(isKorean: isKorean),
+                            ],
                           ),
-                          _SubSectionLabel(title: isKorean ? '커뮤니티 게시글' : 'Posts', color: C.pk),
-                          const SizedBox(height: 8),
-                          _CommunityPreview(isKorean: isKorean),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 14),
-                            child: Divider(height: 1, thickness: 0.5),
-                          ),
-                          _SubSectionLabel(title: isKorean ? '완성 갤러리' : 'Gallery', color: C.lv),
-                          const SizedBox(height: 8),
-                          _HomeGalleryVerticalSection(isKorean: isKorean),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(height: 20),
+                        // 4. 강의실 (위·아래 보라 보더 + 내부 스크롤)
+                        _SectionGroupCard(
+                          label: isKorean ? '강의실' : 'Course',
+                          icon: Icons.play_lesson_rounded,
+                          color: C.lv,
+                          onMoreTap: () => context.push(Routes.toolsCourse),
+                          scrollHeight: 320,
+                          child: const _PopularCourseSection(),
+                        ),
+                        const SizedBox(height: 20),
+                        // 5. 오늘의 뜨개 소식 (모리채널 포함) — 위·아래 오렌지 보더 + 내부 스크롤
+                        _SectionGroupCard(
+                          label: isKorean ? '오늘의 Knitting 소식' : "Today's Knitting News",
+                          icon: Icons.newspaper_rounded,
+                          color: C.og,
+                          scrollHeight: 360,
+                          child: _EditorialBoard(isKorean: isKorean, t: t),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 20),
-                    // 4. 강의실 (위·아래 보라 보더 + 내부 스크롤)
-                    _SectionGroupCard(
-                      label: isKorean ? '강의실' : 'Course',
-                      icon: Icons.play_lesson_rounded,
-                      color: C.lv,
-                      onMoreTap: () => context.push(Routes.toolsCourse),
-                      scrollHeight: 320,
-                      child: const _PopularCourseSection(),
-                    ),
-                    const SizedBox(height: 20),
-                    // 5. 오늘의 뜨개 소식 (모리채널 포함) — 위·아래 오렌지 보더 + 내부 스크롤
-                    _SectionGroupCard(
-                      label: isKorean ? '오늘의 Knitting 소식' : "Today's Knitting News",
-                      icon: Icons.newspaper_rounded,
-                      color: C.og,
-                      scrollHeight: 360,
-                      child: _EditorialBoard(isKorean: isKorean, t: t),
-                    ),
-                  ],
-                ),
+                  ),
+                  // [즐겨찾기 ⭐] 탭 — 별표한 화면 카드 그리드
+                  _FavoritesTab(isKorean: isKorean),
+                ],
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 홈/즐겨찾기 탭바.
+class _HomeTabBar extends StatelessWidget {
+  final TabController controller;
+  final bool isKorean;
+
+  const _HomeTabBar({required this.controller, required this.isKorean});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.transparent,
+        border: Border(
+          bottom: BorderSide(color: C.bd.withValues(alpha: 0.4), width: 0.5),
+        ),
+      ),
+      child: TabBar(
+        controller: controller,
+        labelColor: C.lvD,
+        unselectedLabelColor: C.tx2,
+        indicatorColor: C.lvD,
+        indicatorWeight: 2.5,
+        labelStyle: T.bodyBold,
+        unselectedLabelStyle: T.body,
+        tabs: [
+          Tab(
+            height: 44,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.home_rounded, size: 18),
+                const SizedBox(width: 6),
+                Text(isKorean ? '홈' : 'Home'),
+              ],
+            ),
+          ),
+          Tab(
+            height: 44,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.star_rounded, size: 18),
+                const SizedBox(width: 6),
+                Text(isKorean ? '즐겨찾기' : 'Favorites'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 즐겨찾기 탭 본문 — 별표한 화면 그리드.
+class _FavoritesTab extends ConsumerWidget {
+  final bool isKorean;
+
+  const _FavoritesTab({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final favoritesAsync = ref.watch(favoriteScreensProvider);
+
+    return favoritesAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Text(
+            isKorean ? '즐겨찾기를 불러오지 못했어요.' : 'Could not load favorites.',
+            style: T.body.copyWith(color: C.tx2),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+      data: (items) {
+        if (items.isEmpty) {
+          return _FavoritesEmptyState(isKorean: isKorean);
+        }
+        return GridView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1.0,
+          ),
+          itemCount: items.length,
+          itemBuilder: (context, index) {
+            final item = items[index];
+            return _FavoriteCard(item: item, isKorean: isKorean);
+          },
+        );
+      },
+    );
+  }
+}
+
+class _FavoritesEmptyState extends StatelessWidget {
+  final bool isKorean;
+  const _FavoritesEmptyState({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context) {
+    // 플레이스홀더 — 빈 카드 4개 + 안내 문구
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+      children: [
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 1.0,
+          children: List.generate(4, (_) => const _FavoritePlaceholderCard()),
+        ),
+        const SizedBox(height: 24),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          decoration: BoxDecoration(
+            color: C.lvL.withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: C.lv.withValues(alpha: 0.20)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.star_rounded, color: C.og, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isKorean
+                      ? '자주 가는 화면 우상단의 ⭐ 별 아이콘을 눌러\n즐겨찾기에 추가해 보세요.'
+                      : 'Tap the ⭐ icon on any screen header to\nadd it to your favorites.',
+                  style: T.caption.copyWith(color: C.tx2, height: 1.5),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FavoritePlaceholderCard extends StatelessWidget {
+  const _FavoritePlaceholderCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: C.gx,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: C.bd.withValues(alpha: 0.5)),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.star_outline_rounded,
+          size: 32,
+          color: C.bd,
+        ),
+      ),
+    );
+  }
+}
+
+class _FavoriteCard extends ConsumerWidget {
+  final FavoriteScreen item;
+  final bool isKorean;
+
+  const _FavoriteCard({required this.item, required this.isKorean});
+
+  Future<void> _removeFavorite(BuildContext context, WidgetRef ref) async {
+    await ref.read(favoritesRepositoryProvider).remove(item.screenId);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+          content: Text(
+            isKorean ? '즐겨찾기에서 해제됐어요.' : 'Removed from favorites.',
+          ),
+        ),
+      );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Stack(
+      children: [
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () => context.push(item.path),
+            onLongPress: () => _removeFavorite(context, ref),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: item.accent.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: item.accent.withValues(alpha: 0.25)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: item.accent.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(item.icon, color: item.accent, size: 22),
+                      ),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.title,
+                        style: T.bodyBold.copyWith(color: C.tx),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        isKorean ? '바로가기' : 'Open',
+                        style: T.caption.copyWith(
+                          color: item.accent,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        // 이슈 #729 — 우상단 ✕ 즉시 해제 (항상 표시).
+        Positioned(
+          top: 6,
+          right: 6,
+          child: Material(
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () => _removeFavorite(context, ref),
+              child: Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.92),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: C.bd, width: 0.8),
+                ),
+                child: Icon(Icons.close_rounded, size: 16, color: C.mu),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -327,7 +627,8 @@ class _EcosystemHero extends StatelessWidget {
                 child: _MetricTile(
                   label: t.marketListings,
                   value: '$itemCount',
-                  accent: C.lmD,
+                  // #765 — 마켓 버블 톤 통일 (라벤더/핑크 계열로 다른 버블과 일치).
+                  accent: C.pkD,
                 ),
               ),
               const SizedBox(width: 10),

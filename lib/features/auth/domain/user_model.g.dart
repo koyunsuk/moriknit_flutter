@@ -28,6 +28,17 @@ _$UserModelImpl _$$UserModelImplFromJson(Map<String, dynamic> json) =>
           ? null
           : DateTime.parse(json['lastActiveAt'] as String),
       moriBalance: (json['moriBalance'] as num?)?.toInt() ?? 10000,
+      points: (json['points'] as num?)?.toInt() ?? 0,
+      socialLinks: (json['socialLinks'] as Map<String, dynamic>?)?.map(
+            (k, e) => MapEntry(k, e as String),
+          ) ??
+          const <String, String>{},
+      phoneVerified: json['phoneVerified'] as bool? ?? false,
+      phoneNumber: json['phoneNumber'] as String?,
+      handle: json['handle'] as String? ?? '',
+      handleUpdatedAt: json['handleUpdatedAt'] == null
+          ? null
+          : DateTime.parse(json['handleUpdatedAt'] as String),
     );
 
 Map<String, dynamic> _$$UserModelImplToJson(_$UserModelImpl instance) =>
@@ -43,6 +54,12 @@ Map<String, dynamic> _$$UserModelImplToJson(_$UserModelImpl instance) =>
       'createdAt': instance.createdAt?.toIso8601String(),
       'lastActiveAt': instance.lastActiveAt?.toIso8601String(),
       'moriBalance': instance.moriBalance,
+      'points': instance.points,
+      'socialLinks': instance.socialLinks,
+      'phoneVerified': instance.phoneVerified,
+      'phoneNumber': instance.phoneNumber,
+      'handle': instance.handle,
+      'handleUpdatedAt': instance.handleUpdatedAt?.toIso8601String(),
     };
 
 _$UserSubscriptionImpl _$$UserSubscriptionImplFromJson(
@@ -82,6 +99,10 @@ _$UserUsageImpl _$$UserUsageImplFromJson(Map<String, dynamic> json) =>
       counterCount: (json['counterCount'] as num?)?.toInt() ?? 0,
       editorSaveCount: (json['editorSaveCount'] as num?)?.toInt() ?? 0,
       postsThisMonth: (json['postsThisMonth'] as num?)?.toInt() ?? 0,
+      aiConversionThisMonth:
+          (json['aiConversionThisMonth'] as num?)?.toInt() ?? 0,
+      aiConversionMonthKey: json['aiConversionMonthKey'] as String? ?? '',
+      storageBytesUsed: (json['storageBytesUsed'] as num?)?.toInt() ?? 0,
     );
 
 Map<String, dynamic> _$$UserUsageImplToJson(_$UserUsageImpl instance) =>
@@ -91,4 +112,7 @@ Map<String, dynamic> _$$UserUsageImplToJson(_$UserUsageImpl instance) =>
       'counterCount': instance.counterCount,
       'editorSaveCount': instance.editorSaveCount,
       'postsThisMonth': instance.postsThisMonth,
+      'aiConversionThisMonth': instance.aiConversionThisMonth,
+      'aiConversionMonthKey': instance.aiConversionMonthKey,
+      'storageBytesUsed': instance.storageBytesUsed,
     };

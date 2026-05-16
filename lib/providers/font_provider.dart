@@ -4,19 +4,19 @@ import 'package:hive/hive.dart';
 
 import '../core/constants/subscription_constants.dart';
 
-/// 앱 전역 폰트 옵션 (한국어 호환 5종).
-///
-/// - [notoSansKr]: 기본. 외형 회귀 0 — 기존 fallbackFonts와 동일 톤.
-/// - [gowunDodum]: 둥글둥글 친근.
-/// - [nanumPenScript]: 손글씨 펜.
-/// - [gugi]: 발랄/캐주얼.
-/// - [jua]: 또렷한 둥근 헤드라인체.
+/// 앱 전역 폰트 옵션 (한국어 호환 11종 — #756 확장).
 enum AppFont {
   notoSansKr,
   gowunDodum,
   nanumPenScript,
   gugi,
   jua,
+  blackHanSans,
+  doHyeon,
+  hiMelody,
+  sunflower,
+  cuteFont,
+  singleDay,
 }
 
 extension AppFontExt on AppFont {
@@ -28,6 +28,12 @@ extension AppFontExt on AppFont {
       case AppFont.nanumPenScript: return 'nanum_pen_script';
       case AppFont.gugi:           return 'gugi';
       case AppFont.jua:            return 'jua';
+      case AppFont.blackHanSans:   return 'black_han_sans';
+      case AppFont.doHyeon:        return 'do_hyeon';
+      case AppFont.hiMelody:       return 'hi_melody';
+      case AppFont.sunflower:      return 'sunflower';
+      case AppFont.cuteFont:       return 'cute_font';
+      case AppFont.singleDay:      return 'single_day';
     }
   }
 
@@ -40,6 +46,12 @@ extension AppFontExt on AppFont {
       case AppFont.nanumPenScript: return 'Nanum Pen Script';
       case AppFont.gugi:           return 'Gugi';
       case AppFont.jua:            return 'Jua';
+      case AppFont.blackHanSans:   return 'Black Han Sans';
+      case AppFont.doHyeon:        return 'Do Hyeon';
+      case AppFont.hiMelody:       return 'Hi Melody';
+      case AppFont.sunflower:      return 'Sunflower';
+      case AppFont.cuteFont:       return 'Cute Font';
+      case AppFont.singleDay:      return 'Single Day';
     }
   }
 
@@ -50,6 +62,12 @@ extension AppFontExt on AppFont {
       case AppFont.nanumPenScript: return '나눔 손글씨 펜';
       case AppFont.gugi:           return '꾸기';
       case AppFont.jua:            return '주아';
+      case AppFont.blackHanSans:   return '블랙 한 산스';
+      case AppFont.doHyeon:        return '도현';
+      case AppFont.hiMelody:       return '하이멜로디';
+      case AppFont.sunflower:      return '선플라워';
+      case AppFont.cuteFont:       return '큐트폰트';
+      case AppFont.singleDay:      return '싱글데이';
     }
   }
 
@@ -60,6 +78,12 @@ extension AppFontExt on AppFont {
       case AppFont.nanumPenScript: return 'Nanum Pen Script';
       case AppFont.gugi:           return 'Gugi';
       case AppFont.jua:            return 'Jua';
+      case AppFont.blackHanSans:   return 'Black Han Sans';
+      case AppFont.doHyeon:        return 'Do Hyeon';
+      case AppFont.hiMelody:       return 'Hi Melody';
+      case AppFont.sunflower:      return 'Sunflower';
+      case AppFont.cuteFont:       return 'Cute Font';
+      case AppFont.singleDay:      return 'Single Day';
     }
   }
 }

@@ -10,6 +10,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
+import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_shell_scaffold.dart';
@@ -19,6 +20,7 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/memo_lock_provider.dart';
 import '../../../providers/memo_provider.dart';
 import '../domain/memo_model.dart';
+import 'widgets/memo_drawing_canvas.dart';
 
 // ── Hive 마이그레이션 ─────────────────────────────────────
 const _hiveBoxName = 'tool_memo_box_v2';
@@ -201,6 +203,13 @@ class _ToolMemoScreenState extends ConsumerState<ToolMemoScreen> {
       title: '나만의 메모장',
       subtitle: '도안, 재료, 아이디어를 자유롭게 기록해요',
       showBgOrbs: false,
+      // 즐겨찾기 ⭐ 자동 prepend (이슈 #723 Phase B)
+      favoriteScreenId: 'tools_memo',
+      favoriteTitle: '메모장',
+      favoriteIcon: Icons.sticky_note_2_rounded,
+      favoritePath: Routes.toolsMemo,
+      favoriteAccent: C.og,
+      favoriteIsKorean: true,
       body: !_migrated || !_lockChecked
           ? Center(child: CircularProgressIndicator(color: C.lv))
           : _isLocked
@@ -497,12 +506,7 @@ class _ToolMemoScreenState extends ConsumerState<ToolMemoScreen> {
                       onPressed: _toggleRecording,
                       tooltip: _isRecording ? '녹음 중지' : '음성 녹음',
                     ),
-                  TextButton.icon(
-                    onPressed: () => _openEditor(),
-                    icon: const Icon(Icons.add_circle_outline_rounded,
-                        size: 18),
-                    label: const Text('새 메모'),
-                  ),
+                  // '+ 새 메모' 버튼은 상단 SummaryCard_Detail "추가" 버튼과 중복 — 제거 (이슈 #743)
                 ],
               ),
               if (_isRecording)
@@ -681,6 +685,10 @@ class _MemoEditScreenState extends ConsumerState<_MemoEditScreen> {
 
   bool _saving = false;
 
+  // ── 음성 녹음 (모바일 전용) ──────────────────────────────
+  final AudioRecorder _recorder = AudioRecorder();
+  bool _isRecording = false;
+
   @override
   void initState() {
     super.initState();
@@ -691,6 +699,7 @@ class _MemoEditScreenState extends ConsumerState<_MemoEditScreen> {
   @override
   void dispose() {
     _controller.dispose();
+    _recorder.dispose();
     super.dispose();
   }
 
@@ -706,6 +715,141 @@ class _MemoEditScreenState extends ConsumerState<_MemoEditScreen> {
         _newImageBytes.add(bytes);
         _newImagePreviews.add(bytes);
       });
+    }
+  }
+
+  /// 그리기 캔버스 모달을 열어 PNG bytes 받아 사진 목록에 추가
+  Future<void> _addDrawing() async {
+    final bytes = await Navigator.of(context).push<Uint8List>(
+      MaterialPageRoute(
+        builder: (_) => const MemoDrawingCanvas(),
+        fullscreenDialog: true,
+      ),
+    );
+    if (bytes == null || !mounted) return;
+    final remaining = 6 - _existingUrls.length - _newImageBytes.length;
+    if (remaining <= 0) return;
+    setState(() {
+      _newImageBytes.add(bytes);
+      _newImagePreviews.add(bytes);
+    });
+  }
+
+  /// 음성 녹음 토글 — 완료 시 voiceUrl 업데이트 저장
+  Future<void> _toggleRecording() async {
+    if (kIsWeb) return;
+    final scaffoldMsg = ScaffoldMessenger.of(context);
+
+    if (_isRecording) {
+      // 정지
+      final path = await _recorder.stop();
+      if (!mounted) return;
+      setState(() => _isRecording = false);
+      if (path == null) return;
+
+      try {
+        final bytes = await _readVoiceBytes(path);
+        if (bytes == null || bytes.isEmpty) return;
+        if (!mounted) return;
+        await _saveVoiceToMemo(bytes);
+      } catch (e) {
+        if (!mounted) return;
+        showSaveErrorSnackBar(scaffoldMsg, message: '$e');
+      }
+      return;
+    }
+
+    // 시작 전: 기존 voiceUrl이 있으면 덮어쓰기 확인
+    final hasExistingVoice = (widget.initial?.voiceUrl != null);
+    if (hasExistingVoice) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('재녹음'),
+          content: const Text('기존 음성이 새 녹음으로 덮어써집니다. 진행할까요?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('취소'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: C.lv,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('재녹음'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+
+    final hasPermission = await _recorder.hasPermission();
+    if (!hasPermission) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('마이크 권한이 필요합니다')),
+      );
+      return;
+    }
+    final dir = await getTemporaryDirectory();
+    final path =
+        '${dir.path}/memo_edit_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    await _recorder.start(const RecordConfig(), path: path);
+    if (!mounted) return;
+    setState(() => _isRecording = true);
+  }
+
+  Future<Uint8List?> _readVoiceBytes(String path) async {
+    if (kIsWeb) return null;
+    try {
+      return await io.File(path).readAsBytes();
+    } catch (e) {
+      debugPrint('[MemoEdit] 음성 파일 읽기 실패: $e');
+      return null;
+    }
+  }
+
+  /// 녹음된 bytes를 Storage 업로드 후 현재 메모(또는 새 메모)에 voiceUrl 저장.
+  Future<void> _saveVoiceToMemo(Uint8List bytes) async {
+    final scaffoldMsg = ScaffoldMessenger.of(context);
+    final repo = ref.read(memoRepositoryProvider);
+    final notifier = ref.read(memoNotifierProvider.notifier);
+    final isNew = widget.initial == null;
+
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: '음성 메모를 저장하는 중입니다.',
+        subtitle: '잠시만 기다려 주세요.',
+        task: () async {
+          final voiceUrl = await repo.uploadVoice(bytes);
+          if (isNew) {
+            // 새 메모 — 현재 입력값 + 음성으로 함께 생성
+            final memo = MemoModel(
+              id: '',
+              uid: widget.uid,
+              content: _controller.text.trim(),
+              imageUrls: const [],
+              voiceUrl: voiceUrl,
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            );
+            await notifier.create(memo, newImages: _newImageBytes);
+          } else {
+            // 기존 메모 — voiceUrl만 갱신
+            final updated = widget.initial!.copyWith(voiceUrl: voiceUrl);
+            await repo.updateMemo(updated);
+          }
+        },
+      );
+      if (!mounted) return;
+      showSavedSnackBar(scaffoldMsg, message: '음성 메모가 저장됐어요.');
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(scaffoldMsg, message: '$e');
     }
   }
 
@@ -799,14 +943,53 @@ class _MemoEditScreenState extends ConsumerState<_MemoEditScreen> {
                   Row(
                     children: [
                       Expanded(child: Text('사진', style: T.bodyBold)),
-                      if (totalImages < 6)
+                      if (totalImages < 6) ...[
                         OutlinedButton.icon(
                           onPressed: _saving ? null : _pickImages,
-                          icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
+                          icon: const Icon(
+                              Icons.add_photo_alternate_outlined,
+                              size: 18),
                           label: const Text('사진 추가'),
                         ),
+                        const SizedBox(width: 6),
+                        OutlinedButton.icon(
+                          onPressed: _saving ? null : _addDrawing,
+                          icon: const Icon(Icons.brush_rounded, size: 18),
+                          label: const Text('그림 추가'),
+                        ),
+                      ],
+                      if (!kIsWeb) ...[
+                        const SizedBox(width: 6),
+                        IconButton(
+                          icon: Icon(
+                            _isRecording
+                                ? Icons.stop_circle_rounded
+                                : Icons.mic_rounded,
+                            color: _isRecording ? C.og : C.lv,
+                          ),
+                          tooltip: _isRecording
+                              ? '녹음 중지'
+                              : (widget.initial?.voiceUrl != null
+                                  ? '음성 재녹음'
+                                  : '음성 녹음'),
+                          onPressed: _saving ? null : _toggleRecording,
+                        ),
+                      ],
                     ],
                   ),
+                  if (_isRecording)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6, bottom: 2),
+                      child: Row(
+                        children: [
+                          Icon(Icons.fiber_manual_record,
+                              color: C.og, size: 12),
+                          const SizedBox(width: 6),
+                          Text('녹음 중...',
+                              style: T.caption.copyWith(color: C.og)),
+                        ],
+                      ),
+                    ),
                   if (totalImages > 0) ...[
                     const SizedBox(height: 10),
                     SizedBox(

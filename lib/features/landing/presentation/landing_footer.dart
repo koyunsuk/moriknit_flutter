@@ -74,7 +74,7 @@ class LandingFooter extends ConsumerWidget {
                             children: [
                               TextButton(
                                 onPressed: () => launchUrl(
-                                    Uri.parse('https://www.moriknit.com/terms')),
+                                    Uri.parse('https://moriknit.com/terms')),
                                 style: TextButton.styleFrom(
                                     foregroundColor: Colors.white54,
                                     padding: EdgeInsets.zero),
@@ -83,7 +83,7 @@ class LandingFooter extends ConsumerWidget {
                               ),
                               TextButton(
                                 onPressed: () => launchUrl(Uri.parse(
-                                    'https://www.moriknit.com/privacy')),
+                                    'https://moriknit.com/privacy')),
                                 style: TextButton.styleFrom(
                                     foregroundColor: Colors.white54,
                                     padding: EdgeInsets.zero),

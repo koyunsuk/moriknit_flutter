@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/localization/app_language.dart';
 import '../../../core/router/routes.dart';
@@ -12,6 +11,7 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/swatch_provider.dart';
+import '../data/swatch_group_repository.dart';
 import 'swatch_detail_screen.dart';
 import 'swatch_input_screen.dart';
 import 'widgets/swatch_list_sections.dart';
@@ -55,14 +55,14 @@ class _SwatchListScreenState extends ConsumerState<SwatchListScreen> {
     return AppShellScaffold(
       title: t.swatches,
       subtitle: t.swatchLibrary,
-      trailing: [
-        // 이슈 #723 — 스와치 그룹 진입점
-        IconButton(
-          tooltip: isKorean ? '스와치 그룹' : 'Swatch groups',
-          icon: Icon(Icons.folder_rounded, color: C.lvD),
-          onPressed: () => context.push(Routes.swatchGroups),
-        ),
-      ],
+      // 즐겨찾기 ⭐ 자동 prepend (이슈 #723 Phase B)
+      favoriteScreenId: 'swatch_list',
+      favoriteTitle: isKorean ? '스와치 목록' : 'Swatches',
+      favoriteIcon: Icons.grid_view_rounded,
+      favoritePath: Routes.swatchList,
+      favoriteAccent: C.lvD,
+      favoriteIsKorean: isKorean,
+      // #772 — 헤더 폴더 버튼 제거. 그룹별 섹션은 본문 안에서 표시.
       body: swatchListAsync.when(
                 loading: () => AsyncLoadingFriendly(
                   isKorean: isKorean,
@@ -169,31 +169,27 @@ class _SwatchListScreenState extends ConsumerState<SwatchListScreen> {
                             ),
                             const SizedBox(height: 8),
                           ],
-                          // 블록 안에 카드 목록 포함
+                          // #772 — 3개 섹션으로 분리: 프로젝트별 / 그룹별 / 모든 스와치.
+                          _ProjectGroupedSwatches(
+                            swatches: sorted,
+                            projects: linkedProjects,
+                            isKorean: isKorean,
+                          ),
+                          const SizedBox(height: 12),
+                          _UserGroupedSwatches(
+                            swatches: sorted,
+                            isKorean: isKorean,
+                          ),
+                          const SizedBox(height: 12),
+                          // 모든 스와치 (기존 정렬 리스트 유지)
                           MoriBlockShell(
-                            label: isKorean ? '스와치 목록' : 'Swatches',
+                            label: isKorean ? '모든 스와치 ${swatches.length}' : '${swatches.length} All Swatches',
                             icon: Icons.texture,
                             accent: C.lv,
                             moreLabel: sortLabels[selectedIndex],
                             onMoreTap: () => _showSortMenu(context, sortLabels, selectedIndex),
                             child: Column(
                               children: [
-                                // 헤더 카운트 배지
-                                Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: C.pkD.withValues(alpha: 0.12),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Text('${swatches.length}',
-                                          style: T.caption.copyWith(color: C.pkD, fontWeight: FontWeight.w700)),
-                                    ),
-                                    const Spacer(),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
                                 for (int i = 0; i < sorted.length; i++) ...[
                                   if (i > 0) const SizedBox(height: 10),
                                   _NumberedItem(
@@ -427,6 +423,176 @@ class _SwatchListScreenState extends ConsumerState<SwatchListScreen> {
             style: ElevatedButton.styleFrom(backgroundColor: C.lm, foregroundColor: const Color(0xFF1a3000)),
             onPressed: () => Navigator.pop(ctx),
             child: Text(isKorean ? '업그레이드' : 'Upgrade'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// #772 — 프로젝트별 스와치 섹션.
+class _ProjectGroupedSwatches extends StatelessWidget {
+  final List swatches;
+  final List projects;
+  final bool isKorean;
+  const _ProjectGroupedSwatches({
+    required this.swatches,
+    required this.projects,
+    required this.isKorean,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Map<String, List> grouped = {};
+    for (final s in swatches) {
+      if (s.projectId == null || s.projectId.isEmpty) continue;
+      grouped.putIfAbsent(s.projectId, () => []).add(s);
+    }
+    return MoriBlockShell(
+      label: isKorean ? '프로젝트별 ${grouped.length}' : '${grouped.length} By Project',
+      icon: Icons.folder_special_rounded,
+      accent: C.lvD,
+      child: grouped.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                isKorean ? '프로젝트에 연결된 스와치가 없어요.' : 'No swatches linked to projects yet.',
+                style: T.caption.copyWith(color: C.mu),
+              ),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: grouped.entries.map((entry) {
+                final projName = projects
+                        .where((p) => p.id == entry.key)
+                        .firstOrNull
+                        ?.title ??
+                    (isKorean ? '(이름 없음)' : '(unnamed)');
+                return _SwatchGroupRow(
+                  title: projName,
+                  swatches: entry.value,
+                  isKorean: isKorean,
+                );
+              }).toList(),
+            ),
+    );
+  }
+}
+
+// #772 — 사용자 그룹별 스와치 섹션.
+class _UserGroupedSwatches extends ConsumerWidget {
+  final List swatches;
+  final bool isKorean;
+  const _UserGroupedSwatches({
+    required this.swatches,
+    required this.isKorean,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final groupsAsync = ref.watch(swatchGroupListProvider);
+    return MoriBlockShell(
+      label: isKorean ? '그룹별' : 'By Group',
+      icon: Icons.folder_rounded,
+      accent: C.pkD,
+      child: groupsAsync.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: Center(child: SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2))),
+        ),
+        error: (e, _) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text('$e', style: T.caption.copyWith(color: C.og)),
+        ),
+        data: (groups) {
+          if (groups.isEmpty) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                isKorean ? '아직 사용자 그룹이 없어요.' : 'No user groups yet.',
+                style: T.caption.copyWith(color: C.mu),
+              ),
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: groups.map((g) {
+              final inGroup = swatches.where((s) => g.swatchIds.contains(s.id)).toList();
+              return _SwatchGroupRow(
+                title: g.name,
+                swatches: inGroup,
+                isKorean: isKorean,
+              );
+            }).toList(),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// #772 — 그룹/프로젝트 헤더 + 그 안의 스와치 가로 스크롤 카드 행.
+class _SwatchGroupRow extends StatelessWidget {
+  final String title;
+  final List swatches;
+  final bool isKorean;
+  const _SwatchGroupRow({
+    required this.title,
+    required this.swatches,
+    required this.isKorean,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text(title, style: T.bodyBold)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: C.bd.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text('${swatches.length}',
+                    style: T.caption.copyWith(color: C.tx2, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 140,
+            child: swatches.isEmpty
+                ? Center(
+                    child: Text(
+                      isKorean ? '연결된 스와치 없음' : 'No linked swatches',
+                      style: T.caption.copyWith(color: C.mu),
+                    ),
+                  )
+                : ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: swatches.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 8),
+                    itemBuilder: (ctx, i) {
+                      final s = swatches[i];
+                      return SizedBox(
+                        width: 220,
+                        child: SwatchCard(
+                          swatch: s,
+                          onTap: () => Navigator.push(
+                            ctx,
+                            MaterialPageRoute(
+                              builder: (_) => SwatchDetailScreen(swatchId: s.id),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),

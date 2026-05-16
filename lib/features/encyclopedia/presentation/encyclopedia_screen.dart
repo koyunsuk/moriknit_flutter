@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/localization/app_language.dart';
+import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_shell_scaffold.dart';
@@ -45,6 +46,13 @@ class _EncyclopediaScreenState extends ConsumerState<EncyclopediaScreen> {
         showBgOrbs: false,
         title: t.myEncyclopedia,
         subtitle: t.myEncyclopediaDescription,
+        // 즐겨찾기 ⭐ 자동 prepend (이슈 #723 Phase B)
+        favoriteScreenId: 'encyclopedia',
+        favoriteTitle: isKorean ? '뜨개 사전' : 'Encyclopedia',
+        favoriteIcon: Icons.menu_book_outlined,
+        favoritePath: Routes.toolsEncyclopedia,
+        favoriteAccent: C.pkD,
+        favoriteIsKorean: isKorean,
         aboveBody: Column(
           children: [
             TabBar(

@@ -27,6 +27,60 @@ class PatternConverterRepository {
   CollectionReference<Map<String, dynamic>> get _chartsCol =>
       _db.collection('users').doc(_uid).collection('pattern_charts');
 
+  DocumentReference<Map<String, dynamic>> get _userRef =>
+      _db.collection('users').doc(_uid);
+
+  /// 이슈 #754 — AI 변환 사용량 카운트 (월별).
+  /// 현재 month key(YYYY-MM)와 저장된 키가 다르면 1로 리셋, 같으면 +1 증가.
+  /// 사용자 마이페이지 _AiUsageBlock 표시값 갱신 트리거.
+  Future<void> _incrementAiConversionUsage() async {
+    try {
+      final now = DateTime.now();
+      final monthKey =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}';
+      await _db.runTransaction((tx) async {
+        final snap = await tx.get(_userRef);
+        final data = snap.data() ?? {};
+        final usage = (data['usage'] as Map<String, dynamic>?) ?? {};
+        final storedKey = usage['aiConversionMonthKey'] as String? ?? '';
+        final isNewMonth = storedKey != monthKey;
+        final nextCount = isNewMonth
+            ? 1
+            : ((usage['aiConversionThisMonth'] as num?)?.toInt() ?? 0) + 1;
+        tx.set(
+          _userRef,
+          {
+            'usage': {
+              'aiConversionThisMonth': nextCount,
+              'aiConversionMonthKey': monthKey,
+            },
+          },
+          SetOptions(merge: true),
+        );
+      });
+    } catch (e) {
+      debugPrint('[_incrementAiConversionUsage] failed: $e');
+    }
+  }
+
+  /// 이슈 #754 — 사용자가 업로드한 파일/이미지 바이트 누적 (스토리지 추정용).
+  /// 마이페이지 _StorageUsageBlock 표시값에 반영. 실패해도 변환 흐름 유지.
+  Future<void> _incrementStorageBytesUsed(int bytes) async {
+    if (bytes <= 0) return;
+    try {
+      await _userRef.set(
+        {
+          'usage': {
+            'storageBytesUsed': FieldValue.increment(bytes),
+          },
+        },
+        SetOptions(merge: true),
+      );
+    } catch (e) {
+      debugPrint('[_incrementStorageBytesUsed] failed: $e');
+    }
+  }
+
   /// 파일을 Storage에 업로드 후 Cloud Function으로 파싱, pattern_charts에 저장
   /// 이슈 #644 — [ravelryPatternId] 전달 시 변환된 PatternChart에 매핑됨 (Ravelry 임포트 도안용)
   Future<PatternChart> uploadAndParse({
@@ -92,6 +146,12 @@ class PatternConverterRepository {
     };
     final result = await callable.call(payload);
     onProgress?.call(0.9);
+
+    // 이슈 #754 — AI 변환 사용량 카운트 증가 (월별).
+    // 월 키가 바뀌면 카운터 리셋, 같은 달이면 +1. 실패해도 변환 흐름 유지.
+    unawaited(_incrementAiConversionUsage());
+    // 이슈 #754 — 업로드된 소스 파일 바이트 누적 (스토리지 사용량 추정용).
+    unawaited(_incrementStorageBytesUsed(bytes.length));
 
     final data = Map<String, dynamic>.from(result.data['result'] as Map);
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/localization/app_language.dart';
+import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_shell_scaffold.dart';
@@ -30,6 +31,13 @@ class CounterListScreen extends ConsumerWidget {
     return AppShellScaffold(
       title: isKorean ? '카운터' : 'Counters',
       subtitle: isKorean ? '프로젝트별 카운터 모음' : 'Counter groups by project',
+      // 즐겨찾기 ⭐ 자동 prepend (이슈 #723 Phase B)
+      favoriteScreenId: 'counter_list',
+      favoriteTitle: isKorean ? '카운터' : 'Counters',
+      favoriteIcon: Icons.add_box_rounded,
+      favoritePath: Routes.counterList,
+      favoriteAccent: C.pkD,
+      favoriteIsKorean: isKorean,
       body: counterListAsync.when(
                 loading: () => AsyncLoadingFriendly(
                   isKorean: isKorean,

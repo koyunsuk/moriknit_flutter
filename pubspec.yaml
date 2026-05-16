@@ -53,6 +53,7 @@ dependencies:
   intl: ^0.20.2
   path_provider: ^2.1.3
   url_launcher: ^6.3.0
+  app_settings: ^6.1.1
   share_plus: ^12.0.1
   uuid: ^4.4.2
   connectivity_plus: ^7.0.0
@@ -68,6 +69,9 @@ dependencies:
   font_awesome_flutter: ^10.7.0
   record: 6.0.0
   just_audio: ^0.9.39
+
+  # 이슈 #747 — 커뮤니티 글쓰기 리치텍스트 에디터.
+  flutter_quill: ^11.0.0
 
 dev_dependencies:
   flutter_test:

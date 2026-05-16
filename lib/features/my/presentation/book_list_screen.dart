@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_shell_scaffold.dart';
@@ -23,6 +24,13 @@ class BookListScreen extends ConsumerWidget {
     return AppShellScaffold(
       title: isKorean ? '나의 도서' : 'My Books',
       subtitle: isKorean ? '참고 도서 라이브러리' : 'Reference book library',
+      // 즐겨찾기 ⭐ 자동 prepend (이슈 #723 Phase B)
+      favoriteScreenId: 'books',
+      favoriteTitle: isKorean ? '나의 도서' : 'My Books',
+      favoriteIcon: Icons.menu_book_rounded,
+      favoritePath: Routes.books,
+      favoriteAccent: C.lvD,
+      favoriteIsKorean: isKorean,
       aboveBody: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
         child: SummaryCard_Detail(

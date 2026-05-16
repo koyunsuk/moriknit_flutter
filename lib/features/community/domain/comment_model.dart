@@ -6,6 +6,9 @@ class CommentModel {
   final String authorName;
   final String content;
   final DateTime createdAt;
+  // 이슈 #749 — 질문게시판 답글 채택 시스템
+  final bool isAccepted;
+  final DateTime? acceptedAt;
 
   const CommentModel({
     required this.id,
@@ -13,6 +16,8 @@ class CommentModel {
     required this.authorName,
     required this.content,
     required this.createdAt,
+    this.isAccepted = false,
+    this.acceptedAt,
   });
 
   factory CommentModel.fromFirestore(DocumentSnapshot doc) {
@@ -23,6 +28,8 @@ class CommentModel {
       authorName: data['authorName'] as String? ?? '익명',
       content: data['content'] as String? ?? '',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      isAccepted: data['isAccepted'] as bool? ?? false,
+      acceptedAt: (data['acceptedAt'] as Timestamp?)?.toDate(),
     );
   }
 

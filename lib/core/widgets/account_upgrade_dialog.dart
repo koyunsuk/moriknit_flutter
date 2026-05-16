@@ -12,13 +12,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:hive/hive.dart';
 
 import '../../core/constants/subscription_constants.dart';
 import '../../core/localization/app_language.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme.dart';
+import '../../features/auth/presentation/sign_up_sheet.dart';
 import '../../providers/auth_provider.dart';
 
 class _UpgradePromptState {
@@ -125,7 +125,8 @@ Future<void> showProUpgradeBlockedDialog(
     ),
   );
   if (result == true && context.mounted) {
-    context.push('/login');
+    // #757 — '회원가입하기' 다이얼로그 confirm 시 로그인 화면이 아닌 가입 시트로 직접 연결.
+    showSignUpSheet(context, ref, true);
   }
 }
 
@@ -144,7 +145,8 @@ Future<void> _showDialog(BuildContext context, WidgetRef ref) async {
     ),
   );
   if (result == true && context.mounted) {
-    context.push('/login');
+    // #757 — '회원가입하기' 다이얼로그 confirm 시 로그인 화면이 아닌 가입 시트로 직접 연결.
+    showSignUpSheet(context, ref, true);
   }
 }
 

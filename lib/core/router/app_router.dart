@@ -111,7 +111,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // auth 상태가 아직 초기화되지 않은 경우 redirect 보류 (로그인 화면 깜빡임 방지)
       if (!authInitialized) return null;
 
-      final isLoggedIn = authRepository.currentUser != null;
+      final currentAuthUser = authRepository.currentUser;
+      final isLoggedIn = currentAuthUser != null;
+      // #736 — 익명(게스트) 사용자는 /login 접근 허용 (정식 회원 승격 흐름).
+      // 정식 회원만 /login → 홈으로 리다이렉트.
+      final isAnonymous = currentAuthUser?.isAnonymous ?? false;
       final location = state.matchedLocation;
       final isSplash = location == Routes.splash;
       final isLogin = location == Routes.login;
@@ -123,7 +127,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (!isLoggedIn && !isLogin && !isPublicWebRoute) {
         return Routes.login;
       }
-      if (isLoggedIn && isLogin) {
+      if (isLoggedIn && !isAnonymous && isLogin) {
         final from = state.uri.queryParameters['from'];
         if (from != null && from.isNotEmpty) return from;
         return Routes.home;

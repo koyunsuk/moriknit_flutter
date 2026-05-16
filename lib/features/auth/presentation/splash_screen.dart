@@ -47,20 +47,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProvider
   }
 
   Future<void> _navigate() async {
+    // 자동 익명 로그인 제거 — 사용자가 명시 선택 (로그인 화면의 "게스트로 시작" 버튼).
     final auth = ref.read(authRepositoryProvider);
-    var isLoggedIn = auth.currentUser != null;
-
-    // 미로그인 상태이면 자동 익명 로그인 시도 (모바일만 — 웹은 랜딩으로)
-    if (!isLoggedIn && !kIsWeb) {
-      try {
-        final anon = await auth.signInAnonymously();
-        isLoggedIn = anon != null;
-      } catch (_) {
-        // Firebase Console에서 익명 로그인이 비활성화되어 있거나 네트워크 실패 시
-        // 기존 흐름대로 /login 으로 이동
-      }
-    }
-
+    final isLoggedIn = auth.currentUser != null;
     if (!mounted) return;
     context.go(isLoggedIn ? Routes.home : (kIsWeb ? Routes.landing : Routes.login));
   }

@@ -9,6 +9,7 @@ import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/localization/app_language.dart';
+import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_shell_scaffold.dart';
@@ -217,6 +218,13 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
     return AppShellScaffold(
       title: t.gaugeCalculator,
       subtitle: isKorean ? '게이지 변환·도안 생성' : 'Gauge conversion & generator',
+      // 즐겨찾기 ⭐ 자동 prepend (이슈 #723 Phase B)
+      favoriteScreenId: 'gauge',
+      favoriteTitle: isKorean ? '게이지 계산기' : 'Gauge Calculator',
+      favoriteIcon: Icons.calculate_rounded,
+      favoritePath: Routes.toolsGauge,
+      favoriteAccent: C.lv,
+      favoriteIsKorean: isKorean,
       body: ListView(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
                     children: [

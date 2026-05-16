@@ -14,13 +14,16 @@
 // ```
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../theme/app_colors.dart';
+import '../../features/favorites/data/favorites_provider.dart';
+import '../../features/favorites/data/favorites_repository.dart';
 import 'common_widgets.dart';
 import 'network_badge.dart';
 
-class AppShellScaffold extends StatelessWidget {
+class AppShellScaffold extends ConsumerStatefulWidget {
   /// 메인 본문.
   final Widget body;
 
@@ -63,6 +66,20 @@ class AppShellScaffold extends StatelessWidget {
   /// FloatingActionButton.
   final Widget? floatingActionButton;
 
+  /// 즐겨찾기 ⭐ 토글 자동 prepend 옵션.
+  /// `favoriteScreenId` 가 주어지면 trailing 첫 자리에 FavoriteToggleButton 자동 추가.
+  final String? favoriteScreenId;
+  final String? favoriteTitle;
+  final IconData? favoriteIcon;
+  final Color? favoriteAccent;
+
+  /// 즐겨찾기 카드를 탭했을 때 이동할 경로.
+  /// 미지정 시 현재 GoRouter 경로를 사용.
+  final String? favoritePath;
+
+  /// 토스트 메시지를 위한 언어 정보 (즐겨찾기 토글 시).
+  final bool? favoriteIsKorean;
+
   const AppShellScaffold({
     super.key,
     required this.body,
@@ -78,16 +95,73 @@ class AppShellScaffold extends StatelessWidget {
     this.useSafeArea = true,
     this.bottom,
     this.floatingActionButton,
+    this.favoriteScreenId,
+    this.favoriteTitle,
+    this.favoriteIcon,
+    this.favoriteAccent,
+    this.favoritePath,
+    this.favoriteIsKorean,
   });
 
   @override
+  ConsumerState<AppShellScaffold> createState() => _AppShellScaffoldState();
+}
+
+class _AppShellScaffoldState extends ConsumerState<AppShellScaffold> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _publishFavoriteCandidate());
+  }
+
+  @override
+  void didUpdateWidget(covariant AppShellScaffold oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _publishFavoriteCandidate());
+  }
+
+  void _publishFavoriteCandidate() {
+    if (!mounted) return;
+    final id = widget.favoriteScreenId;
+    final title = widget.favoriteTitle;
+    final icon = widget.favoriteIcon;
+    final accent = widget.favoriteAccent;
+    if (id != null && title != null && icon != null && accent != null) {
+      final path = widget.favoritePath ?? GoRouterState.of(context).uri.toString();
+      ref.read(currentScreenFavoriteProvider.notifier).state = FavoriteScreen(
+        screenId: id,
+        title: title,
+        icon: icon,
+        path: path,
+        accent: accent,
+        addedAt: DateTime.now(),
+      );
+    } else {
+      ref.read(currentScreenFavoriteProvider.notifier).state = null;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // ConsumerState 호환: widget.* 로 props 접근.
+    final subtitle = widget.subtitle;
+    final title = widget.title;
+    final trailing = widget.trailing;
+    final aboveBody = widget.aboveBody;
+    final showHeader = widget.showHeader;
+    final showBgOrbs = widget.showBgOrbs;
+    final compact = widget.compact;
+    final showBackButton = widget.showBackButton;
+    final onBackPressed = widget.onBackPressed;
+    final useSafeArea = widget.useSafeArea;
+    final bottom = widget.bottom;
+    final floatingActionButton = widget.floatingActionButton;
+    final body = widget.body;
     // 이슈 #704 — 헤더 trailing 앞에 NetworkBadge 자동 prepend.
-    // 온라인 상태에서는 SizedBox.shrink() 반환하므로 공간 차지 X.
-    // 오프라인 상태일 때만 작은 칩으로 표시.
+    // #766 — 즐겨찾기 ⭐는 헤더에서 제거하고 퀵버튼(메인 셸)으로 이동.
     final List<Widget> effectiveTrailing = <Widget>[
       const NetworkBadge(),
-      if (trailing != null) ...trailing!,
+      if (trailing != null) ...trailing,
     ];
 
     final content = Column(
@@ -114,7 +188,7 @@ class AppShellScaffold extends StatelessWidget {
                       // 이슈 #727 — 화면별 onBackPressed 콜백 우선.
                       // false 반환 시 pop 차단 (dirty 가드 등에서 활용).
                       if (onBackPressed != null) {
-                        final allow = await onBackPressed!();
+                        final allow = await onBackPressed();
                         if (!allow) return;
                       }
                       if (!context.mounted) return;
@@ -128,7 +202,7 @@ class AppShellScaffold extends StatelessWidget {
                 ),
             ],
           ),
-        if (aboveBody != null) aboveBody!,
+        if (aboveBody != null) aboveBody,
         Expanded(child: body),
       ],
     );

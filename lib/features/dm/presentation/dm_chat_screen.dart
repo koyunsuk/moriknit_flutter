@@ -78,6 +78,103 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
     }
   }
 
+  /// 자기 메시지 길게 누를 때 팝업 옵션 표시.
+  void _showMessageOptions(DmMessage message, bool isKorean) {
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: C.bd,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              leading: Icon(Icons.delete_outline_rounded, color: C.og),
+              title: Text(
+                isKorean ? '메시지 삭제' : 'Delete message',
+                style: T.body.copyWith(color: C.og),
+              ),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _confirmDeleteMessage(message, isKorean);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 메시지 삭제 확인 다이얼로그.
+  Future<void> _confirmDeleteMessage(DmMessage message, bool isKorean) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(isKorean ? '메시지를 삭제할까요?' : 'Delete message?', style: T.h3),
+        content: Text(
+          isKorean
+              ? '삭제된 메시지는 복구할 수 없습니다.'
+              : 'This action cannot be undone.',
+          style: T.body,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(isKorean ? '취소' : 'Cancel', style: TextStyle(color: C.mu)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: C.og,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text(
+              isKorean ? '삭제' : 'Delete',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '삭제하는 중입니다.' : 'Deleting...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () => ref.read(dmRepositoryProvider).deleteMessage(
+              roomId: widget.roomId,
+              messageId: message.id,
+            ),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(isKorean ? '메시지가 삭제됐습니다.' : 'Message deleted.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$e'), backgroundColor: C.og),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final language = ref.watch(appLanguageProvider);
@@ -89,6 +186,8 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
     final roomsAsync = ref.watch(dmRoomsProvider(user?.uid ?? ''));
     final room = roomsAsync.valueOrNull?.where((r) => r.id == widget.roomId).firstOrNull;
     final otherName = room?.otherName(user?.uid ?? '') ?? '';
+    // 이슈 #771 — 상대방 핸들 (AppBar 타이틀 옆 작은 표시)
+    final otherHandle = room?.otherHandle(user?.uid ?? '') ?? '';
 
     // Mark as read once
     if (!_didMarkRead && user != null) {
@@ -106,9 +205,28 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
           icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
-          otherName.isEmpty ? (isKorean ? '대화' : 'Chat') : otherName,
-          style: T.h3,
+        title: Row(
+          children: [
+            Flexible(
+              child: Text(
+                otherName.isEmpty ? (isKorean ? '대화' : 'Chat') : otherName,
+                style: T.h3,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (otherHandle.isNotEmpty) ...[
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  '@$otherHandle',
+                  style: T.caption.copyWith(color: C.lvD, fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
       body: Stack(
@@ -138,7 +256,12 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
                       itemBuilder: (context, index) {
                         final msg = messages[index];
                         final isMe = msg.senderId == user?.uid;
-                        return _MessageBubble(message: msg, isMe: isMe);
+                        return GestureDetector(
+                          onLongPress: isMe
+                              ? () => _showMessageOptions(msg, isKorean)
+                              : null,
+                          child: _MessageBubble(message: msg, isMe: isMe),
+                        );
                       },
                     );
                   },

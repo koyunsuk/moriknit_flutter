@@ -103,13 +103,26 @@ class PostRepository {
     await _posts.doc(postId).delete();
   }
 
-  Future<void> updatePost(String postId, {required String title, required String content, List<String>? imageUrls}) async {
+  Future<void> updatePost(
+    String postId, {
+    required String title,
+    required String content,
+    List<String>? imageUrls,
+    // 이슈 #747 — 리치 텍스트 본문 업데이트 지원.
+    String? bodyFormat,
+    String? bodyDelta,
+    // 이슈 #748 — 본문 유튜브 링크 업데이트.
+    List<String>? youtubeUrls,
+  }) async {
     final data = <String, dynamic>{
       'title': title,
       'content': content,
       'updatedAt': FieldValue.serverTimestamp(),
     };
     if (imageUrls != null) data['imageUrls'] = imageUrls;
+    if (bodyFormat != null) data['bodyFormat'] = bodyFormat;
+    if (bodyDelta != null) data['bodyDelta'] = bodyDelta;
+    if (youtubeUrls != null) data['youtubeUrls'] = youtubeUrls;
     await _posts.doc(postId).update(data);
   }
 

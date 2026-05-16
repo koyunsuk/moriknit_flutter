@@ -9,19 +9,19 @@ TARGET=${1:-"both"}  # 인자: app | admin | landing | both | all (기본값: bo
 
 build_app() {
   echo "▶ 앱 빌드 → build/web"
-  flutter build web --target lib/main.dart
+  flutter build web --target lib/main.dart --no-tree-shake-icons
   echo "✅ 앱 빌드 완료"
 }
 
 build_admin() {
   echo "▶ 어드민 빌드 → build/web_admin"
-  flutter build web --target lib/main_admin.dart --output build/web_admin
+  flutter build web --target lib/main_admin.dart --output build/web_admin --no-tree-shake-icons
   echo "✅ 어드민 빌드 완료"
 }
 
 build_landing() {
   echo "▶ 랜딩 빌드 → build/web_landing"
-  flutter build web --target lib/main_landing.dart --output build/web_landing
+  flutter build web --target lib/main_landing.dart --output build/web_landing --no-tree-shake-icons
   echo "✅ 랜딩 빌드 완료"
 }
 

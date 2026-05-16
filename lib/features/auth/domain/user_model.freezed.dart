@@ -30,7 +30,24 @@ mixin _$UserModel {
   String? get locale => throw _privateConstructorUsedError;
   DateTime? get createdAt => throw _privateConstructorUsedError;
   DateTime? get lastActiveAt => throw _privateConstructorUsedError;
-  int get moriBalance => throw _privateConstructorUsedError;
+  int get moriBalance =>
+      throw _privateConstructorUsedError; // 이슈 #749 — 질문게시판 답글 채택 포인트
+  int get points =>
+      throw _privateConstructorUsedError; // 이슈 #750 — 마이페이지 SNS 입력 필드.
+// keys: 'instagram', 'youtube', 'blog', 'kakaoId', 'whatsapp', 'email'
+// 값은 사용자가 입력한 URL/ID. Pro 회원만 글 작성 시 노출됨.
+  Map<String, String> get socialLinks =>
+      throw _privateConstructorUsedError; // 이슈 #750 — 휴대폰 인증 여부. Pro 결제 게이트의 선결 조건.
+  bool get phoneVerified =>
+      throw _privateConstructorUsedError; // 이슈 #750 — 인증된 휴대폰 번호 (E.164 형식 권장: +821012345678).
+// UI 노출 시 마스킹 처리 (예: 010-****-1234).
+  String? get phoneNumber =>
+      throw _privateConstructorUsedError; // 이슈 #771 — 회원 닉네임(@핸들) 시스템.
+// 형식: ^[a-z0-9_]{3,20}$ (소문자/숫자/언더스코어 3~20자).
+// handles/{handle} 컬렉션에 reservation 문서로 중복 방지.
+  String get handle =>
+      throw _privateConstructorUsedError; // 이슈 #771 — 핸들 마지막 변경 시각. 30일 변경 제한 기준.
+  DateTime? get handleUpdatedAt => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -54,7 +71,13 @@ abstract class $UserModelCopyWith<$Res> {
       String? locale,
       DateTime? createdAt,
       DateTime? lastActiveAt,
-      int moriBalance});
+      int moriBalance,
+      int points,
+      Map<String, String> socialLinks,
+      bool phoneVerified,
+      String? phoneNumber,
+      String handle,
+      DateTime? handleUpdatedAt});
 
   $UserSubscriptionCopyWith<$Res> get subscription;
   $UserUsageCopyWith<$Res> get usage;
@@ -84,6 +107,12 @@ class _$UserModelCopyWithImpl<$Res, $Val extends UserModel>
     Object? createdAt = freezed,
     Object? lastActiveAt = freezed,
     Object? moriBalance = null,
+    Object? points = null,
+    Object? socialLinks = null,
+    Object? phoneVerified = null,
+    Object? phoneNumber = freezed,
+    Object? handle = null,
+    Object? handleUpdatedAt = freezed,
   }) {
     return _then(_value.copyWith(
       uid: null == uid
@@ -130,6 +159,30 @@ class _$UserModelCopyWithImpl<$Res, $Val extends UserModel>
           ? _value.moriBalance
           : moriBalance // ignore: cast_nullable_to_non_nullable
               as int,
+      points: null == points
+          ? _value.points
+          : points // ignore: cast_nullable_to_non_nullable
+              as int,
+      socialLinks: null == socialLinks
+          ? _value.socialLinks
+          : socialLinks // ignore: cast_nullable_to_non_nullable
+              as Map<String, String>,
+      phoneVerified: null == phoneVerified
+          ? _value.phoneVerified
+          : phoneVerified // ignore: cast_nullable_to_non_nullable
+              as bool,
+      phoneNumber: freezed == phoneNumber
+          ? _value.phoneNumber
+          : phoneNumber // ignore: cast_nullable_to_non_nullable
+              as String?,
+      handle: null == handle
+          ? _value.handle
+          : handle // ignore: cast_nullable_to_non_nullable
+              as String,
+      handleUpdatedAt: freezed == handleUpdatedAt
+          ? _value.handleUpdatedAt
+          : handleUpdatedAt // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
     ) as $Val);
   }
 
@@ -169,7 +222,13 @@ abstract class _$$UserModelImplCopyWith<$Res>
       String? locale,
       DateTime? createdAt,
       DateTime? lastActiveAt,
-      int moriBalance});
+      int moriBalance,
+      int points,
+      Map<String, String> socialLinks,
+      bool phoneVerified,
+      String? phoneNumber,
+      String handle,
+      DateTime? handleUpdatedAt});
 
   @override
   $UserSubscriptionCopyWith<$Res> get subscription;
@@ -199,6 +258,12 @@ class __$$UserModelImplCopyWithImpl<$Res>
     Object? createdAt = freezed,
     Object? lastActiveAt = freezed,
     Object? moriBalance = null,
+    Object? points = null,
+    Object? socialLinks = null,
+    Object? phoneVerified = null,
+    Object? phoneNumber = freezed,
+    Object? handle = null,
+    Object? handleUpdatedAt = freezed,
   }) {
     return _then(_$UserModelImpl(
       uid: null == uid
@@ -245,6 +310,30 @@ class __$$UserModelImplCopyWithImpl<$Res>
           ? _value.moriBalance
           : moriBalance // ignore: cast_nullable_to_non_nullable
               as int,
+      points: null == points
+          ? _value.points
+          : points // ignore: cast_nullable_to_non_nullable
+              as int,
+      socialLinks: null == socialLinks
+          ? _value._socialLinks
+          : socialLinks // ignore: cast_nullable_to_non_nullable
+              as Map<String, String>,
+      phoneVerified: null == phoneVerified
+          ? _value.phoneVerified
+          : phoneVerified // ignore: cast_nullable_to_non_nullable
+              as bool,
+      phoneNumber: freezed == phoneNumber
+          ? _value.phoneNumber
+          : phoneNumber // ignore: cast_nullable_to_non_nullable
+              as String?,
+      handle: null == handle
+          ? _value.handle
+          : handle // ignore: cast_nullable_to_non_nullable
+              as String,
+      handleUpdatedAt: freezed == handleUpdatedAt
+          ? _value.handleUpdatedAt
+          : handleUpdatedAt // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
     ));
   }
 }
@@ -263,7 +352,14 @@ class _$UserModelImpl implements _UserModel {
       this.locale,
       this.createdAt,
       this.lastActiveAt,
-      this.moriBalance = 10000});
+      this.moriBalance = 10000,
+      this.points = 0,
+      final Map<String, String> socialLinks = const <String, String>{},
+      this.phoneVerified = false,
+      this.phoneNumber,
+      this.handle = '',
+      this.handleUpdatedAt})
+      : _socialLinks = socialLinks;
 
   factory _$UserModelImpl.fromJson(Map<String, dynamic> json) =>
       _$$UserModelImplFromJson(json);
@@ -296,10 +392,46 @@ class _$UserModelImpl implements _UserModel {
   @override
   @JsonKey()
   final int moriBalance;
+// 이슈 #749 — 질문게시판 답글 채택 포인트
+  @override
+  @JsonKey()
+  final int points;
+// 이슈 #750 — 마이페이지 SNS 입력 필드.
+// keys: 'instagram', 'youtube', 'blog', 'kakaoId', 'whatsapp', 'email'
+// 값은 사용자가 입력한 URL/ID. Pro 회원만 글 작성 시 노출됨.
+  final Map<String, String> _socialLinks;
+// 이슈 #750 — 마이페이지 SNS 입력 필드.
+// keys: 'instagram', 'youtube', 'blog', 'kakaoId', 'whatsapp', 'email'
+// 값은 사용자가 입력한 URL/ID. Pro 회원만 글 작성 시 노출됨.
+  @override
+  @JsonKey()
+  Map<String, String> get socialLinks {
+    if (_socialLinks is EqualUnmodifiableMapView) return _socialLinks;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableMapView(_socialLinks);
+  }
+
+// 이슈 #750 — 휴대폰 인증 여부. Pro 결제 게이트의 선결 조건.
+  @override
+  @JsonKey()
+  final bool phoneVerified;
+// 이슈 #750 — 인증된 휴대폰 번호 (E.164 형식 권장: +821012345678).
+// UI 노출 시 마스킹 처리 (예: 010-****-1234).
+  @override
+  final String? phoneNumber;
+// 이슈 #771 — 회원 닉네임(@핸들) 시스템.
+// 형식: ^[a-z0-9_]{3,20}$ (소문자/숫자/언더스코어 3~20자).
+// handles/{handle} 컬렉션에 reservation 문서로 중복 방지.
+  @override
+  @JsonKey()
+  final String handle;
+// 이슈 #771 — 핸들 마지막 변경 시각. 30일 변경 제한 기준.
+  @override
+  final DateTime? handleUpdatedAt;
 
   @override
   String toString() {
-    return 'UserModel(uid: $uid, email: $email, displayName: $displayName, photoURL: $photoURL, bio: $bio, subscription: $subscription, usage: $usage, locale: $locale, createdAt: $createdAt, lastActiveAt: $lastActiveAt, moriBalance: $moriBalance)';
+    return 'UserModel(uid: $uid, email: $email, displayName: $displayName, photoURL: $photoURL, bio: $bio, subscription: $subscription, usage: $usage, locale: $locale, createdAt: $createdAt, lastActiveAt: $lastActiveAt, moriBalance: $moriBalance, points: $points, socialLinks: $socialLinks, phoneVerified: $phoneVerified, phoneNumber: $phoneNumber, handle: $handle, handleUpdatedAt: $handleUpdatedAt)';
   }
 
   @override
@@ -323,7 +455,17 @@ class _$UserModelImpl implements _UserModel {
             (identical(other.lastActiveAt, lastActiveAt) ||
                 other.lastActiveAt == lastActiveAt) &&
             (identical(other.moriBalance, moriBalance) ||
-                other.moriBalance == moriBalance));
+                other.moriBalance == moriBalance) &&
+            (identical(other.points, points) || other.points == points) &&
+            const DeepCollectionEquality()
+                .equals(other._socialLinks, _socialLinks) &&
+            (identical(other.phoneVerified, phoneVerified) ||
+                other.phoneVerified == phoneVerified) &&
+            (identical(other.phoneNumber, phoneNumber) ||
+                other.phoneNumber == phoneNumber) &&
+            (identical(other.handle, handle) || other.handle == handle) &&
+            (identical(other.handleUpdatedAt, handleUpdatedAt) ||
+                other.handleUpdatedAt == handleUpdatedAt));
   }
 
   @JsonKey(ignore: true)
@@ -340,7 +482,13 @@ class _$UserModelImpl implements _UserModel {
       locale,
       createdAt,
       lastActiveAt,
-      moriBalance);
+      moriBalance,
+      points,
+      const DeepCollectionEquality().hash(_socialLinks),
+      phoneVerified,
+      phoneNumber,
+      handle,
+      handleUpdatedAt);
 
   @JsonKey(ignore: true)
   @override
@@ -368,7 +516,13 @@ abstract class _UserModel implements UserModel {
       final String? locale,
       final DateTime? createdAt,
       final DateTime? lastActiveAt,
-      final int moriBalance}) = _$UserModelImpl;
+      final int moriBalance,
+      final int points,
+      final Map<String, String> socialLinks,
+      final bool phoneVerified,
+      final String? phoneNumber,
+      final String handle,
+      final DateTime? handleUpdatedAt}) = _$UserModelImpl;
 
   factory _UserModel.fromJson(Map<String, dynamic> json) =
       _$UserModelImpl.fromJson;
@@ -395,6 +549,23 @@ abstract class _UserModel implements UserModel {
   DateTime? get lastActiveAt;
   @override
   int get moriBalance;
+  @override // 이슈 #749 — 질문게시판 답글 채택 포인트
+  int get points;
+  @override // 이슈 #750 — 마이페이지 SNS 입력 필드.
+// keys: 'instagram', 'youtube', 'blog', 'kakaoId', 'whatsapp', 'email'
+// 값은 사용자가 입력한 URL/ID. Pro 회원만 글 작성 시 노출됨.
+  Map<String, String> get socialLinks;
+  @override // 이슈 #750 — 휴대폰 인증 여부. Pro 결제 게이트의 선결 조건.
+  bool get phoneVerified;
+  @override // 이슈 #750 — 인증된 휴대폰 번호 (E.164 형식 권장: +821012345678).
+// UI 노출 시 마스킹 처리 (예: 010-****-1234).
+  String? get phoneNumber;
+  @override // 이슈 #771 — 회원 닉네임(@핸들) 시스템.
+// 형식: ^[a-z0-9_]{3,20}$ (소문자/숫자/언더스코어 3~20자).
+// handles/{handle} 컬렉션에 reservation 문서로 중복 방지.
+  String get handle;
+  @override // 이슈 #771 — 핸들 마지막 변경 시각. 30일 변경 제한 기준.
+  DateTime? get handleUpdatedAt;
   @override
   @JsonKey(ignore: true)
   _$$UserModelImplCopyWith<_$UserModelImpl> get copyWith =>
@@ -688,7 +859,14 @@ mixin _$UserUsage {
   int get projectCount => throw _privateConstructorUsedError;
   int get counterCount => throw _privateConstructorUsedError;
   int get editorSaveCount => throw _privateConstructorUsedError;
-  int get postsThisMonth => throw _privateConstructorUsedError;
+  int get postsThisMonth =>
+      throw _privateConstructorUsedError; // 이슈 #754 — 마이페이지 AI 사용량 블록용 월별 카운터.
+// 매월 1일 reset (서버 또는 클라이언트 진입 시 monthKey 비교 후 0 리셋).
+  int get aiConversionThisMonth =>
+      throw _privateConstructorUsedError; // YYYY-MM 형식. 다음 달 진입 시 aiConversionThisMonth=0으로 리셋 트리거.
+  String get aiConversionMonthKey =>
+      throw _privateConstructorUsedError; // 이슈 #754 — 사용자가 업로드한 이미지/파일 바이트 누적. 스토리지 추정용.
+  int get storageBytesUsed => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -706,7 +884,10 @@ abstract class $UserUsageCopyWith<$Res> {
       int projectCount,
       int counterCount,
       int editorSaveCount,
-      int postsThisMonth});
+      int postsThisMonth,
+      int aiConversionThisMonth,
+      String aiConversionMonthKey,
+      int storageBytesUsed});
 }
 
 /// @nodoc
@@ -727,6 +908,9 @@ class _$UserUsageCopyWithImpl<$Res, $Val extends UserUsage>
     Object? counterCount = null,
     Object? editorSaveCount = null,
     Object? postsThisMonth = null,
+    Object? aiConversionThisMonth = null,
+    Object? aiConversionMonthKey = null,
+    Object? storageBytesUsed = null,
   }) {
     return _then(_value.copyWith(
       swatchCount: null == swatchCount
@@ -749,6 +933,18 @@ class _$UserUsageCopyWithImpl<$Res, $Val extends UserUsage>
           ? _value.postsThisMonth
           : postsThisMonth // ignore: cast_nullable_to_non_nullable
               as int,
+      aiConversionThisMonth: null == aiConversionThisMonth
+          ? _value.aiConversionThisMonth
+          : aiConversionThisMonth // ignore: cast_nullable_to_non_nullable
+              as int,
+      aiConversionMonthKey: null == aiConversionMonthKey
+          ? _value.aiConversionMonthKey
+          : aiConversionMonthKey // ignore: cast_nullable_to_non_nullable
+              as String,
+      storageBytesUsed: null == storageBytesUsed
+          ? _value.storageBytesUsed
+          : storageBytesUsed // ignore: cast_nullable_to_non_nullable
+              as int,
     ) as $Val);
   }
 }
@@ -766,7 +962,10 @@ abstract class _$$UserUsageImplCopyWith<$Res>
       int projectCount,
       int counterCount,
       int editorSaveCount,
-      int postsThisMonth});
+      int postsThisMonth,
+      int aiConversionThisMonth,
+      String aiConversionMonthKey,
+      int storageBytesUsed});
 }
 
 /// @nodoc
@@ -785,6 +984,9 @@ class __$$UserUsageImplCopyWithImpl<$Res>
     Object? counterCount = null,
     Object? editorSaveCount = null,
     Object? postsThisMonth = null,
+    Object? aiConversionThisMonth = null,
+    Object? aiConversionMonthKey = null,
+    Object? storageBytesUsed = null,
   }) {
     return _then(_$UserUsageImpl(
       swatchCount: null == swatchCount
@@ -807,6 +1009,18 @@ class __$$UserUsageImplCopyWithImpl<$Res>
           ? _value.postsThisMonth
           : postsThisMonth // ignore: cast_nullable_to_non_nullable
               as int,
+      aiConversionThisMonth: null == aiConversionThisMonth
+          ? _value.aiConversionThisMonth
+          : aiConversionThisMonth // ignore: cast_nullable_to_non_nullable
+              as int,
+      aiConversionMonthKey: null == aiConversionMonthKey
+          ? _value.aiConversionMonthKey
+          : aiConversionMonthKey // ignore: cast_nullable_to_non_nullable
+              as String,
+      storageBytesUsed: null == storageBytesUsed
+          ? _value.storageBytesUsed
+          : storageBytesUsed // ignore: cast_nullable_to_non_nullable
+              as int,
     ));
   }
 }
@@ -819,7 +1033,10 @@ class _$UserUsageImpl implements _UserUsage {
       this.projectCount = 0,
       this.counterCount = 0,
       this.editorSaveCount = 0,
-      this.postsThisMonth = 0});
+      this.postsThisMonth = 0,
+      this.aiConversionThisMonth = 0,
+      this.aiConversionMonthKey = '',
+      this.storageBytesUsed = 0});
 
   factory _$UserUsageImpl.fromJson(Map<String, dynamic> json) =>
       _$$UserUsageImplFromJson(json);
@@ -839,10 +1056,23 @@ class _$UserUsageImpl implements _UserUsage {
   @override
   @JsonKey()
   final int postsThisMonth;
+// 이슈 #754 — 마이페이지 AI 사용량 블록용 월별 카운터.
+// 매월 1일 reset (서버 또는 클라이언트 진입 시 monthKey 비교 후 0 리셋).
+  @override
+  @JsonKey()
+  final int aiConversionThisMonth;
+// YYYY-MM 형식. 다음 달 진입 시 aiConversionThisMonth=0으로 리셋 트리거.
+  @override
+  @JsonKey()
+  final String aiConversionMonthKey;
+// 이슈 #754 — 사용자가 업로드한 이미지/파일 바이트 누적. 스토리지 추정용.
+  @override
+  @JsonKey()
+  final int storageBytesUsed;
 
   @override
   String toString() {
-    return 'UserUsage(swatchCount: $swatchCount, projectCount: $projectCount, counterCount: $counterCount, editorSaveCount: $editorSaveCount, postsThisMonth: $postsThisMonth)';
+    return 'UserUsage(swatchCount: $swatchCount, projectCount: $projectCount, counterCount: $counterCount, editorSaveCount: $editorSaveCount, postsThisMonth: $postsThisMonth, aiConversionThisMonth: $aiConversionThisMonth, aiConversionMonthKey: $aiConversionMonthKey, storageBytesUsed: $storageBytesUsed)';
   }
 
   @override
@@ -859,13 +1089,27 @@ class _$UserUsageImpl implements _UserUsage {
             (identical(other.editorSaveCount, editorSaveCount) ||
                 other.editorSaveCount == editorSaveCount) &&
             (identical(other.postsThisMonth, postsThisMonth) ||
-                other.postsThisMonth == postsThisMonth));
+                other.postsThisMonth == postsThisMonth) &&
+            (identical(other.aiConversionThisMonth, aiConversionThisMonth) ||
+                other.aiConversionThisMonth == aiConversionThisMonth) &&
+            (identical(other.aiConversionMonthKey, aiConversionMonthKey) ||
+                other.aiConversionMonthKey == aiConversionMonthKey) &&
+            (identical(other.storageBytesUsed, storageBytesUsed) ||
+                other.storageBytesUsed == storageBytesUsed));
   }
 
   @JsonKey(ignore: true)
   @override
-  int get hashCode => Object.hash(runtimeType, swatchCount, projectCount,
-      counterCount, editorSaveCount, postsThisMonth);
+  int get hashCode => Object.hash(
+      runtimeType,
+      swatchCount,
+      projectCount,
+      counterCount,
+      editorSaveCount,
+      postsThisMonth,
+      aiConversionThisMonth,
+      aiConversionMonthKey,
+      storageBytesUsed);
 
   @JsonKey(ignore: true)
   @override
@@ -887,7 +1131,10 @@ abstract class _UserUsage implements UserUsage {
       final int projectCount,
       final int counterCount,
       final int editorSaveCount,
-      final int postsThisMonth}) = _$UserUsageImpl;
+      final int postsThisMonth,
+      final int aiConversionThisMonth,
+      final String aiConversionMonthKey,
+      final int storageBytesUsed}) = _$UserUsageImpl;
 
   factory _UserUsage.fromJson(Map<String, dynamic> json) =
       _$UserUsageImpl.fromJson;
@@ -902,6 +1149,13 @@ abstract class _UserUsage implements UserUsage {
   int get editorSaveCount;
   @override
   int get postsThisMonth;
+  @override // 이슈 #754 — 마이페이지 AI 사용량 블록용 월별 카운터.
+// 매월 1일 reset (서버 또는 클라이언트 진입 시 monthKey 비교 후 0 리셋).
+  int get aiConversionThisMonth;
+  @override // YYYY-MM 형식. 다음 달 진입 시 aiConversionThisMonth=0으로 리셋 트리거.
+  String get aiConversionMonthKey;
+  @override // 이슈 #754 — 사용자가 업로드한 이미지/파일 바이트 누적. 스토리지 추정용.
+  int get storageBytesUsed;
   @override
   @JsonKey(ignore: true)
   _$$UserUsageImplCopyWith<_$UserUsageImpl> get copyWith =>

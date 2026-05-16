@@ -128,6 +128,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           onLoginEmail: _loginEmail,
                           onLoginGoogle: _loginGoogle,
                           onLoginKakao: _loginKakao,
+                          onLoginGuest: _loginGuest,
                           onShowSignUp: () => showSignUpSheet(context, ref, mounted),
                         ),
                       ),
@@ -176,6 +177,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     onLoginEmail: _loginEmail,
                     onLoginGoogle: _loginGoogle,
                     onLoginKakao: _loginKakao,
+                    onLoginGuest: _loginGuest,
                     onShowSignUp: () => showSignUpSheet(context, ref, mounted),
                   ),
                 ),
@@ -498,6 +500,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  Future<void> _loginGuest() async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    setState(() => _error = null);
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '게스트로 시작하는 중입니다.' : 'Starting as guest...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () async {
+          await ref.read(authRepositoryProvider).signInAnonymously();
+        },
+      );
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) GoRouter.of(context).go('/');
+      });
+    } catch (e) {
+      if (!mounted) return;
+      final msg = isKorean
+          ? '게스트 로그인에 실패했어요. 잠시 후 다시 시도해 주세요.'
+          : 'Guest sign-in failed. Please try again later.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg)),
+      );
+      setState(() => _error = e.toString());
+    }
+  }
+
 }
 
 Future<void> showWebLoginOverlayDialog(
@@ -688,6 +718,7 @@ class LoginPanel extends ConsumerWidget {
   final VoidCallback onLoginGoogle;
   final VoidCallback onLoginKakao;
   final VoidCallback onShowSignUp;
+  final VoidCallback? onLoginGuest;
   final bool showOverlayIntro;
   final String? title;
   final String? message;
@@ -705,6 +736,7 @@ class LoginPanel extends ConsumerWidget {
     required this.onLoginGoogle,
     required this.onLoginKakao,
     required this.onShowSignUp,
+    this.onLoginGuest,
     this.showOverlayIntro = false,
     this.title,
     this.message,
@@ -935,6 +967,51 @@ class LoginPanel extends ConsumerWidget {
               ),
             ),
           ),
+          if (onLoginGuest != null) ...[
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                children: [
+                  Expanded(child: Divider(color: C.bd2)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Text(
+                      language == AppLanguage.ko ? '또는' : 'or',
+                      style: T.caption.copyWith(color: C.mu),
+                    ),
+                  ),
+                  Expanded(child: Divider(color: C.bd2)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: onLoginGuest,
+                icon: Icon(Icons.person_outline_rounded, size: 18, color: C.lvD),
+                label: Text(
+                  language == AppLanguage.ko ? '게스트로 시작하기' : 'Continue as Guest',
+                  style: T.bodyBold.copyWith(color: C.lvD),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  side: BorderSide(color: C.lv.withValues(alpha: 0.40)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  backgroundColor: Colors.white.withValues(alpha: 0.60),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              language == AppLanguage.ko
+                  ? '회원가입 없이 바로 사용. 나중에 계정 만들 수 있어요.'
+                  : 'Use without signing up. You can create an account later.',
+              style: T.caption.copyWith(color: C.mu),
+              textAlign: TextAlign.center,
+            ),
+          ],
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,

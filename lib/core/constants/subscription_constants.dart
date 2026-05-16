@@ -7,6 +7,10 @@ class SubscriptionConstants {
   static const int maxFreeCounters = 1;
   static const int maxFreePostsPerMonth = 5;
   static const int maxFreeEditorSaves = 0;
+  // 이슈 #754 — Free 플랜 월간 AI 변환 횟수.
+  static const int maxFreeAiConversionPerMonth = 3;
+  // 이슈 #754 — Free 플랜 스토리지 추정 한도 (100MB = 100 * 1024 * 1024 bytes).
+  static const int maxFreeStorageBytes = 100 * 1024 * 1024;
 
   // ── Starter 플랜 한도 ──────────────────────────────────────
   static const int maxStarterEditorSaves = 10;
@@ -40,6 +44,10 @@ class SubscriptionConstants {
   // ── 심볼 SVG 본문 영속 캐시 (오프라인 도안에디터 보장) ─────
   // 키: symbolId 또는 URL hash, 값: { 'svg': '<svg ...>...', 'fetchedAt': ms }
   static const String boxKnitSymbolSvgCache = 'knit_symbol_svg_cache';
+
+  // 홈 즐겨찾기 — 사용자가 별표한 화면 카드 목록.
+  // 키: screenId, 값: { title, iconCode, path, accent(int color), addedAt(ms) }
+  static const String boxFavorites = 'favorites';
 
   // ── #704 Phase A-B: PatternSession Hive 폴백 캐시 ─────────
   static const String boxPatternSessionHiveCache = 'pattern_session_hive_cache';

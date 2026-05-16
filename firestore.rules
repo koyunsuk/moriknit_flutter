@@ -44,6 +44,25 @@ service cloud.firestore {
       return false;
     }
 
+    // ── 핸들 reservation (이슈 #771) ────────────────────────────────────────────
+    // handles/{handle} : 문서 ID = 소문자 normalized handle
+    //   data: { userId, displayHandle, reservedAt }
+    // 정책:
+    //   - read: 로그인 사용자 (중복 체크/멘션 해소)
+    //   - create: 자기 자신 + 형식 검증 (^[a-z0-9_]{3,20}$) + 미존재
+    //   - update: deny (변경은 delete + create 트랜잭션으로만)
+    //   - delete: 자기 자신 또는 admin
+    match /handles/{handle} {
+      allow read: if isLoggedIn();
+      allow create: if isLoggedIn()
+                   && request.resource.data.userId == request.auth.uid
+                   && handle.matches('^[a-z0-9_]{3,20}$')
+                   && request.resource.data.displayHandle == handle;
+      allow update: if false;
+      allow delete: if isLoggedIn()
+                   && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
     // ── 사용자 프로필 ───────────────────────────────────────────────────────────
     match /users/{uid} {
       allow read: if isLoggedIn();

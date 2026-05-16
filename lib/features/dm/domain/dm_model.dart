@@ -5,6 +5,8 @@ class DmRoom {
   final List<String> participants;
   final Map<String, String> participantNames;
   final Map<String, String> participantPhotos;
+  /// 이슈 #771 — 참여자별 핸들(@아이디) 스냅샷.
+  final Map<String, String> participantHandles;
   final String lastMessage;
   final DateTime lastMessageAt;
   final Map<String, int> unreadCount;
@@ -14,6 +16,7 @@ class DmRoom {
     required this.participants,
     required this.participantNames,
     this.participantPhotos = const {},
+    this.participantHandles = const {},
     this.lastMessage = '',
     required this.lastMessageAt,
     this.unreadCount = const {},
@@ -26,6 +29,7 @@ class DmRoom {
       participants: List<String>.from(data['participants'] as List? ?? const <String>[]),
       participantNames: Map<String, String>.from(data['participantNames'] as Map? ?? const <String, String>{}),
       participantPhotos: Map<String, String>.from(data['participantPhotos'] as Map? ?? const <String, String>{}),
+      participantHandles: Map<String, String>.from(data['participantHandles'] as Map? ?? const <String, String>{}),
       lastMessage: data['lastMessage'] as String? ?? '',
       lastMessageAt: (data['lastMessageAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       unreadCount: Map<String, int>.from(
@@ -47,6 +51,12 @@ class DmRoom {
   String otherPhoto(String myUid) {
     final other = otherUid(myUid);
     return participantPhotos[other] ?? '';
+  }
+
+  /// 이슈 #771 — 상대방의 핸들(@아이디). 없으면 빈 문자열.
+  String otherHandle(String myUid) {
+    final other = otherUid(myUid);
+    return participantHandles[other] ?? '';
   }
 
   /// Returns the unread count for the given user.

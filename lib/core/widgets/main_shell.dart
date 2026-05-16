@@ -17,6 +17,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'common_widgets.dart';
 import 'offline_listener.dart';
+import '../../features/favorites/data/favorites_provider.dart';
 import '../../features/project/presentation/widgets/project_start_sheet.dart';
 
 class MainShell extends ConsumerStatefulWidget {
@@ -154,11 +155,65 @@ class _MainShellState extends ConsumerState<MainShell> with TickerProviderStateM
       MoriTabDestination(Icons.person_rounded, t.my, C.tx, avatarUrl: avatarUrl, avatarInitial: authUser == null ? null : avatarInitial, avatarPreset: avatarPreset),
     ];
 
-    final speedItems = [
+    // 이슈 #729 — 즐겨찾기 항목 동적 추가 (사용자가 ⭐로 즐겨찾기한 화면).
+    final favorites = ref.watch(favoriteScreensProvider).valueOrNull ?? const [];
+
+    // #730/#766 — 현재 화면을 즐겨찾기 토글하는 ⭐ 퀵 액션.
+    final currentFav = ref.watch(currentScreenFavoriteProvider);
+    final favoriteIds = ref.watch(favoriteScreenIdsProvider);
+    final isCurrentFavorited = currentFav != null && favoriteIds.contains(currentFav.screenId);
+
+    final speedItems = <_SpeedItem>[
+      // ⭐ 현재 화면 즐겨찾기 토글 (최상단)
+      if (currentFav != null)
+        _SpeedItem(
+          icon: isCurrentFavorited ? Icons.star_rounded : Icons.star_outline_rounded,
+          label: isCurrentFavorited ? '즐겨찾기 해제' : '즐겨찾기 추가',
+          color: C.og,
+          onTap: () async {
+            _closeFab();
+            await ref.read(favoritesRepositoryProvider).toggle(currentFav);
+            if (!context.mounted) return;
+            final isKorean = ref.read(appLanguageProvider).isKorean;
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(SnackBar(
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 2),
+                content: Text(isCurrentFavorited
+                    ? (isKorean ? '즐겨찾기에서 해제됐어요.' : 'Removed from favorites.')
+                    : (isKorean ? '즐겨찾기에 추가됐어요.' : 'Added to favorites.')),
+              ));
+          },
+        ),
       _SpeedItem(icon: Icons.folder_open_rounded, label: '새 프로젝트', color: C.lv, onTap: () { _closeFab(); showProjectStartSheet(context, ref); }),
       _SpeedItem(icon: Icons.grid_view_rounded, label: t.swatches, color: C.lmD, onTap: () { _closeFab(); context.push(Routes.swatchInput); }),
       _SpeedItem(icon: Icons.edit_note_rounded, label: '새 메모', color: C.pk, onTap: () { _closeFab(); context.push(Routes.toolsMemo); }),
       _SpeedItem(icon: Icons.exposure_plus_1_rounded, label: t.newCounter, color: C.pkD, onTap: () { _closeFab(); context.push(Routes.counterList); }),
+      // 사용자 즐겨찾기 항목들 (별표 표시 — 길게 누름 시 제거)
+      for (final fav in favorites)
+        _SpeedItem(
+          icon: fav.icon,
+          label: '⭐ ${fav.title}',
+          color: fav.accent,
+          onTap: () { _closeFab(); context.push(fav.path); },
+          onLongPress: () async {
+            await ref.read(favoritesRepositoryProvider).remove(fav.screenId);
+            if (!context.mounted) return;
+            final isKorean = ref.read(appLanguageProvider).isKorean;
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(
+                SnackBar(
+                  behavior: SnackBarBehavior.floating,
+                  duration: const Duration(seconds: 2),
+                  content: Text(
+                    isKorean ? '즐겨찾기에서 해제됐어요.' : 'Removed from favorites.',
+                  ),
+                ),
+              );
+          },
+        ),
     ];
 
     final fabSettings = ref.watch(fabSettingsProvider);
@@ -285,7 +340,15 @@ class _SpeedItem {
   final String label;
   final Color color;
   final VoidCallback onTap;
-  const _SpeedItem({required this.icon, required this.label, required this.color, required this.onTap});
+  /// 길게 누름 콜백 (즐겨찾기 항목 제거 등).
+  final VoidCallback? onLongPress;
+  const _SpeedItem({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+    this.onLongPress,
+  });
 }
 
 // ── 오른쪽 퀵 사이드바 ─────────────────────────────────────────────────────────
@@ -424,6 +487,7 @@ class _SpeedSideItem extends StatelessWidget {
           const SizedBox(width: 6),
           GestureDetector(
             onTap: item.onTap,
+            onLongPress: item.onLongPress,
             child: Container(
               width: 52,
               height: 40,

@@ -209,22 +209,103 @@ class AuthRepository {
   static const _kakaoFunctionUrl =
       'https://us-central1-moriknit-ceea9.cloudfunctions.net/kakaoCustomToken';
 
+  /// #728 — 카카오 회원가입 (signInWithKakao 호출 후 referrer/provider 등 가입 메타데이터를 users 문서에 머지).
+  /// 기존 사용자도 호출 가능 — referrerInput/referrerId 가 비어 있는 경우에만 새로 기록한다.
+  Future<UserModel?> signUpWithKakao({
+    String? referrerInput,
+    String? referrerId,
+  }) async {
+    final model = await signInWithKakao();
+    final user = _auth.currentUser;
+    if (user == null || model == null) return model;
+    try {
+      final docRef = _db.collection('users').doc(user.uid);
+      final updates = <String, dynamic>{
+        'provider': 'kakao',
+        if (user.email != null && user.email!.isNotEmpty) 'kakaoEmail': user.email,
+      };
+      if (referrerInput != null && referrerInput.isNotEmpty) {
+        updates['referrerInput'] = referrerInput;
+      }
+      if (referrerId != null && referrerId.isNotEmpty) {
+        updates['referrerId'] = referrerId;
+      }
+      await docRef.set(updates, SetOptions(merge: true))
+          .timeout(const Duration(seconds: 12));
+    } catch (_) {
+      // 메타데이터 머지 실패는 가입 자체를 막지 않음
+    }
+    return model;
+  }
+
+  /// #753 — 구글 회원가입 (signInWithGoogle 후 referrer/provider 메타데이터 머지).
+  Future<UserModel?> signUpWithGoogle({
+    String? referrerInput,
+    String? referrerId,
+  }) async {
+    final model = await signInWithGoogle();
+    final user = _auth.currentUser;
+    if (user == null || model == null) return model;
+    try {
+      final docRef = _db.collection('users').doc(user.uid);
+      final updates = <String, dynamic>{
+        'provider': 'google',
+        if (user.email != null && user.email!.isNotEmpty) 'googleEmail': user.email,
+      };
+      if (referrerInput != null && referrerInput.isNotEmpty) {
+        updates['referrerInput'] = referrerInput;
+      }
+      if (referrerId != null && referrerId.isNotEmpty) {
+        updates['referrerId'] = referrerId;
+      }
+      await docRef.set(updates, SetOptions(merge: true))
+          .timeout(const Duration(seconds: 12));
+    } catch (_) {
+      // 메타데이터 머지 실패는 가입 자체를 막지 않음
+    }
+    return model;
+  }
+
   Future<UserModel?> signInWithKakao() async {
     try {
       // 1. 카카오 로그인 (kakao_flutter_sdk 웹 미지원 — 모바일 전용)
       if (kIsWeb) {
         throw Exception('카카오 로그인은 모바일 앱에서만 지원합니다.');
       }
+
+      // #733 — 이전 카카오 세션을 완전 초기화하여 동의 화면을 항상 표시.
+      // logout()만으로는 디바이스에 캐시된 토큰이 남아 동의 화면이 스킵되는 사례가 있어 unlink()까지 호출.
+      // logout: 로컬 세션 토큰 삭제
+      // unlink: 앱-사용자 연결 해제 → 다음 로그인 시 카카오가 동의 화면을 무조건 표시
+      try {
+        await kakao.UserApi.instance.logout();
+      } catch (_) {
+        // 이미 로그아웃 상태인 경우 무시
+      }
+      try {
+        await kakao.UserApi.instance.unlink();
+      } catch (_) {
+        // unlink 실패(미로그인 등)는 무시 — 다음 단계에서 새로 로그인
+      }
+
+      // prompts: [Prompt.login] → 카카오 계정 재로그인 강제 (자동로그인 무시).
+      // 위 unlink() 로 앱-사용자 연결이 해제됐기 때문에 카카오 서버에서 동의 화면을 자동으로 다시 표시.
+      // 동의 항목(닉네임/프로필/이메일) 자체는 Kakao Developers 콘솔에서 활성화 필요.
+      // SDK는 -402 에러 발생 시 누락된 동의 항목을 자동으로 추가 요청한다.
       kakao.OAuthToken token;
       if (await kakao.isKakaoTalkInstalled()) {
         try {
           token = await kakao.UserApi.instance.loginWithKakaoTalk();
         } catch (_) {
           // 카카오톡 설치돼 있어도 사용자가 카카오톡 로그인을 취소하면 계정 로그인 폴백
-          token = await kakao.UserApi.instance.loginWithKakaoAccount();
+          token = await kakao.UserApi.instance.loginWithKakaoAccount(
+            prompts: [kakao.Prompt.login],
+          );
         }
       } else {
-        token = await kakao.UserApi.instance.loginWithKakaoAccount();
+        token = await kakao.UserApi.instance.loginWithKakaoAccount(
+          prompts: [kakao.Prompt.login],
+        );
       }
 
       // 2. 현재 익명 사용자이면 ID 토큰을 함께 전달해 uid를 유지한 채 업그레이드
@@ -348,6 +429,102 @@ class AuthRepository {
   Future<void> updateDisplayName(String uid, String displayName) async {
     await _db.collection('users').doc(uid).update({'displayName': displayName});
     await _auth.currentUser?.updateDisplayName(displayName);
+  }
+
+  /// 이슈 #750 — 마이페이지 프로필 추가정보 저장 (자기소개 + SNS 링크).
+  /// users/{uid} 문서에 merge 방식으로 저장. 한쪽만 업데이트도 허용.
+  Future<void> updateProfileExtras({
+    required String uid,
+    String? bio,
+    Map<String, String>? socialLinks,
+  }) async {
+    final updates = <String, dynamic>{};
+    if (bio != null) updates['bio'] = bio;
+    if (socialLinks != null) {
+      // 빈 값(공백) 제거 후 저장.
+      final cleaned = <String, String>{};
+      socialLinks.forEach((key, value) {
+        final trimmed = value.trim();
+        if (trimmed.isNotEmpty) cleaned[key] = trimmed;
+      });
+      updates['socialLinks'] = cleaned;
+    }
+    if (updates.isEmpty) return;
+    await _db
+        .collection('users')
+        .doc(uid)
+        .set(updates, SetOptions(merge: true))
+        .timeout(const Duration(seconds: 12));
+  }
+
+  /// 이슈 #750 — 휴대폰 인증 코드 전송 (Firebase Phone Auth).
+  ///
+  /// [phoneNumber]: E.164 형식 (예: '+821012345678').
+  /// [codeSent]: SMS 코드 전송 완료 시 호출. (verificationId, resendToken) 전달.
+  /// [verificationCompleted]: Android 자동 인증 감지 시 즉시 완료 콜백.
+  /// [verificationFailed]: 검증 요청 실패 시 호출.
+  /// [codeAutoRetrievalTimeout]: 자동 검색 타임아웃 시 호출.
+  ///
+  /// Firebase Console → Authentication → Phone provider 활성화 필요.
+  Future<void> sendPhoneVerificationCode({
+    required String phoneNumber,
+    required void Function(String verificationId, int? resendToken) codeSent,
+    required void Function(PhoneAuthCredential credential) verificationCompleted,
+    required void Function(FirebaseAuthException error) verificationFailed,
+    void Function(String verificationId)? codeAutoRetrievalTimeout,
+    Duration timeout = const Duration(seconds: 60),
+  }) async {
+    await _auth.verifyPhoneNumber(
+      phoneNumber: phoneNumber,
+      timeout: timeout,
+      verificationCompleted: verificationCompleted,
+      verificationFailed: verificationFailed,
+      codeSent: codeSent,
+      codeAutoRetrievalTimeout: codeAutoRetrievalTimeout ?? (_) {},
+    );
+  }
+
+  /// 이슈 #750 — 휴대폰 인증 코드 검증 + users/{uid}.phoneVerified=true 저장.
+  ///
+  /// 동작:
+  /// 1. PhoneAuthCredential 생성 → 현재 사용자에 linkWithCredential (가능한 경우)
+  ///    이미 다른 provider(Google/Kakao)로 로그인된 사용자에 phone provider 추가.
+  /// 2. linkWithCredential 실패 시 (이미 phone 연결됨 등) — Firestore 업데이트만 수행.
+  /// 3. users/{uid} 문서에 phoneVerified=true, phoneNumber 저장.
+  Future<void> verifyPhoneCode({
+    required String verificationId,
+    required String smsCode,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('로그인 상태가 아닙니다.');
+
+    final credential = PhoneAuthProvider.credential(
+      verificationId: verificationId,
+      smsCode: smsCode,
+    );
+
+    String? phoneNumber;
+    try {
+      final result = await user
+          .linkWithCredential(credential)
+          .timeout(const Duration(seconds: 20));
+      phoneNumber = result.user?.phoneNumber;
+    } on FirebaseAuthException catch (e) {
+      // 이미 휴대폰이 연결돼 있거나 다른 계정에 연결된 경우 — 검증만 시도 후 통과 처리.
+      if (e.code == 'provider-already-linked' ||
+          e.code == 'credential-already-in-use') {
+        // 이미 같은 휴대폰이 연결된 상태 — Firestore만 갱신.
+        phoneNumber = user.phoneNumber;
+      } else {
+        rethrow;
+      }
+    }
+
+    await _db.collection('users').doc(user.uid).set({
+      'phoneVerified': true,
+      if (phoneNumber != null && phoneNumber.isNotEmpty)
+        'phoneNumber': phoneNumber,
+    }, SetOptions(merge: true)).timeout(const Duration(seconds: 12));
   }
 
   /// 구독 해지 예약 토글

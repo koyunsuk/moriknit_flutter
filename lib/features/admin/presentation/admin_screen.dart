@@ -528,7 +528,7 @@ class _AdminSidebarState extends State<_AdminSidebar> {
                       child: _SidebarUtilBtn(
                         icon: Icons.open_in_new_rounded,
                         label: '앱으로',
-                        onTap: () => launchUrl(Uri.parse('https://www.moriknit.com'), mode: LaunchMode.externalApplication),
+                        onTap: () => launchUrl(Uri.parse('https://moriknit.com'), mode: LaunchMode.externalApplication),
                       ),
                     ),
                     const SizedBox(width: 6),

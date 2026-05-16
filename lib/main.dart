@@ -1,11 +1,13 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -54,6 +56,8 @@ void main() async {
       Hive.openBox<Map>(SubscriptionConstants.boxStepBlueprintUnitsHiveCache),
       // 심볼 SVG 본문 영속 캐시 — 오프라인에서 도안에디터 동작 보장
       Hive.openBox<Map>(SubscriptionConstants.boxKnitSymbolSvgCache),
+      // 홈 즐겨찾기 — 사용자가 별표한 화면 카드 목록
+      Hive.openBox<Map>(SubscriptionConstants.boxFavorites),
     ]);
   }
 
@@ -102,6 +106,8 @@ class MoriKnitApp extends ConsumerWidget {
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
+        // #768 — flutter_quill 11.x 의 필수 delegate (없으면 UnimplementedError)
+        FlutterQuillLocalizations.delegate,
       ],
       localeResolutionCallback: (deviceLocale, supportedLocales) {
         return resolveSupportedLocale(deviceLocale);
@@ -127,6 +133,12 @@ class _OAuthLinkListenerState extends ConsumerState<_OAuthLinkListener>
     with WidgetsBindingObserver {
   static const _channel = MethodChannel('moriknit/deeplink');
   bool _handledInitialUri = false;
+
+  // #738 — 게스트 휘발 정책.
+  // detached(앱 완전 종료) 시 즉시 sign out + paused 5분 이상 백그라운드 시 sign out.
+  // 일반 단기 백그라운드(다른 앱 잠깐 보기)에서는 작업 보존을 위해 유지.
+  DateTime? _pausedAt;
+  static const Duration _guestBackgroundTtl = Duration(minutes: 5);
 
   @override
   void initState() {
@@ -156,9 +168,36 @@ class _OAuthLinkListenerState extends ConsumerState<_OAuthLinkListener>
       ref.read(ravelryAuthProvider.notifier).refreshSession();
       // 이슈 #704 Phase 2 — 포그라운드 복귀 시 pending op 처리 (활성화)
       ref.read(syncOrchestratorProvider).syncAll();
+      // #738 — 게스트 모드: 백그라운드 5분 이상이면 sign out (휘발성)
+      _maybeSignOutGuestAfterLongBackground();
+      _pausedAt = null;
     } else if (state == AppLifecycleState.paused) {
       // 이슈 #704 Phase 2 — 백그라운드 진입 시 pending flush (활성화)
       ref.read(syncOrchestratorProvider).flushPending();
+      // #738 — 게스트 휘발 타이머 시작 (다른 앱 잠깐 보기는 보호)
+      _pausedAt = DateTime.now();
+    } else if (state == AppLifecycleState.detached) {
+      // #738 — 앱 완전 종료 시: 익명 사용자는 즉시 sign out (게스트 휘발 정책)
+      _signOutIfGuest();
+    }
+  }
+
+  /// 백그라운드 5분 이상이면 익명 사용자 sign out.
+  void _maybeSignOutGuestAfterLongBackground() {
+    final pausedAt = _pausedAt;
+    if (pausedAt == null) return;
+    final elapsed = DateTime.now().difference(pausedAt);
+    if (elapsed >= _guestBackgroundTtl) {
+      _signOutIfGuest();
+    }
+  }
+
+  /// 익명 사용자일 때만 signOut — fire-and-forget.
+  void _signOutIfGuest() {
+    final auth = FirebaseAuth.instance;
+    final user = auth.currentUser;
+    if (user != null && user.isAnonymous) {
+      auth.signOut().catchError((_) {});
     }
   }
 

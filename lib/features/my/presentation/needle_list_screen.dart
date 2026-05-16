@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/localization/app_language.dart';
+import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_shell_scaffold.dart';
@@ -28,6 +29,13 @@ class NeedleListScreen extends ConsumerWidget {
     return AppShellScaffold(
       title: t.needles,
       subtitle: t.manageNeedles,
+      // 즐겨찾기 ⭐ 자동 prepend (이슈 #723 Phase B)
+      favoriteScreenId: 'needles',
+      favoriteTitle: isKorean ? '나의 바늘' : 'My Needles',
+      favoriteIcon: Icons.straighten_rounded,
+      favoritePath: Routes.needles,
+      favoriteAccent: C.lmD,
+      favoriteIsKorean: isKorean,
       aboveBody: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
         child: SummaryCard_Detail(

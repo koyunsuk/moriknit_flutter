@@ -11,6 +11,7 @@ import 'package:video_player/video_player.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import '../../../core/localization/app_language.dart';
+import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_shell_scaffold.dart';
@@ -88,6 +89,13 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
       title: isKorean ? '클라스' : 'Class',
       subtitle: isKorean ? '유튜브 링크로 뜨개 강의를 모아두는 임시 보드예요.' : 'A temporary board for knitting lessons with YouTube links.',
       showBgOrbs: false,
+      // 즐겨찾기 ⭐ 자동 prepend (이슈 #723 Phase B)
+      favoriteScreenId: 'course',
+      favoriteTitle: isKorean ? '강의실' : 'Class',
+      favoriteIcon: Icons.play_lesson_rounded,
+      favoritePath: Routes.toolsCourse,
+      favoriteAccent: C.lv,
+      favoriteIsKorean: isKorean,
       aboveBody: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
         child: Builder(

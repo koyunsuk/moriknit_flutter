@@ -1,10 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_quill/flutter_quill.dart' as fq;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -14,6 +15,7 @@ import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/widgets/handle_mention_text.dart';
 import '../../../providers/app_config_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/comment_provider.dart';
@@ -25,10 +27,11 @@ import '../../my/data/mori_service.dart';
 import '../../project/data/public_project_service.dart';
 import '../domain/comment_model.dart';
 import '../domain/guestbook_entry.dart';
+import 'community_post_editor_screen.dart';
 import 'gallery_detail_page.dart';
+import 'widgets/youtube_embed_card.dart';
 import '../domain/post_model.dart';
 
-const _categoryKeys = ['all', 'daily', 'showcase', 'questions', 'pattern_share'];
 
 class CommunityScreen extends ConsumerWidget {
   const CommunityScreen({super.key});
@@ -113,180 +116,32 @@ class CommunityScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _showWriteSheet(BuildContext context, WidgetRef ref, String uid, String authorName) async {
-    final isKorean = ref.read(appLanguageProvider).isKorean;
-    final authorPhotoUrl = ref.read(currentUserProvider).valueOrNull?.photoURL ?? '';
-    final titleCtrl = TextEditingController();
-    final contentCtrl = TextEditingController();
-    String category = _categoryKeys.first;
-    final images = <Uint8List>[];
-    final files = <Map<String, dynamic>>[];
-    var loading = false;
+  /// 이슈 #747 — 글쓰기 진입점. BottomSheet → 풀스크린 에디터로 변경.
+  Future<void> _showWriteSheet(
+    BuildContext context,
+    WidgetRef ref,
+    String uid,
+    String authorName,
+  ) async {
+    final profile = ref.read(currentUserProvider).valueOrNull;
+    final authorPhotoUrl = profile?.photoURL ?? '';
+    final authorHandle = profile?.handle ?? '';
+    // #761 — 작성자 등급 스냅샷 ('free' | 'pro' | 'business')
+    final authorTier = profile?.subscription.planId ?? 'free';
+    final socialSnapshot = (profile?.socialLinks.isNotEmpty ?? false)
+        ? Map<String, String>.from(profile!.socialLinks)
+        : null;
 
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: C.bg,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: StatefulBuilder(
-          builder: (ctx, setState) => SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-            child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(isKorean ? '새 글쓰기' : 'New post', style: T.h3),
-                  const Spacer(),
-                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
-                ],
-              ),
-              const SizedBox(height: 10),
-              TextField(controller: titleCtrl, decoration: InputDecoration(labelText: isKorean ? '제목' : 'Title')),
-              const SizedBox(height: 10),
-              TextField(controller: contentCtrl, maxLines: 4, decoration: InputDecoration(labelText: isKorean ? '내용' : 'Content')),
-              const SizedBox(height: 10),
-              Text(isKorean ? '카테고리' : 'Category', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-              const SizedBox(height: 6),
-              MoriOptionChips<String>(
-                options: _categoryKeys
-                    .where((k) => k != 'all')
-                    .map((k) => (value: k, label: _categoryLabel(k, isKorean)))
-                    .toList(),
-                selected: category,
-                onSelected: (v) => setState(() => category = v),
-              ),
-              const SizedBox(height: 10),
-              OutlinedButton.icon(
-                onPressed: images.length >= 4
-                    ? null
-                    : () async {
-                        final picker = ImagePicker();
-                        final picked = await picker.pickMultiImage(imageQuality: 80, limit: 4 - images.length);
-                        for (final file in picked) {
-                          images.add(await file.readAsBytes());
-                        }
-                        setState(() {});
-                      },
-                icon: const Icon(Icons.add_photo_alternate_rounded),
-                label: Text(isKorean
-                  ? (images.isEmpty ? '사진 추가' : '사진 추가 +${images.length}')
-                  : (images.isEmpty ? 'Add photo' : 'Add photo +${images.length}')),
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: () async {
-                  final result = await FilePicker.platform.pickFiles(withData: true, allowMultiple: true);
-                  if (result == null) return;
-                  for (final file in result.files) {
-                    if (file.bytes != null) {
-                      files.add({'name': file.name, 'bytes': file.bytes!});
-                    }
-                  }
-                  setState(() {});
-                },
-                icon: const Icon(Icons.attach_file_rounded),
-                label: Text('${isKorean ? '파일 추가' : 'Attach file'} (${files.length})'),
-              ),
-              if (images.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 76,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: images.length,
-                    separatorBuilder: (_, _) => const SizedBox(width: 8),
-                    itemBuilder: (_, index) => ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Image.memory(images[index], width: 76, height: 76, fit: BoxFit.cover),
-                    ),
-                  ),
-                ),
-              ],
-              if (files.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: files.map((file) {
-                    return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.84),
-                        borderRadius: BorderRadius.circular(99),
-                        border: Border.all(color: C.bd),
-                      ),
-                      child: Text(file['name'] as String, style: T.caption.copyWith(color: C.tx2)),
-                    );
-                  }).toList(),
-                ),
-              ],
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: loading
-                      ? null
-                      : () async {
-                          final missing = <String>[];
-                          if (titleCtrl.text.trim().isEmpty) missing.add(isKorean ? '제목' : 'Title');
-                          if (contentCtrl.text.trim().isEmpty) missing.add(isKorean ? '내용' : 'Content');
-                          if (missing.isNotEmpty) {
-                            await showMissingFieldsDialog(ctx, missing: missing, isKorean: isKorean);
-                            return;
-                          }
-                          setState(() => loading = true);
-                          try {
-                            await runWithMoriLoadingDialog<void>(
-                              ctx,
-                              message: isKorean ? '게시하는 중입니다.' : 'Posting...',
-                              subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
-                              task: () async {
-                                final repo = ref.read(postRepositoryProvider);
-                                final imageUrls = images.isEmpty ? <String>[] : await repo.uploadImages(uid, images);
-                                final attachmentUrls = files.isEmpty ? <String>[] : await repo.uploadFiles(uid, files);
-                                await repo.createPost(
-                                  PostModel(
-                                    id: '',
-                                    uid: uid,
-                                    authorName: authorName.isEmpty ? (isKorean ? '익명' : 'Anonymous') : authorName,
-                                    authorPhotoUrl: authorPhotoUrl,
-                                    category: category,
-                                    title: titleCtrl.text.trim(),
-                                    content: contentCtrl.text.trim(),
-                                    imageUrls: imageUrls,
-                                    attachmentUrls: attachmentUrls,
-                                    attachmentNames: files.map((file) => file['name'] as String).toList(),
-                                    createdAt: DateTime.now(),
-                                  ),
-                                );
-                              },
-                            );
-                            if (ctx.mounted) {
-                              showSavedSnackBar(ctx, message: isKorean ? '게시되었습니다.' : 'Posted.');
-                              Navigator.pop(ctx);
-                            }
-                          } catch (_) {
-                            if (ctx.mounted) {
-                              showSaveErrorSnackBar(ctx, message: isKorean ? '게시에 실패했습니다.' : 'Failed to post.');
-                              setState(() => loading = false);
-                            }
-                          }
-                        },
-                  child: loading
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : Text(isKorean ? '게시하기' : 'Post'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
+    await pushCommunityPostEditor(
+      context,
+      uid: uid,
+      authorName: authorName,
+      // 이슈 #771 — 작성자 핸들 스냅샷
+      authorHandle: authorHandle,
+      authorPhotoUrl: authorPhotoUrl,
+      authorTier: authorTier,
+      authorSocialSnapshot: socialSnapshot,
+    );
   }
 }
 
@@ -327,8 +182,14 @@ class _CommunityPostsBlock extends ConsumerWidget {
         ? const ['전체', '일상', '작품자랑', '질문']
         : const ['All', 'Daily', 'Showcase', 'Questions'];
 
+    // #764 — 전체 게시글 카운트 실시간 연동.
+    final totalPostsCount = ref.watch(postsProvider('all')).maybeWhen(
+          data: (posts) => posts.length,
+          orElse: () => 0,
+        );
+
     return MoriBlockShell(
-      label: isKorean ? '게시글' : 'Posts',
+      label: isKorean ? '게시글 $totalPostsCount' : '$totalPostsCount Posts',
       icon: Icons.forum_rounded,
       accent: C.pkD,
       moreLabel: isKorean ? '글쓰기' : 'Write',
@@ -639,10 +500,15 @@ class _GuestbookSectionState extends ConsumerState<_GuestbookSection> {
                 scrollDirection: Axis.vertical,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 itemCount: entries.length,
-                separatorBuilder: (_, _) => Container(
-                  height: 1,
-                  margin: const EdgeInsets.symmetric(vertical: 6),
-                  color: C.bd2.withValues(alpha: 0.6),
+                // #763 — 방명록 항목 사이 점선 보더 (블록 외곽이 아닌 내부 구분선).
+                separatorBuilder: (_, _) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: CustomPaint(
+                    size: const Size(double.infinity, 1),
+                    painter: _GuestbookDashedDividerPainter(
+                      color: C.bd2.withValues(alpha: 0.7),
+                    ),
+                  ),
                 ),
                 itemBuilder: (_, i) => _GuestbookEntryChip(
                   entry: entries[i],
@@ -687,6 +553,77 @@ class _GuestbookSectionState extends ConsumerState<_GuestbookSection> {
       ),
     );
   }
+}
+
+// #763 — 방명록 항목 사이 점선 보더 painter.
+// #761 — 게시글 작성자 등급 뱃지 (Pro = PRO 라벨, Business = 👑).
+class _AuthorTierBadge extends StatelessWidget {
+  final String label;
+  final Color color;
+  final String? emoji;
+  const _AuthorTierBadge._({required this.label, required this.color, this.emoji});
+
+  factory _AuthorTierBadge.pro() {
+    return _AuthorTierBadge._(label: 'PRO', color: C.og);
+  }
+  factory _AuthorTierBadge.business() {
+    return _AuthorTierBadge._(label: 'BIZ', color: C.lmD, emoji: '👑');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (emoji != null) ...[
+            Text(emoji!, style: const TextStyle(fontSize: 9, height: 1)),
+            const SizedBox(width: 2),
+          ],
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 8,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.4,
+              color: color,
+              height: 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GuestbookDashedDividerPainter extends CustomPainter {
+  final Color color;
+  _GuestbookDashedDividerPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const dashWidth = 4.0;
+    const dashSpace = 3.0;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+    double x = 0;
+    while (x < size.width) {
+      canvas.drawLine(Offset(x, 0), Offset(x + dashWidth, 0), paint);
+      x += dashWidth + dashSpace;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_GuestbookDashedDividerPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 // 이슈 #717 — 세로 스크롤 한 줄 행 (가로 칩에서 전환).
@@ -1027,6 +964,22 @@ class _PostRowState extends ConsumerState<_PostRow> {
                               color: isOther ? C.lv : C.tx2,
                               fontWeight: FontWeight.w700,
                             )),
+                            // #761 — 작성자 등급 배지 (Pro/Business)
+                            if (post.authorTier == 'pro') ...[
+                              const SizedBox(width: 4),
+                              _AuthorTierBadge.pro(),
+                            ] else if (post.authorTier == 'business') ...[
+                              const SizedBox(width: 4),
+                              _AuthorTierBadge.business(),
+                            ],
+                            // 이슈 #771 — 작성자 @handle 표시
+                            if (post.authorHandle.isNotEmpty) ...[
+                              const SizedBox(width: 4),
+                              Text('@${post.authorHandle}', style: T.caption.copyWith(
+                                color: C.lvD,
+                                fontWeight: FontWeight.w500,
+                              )),
+                            ],
                             if (isOther) ...[
                               const SizedBox(width: 4),
                               Icon(Icons.send_rounded, size: 12, color: C.lv),
@@ -1653,7 +1606,16 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(widget.post.authorName, style: T.bodyBold),
+                              Row(
+                                children: [
+                                  Flexible(child: Text(widget.post.authorName, style: T.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                  // 이슈 #771 — 작성자 @handle 표시
+                                  if (widget.post.authorHandle.isNotEmpty) ...[
+                                    const SizedBox(width: 6),
+                                    Flexible(child: Text('@${widget.post.authorHandle}', style: T.caption.copyWith(color: C.lvD, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                  ],
+                                ],
+                              ),
                               Text(widget.post.timeAgo, style: T.caption.copyWith(color: C.mu)),
                             ],
                           ),
@@ -1683,13 +1645,26 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
                     ),
                     const SizedBox(width: 8),
                     Text(widget.post.authorName, style: T.caption.copyWith(color: C.tx2, fontWeight: FontWeight.w600)),
+                    // 이슈 #771 — 작성자 @handle 표시
+                    if (widget.post.authorHandle.isNotEmpty) ...[
+                      const SizedBox(width: 5),
+                      Text('@${widget.post.authorHandle}', style: T.caption.copyWith(color: C.lvD, fontWeight: FontWeight.w500)),
+                    ],
                     const SizedBox(width: 6),
                     Text('·', style: T.caption.copyWith(color: C.mu)),
                     const SizedBox(width: 6),
                     Text(widget.post.timeAgo, style: T.caption.copyWith(color: C.mu)),
                   ]),
                 const Divider(height: 20),
-                Text(widget.post.content, style: T.body),
+                _PostBodyView(post: widget.post),
+                if (widget.post.youtubeUrls.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  for (final url in widget.post.youtubeUrls)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: YoutubeEmbedCard(url: url),
+                    ),
+                ],
                 if (widget.post.imageUrls.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Wrap(
@@ -2181,8 +2156,10 @@ class _ForkSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // #764 — 함께뜨기 카운트 (게이트 미구현 → 임시 0).
+    const forkCount = 0;
     return MoriBlockShell(
-      label: isKorean ? '함께뜨기' : 'Knit Together',
+      label: isKorean ? '함께뜨기 $forkCount' : '$forkCount Knit Together',
       icon: Icons.call_split_rounded,
       accent: C.lvD,
       moreLabel: isKorean ? '전체 보기' : 'See all',
@@ -2414,3 +2391,75 @@ class _GalleryCardState extends ConsumerState<_GalleryCard> {
   }
 }
 
+/// 이슈 #747 — 게시글 본문 렌더러.
+/// - bodyFormat == 'quill' && bodyDelta 가 유효한 JSON: flutter_quill 읽기 전용 에디터
+/// - 그 외 (기존 plain 게시글 호환): post.content 일반 텍스트
+class _PostBodyView extends StatefulWidget {
+  final PostModel post;
+  const _PostBodyView({required this.post});
+
+  @override
+  State<_PostBodyView> createState() => _PostBodyViewState();
+}
+
+class _PostBodyViewState extends State<_PostBodyView> {
+  fq.QuillController? _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _maybeBuildController();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PostBodyView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.post.bodyDelta != widget.post.bodyDelta ||
+        oldWidget.post.bodyFormat != widget.post.bodyFormat) {
+      _ctrl?.dispose();
+      _ctrl = null;
+      _maybeBuildController();
+    }
+  }
+
+  void _maybeBuildController() {
+    if (!widget.post.isRichBody) return;
+    try {
+      final decoded = jsonDecode(widget.post.bodyDelta);
+      if (decoded is! List) return;
+      final doc = fq.Document.fromJson(decoded);
+      _ctrl = fq.QuillController(
+        document: doc,
+        selection: const TextSelection.collapsed(offset: 0),
+        readOnly: true,
+      );
+    } catch (_) {
+      // 잘못된 Delta → plain 폴백.
+      _ctrl = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ctrl = _ctrl;
+    if (ctrl == null) {
+      // 이슈 #771 — plain 본문에서 @handle 멘션을 chip으로 표시
+      return HandleMentionText(text: widget.post.content, baseStyle: T.body);
+    }
+    return fq.QuillEditor.basic(
+      controller: ctrl,
+      config: const fq.QuillEditorConfig(
+        showCursor: false,
+        autoFocus: false,
+        expands: false,
+        padding: EdgeInsets.zero,
+      ),
+    );
+  }
+}
