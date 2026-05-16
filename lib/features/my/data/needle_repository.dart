@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 
 import '../../../core/constants/subscription_constants.dart';
+import '../../../core/errors/firestore_timeout_extension.dart';
 import '../domain/needle_model.dart';
 
 class NeedleRepository {
@@ -33,7 +34,7 @@ class NeedleRepository {
         'updatedAt': FieldValue.serverTimestamp(),
         'isDirty': false,
         if (photoUrl != null && photoUrl.isNotEmpty) 'photoUrl': photoUrl,
-      });
+      }).withServerTimeout(op: 'create_needle');
 
       final saved = prepared.copyWith(id: docRef.id, isDirty: false);
       await _saveToHive(saved);
@@ -52,7 +53,7 @@ class NeedleRepository {
 
   Future<List<NeedleModel>> getNeedles() async {
     if (_uid.isEmpty) return [];
-    final snapshot = await _needlesRef.orderBy('size').get();
+    final snapshot = await _needlesRef.orderBy('size').get().withServerTimeout(op: 'get_needles');
     return snapshot.docs.map((doc) => NeedleModel.fromFirestore(doc)).toList();
   }
 
@@ -68,7 +69,7 @@ class NeedleRepository {
         'updatedAt': FieldValue.serverTimestamp(),
         'isDirty': false,
         if (photoUrl != null && photoUrl.isNotEmpty) 'photoUrl': photoUrl,
-      });
+      }).withServerTimeout(op: 'update_needle');
       return updated.copyWith(isDirty: false);
     } catch (_) {
       final dirty = updated.copyWith(isDirty: true);

@@ -677,6 +677,14 @@ exports.ravelryYarnDetail = onRequest(
 );
 
 // ── 카카오 커스텀 토큰 발급 ─────────────────────────────────
+// #728/#729 — 카카오 로그인 + 익명 → 카카오 업그레이드 흐름 지원.
+//   요청 body:
+//     { accessToken: string, anonymousIdToken?: string }
+//   anonymousIdToken 전달 시:
+//     - 익명 uid를 검증하고 그 uid를 그대로 사용해 카카오 프로필을 merge.
+//     - 익명 사용자의 데이터를 유지하면서 카카오 계정 정보만 연결.
+//   미전달 시:
+//     - 기존 흐름대로 `kakao_{kakaoId}` uid로 신규/기존 처리.
 exports.kakaoCustomToken = onRequest(
   { region: REGION, serviceAccount: 'firebase-adminsdk-fbsvc@moriknit-ceea9.iam.gserviceaccount.com' },
   async (req, res) => {
@@ -684,7 +692,7 @@ exports.kakaoCustomToken = onRequest(
     if (req.method === 'OPTIONS') { res.status(204).send(''); return; }
     if (req.method !== 'POST') { res.status(405).json({ error: 'Method Not Allowed' }); return; }
 
-    const { accessToken } = req.body;
+    const { accessToken, anonymousIdToken } = req.body || {};
     if (!accessToken) { res.status(400).json({ error: 'accessToken is required' }); return; }
 
     try {
@@ -704,16 +712,36 @@ exports.kakaoCustomToken = onRequest(
       const displayName = profile.nickname ?? '';
       const photoURL = profile.profile_image_url ?? '';
 
+      // 1) 익명 사용자 업그레이드 분기 — 익명 uid 보존
+      let uid;
+      let isUpgrade = false;
+      if (anonymousIdToken) {
+        try {
+          const decoded = await admin.auth().verifyIdToken(anonymousIdToken);
+          if (decoded.firebase?.sign_in_provider === 'anonymous') {
+            uid = decoded.uid;
+            isUpgrade = true;
+          }
+        } catch (verifyErr) {
+          console.warn('kakaoCustomToken: anonymousIdToken verify failed', verifyErr);
+        }
+      }
+
+      // 2) 일반 흐름 — kakao_{id} uid
+      if (!uid) {
+        uid = `kakao_${kakaoId}`;
+      }
+
       // Firebase 커스텀 토큰 생성
-      const uid = `kakao_${kakaoId}`;
       const customToken = await admin.auth().createCustomToken(uid, {
         provider: 'kakao',
+        kakaoId,
         displayName,
         email,
         photoURL,
       });
 
-      // Firestore 사용자 문서 upsert (신규 가입 처리)
+      // Firestore 사용자 문서 upsert
       const userRef = db.collection('users').doc(uid);
       const userDoc = await userRef.get();
       if (!userDoc.exists) {
@@ -723,6 +751,7 @@ exports.kakaoCustomToken = onRequest(
           displayName,
           photoURL,
           provider: 'kakao',
+          kakaoId,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           lastActiveAt: admin.firestore.FieldValue.serverTimestamp(),
           moriBalance: 10000,
@@ -730,13 +759,20 @@ exports.kakaoCustomToken = onRequest(
           usage: { swatchCount: 0, projectCount: 0, counterCount: 0, editorSaveCount: 0, postsThisMonth: 0 },
         });
       } else {
-        await userRef.set(
-          { displayName, photoURL, email, lastActiveAt: admin.firestore.FieldValue.serverTimestamp() },
-          { merge: true },
-        );
+        // 업그레이드: 기존 익명 문서를 카카오 정보로 보강 (기존 데이터 보존)
+        const updates = {
+          provider: 'kakao',
+          kakaoId,
+          lastActiveAt: admin.firestore.FieldValue.serverTimestamp(),
+          isAnonymous: false,
+        };
+        if (email) updates.email = email;
+        if (displayName) updates.displayName = displayName;
+        if (photoURL) updates.photoURL = photoURL;
+        await userRef.set(updates, { merge: true });
       }
 
-      res.status(200).json({ customToken });
+      res.status(200).json({ customToken, uid, isUpgrade });
     } catch (err) {
       console.error('kakaoCustomToken error:', err);
       res.status(500).json({ error: 'Internal server error' });

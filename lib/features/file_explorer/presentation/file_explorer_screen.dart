@@ -17,6 +17,7 @@ import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/dropbox_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../cloud_integrations/presentation/widgets/cloud_brand_icon.dart';
 import '../../pattern/data/pattern_repository.dart';
@@ -177,35 +178,13 @@ class _FileExplorerScreenState extends ConsumerState<FileExplorerScreen> {
   @override
   Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
-    return Scaffold(
-      body: Stack(
-        children: [
-          const BgOrbs(),
-          SafeArea(
-            child: Column(
-              children: [
-                MoriPageHeaderShell(
-                  child: MoriWideHeader(
-                    title: isKorean ? '파일 탐색기' : 'File Explorer',
-                    subtitle: isKorean
-                        ? '외부 파일을 도안 라이브러리로 가져와요'
-                        : 'Import external files into the pattern library',
-                    trailing: [
-                      IconButton(
-                        icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
-                        onPressed: () => Navigator.pop(context),
-                        tooltip: isKorean ? '뒤로' : 'Back',
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(child: _buildBody(isKorean)),
-              ],
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: !_hasSelection
+    return AppShellScaffold(
+      title: isKorean ? '파일 탐색기' : 'File Explorer',
+      subtitle: isKorean
+          ? '외부 파일을 도안 라이브러리로 가져와요'
+          : 'Import external files into the pattern library',
+      showBackButton: true,
+      bottom: !_hasSelection
           ? null
           : SafeArea(
               child: Padding(
@@ -236,6 +215,7 @@ class _FileExplorerScreenState extends ConsumerState<FileExplorerScreen> {
                 ),
               ),
             ),
+      body: _buildBody(isKorean),
     );
   }
 

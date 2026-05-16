@@ -8,6 +8,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/errors/firestore_timeout_extension.dart';
+
 class SwatchTimerState {
   final String swatchId;
   final int totalSeconds;
@@ -72,7 +74,7 @@ class SwatchTimerRepository {
   Future<SwatchTimerState> load(String swatchId) async {
     final ref = _docRef(swatchId);
     if (ref == null) return SwatchTimerState.empty(swatchId);
-    final snap = await ref.get();
+    final snap = await ref.get().withServerTimeout(op: 'load_swatch_timer');
     if (!snap.exists) return SwatchTimerState.empty(swatchId);
     return SwatchTimerState.fromMap(swatchId, snap.data() ?? {});
   }
@@ -96,7 +98,8 @@ class SwatchTimerRepository {
         .collection('users')
         .doc(uid)
         .collection('swatch_timers')
-        .get();
+        .get()
+        .withServerTimeout(op: 'swatch_timer_total_all');
     int sum = 0;
     for (final doc in snap.docs) {
       final data = doc.data();
@@ -114,7 +117,8 @@ class SwatchTimerRepository {
         .collection('users')
         .doc(uid)
         .collection('swatch_timers')
-        .get();
+        .get()
+        .withServerTimeout(op: 'swatch_timer_load_all');
     final result = <String, int>{};
     for (final doc in snap.docs) {
       final data = doc.data();
@@ -132,7 +136,7 @@ class SwatchTimerRepository {
     await ref.set({
       'currentSessionStart': FieldValue.serverTimestamp(),
       'lastUpdatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    }, SetOptions(merge: true)).withServerTimeout(op: 'swatch_timer_start');
   }
 
   Future<void> pause(String swatchId, int elapsedSeconds) async {
@@ -152,7 +156,7 @@ class SwatchTimerRepository {
         },
         SetOptions(merge: true),
       );
-    });
+    }).withServerTimeout(op: 'swatch_timer_pause_tx');
   }
 
   Future<void> reset(String swatchId) async {
@@ -162,7 +166,7 @@ class SwatchTimerRepository {
       'totalSeconds': 0,
       'currentSessionStart': null,
       'lastUpdatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    }, SetOptions(merge: true)).withServerTimeout(op: 'swatch_timer_reset');
   }
 }
 

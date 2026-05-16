@@ -154,6 +154,174 @@ class BlueprintMigration {
 
   // ── 1) 도안 → 청사진 ──────────────────────────────────────────────────────
 
+  /// 사용자 명시 트리거용 — 진행률 콜백을 받는 옛 도안 일괄 마이그레이션.
+  ///
+  /// `onProgress(current, total)`로 진행 상황 보고. 결과는 [MigrationResult] 그대로.
+  /// 내부적으로 [migratePatterns] 와 같은 멱등 로직.
+  /// 호출 단위가 1건이므로 진행률 콜백을 통해 UI 가 진행률 표시 가능.
+  Future<MigrationResult> migrateAllPatterns({
+    bool dryRun = false,
+    void Function(int current, int total)? onProgress,
+  }) async {
+    final snap = await _userPatternCharts.get();
+    final total = snap.docs.length;
+    int processed = 0;
+
+    // 진행률만 별도 트래킹하고, 본 로직은 [migratePatterns] 와 동일 멱등 처리.
+    // 도중 개별 실패가 있어도 다음 문서로 이어진다.
+    int migrated = 0, skipped = 0, errors = 0;
+    final errorMessages = <String>[];
+
+    for (final doc in snap.docs) {
+      try {
+        // 멱등 검사
+        final blueprintId = doc.id;
+        final existing = await _stepBlueprints.doc(blueprintId).get();
+        if (existing.exists &&
+            existing.data()?['migrationVersion'] == kBlueprintMigrationVersion) {
+          skipped++;
+        } else if (!dryRun) {
+          // 단일 문서 마이그레이션 — migratePatterns 의 반복 로직을 1회 실행한 효과.
+          // 본 메서드는 진행률 콜백용 래퍼이므로 핵심 로직은 [migratePatterns] 위임.
+          final result = await BlueprintMigration(uid: uid, db: _db)
+              ._migrateSinglePattern(doc);
+          if (result) {
+            migrated++;
+          } else {
+            skipped++;
+          }
+        } else {
+          migrated++; // dryRun 카운팅만
+        }
+      } catch (e) {
+        errors++;
+        errorMessages.add('pattern ${doc.id}: $e');
+      }
+      processed++;
+      onProgress?.call(processed, total);
+    }
+
+    return MigrationResult(
+      migrated: migrated,
+      skipped: skipped,
+      errors: errors,
+      errorMessages: errorMessages,
+    );
+  }
+
+  /// [migrateAllPatterns] 전용 단일 문서 마이그레이션 헬퍼.
+  /// [migratePatterns] 의 본문 로직을 1건만 적용. 멱등 검사는 호출부에서 수행 가정.
+  /// 반환값: true = 신규 작성, false = 파싱 실패로 skip.
+  Future<bool> _migrateSinglePattern(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) async {
+    pat.PatternChart? chart;
+    final raw = <String, dynamic>{...doc.data(), 'id': doc.id};
+    try {
+      chart = pat.PatternChart.fromJson(raw);
+    } catch (_) {
+      chart = null;
+    }
+    if (chart == null) return false;
+
+    final blueprintId = doc.id;
+    final title = chart.title;
+    final aiSections = chart.aiSections ?? const <ais.AiSection>[];
+    final pdfUrl = chart.pdfUrl;
+    final imageUrl = chart.imageUrl;
+    final sourceType = chart.sourceType;
+    final createdAt = chart.createdAt ?? DateTime.now();
+
+    final groups = <StepGroupMeta>[];
+    final units = <StepBlueprintUnit>[];
+    for (var gi = 0; gi < aiSections.length; gi++) {
+      final section = aiSections[gi];
+      groups.add(StepGroupMeta(
+        id: section.id,
+        title: section.title,
+        titleKo: section.titleKo,
+        order: gi,
+        unitIds: section.steps.map((s) => s.id).toList(),
+      ));
+      for (var i = 0; i < section.steps.length; i++) {
+        final step = section.steps[i];
+        units.add(StepBlueprintUnit(
+          id: step.id,
+          blueprintId: blueprintId,
+          order: gi * 1000 + i,
+          title: '',
+          instruction: step.instruction,
+          instructionKo: step.instructionKo,
+          targetRows: 0,
+          referenceImages: const [],
+          chartRegion: null,
+          isPreview: false,
+          tags: const [],
+          sourceSectionId: section.id,
+          createdAt: createdAt,
+        ));
+      }
+    }
+
+    final blueprint = StepBlueprint(
+      id: blueprintId,
+      ownerUid: uid,
+      title: title,
+      kind: BlueprintKind.pattern,
+      visibility: BlueprintVisibility.private,
+      license: const BlueprintLicense(),
+      provider: BlueprintProvider.user,
+      sourcePatternChartId: blueprintId,
+      chartAssetId: blueprintId,
+      attachedPdfUrls: pdfUrl.isEmpty ? null : [pdfUrl],
+      attachedImageUrls: imageUrl.isEmpty ? null : [imageUrl],
+      version: '1.0.0',
+      publishedVersions: const [],
+      autoSyncOwnerRuns: true,
+      members: const {},
+      discoverability: BlueprintDiscoverability.hidden,
+      isFeatured: false,
+      isCurated: false,
+      moriknitVerified: false,
+      tags: <String>[
+        'migrated:patterns',
+        'sourceType:${sourceType.name}',
+      ],
+      groups: groups,
+      ravelryPatternId: chart.ravelryPatternId,
+      forkCount: chart.forkCount,
+      assetType: chart.type.name,
+      gaugeJson: chart.gauge?.toJson(),
+      repeatRegionsJson:
+          chart.repeatRegions.map((r) => r.toJson()).toList(),
+      createdAt: createdAt,
+      updatedAt: DateTime.now(),
+    );
+
+    await _stepBlueprints.doc(blueprintId).set({
+      ...blueprint.toMap(),
+      'migrationVersion': kBlueprintMigrationVersion,
+      'migratedFromPatternChartId': blueprintId,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: false));
+
+    final batches = _chunked(units, 400);
+    for (final chunk in batches) {
+      final batch = _db.batch();
+      for (final unit in chunk) {
+        batch.set(_stepBlueprintUnits(blueprintId).doc(unit.id), {
+          ...unit.toMap(),
+          'migrationVersion': kBlueprintMigrationVersion,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: false));
+      }
+      await batch.commit();
+    }
+    return true;
+  }
+
   /// users/{uid}/pattern_charts → step_blueprints + units.
   /// blueprintId == 원본 PatternChart.id (역참조 단순화 + 멱등 키).
   Future<MigrationResult> migratePatterns({bool dryRun = false}) async {

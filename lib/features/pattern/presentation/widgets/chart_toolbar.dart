@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/mori_symbol_view.dart';
+import '../../../../core/widgets/symbol_svg_widget.dart';
 import '../../../../providers/knit_symbol_provider.dart';
 import '../../domain/crochet_symbols.dart';
 import '../../domain/knit_symbol_entry.dart';
@@ -864,12 +864,12 @@ class _CrochetSymbolCell extends StatelessWidget {
             children: [
               // 코바늘은 직접 firebaseUrl 사용 — Firestore 매핑 충돌 회피.
               if (symbol.hasSvg)
-                SvgPicture.network(
-                  symbol.firebaseUrl,
-                  width: 22,
-                  height: 22,
+                SymbolSvgWidget(
+                  symbolId: symbol.id,
+                  svgUrl: symbol.firebaseUrl,
+                  size: 22,
                   fit: BoxFit.contain,
-                  placeholderBuilder: (_) => Text(
+                  fallback: Text(
                     label.length > 4 ? label.substring(0, 4) : label,
                     style: TextStyle(fontSize: 9, color: C.tx2, fontWeight: FontWeight.w600),
                   ),

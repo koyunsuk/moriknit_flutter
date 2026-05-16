@@ -9,6 +9,7 @@ import '../../../core/localization/app_language.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/accessory_provider.dart';
 import '../../../providers/auth_provider.dart';
@@ -77,9 +78,11 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      bottomNavigationBar: SafeArea(
+    return AppShellScaffold(
+      title: widget.swatchId == null ? t.newSwatch : t.editSwatch,
+      subtitle: t.swatchHeaderSubtitle,
+      showBackButton: true,
+      bottom: SafeArea(
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -98,32 +101,7 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
           ),
         ),
       ),
-      body: Stack(
-        children: [
-          const BgOrbs(),
-          SafeArea(
-            child: Column(
-              children: [
-                Stack(
-                  children: [
-                    MoriPageHeaderShell(
-                      child: MoriWideHeader(
-                        title: widget.swatchId == null ? t.newSwatch : t.editSwatch,
-                        subtitle: t.swatchHeaderSubtitle,
-                      ),
-                    ),
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: IconButton(
-                        icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ),
-                  ],
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
+      body: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -520,12 +498,6 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
               ],
             ),
           ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 

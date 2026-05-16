@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../core/errors/firestore_timeout_extension.dart';
 import '../../pattern/domain/ai_pattern_section.dart';
 import '../../pattern/domain/pattern_chart.dart';
 import '../domain/parsed_pattern.dart';
@@ -246,7 +247,7 @@ class PatternConverterRepository {
     required String stepId,
     required bool isCompleted,
   }) async {
-    final doc = await _chartsCol.doc(patternId).get();
+    final doc = await _chartsCol.doc(patternId).get().withServerTimeout(op: 'get_pattern_chart_toggle');
     if (!doc.exists) return;
     final data = Map<String, dynamic>.from(doc.data()!);
     if ((data['id'] as String?)?.isEmpty != false) data['id'] = doc.id;
@@ -264,7 +265,7 @@ class PatternConverterRepository {
 
     await _chartsCol.doc(patternId).update({
       'aiSections': updatedSections.map((s) => s.toMap()).toList(),
-    });
+    }).withServerTimeout(op: 'update_pattern_chart_toggle');
   }
 
   /// AI 변환 도안 섹션 업데이트
@@ -272,12 +273,12 @@ class PatternConverterRepository {
     await _chartsCol.doc(patternId).update({
       'aiSections': sections.map((s) => s.toMap()).toList(),
       'updatedAt': FieldValue.serverTimestamp(),
-    });
+    }).withServerTimeout(op: 'update_pattern_chart_sections');
   }
 
   /// AI 변환 도안 삭제 (pattern_charts 기반)
   Future<void> deleteAiPattern(String patternId) async {
-    final doc = await _chartsCol.doc(patternId).get();
+    final doc = await _chartsCol.doc(patternId).get().withServerTimeout(op: 'get_pattern_chart_delete');
     if (!doc.exists) return;
     final data = Map<String, dynamic>.from(doc.data()!);
     if ((data['id'] as String?)?.isEmpty != false) data['id'] = doc.id;
@@ -289,7 +290,7 @@ class PatternConverterRepository {
         await _storage.ref(chart.pdfUrl).delete();
       } catch (_) {}
     }
-    await _chartsCol.doc(patternId).delete();
+    await _chartsCol.doc(patternId).delete().withServerTimeout(op: 'delete_pattern_chart');
   }
 
   // ─── 구버전 parsed_patterns 호환 메서드 (레거시 지원) ──────────────
@@ -304,7 +305,7 @@ class PatternConverterRepository {
 
   /// 도안 삭제 (구버전 parsed_patterns 기반)
   Future<void> deletePattern(String patternId) async {
-    final doc = await _parsedCol.doc(patternId).get();
+    final doc = await _parsedCol.doc(patternId).get().withServerTimeout(op: 'get_parsed_pattern_delete');
     if (!doc.exists) return;
     final pattern = ParsedPattern.fromFirestore(doc.id, doc.data()!);
 
@@ -313,7 +314,7 @@ class PatternConverterRepository {
         await _storage.ref(pattern.storageUrl).delete();
       } catch (_) {}
     }
-    await _parsedCol.doc(patternId).delete();
+    await _parsedCol.doc(patternId).delete().withServerTimeout(op: 'delete_parsed_pattern');
   }
 }
 

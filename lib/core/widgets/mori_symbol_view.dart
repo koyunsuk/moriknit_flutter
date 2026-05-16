@@ -15,10 +15,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../providers/knit_symbol_provider.dart';
 import '../theme/app_colors.dart';
+import 'symbol_svg_widget.dart';
 
 /// 모리니트 표준 심볼 표시 위젯 — 단일 SVG 소스 통일.
 ///
@@ -59,21 +59,16 @@ class MoriSymbolView extends ConsumerWidget {
     final urls = ref.watch(unifiedSymbolSvgUrlProvider);
     final url = urls[symbolId];
 
-    if (url == null || url.isEmpty) {
-      return _fallback();
-    }
-
-    return SizedBox(
-      width: size,
-      height: size,
-      child: SvgPicture.network(
-        url,
-        width: size,
-        height: size,
-        fit: fit,
-        colorFilter: color != null ? ColorFilter.mode(color!, BlendMode.srcIn) : null,
-        placeholderBuilder: (_) => _fallback(),
-      ),
+    // 하이브리드 캐시 사용 — Hive/인라인/네트워크 자동 폴백.
+    // url이 비어도 symbolId만으로 인라인(kKnitSymbolSvgData) 폴백 가능.
+    return SymbolSvgWidget(
+      symbolId: symbolId,
+      svgUrl: (url == null || url.isEmpty) ? null : url,
+      size: size,
+      fit: fit,
+      color: color,
+      fallbackText: fallbackText,
+      fallback: _fallback(),
     );
   }
 

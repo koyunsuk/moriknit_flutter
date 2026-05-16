@@ -13,6 +13,7 @@ import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/course_provider.dart';
@@ -83,42 +84,33 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
     final user = ref.watch(authStateProvider).valueOrNull;
     final coursesAsync = ref.watch(courseProvider);
 
-    return Scaffold(
-      backgroundColor: C.bg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            MoriPageHeaderShell(
-              child: MoriWideHeader(
-                title: isKorean ? '클라스' : 'Class',
-                subtitle: isKorean ? '유튜브 링크로 뜨개 강의를 모아두는 임시 보드예요.' : 'A temporary board for knitting lessons with YouTube links.',
-              ),
-            ),
-            // 요약카드 (고정 영역)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: Builder(
-                builder: (context) {
-                  final courses = coursesAsync.valueOrNull ?? [];
-                  final counts = _countByMediaType(courses);
-                  return SummaryCard_Detail(
-                    headers: [isKorean ? '동영상' : 'Video', isKorean ? '파일' : 'File', 'YouTube'],
-                    rows: [
-                      LibrarySummaryRowData(
-                        badge: isKorean ? '클라스' : 'Class',
-                        badgeColor: C.lv,
-                        values: ['${counts['video']}', '${counts['file']}', '${counts['youtube']}'],
-                        valueColors: [C.lv, C.pkD, C.og],
-                      ),
-                    ],
-                    addLabel: isKorean ? '추가' : 'Add',
-                    onAdd: () => _showCourseStartSheet(context, ref, isKorean),
-                  );
-                },
-              ),
-            ),
-            Expanded(
-              child: coursesAsync.when(
+    return AppShellScaffold(
+      title: isKorean ? '클라스' : 'Class',
+      subtitle: isKorean ? '유튜브 링크로 뜨개 강의를 모아두는 임시 보드예요.' : 'A temporary board for knitting lessons with YouTube links.',
+      showBgOrbs: false,
+      aboveBody: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+        child: Builder(
+          builder: (context) {
+            final courses = coursesAsync.valueOrNull ?? [];
+            final counts = _countByMediaType(courses);
+            return SummaryCard_Detail(
+              headers: [isKorean ? '동영상' : 'Video', isKorean ? '파일' : 'File', 'YouTube'],
+              rows: [
+                LibrarySummaryRowData(
+                  badge: isKorean ? '클라스' : 'Class',
+                  badgeColor: C.lv,
+                  values: ['${counts['video']}', '${counts['file']}', '${counts['youtube']}'],
+                  valueColors: [C.lv, C.pkD, C.og],
+                ),
+              ],
+              addLabel: isKorean ? '추가' : 'Add',
+              onAdd: () => _showCourseStartSheet(context, ref, isKorean),
+            );
+          },
+        ),
+      ),
+      body: coursesAsync.when(
                 loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
                 error: (_, _) => _CourseFallback(isKorean: isKorean, canAdd: user != null, onAdd: () => _showCourseStartSheet(context, ref, isKorean)),
                 data: (courses) {
@@ -211,10 +203,6 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
                   );
                 },
               ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 

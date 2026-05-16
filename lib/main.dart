@@ -16,10 +16,13 @@ import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' as kakao;
 import 'core/constants/subscription_constants.dart';
 import 'core/localization/app_language.dart';
 import 'core/router/app_router.dart';
+import 'core/sync/sync_orchestrator.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
+import 'features/pattern/data/symbol_svg_repository.dart';
 import 'firebase_options.dart';
 import 'features/ravelry/data/ravelry_auth_provider.dart';
+import 'providers/font_provider.dart';
 import 'providers/theme_provider.dart';
 
 
@@ -27,7 +30,9 @@ void main() async {
   if (kIsWeb) usePathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
 
-  GoogleFonts.config.allowRuntimeFetching = false;
+  // 폰트 선택 기능을 위해 런타임 페치 허용 (첫 사용 시 다운로드 → 캐시).
+  // 오프라인 첫 진입 시 페치 실패 → fontFamilyFallback(Noto Sans CJK KR 등)으로 자동 폴백.
+  GoogleFonts.config.allowRuntimeFetching = true;
   if (!kIsWeb) {
     await Hive.initFlutter();
     await Future.wait([
@@ -42,6 +47,13 @@ void main() async {
       Hive.openBox<Map>(SubscriptionConstants.boxCacheKnitSymbols),
       Hive.openBox<Map>(SubscriptionConstants.boxCacheEncyclopedia),
       Hive.openBox<Map>(SubscriptionConstants.boxCachePatternCharts),
+      // #704 Phase A-B — PatternSession 오프라인 폴백 캐시
+      Hive.openBox<Map>(SubscriptionConstants.boxPatternSessionHiveCache),
+      // #704 Phase 2 — StepBlueprint + units 오프라인 폴백 캐시
+      Hive.openBox<Map>(SubscriptionConstants.boxStepBlueprintsHiveCache),
+      Hive.openBox<Map>(SubscriptionConstants.boxStepBlueprintUnitsHiveCache),
+      // 심볼 SVG 본문 영속 캐시 — 오프라인에서 도안에디터 동작 보장
+      Hive.openBox<Map>(SubscriptionConstants.boxKnitSymbolSvgCache),
     ]);
   }
 
@@ -75,13 +87,14 @@ class MoriKnitApp extends ConsumerWidget {
     final router = ref.watch(appRouterProvider);
     final locale = resolveSupportedLocale(ref.watch(appLocaleProvider));
     final themeMode = ref.watch(appThemeProvider);
+    final appFont = ref.watch(fontProvider);
     C.apply(themeMode);
 
     return MaterialApp.router(
-      key: ValueKey(themeMode),
+      key: ValueKey('$themeMode-${appFont.storageKey}'),
       title: 'MoriKnit',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.current,
+      theme: AppTheme.lightWithFont(appFont),
       routerConfig: router,
       locale: locale,
       supportedLocales: supportedAppLocales,
@@ -119,12 +132,21 @@ class _OAuthLinkListenerState extends ConsumerState<_OAuthLinkListener>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // 심볼 SVG 본문 백그라운드 prefetch — 오프라인 도안에디터 보장.
+    // 사용자 체감 0 (PostFrame, fire-and-forget).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(symbolSvgRepositoryProvider).prefetchAll();
+    });
     if (!kIsWeb) {
       _channel.setMethodCallHandler(_handleMethodCall);
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         await _handleInitialUri();
       });
     }
+    // 이슈 #704 Phase 2 — 앱 시작 시 첫 sync 시도 (활성화)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(syncOrchestratorProvider).syncAll();
+    });
   }
 
   @override
@@ -132,6 +154,11 @@ class _OAuthLinkListenerState extends ConsumerState<_OAuthLinkListener>
     if (state == AppLifecycleState.resumed) {
       // 포그라운드 복귀 시 Ravelry 세션 재검증 — 토큰 만료 조기 감지
       ref.read(ravelryAuthProvider.notifier).refreshSession();
+      // 이슈 #704 Phase 2 — 포그라운드 복귀 시 pending op 처리 (활성화)
+      ref.read(syncOrchestratorProvider).syncAll();
+    } else if (state == AppLifecycleState.paused) {
+      // 이슈 #704 Phase 2 — 백그라운드 진입 시 pending flush (활성화)
+      ref.read(syncOrchestratorProvider).flushPending();
     }
   }
 

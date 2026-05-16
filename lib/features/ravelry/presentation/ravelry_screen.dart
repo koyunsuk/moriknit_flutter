@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../data/ravelry_auth_provider.dart';
 import '../data/ravelry_repository.dart';
@@ -42,34 +43,21 @@ class _RavelryScreenState extends ConsumerState<RavelryScreen>
     final auth = ref.watch(ravelryAuthProvider);
     final isKorean = ref.watch(appLanguageProvider).isKorean;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SafeArea(
-        child: Column(
-          children: [
-            MoriPageHeaderShell(
-              child: MoriWideHeader(
-                title: 'Ravelry',
-                subtitle: isKorean ? '라벨리 계정을 연결해 실과 도안을 관리하세요' : 'Connect your Ravelry account',
-                trailing: auth.isLoggedIn
-                    ? [
-                        TextButton(
-                          onPressed: () => ref.read(ravelryAuthProvider.notifier).logout(),
-                          child: Text(isKorean ? '연결 해제' : 'Disconnect',
-                              style: T.caption.copyWith(color: C.og)),
-                        ),
-                      ]
-                    : null,
+    return AppShellScaffold(
+      title: 'Ravelry',
+      subtitle: isKorean ? '라벨리 계정을 연결해 실과 도안을 관리하세요' : 'Connect your Ravelry account',
+      trailing: auth.isLoggedIn
+          ? [
+              TextButton(
+                onPressed: () => ref.read(ravelryAuthProvider.notifier).logout(),
+                child: Text(isKorean ? '연결 해제' : 'Disconnect',
+                    style: T.caption.copyWith(color: C.og)),
               ),
-            ),
-            Expanded(
-              child: auth.isLoggedIn
-                  ? _LoggedInBody(tabController: _tabController, isKorean: isKorean)
-                  : _LoginPrompt(isKorean: isKorean),
-            ),
-          ],
-        ),
-      ),
+            ]
+          : null,
+      body: auth.isLoggedIn
+          ? _LoggedInBody(tabController: _tabController, isKorean: isKorean)
+          : _LoginPrompt(isKorean: isKorean),
     );
   }
 }

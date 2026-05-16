@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/dropbox_provider.dart';
 import '../data/dropbox_auth_provider.dart';
@@ -145,38 +146,32 @@ class _DropboxExplorerScreenState
 
     final displayPath = _pathStack.length == 1 ? '/' : _currentPath;
 
-    return Scaffold(
-      backgroundColor: C.bg,
-      body: Column(
-        children: [
-          MoriPageHeaderShell(
-            child: MoriWideHeader(
-              title: isKorean ? 'Dropbox 탐색기' : 'Dropbox Explorer',
-              subtitle: displayPath,
-              trailing: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back_ios, size: 20),
-                  color: C.tx,
-                  tooltip: isKorean ? '뒤로' : 'Back',
-                  onPressed: () {
-                    if (_pathStack.length > 1) {
-                      _goUp();
-                    } else {
-                      Navigator.pop(context);
-                    }
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.refresh_rounded, size: 20),
-                  color: C.mu,
-                  tooltip: isKorean ? '새로고침' : 'Refresh',
-                  onPressed: _loading ? null : _reload,
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: !auth.isLoggedIn
+    return AppShellScaffold(
+      showBgOrbs: false,
+      useSafeArea: false,
+      title: isKorean ? 'Dropbox 탐색기' : 'Dropbox Explorer',
+      subtitle: displayPath,
+      trailing: [
+        IconButton(
+          icon: const Icon(Icons.arrow_back_ios, size: 20),
+          color: C.tx,
+          tooltip: isKorean ? '뒤로' : 'Back',
+          onPressed: () {
+            if (_pathStack.length > 1) {
+              _goUp();
+            } else {
+              Navigator.pop(context);
+            }
+          },
+        ),
+        IconButton(
+          icon: const Icon(Icons.refresh_rounded, size: 20),
+          color: C.mu,
+          tooltip: isKorean ? '새로고침' : 'Refresh',
+          onPressed: _loading ? null : _reload,
+        ),
+      ],
+      body: !auth.isLoggedIn
           ? Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
@@ -277,9 +272,6 @@ class _DropboxExplorerScreenState
                             },
                           ),
                         ),
-          ),
-        ],
-      ),
     );
   }
 }

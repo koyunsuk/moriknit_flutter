@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/async_loading_state.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/yarn_provider.dart';
@@ -27,21 +28,11 @@ class _YarnListScreenState extends ConsumerState<YarnListScreen> {
     final yarnListAsync = ref.watch(yarnListProvider);
     final count = ref.watch(yarnCountProvider);
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          const BgOrbs(),
-          SafeArea(
-            child: Column(
+    return AppShellScaffold(
+      title: isKorean ? '나의 실 라이브러리' : 'My Yarn Library',
+      subtitle: isKorean ? '보유 중인 실을 기록하세요' : 'Track your yarn stash',
+      body: Column(
               children: [
-                // 고정 헤더
-                MoriPageHeaderShell(
-                  child: MoriWideHeader(
-                    title: isKorean ? '나의 실 라이브러리' : 'My Yarn Library',
-                    subtitle: isKorean ? '보유 중인 실을 기록하세요' : 'Track your yarn stash',
-                  ),
-                ),
                 // 요약카드 틀고정
                 Consumer(
                   builder: (ctx, ref2, _) {
@@ -150,9 +141,6 @@ class _YarnListScreenState extends ConsumerState<YarnListScreen> {
                 ),
               ],
             ),
-          ),
-        ],
-      ),
     );
   }
 

@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../core/errors/firestore_timeout_extension.dart';
 import '../domain/memo_model.dart';
 
 class MemoRepository {
@@ -32,20 +33,20 @@ class MemoRepository {
       ...memo.copyWith(id: docRef.id, uid: _uid).toJson(),
       'id': docRef.id,
     };
-    await docRef.set(data);
+    await docRef.set(data).withServerTimeout(op: 'create_memo');
     return memo.copyWith(id: docRef.id, uid: _uid);
   }
 
   // ── UPDATE ────────────────────────────────────────────────
   Future<void> updateMemo(MemoModel memo) async {
     if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
-    await _memosRef(_uid).doc(memo.id).update(memo.toUpdateJson());
+    await _memosRef(_uid).doc(memo.id).update(memo.toUpdateJson()).withServerTimeout(op: 'update_memo');
   }
 
   // ── DELETE ────────────────────────────────────────────────
   Future<void> deleteMemo(String memoId) async {
     if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
-    await _memosRef(_uid).doc(memoId).delete();
+    await _memosRef(_uid).doc(memoId).delete().withServerTimeout(op: 'delete_memo');
   }
 
   // ── IMAGES ────────────────────────────────────────────────
@@ -98,7 +99,7 @@ class MemoRepository {
         'updatedAt': Timestamp.fromDate(updatedAt),
       });
     }
-    await batch.commit();
+    await batch.commit().withServerTimeout(op: 'migrate_memos_batch');
   }
 
   DateTime _parseDateTime(dynamic value) {

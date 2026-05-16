@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/needle_provider.dart';
@@ -335,16 +336,11 @@ class _SwatchDetailScreenState extends ConsumerState<SwatchDetailScreen> {
     // autoDispose 방지: 수정 모드 진입 시 provider 살아있도록 항상 watch
     ref.watch(swatchInputProvider);
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SafeArea(
-        child: Column(
-          children: [
-            MoriPageHeaderShell(
-              child: MoriWideHeader(
-                title: _isEditing ? (isKorean ? '스와치 수정' : 'Edit Swatch') : t.swatchDetails,
-                subtitle: isKorean ? '스와치 상세' : 'Swatch details',
-                trailing: _isEditing
+    return AppShellScaffold(
+      title: _isEditing ? (isKorean ? '스와치 수정' : 'Edit Swatch') : t.swatchDetails,
+      subtitle: isKorean ? '스와치 상세' : 'Swatch details',
+      showBackButton: true,
+      trailing: _isEditing
                     ? [
                         TextButton(
                           onPressed: _cancelEdit,
@@ -438,10 +434,7 @@ class _SwatchDetailScreenState extends ConsumerState<SwatchDetailScreen> {
                             ) ??
                             const SizedBox.shrink(),
                       ],
-              ),
-            ),
-            Expanded(
-              child: swatchAsync.when(
+      body: swatchAsync.when(
                 data: (swatch) {
                   if (swatch == null) {
                     return Center(child: Text(t.swatchNotFound, style: T.body.copyWith(color: C.mu)));
@@ -454,11 +447,7 @@ class _SwatchDetailScreenState extends ConsumerState<SwatchDetailScreen> {
                   child: Text(t.failedToLoadSwatch(error.toString()), style: T.body.copyWith(color: C.og)),
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: _isEditing
+      bottom: _isEditing
           ? null
           : swatchAsync.whenOrNull(
               data: (swatch) => swatch == null
@@ -944,8 +933,10 @@ class _SwatchDetailBody extends ConsumerWidget {
             // 이슈 #630 (B-5) — 작업 시간 카드 (⋮ 메뉴 의존도 낮추기)
             _SwatchTimerSummaryCard(swatch: swatch, isKorean: isKorean),
             const SizedBox(height: 12),
-            GlassCard(
-              padding: const EdgeInsets.all(16),
+            MoriBlockShell(
+              label: isKorean ? '기본 정보' : 'Basic Info',
+              icon: Icons.info_outline,
+              accent: C.lv,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -980,6 +971,7 @@ class _SwatchDetailBody extends ConsumerWidget {
               _InfoCard(
                 icon: Icons.circle_outlined,
                 title: t.needleInfo,
+                accent: C.pkD,
                 rows: [
                   if (myNeedle != null) ...[
                     if (myNeedle.name.isNotEmpty) _InfoRowData(isKorean ? '이름' : 'Name', myNeedle.name),
@@ -997,6 +989,7 @@ class _SwatchDetailBody extends ConsumerWidget {
               _InfoCard(
                 icon: Icons.texture,
                 title: t.yarnInfo,
+                accent: C.lmD,
                 rows: [
                   if (myYarn != null) ...[
                     if ((myYarn.name as String).isNotEmpty) _InfoRowData(isKorean ? '이름' : 'Name', myYarn.name as String),
@@ -1241,23 +1234,24 @@ class _InfoCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final List<_InfoRowData> rows;
+  final Color accent;
 
-  const _InfoCard({required this.icon, required this.title, required this.rows});
+  const _InfoCard({
+    required this.icon,
+    required this.title,
+    required this.rows,
+    required this.accent,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return GlassCard(
+    return MoriBlockShell(
+      label: title,
+      icon: icon,
+      accent: accent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(icon, size: 14, color: C.mu),
-              const SizedBox(width: 6),
-              Text(title, style: T.captionBold.copyWith(color: C.mu)),
-            ],
-          ),
-          const SizedBox(height: 10),
           ...rows.map(
             (row) => Padding(
               padding: const EdgeInsets.only(bottom: 6),

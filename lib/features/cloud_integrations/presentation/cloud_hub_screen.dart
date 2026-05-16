@@ -13,6 +13,7 @@ import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/dropbox_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../dropbox/data/dropbox_auth_provider.dart';
 import '../data/google_drive_auth_provider.dart';
@@ -27,50 +28,26 @@ class CloudHubScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          const BgOrbs(),
-          SafeArea(
-            child: Column(
-              children: [
-                MoriPageHeaderShell(
-                  child: MoriWideHeader(
-                    title: isKorean ? '클라우드 연결' : 'Cloud Connections',
-                    subtitle: isKorean
-                        ? '클라우드 저장소를 연결해 도안 파일을 앱에서 바로 탐색하세요.'
-                        : 'Connect cloud storage to browse pattern files directly.',
-                    trailing: [
-                      IconButton(
-                        icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
-                        onPressed: () => Navigator.pop(context),
-                        tooltip: isKorean ? '뒤로' : 'Back',
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _DropboxCard(isKorean: isKorean),
-                        const SizedBox(height: 10),
-                        _GoogleDriveCard(isKorean: isKorean),
-                        const SizedBox(height: 10),
-                        _ICloudCard(isKorean: isKorean),
-                        const SizedBox(height: 10),
-                        _OneDriveCard(isKorean: isKorean),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+    return AppShellScaffold(
+      title: isKorean ? '클라우드 연결' : 'Cloud Connections',
+      subtitle: isKorean
+          ? '클라우드 저장소를 연결해 도안 파일을 앱에서 바로 탐색하세요.'
+          : 'Connect cloud storage to browse pattern files directly.',
+      showBackButton: true,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _DropboxCard(isKorean: isKorean),
+            const SizedBox(height: 10),
+            _GoogleDriveCard(isKorean: isKorean),
+            const SizedBox(height: 10),
+            _ICloudCard(isKorean: isKorean),
+            const SizedBox(height: 10),
+            _OneDriveCard(isKorean: isKorean),
+          ],
+        ),
       ),
     );
   }

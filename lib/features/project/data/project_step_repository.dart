@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../../core/errors/firestore_timeout_extension.dart';
 import '../../counter/data/counter_repository.dart';
 import '../../counter/domain/counter_model.dart';
 import '../../pattern/domain/narrative_block.dart';
@@ -54,11 +55,11 @@ class ProjectStepRepository {
       'blockType': blockType.name,
       'createdAt': DateTime.now().toIso8601String(),
       'doneAt': null,
-    });
+    }).withServerTimeout(op: 'add_step');
   }
 
   Future<void> updateStepPhoto(String projectId, String stepId, String photoUrl) async {
-    await _stepsRef(projectId).doc(stepId).update({'photoUrl': photoUrl});
+    await _stepsRef(projectId).doc(stepId).update({'photoUrl': photoUrl}).withServerTimeout(op: 'update_step_photo');
   }
 
   Future<void> toggleStep(String projectId, ProjectStep step) async {
@@ -66,14 +67,14 @@ class ProjectStepRepository {
     await _stepsRef(projectId).doc(step.id).update({
       'isDone': nowDone,
       'doneAt': nowDone ? DateTime.now().toIso8601String() : null,
-    });
+    }).withServerTimeout(op: 'toggle_step');
     // 진행률 카운트 업데이트
     await _updateProgressCounts(projectId);
   }
 
   Future<void> _updateProgressCounts(String projectId) async {
     if (_uid.isEmpty) return;
-    final snap = await _stepsRef(projectId).get();
+    final snap = await _stepsRef(projectId).get().withServerTimeout(op: 'progress_counts_get');
     final total = snap.docs.length;
     final completed = snap.docs.where((d) => (d.data()['isDone'] as bool? ?? false)).length;
     final percent = total > 0 ? (completed / total * 100).roundToDouble() : 0.0;
@@ -86,7 +87,7 @@ class ProjectStepRepository {
       'completedStepCount': completed,
       'totalStepCount': total,
       'progressPercent': percent,
-    });
+    }).withServerTimeout(op: 'progress_counts_update');
   }
 
   Future<void> updateStep(
@@ -105,26 +106,26 @@ class ProjectStepRepository {
     };
     if (targetRow != null) updates['targetRow'] = targetRow;
     if (blockType != null) updates['blockType'] = blockType.name;
-    await _stepsRef(projectId).doc(stepId).update(updates);
+    await _stepsRef(projectId).doc(stepId).update(updates).withServerTimeout(op: 'update_step');
   }
 
   Future<void> updateNote(String projectId, String stepId, String note) async {
-    await _stepsRef(projectId).doc(stepId).update({'note': note});
+    await _stepsRef(projectId).doc(stepId).update({'note': note}).withServerTimeout(op: 'update_note');
   }
 
   Future<void> deleteStep(String projectId, String stepId) async {
-    await _stepsRef(projectId).doc(stepId).delete();
+    await _stepsRef(projectId).doc(stepId).delete().withServerTimeout(op: 'delete_step');
   }
 
   Future<void> updateStepOrder(String projectId, String stepId, int newOrder) async {
-    await _stepsRef(projectId).doc(stepId).update({'order': newOrder});
+    await _stepsRef(projectId).doc(stepId).update({'order': newOrder}).withServerTimeout(op: 'update_step_order');
   }
 
   Future<void> swapStepOrders(String projectId, String stepIdA, int newOrderA, String stepIdB, int newOrderB) async {
     final batch = _db.batch();
     batch.update(_stepsRef(projectId).doc(stepIdA), {'order': newOrderA});
     batch.update(_stepsRef(projectId).doc(stepIdB), {'order': newOrderB});
-    await batch.commit();
+    await batch.commit().withServerTimeout(op: 'swap_step_orders');
   }
 
   Future<void> addDefaultSteps(String projectId) async {
@@ -135,14 +136,14 @@ class ProjectStepRepository {
   }
 
   Future<void> copySteps(String fromProjectId, String toProjectId) async {
-    final snap = await _stepsRef(fromProjectId).orderBy('order').get();
+    final snap = await _stepsRef(fromProjectId).orderBy('order').get().withServerTimeout(op: 'copy_steps_get');
     for (final doc in snap.docs) {
       final data = Map<String, dynamic>.from(doc.data());
       data['isDone'] = false;
       data['doneAt'] = null;
       data['photoUrl'] = null;
       data['createdAt'] = DateTime.now().toIso8601String();
-      await _stepsRef(toProjectId).add(data);
+      await _stepsRef(toProjectId).add(data).withServerTimeout(op: 'copy_step_add');
     }
   }
 
@@ -218,7 +219,7 @@ class ProjectStepRepository {
         'doneAt': null,
         'sourceSectionId': sec.id,
         'sourcePatternChartId': chart.id,
-      });
+      }).withServerTimeout(op: 'add_pattern_section_step');
       order++;
     }
     await _updateProgressCounts(projectId);
@@ -283,7 +284,7 @@ class ProjectStepRepository {
         'doneAt': null,
         'sourceSectionId': sec.id,
         'sourcePatternChartId': chart.id,
-      });
+      }).withServerTimeout(op: 'add_section_step_with_counter');
 
       // 카운터 자동 생성
       final counter = CounterModel(

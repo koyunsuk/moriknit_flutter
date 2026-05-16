@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:moriknit_flutter/core/widgets/main_shell.dart';
+import 'package:moriknit_flutter/core/widgets/main_tab_back_handler.dart';
 import 'package:moriknit_flutter/features/auth/presentation/login_screen.dart';
 import 'package:moriknit_flutter/features/auth/presentation/splash_screen.dart';
 import 'package:moriknit_flutter/features/counter/presentation/counter_list_screen.dart';
@@ -39,9 +40,13 @@ import 'package:moriknit_flutter/features/project/presentation/template_detail_s
 import 'package:moriknit_flutter/features/project/presentation/template_editor_screen.dart';
 import 'package:moriknit_flutter/features/ravelry/data/ravelry_auth_provider.dart';
 import 'package:moriknit_flutter/features/swatch/presentation/swatch_detail_screen.dart';
+import 'package:moriknit_flutter/features/swatch/presentation/swatch_group_detail_screen.dart';
+import 'package:moriknit_flutter/features/swatch/presentation/swatch_group_screen.dart';
 import 'package:moriknit_flutter/features/swatch/presentation/swatch_input_screen.dart';
 import 'package:moriknit_flutter/features/swatch/presentation/swatch_list_screen.dart';
 import 'package:moriknit_flutter/features/swatch/presentation/swatch_timer_screen.dart';
+import 'package:moriknit_flutter/features/sync/presentation/conflict_inbox_screen.dart';
+import 'package:moriknit_flutter/features/blueprint/presentation/step_blueprint_editor_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/tools_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/tool_memo_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/free_timer_screen.dart';
@@ -131,7 +136,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),
         routes: [
-          GoRoute(path: Routes.home, pageBuilder: (_, _) => _noTransitionPage(const HomeScreen())),
+          GoRoute(path: Routes.home, pageBuilder: (_, _) => _noTransitionPage(const MainTabBackHandler(isHome: true, child: HomeScreen()))),
           GoRoute(
             path: Routes.projectList,
             pageBuilder: (_, _) => _noTransitionPage(const ProjectListScreen()),
@@ -146,6 +151,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             pageBuilder: (_, _) => _noTransitionPage(const SwatchListScreen()),
             routes: [
               GoRoute(path: 'input', pageBuilder: (_, _) => _fadePage(const SwatchInputScreen())),
+              // 이슈 #723 — 스와치 그룹 (:id 보다 먼저 등록 → 'groups' 가 :id로 매치되는 것 방지)
+              GoRoute(
+                path: 'groups',
+                pageBuilder: (_, _) => _fadePage(const SwatchGroupScreen()),
+                routes: [
+                  GoRoute(
+                    path: ':id',
+                    pageBuilder: (_, state) => _fadePage(
+                      SwatchGroupDetailScreen(
+                          groupId: state.pathParameters['id']!),
+                    ),
+                  ),
+                ],
+              ),
               GoRoute(path: ':id', pageBuilder: (_, state) => _fadePage(SwatchDetailScreen(swatchId: state.pathParameters['id']!))),
               GoRoute(
                 path: ':id/timer',
@@ -158,7 +177,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: Routes.tools,
-            pageBuilder: (_, _) => _noTransitionPage(const ToolsScreen()),
+            pageBuilder: (_, _) => _noTransitionPage(const MainTabBackHandler(child: ToolsScreen())),
             routes: [
               GoRoute(path: 'patterns', pageBuilder: (_, _) => _fadePage(const PatternListScreen())),
               GoRoute(path: 'pattern-gate', pageBuilder: (_, _) => _fadePage(const PatternGateScreen())),
@@ -259,7 +278,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          GoRoute(path: Routes.community, pageBuilder: (_, _) => _noTransitionPage(const CommunityScreen())),
+          GoRoute(path: Routes.community, pageBuilder: (_, _) => _noTransitionPage(const MainTabBackHandler(child: CommunityScreen()))),
           GoRoute(path: Routes.messenger, pageBuilder: (_, _) => _noTransitionPage(const DmListScreen())),
           GoRoute(
             path: Routes.dm,
@@ -281,7 +300,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: Routes.my,
-            pageBuilder: (_, _) => _noTransitionPage(const MyPageScreen()),
+            pageBuilder: (_, _) => _noTransitionPage(const MainTabBackHandler(child: MyPageScreen())),
             routes: [
               GoRoute(path: 'needles', pageBuilder: (_, _) => _fadePage(const NeedleListScreen())),
               GoRoute(path: 'accessories', pageBuilder: (_, _) => _fadePage(const AccessoryListScreen())),
@@ -320,6 +339,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
       GoRoute(path: '/counter/:id', pageBuilder: (_, state) => _fadePage(CounterScreen(counterId: state.pathParameters['id']!))),
+      // 이슈 #704 Phase 4 — 동기화 충돌 인박스
+      GoRoute(path: Routes.conflictInbox, pageBuilder: (_, _) => _fadePage(const ConflictInboxScreen())),
+      // 이슈 #687 — 단계 청사진 편집
+      GoRoute(
+        path: Routes.stepBlueprintEditor,
+        pageBuilder: (_, state) => _fadePage(
+          StepBlueprintEditorScreen(blueprintId: state.pathParameters['id']!),
+        ),
+      ),
       GoRoute(path: '/features/:featureId', pageBuilder: (_, state) => _fadePage(LandingGenericFeaturePage(featureId: state.pathParameters['featureId']!))),
       GoRoute(path: '/classes', pageBuilder: (_, _) => _fadePage(const LandingClassesScreen())),
       GoRoute(

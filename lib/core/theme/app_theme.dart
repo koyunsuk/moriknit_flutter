@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
+import '../../providers/font_provider.dart';
 import 'app_colors.dart';
 import 'async_state_theme.dart';
 import 'block_theme.dart';
@@ -400,4 +402,54 @@ class AppTheme {
           elevation: 0,
         ),
       );
+
+  /// 선택된 [AppFont]를 [light] ThemeData에 주입한다.
+  ///
+  /// - [AppFont.notoSansKr]는 외형 회귀 0을 위해 그대로 [light] 반환 (현재 동작 유지).
+  /// - 다른 폰트는 GoogleFonts.getTextTheme 으로 textTheme 재구성.
+  /// - 런타임 페치는 main.dart에서 차단되어 있어도, 첫 사용 후 캐시 시 다음 실행부터 정상 동작.
+  /// - 폰트 페치 실패 시 fallbackFonts(Noto Sans CJK KR 등)로 자동 폴백.
+  static ThemeData lightWithFont(AppFont font) {
+    final base = light;
+    if (font == AppFont.notoSansKr) return base;
+
+    final family = font.googleFontFamily;
+    final baseText = base.textTheme;
+
+    TextStyle? apply(TextStyle? style) {
+      if (style == null) return null;
+      return GoogleFonts.getFont(family, textStyle: style).copyWith(
+        fontFamilyFallback: T.fallbackFonts,
+      );
+    }
+
+    final newTextTheme = TextTheme(
+      bodyLarge: apply(baseText.bodyLarge),
+      bodyMedium: apply(baseText.bodyMedium),
+      bodySmall: apply(baseText.bodySmall),
+      titleLarge: apply(baseText.titleLarge),
+      titleMedium: apply(baseText.titleMedium),
+      titleSmall: apply(baseText.titleSmall),
+      labelLarge: apply(baseText.labelLarge),
+      labelMedium: apply(baseText.labelMedium),
+      labelSmall: apply(baseText.labelSmall),
+      headlineLarge: apply(baseText.headlineLarge),
+      headlineMedium: apply(baseText.headlineMedium),
+      headlineSmall: apply(baseText.headlineSmall),
+      displayLarge: apply(baseText.displayLarge),
+      displayMedium: apply(baseText.displayMedium),
+      displaySmall: apply(baseText.displaySmall),
+    );
+
+    final baseAppBar = base.appBarTheme;
+    final newAppBar = baseAppBar.copyWith(
+      titleTextStyle: apply(baseAppBar.titleTextStyle),
+    );
+
+    return base.copyWith(
+      textTheme: newTextTheme,
+      primaryTextTheme: newTextTheme,
+      appBarTheme: newAppBar,
+    );
+  }
 }

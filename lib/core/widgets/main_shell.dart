@@ -16,6 +16,7 @@ import '../router/app_router.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'common_widgets.dart';
+import 'offline_listener.dart';
 import '../../features/project/presentation/widgets/project_start_sheet.dart';
 
 class MainShell extends ConsumerStatefulWidget {
@@ -39,6 +40,9 @@ class _MobileParticle {
 class _MainShellState extends ConsumerState<MainShell> with TickerProviderStateMixin {
   bool _fabOpen = false;
   double _sidebarTop = 80.0; // 드래그 수직 위치
+
+  // 이슈 #727 — Android 물리 뒤로가기 "한 번 더 누르면 종료" 더블탭 시간 추적.
+  DateTime? _lastBackPress;
 
   // ── 스파클 ───────────────────────────────────────────────────────────────
   static const _sparkleEmojis = ['❤️', '🩷', '♪', '♫', '✨', '💜', '🎵', '🧶'];
@@ -118,7 +122,12 @@ class _MainShellState extends ConsumerState<MainShell> with TickerProviderStateM
     final isWide = kIsWeb || screenWidth >= 900;
 
     if (isWide) {
-      return _WebShell(locationIndex: _locationToIndex(GoRouterState.of(context).matchedLocation), child: widget.child);
+      return OfflineListener(
+        child: _WebShell(
+          locationIndex: _locationToIndex(GoRouterState.of(context).matchedLocation),
+          child: widget.child,
+        ),
+      );
     }
 
     final t = ref.watch(appStringsProvider);
@@ -156,14 +165,39 @@ class _MainShellState extends ConsumerState<MainShell> with TickerProviderStateM
     const backAlpha = 1.0;
     const speedAlpha = 1.0;
 
-    return PopScope(
+    return OfflineListener(
+      child: PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
+        // 이슈 #727 — Android 물리 뒤로가기 처리.
+        // 메인 탭 비-홈 → 홈으로 이동 (탭 히스토리 단순화)
+        // 홈 탭 최상위 → "한 번 더 누르면 종료" 더블탭 패턴
         if (currentIndex != 0) {
           if (context.mounted) context.go(Routes.home);
-        } else {
+          return;
+        }
+        final now = DateTime.now();
+        if (_lastBackPress != null &&
+            now.difference(_lastBackPress!).inSeconds < 2) {
           await SystemNavigator.pop();
+          return;
+        }
+        _lastBackPress = now;
+        if (context.mounted) {
+          final isKorean =
+              ref.read(appLanguageProvider).isKorean;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                isKorean
+                    ? '한 번 더 누르면 종료돼요'
+                    : 'Press back again to exit',
+              ),
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
         }
       },
       child: Scaffold(
@@ -228,6 +262,7 @@ class _MainShellState extends ConsumerState<MainShell> with TickerProviderStateM
           ],
         ),
         bottomNavigationBar: MoriTabBar(currentIndex: currentIndex, tabs: tabs, onTap: (i) => _onTap(context, i)),
+      ),
       ),
     );
   }

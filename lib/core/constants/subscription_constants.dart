@@ -37,6 +37,19 @@ class SubscriptionConstants {
   static const String boxCacheEncyclopedia = 'cache_encyclopedia';
   static const String boxCachePatternCharts = 'cache_pattern_charts';
 
+  // ── 심볼 SVG 본문 영속 캐시 (오프라인 도안에디터 보장) ─────
+  // 키: symbolId 또는 URL hash, 값: { 'svg': '<svg ...>...', 'fetchedAt': ms }
+  static const String boxKnitSymbolSvgCache = 'knit_symbol_svg_cache';
+
+  // ── #704 Phase A-B: PatternSession Hive 폴백 캐시 ─────────
+  static const String boxPatternSessionHiveCache = 'pattern_session_hive_cache';
+
+  // ── #704 Phase 2: StepBlueprint Hive 폴백 캐시 ────────────
+  // "종이 도안 대체성" — 오프라인에서 단계가 안 보이면 카운터/타이머 무의미.
+  static const String boxStepBlueprintsHiveCache = 'step_blueprints_hive_cache';
+  static const String boxStepBlueprintUnitsHiveCache =
+      'step_blueprint_units_hive_cache';
+
   // ── Sync ───────────────────────────────────────────────────
   static const int syncIntervalMinutes = 30;
 }

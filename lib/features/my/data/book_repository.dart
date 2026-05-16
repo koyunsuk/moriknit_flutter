@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../core/errors/firestore_timeout_extension.dart';
 import '../domain/book_model.dart';
 
 class BookRepository {
@@ -30,7 +31,7 @@ class BookRepository {
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
       'isDirty': false,
-    });
+    }).withServerTimeout(op: 'create_book');
 
     return prepared.copyWith(id: docRef.id, isDirty: false);
   }
@@ -47,7 +48,7 @@ class BookRepository {
   Future<List<BookModel>> getBooks() async {
     if (_uid.isEmpty) return [];
     final snapshot =
-        await _booksRef.orderBy('createdAt', descending: true).get();
+        await _booksRef.orderBy('createdAt', descending: true).get().withServerTimeout(op: 'get_books');
     return snapshot.docs
         .map((doc) => BookModel.fromFirestore(doc))
         .toList();
@@ -55,7 +56,7 @@ class BookRepository {
 
   Future<BookModel?> getBook(String id) async {
     if (_uid.isEmpty || id.isEmpty) return null;
-    final doc = await _booksRef.doc(id).get();
+    final doc = await _booksRef.doc(id).get().withServerTimeout(op: 'get_book');
     if (!doc.exists) return null;
     return BookModel.fromFirestore(doc);
   }
@@ -69,7 +70,7 @@ class BookRepository {
       ...updated.toJson(),
       'updatedAt': FieldValue.serverTimestamp(),
       'isDirty': false,
-    });
+    }).withServerTimeout(op: 'update_book');
     return updated.copyWith(isDirty: false);
   }
 

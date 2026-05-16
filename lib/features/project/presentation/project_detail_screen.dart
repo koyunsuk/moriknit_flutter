@@ -16,6 +16,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/book_provider.dart';
@@ -621,16 +622,11 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
     final projectAsync = ref.watch(projectByIdProvider(widget.projectId));
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SafeArea(
-        child: Column(
-          children: [
-            MoriPageHeaderShell(
-              child: MoriWideHeader(
-                title: isKorean ? '프로젝트' : 'Project',
-                subtitle: isKorean ? '프로젝트 상세' : 'Project details',
-                trailing: _isEditing
+    return AppShellScaffold(
+      title: isKorean ? '프로젝트' : 'Project',
+      subtitle: isKorean ? '프로젝트 상세' : 'Project details',
+      showBackButton: true,
+      trailing: _isEditing
                     ? [
                         IconButton(
                           icon: Icon(Icons.close, color: C.tx),
@@ -707,10 +703,7 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
                             ) ??
                             const SizedBox.shrink(),
                       ],
-              ),
-            ),
-            Expanded(
-              child: projectAsync.when(
+      body: projectAsync.when(
                 data: (project) {
                   if (project == null) {
                     return Center(child: Text(t.projectNotFound, style: T.body));
@@ -730,10 +723,6 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
                   child: Text(t.failedToLoadProject(e.toString()), style: T.body),
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -1416,9 +1405,7 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
                                     context,
                                     message: isKorean ? '연결 해제 중입니다.' : 'Unlinking...',
                                     subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
-                                    task: () => ref.read(projectRepositoryProvider).updateProject(
-                                          project.copyWith(sourcePatternId: ''),
-                                        ),
+                                    task: () => ref.read(projectRepositoryProvider).unlinkPattern(project.id),
                                   );
                                   if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '연결이 해제됐어요.' : 'Unlinked.');
                                 },
@@ -1864,16 +1851,55 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
                             ),
                             onTap: () async {
                               Navigator.pop(ctx);
-                              await runWithMoriLoadingDialog<void>(
-                                context,
-                                message: isKorean ? '연결하는 중입니다.' : 'Linking...',
-                                subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
-                                task: () => ref.read(projectRepositoryProvider).updateProject(
-                                      widget.project.copyWith(sourcePatternId: pattern.id),
-                                    ),
-                              );
+                              // 이슈 #627 — 도안 연결 시 단계 자동 미러링.
+                              // 1) sourcePatternId 업데이트
+                              // 2) 도안이 complete + aiSections 있고 기존 단계 없으면 자동 단계+카운터 생성
+                              int mirroredCount = 0;
+                              try {
+                                await runWithMoriLoadingDialog<void>(
+                                  context,
+                                  message: isKorean ? '연결하는 중입니다.' : 'Linking...',
+                                  subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+                                  task: () async {
+                                    await ref.read(projectRepositoryProvider).linkPattern(
+                                          projectId: widget.project.id,
+                                          patternId: pattern.id,
+                                        );
+                                    // 기존 단계 확인 (이미 있으면 중복 미러링 차단)
+                                    final stepsRepo = ref.read(projectStepRepositoryProvider);
+                                    final existingSteps = await stepsRepo
+                                        .watchSteps(widget.project.id)
+                                        .first;
+                                    if (existingSteps.isEmpty &&
+                                        pattern.isComplete &&
+                                        (pattern.aiSections?.isNotEmpty ?? false)) {
+                                      final counterRepo = ref.read(counterRepositoryProvider);
+                                      await stepsRepo.addPatternSectionStepsWithCounters(
+                                        widget.project.id,
+                                        pattern,
+                                        isKorean,
+                                        counterRepo,
+                                      );
+                                      mirroredCount = pattern.aiSections!.length;
+                                    }
+                                  },
+                                );
+                              } catch (e) {
+                                if (context.mounted) {
+                                  showSaveErrorSnackBar(
+                                    ScaffoldMessenger.of(context),
+                                    message: '$e',
+                                  );
+                                }
+                                return;
+                              }
                               if (context.mounted) {
-                                showSavedSnackBar(ScaffoldMessenger.of(context), message: isKorean ? '연결됐어요.' : 'Linked.');
+                                final msg = mirroredCount > 0
+                                    ? (isKorean
+                                        ? '연결됐어요. 단계 $mirroredCount개 자동 생성.'
+                                        : 'Linked. $mirroredCount steps auto-created.')
+                                    : (isKorean ? '연결됐어요.' : 'Linked.');
+                                showSavedSnackBar(ScaffoldMessenger.of(context), message: msg);
                               }
                             },
                           );

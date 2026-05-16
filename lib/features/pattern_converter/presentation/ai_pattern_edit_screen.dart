@@ -10,6 +10,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../pattern/data/pattern_repository.dart';
 import '../../pattern/domain/ai_pattern_section.dart';
@@ -257,38 +258,42 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
   Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
 
-    return Scaffold(
-      backgroundColor: C.bg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            MoriPageHeaderShell(
-              child: MoriWideHeader(
-                title: isKorean ? '변환 결과 확인' : 'Review Result',
-                subtitle: isKorean
-                    ? 'AI 변환 결과 검토 후 저장'
-                    : 'Review and save AI result',
-                trailing: [
-                  TextButton(
-                    onPressed: _loading ? null : _save,
-                    child: Text(
-                      isKorean ? '저장하기' : 'Save',
-                      style: T.sm.copyWith(
-                        color: C.lv,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+    return AppShellScaffold(
+      title: isKorean ? '변환 결과 확인' : 'Review Result',
+      subtitle: isKorean
+          ? 'AI 변환 결과 검토 후 저장'
+          : 'Review and save AI result',
+      showBgOrbs: false,
+      trailing: [
+        TextButton(
+          onPressed: _loading ? null : _save,
+          child: Text(
+            isKorean ? '저장하기' : 'Save',
+            style: T.sm.copyWith(
+              color: C.lv,
+              fontWeight: FontWeight.w700,
             ),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : Stack(
-                      children: [
-                        const BgOrbs(),
-                        SingleChildScrollView(
+          ),
+        ),
+      ],
+      bottom: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: ElevatedButton(
+            onPressed: _loading ? null : _save,
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 54),
+            ),
+            child: Text(isKorean ? '저장하기' : 'Save'),
+          ),
+        ),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Stack(
+              children: [
+                const BgOrbs(),
+                SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -398,22 +403,6 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
                 ),
               ],
             ),
-            ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: ElevatedButton(
-            onPressed: _loading ? null : _save,
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 54),
-            ),
-            child: Text(isKorean ? '저장하기' : 'Save'),
-          ),
-        ),
-      ),
     );
   }
 }

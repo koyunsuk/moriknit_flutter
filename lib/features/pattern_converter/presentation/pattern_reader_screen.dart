@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../features/pattern/domain/ai_pattern_section.dart';
 import '../../../features/pattern/domain/pattern_chart.dart';
@@ -78,126 +79,96 @@ class _PatternReaderView extends StatelessWidget {
   Widget build(BuildContext context) {
     final pct = (_progress * 100).toInt();
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          const BgOrbs(),
-          SafeArea(
-            child: Column(
-              children: [
-                Stack(
-                  children: [
-                    MoriPageHeaderShell(
-                      child: MoriWideHeader(
-                        title: pattern.title,
-                        subtitle: isKorean ? '단계별로 진행해요' : 'Step by step',
-                        trailing: [
-                          IconButton(
-                            icon: const Icon(Icons.menu_book_rounded, size: 22),
-                            color: C.lv,
-                            tooltip: isKorean ? '텍스트 뷰어' : 'Text Viewer',
-                            onPressed: () => context.push('/tools/my-parsed-patterns/${pattern.id}/text'),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: IconButton(
-                        icon: const Icon(Icons.arrow_back_ios, size: 20),
-                        color: C.tx,
-                        onPressed: () => context.pop(),
-                      ),
-                    ),
-                  ],
-                ),
-                Expanded(
-                  child: CustomScrollView(
-            slivers: [
-              // 진행률 헤더
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+    return AppShellScaffold(
+      title: pattern.title,
+      subtitle: isKorean ? '단계별로 진행해요' : 'Step by step',
+      showBackButton: true,
+      trailing: [
+        IconButton(
+          icon: const Icon(Icons.menu_book_rounded, size: 22),
+          color: C.lv,
+          tooltip: isKorean ? '텍스트 뷰어' : 'Text Viewer',
+          onPressed: () => context.push('/tools/my-parsed-patterns/${pattern.id}/text'),
+        ),
+      ],
+      body: CustomScrollView(
+        slivers: [
+          // 진행률 헤더
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: LinearProgressIndicator(
-                              value: _progress,
-                              backgroundColor:
-                                  C.lv.withValues(alpha: 0.15),
-                              color: C.lv,
-                              borderRadius: BorderRadius.circular(4),
-                              minHeight: 6,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            '$pct%',
-                            style: T.caption.copyWith(
-                                color: C.lv,
-                                fontWeight: FontWeight.w700),
-                          ),
-                        ],
+                      Expanded(
+                        child: LinearProgressIndicator(
+                          value: _progress,
+                          backgroundColor:
+                              C.lv.withValues(alpha: 0.15),
+                          color: C.lv,
+                          borderRadius: BorderRadius.circular(4),
+                          minHeight: 6,
+                        ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(width: 12),
                       Text(
-                        isKorean
-                            ? '$_completedSteps/$_totalSteps단계 완료'
-                            : '$_completedSteps/$_totalSteps steps done',
-                        style: T.caption.copyWith(color: C.tx2),
+                        '$pct%',
+                        style: T.caption.copyWith(
+                            color: C.lv,
+                            fontWeight: FontWeight.w700),
                       ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 6),
+                  Text(
+                    isKorean
+                        ? '$_completedSteps/$_totalSteps단계 완료'
+                        : '$_completedSteps/$_totalSteps steps done',
+                    style: T.caption.copyWith(color: C.tx2),
+                  ),
+                ],
               ),
-
-              // 섹션별 단계 목록
-              for (final section in _sections) ...[
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-                    child: Text(
-                      section.title,
-                      style: T.h3.copyWith(color: C.lv),
-                    ),
-                  ),
-                ),
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (ctx, i) {
-                      final step = section.steps[i];
-                      return _StepTile(
-                        stepId: step.id,
-                        index: i + 1,
-                        instruction: step.instruction,
-                        isCompleted: step.isCompleted,
-                        onToggle: (val) => ref
-                            .read(patternConverterRepositoryProvider)
-                            .toggleStep(
-                              patternId: pattern.id,
-                              sectionId: section.id,
-                              stepId: step.id,
-                              isCompleted: val,
-                            ),
-                      );
-                    },
-                    childCount: section.steps.length,
-                  ),
-                ),
-              ],
-
-              const SliverToBoxAdapter(child: SizedBox(height: 40)),
-            ],
-          ),
-                ),
-              ],
             ),
           ),
+
+          // 섹션별 단계 목록
+          for (final section in _sections) ...[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+                child: Text(
+                  section.title,
+                  style: T.h3.copyWith(color: C.lv),
+                ),
+              ),
+            ),
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (ctx, i) {
+                  final step = section.steps[i];
+                  return _StepTile(
+                    stepId: step.id,
+                    index: i + 1,
+                    instruction: step.instruction,
+                    isCompleted: step.isCompleted,
+                    onToggle: (val) => ref
+                        .read(patternConverterRepositoryProvider)
+                        .toggleStep(
+                          patternId: pattern.id,
+                          sectionId: section.id,
+                          stepId: step.id,
+                          isCompleted: val,
+                        ),
+                  );
+                },
+                childCount: section.steps.length,
+              ),
+            ),
+          ],
+
+          const SliverToBoxAdapter(child: SizedBox(height: 40)),
         ],
       ),
     );

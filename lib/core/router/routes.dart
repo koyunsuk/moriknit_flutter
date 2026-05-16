@@ -5,6 +5,8 @@ class Routes {
   static const home = '/home';
   static const swatchList = '/swatch';
   static const swatchInput = '/swatch/input';
+  // 이슈 #723 — 스와치 그룹
+  static const swatchGroups = '/swatch/groups';
   static const projectList = '/project';
   static const projectAllList = '/project/all';
   static const projectInput = '/project/input';
@@ -61,4 +63,8 @@ class Routes {
   static const toolsFileExplorer = '/tools/file-explorer';
   // 이슈 #664 — 패턴 생성기 (래글런 도안 + SVG 도식 + 출판용 PDF)
   static const toolsPatternGenerator = '/tools/pattern-generator';
+  // 이슈 #704 Phase 4 — 동기화 충돌 인박스
+  static const conflictInbox = '/sync/conflicts';
+  // 이슈 #687 — 단계 청사진(StepBlueprint) 편집 화면
+  static const stepBlueprintEditor = '/blueprints/:id/edit';
 }

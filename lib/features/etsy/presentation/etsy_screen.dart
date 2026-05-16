@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../data/etsy_auth_provider.dart';
 import '../data/etsy_repository.dart';
@@ -19,36 +20,23 @@ class EtsyScreen extends ConsumerWidget {
     final auth = ref.watch(etsyAuthProvider);
     final isKorean = ref.watch(appLanguageProvider).isKorean;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SafeArea(
-        child: Column(
-          children: [
-            MoriPageHeaderShell(
-              child: MoriWideHeader(
-                title: 'Etsy',
-                subtitle: isKorean ? '내 Etsy 샵 리스팅을 확인해요' : 'View your Etsy shop listings',
-                trailing: auth.isLoggedIn
-                    ? [
-                        TextButton(
-                          onPressed: () => ref.read(etsyAuthProvider.notifier).logout(),
-                          child: Text(
-                            isKorean ? '연결 해제' : 'Disconnect',
-                            style: T.caption.copyWith(color: C.og),
-                          ),
-                        ),
-                      ]
-                    : null,
+    return AppShellScaffold(
+      title: 'Etsy',
+      subtitle: isKorean ? '내 Etsy 샵 리스팅을 확인해요' : 'View your Etsy shop listings',
+      trailing: auth.isLoggedIn
+          ? [
+              TextButton(
+                onPressed: () => ref.read(etsyAuthProvider.notifier).logout(),
+                child: Text(
+                  isKorean ? '연결 해제' : 'Disconnect',
+                  style: T.caption.copyWith(color: C.og),
+                ),
               ),
-            ),
-            Expanded(
-              child: auth.isLoggedIn
-                  ? _LoggedInBody(isKorean: isKorean)
-                  : _LoginPrompt(isKorean: isKorean),
-            ),
-          ],
-        ),
-      ),
+            ]
+          : null,
+      body: auth.isLoggedIn
+          ? _LoggedInBody(isKorean: isKorean)
+          : _LoginPrompt(isKorean: isKorean),
     );
   }
 }

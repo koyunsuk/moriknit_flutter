@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/async_loading_state.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/needle_provider.dart';
@@ -24,42 +25,32 @@ class NeedleListScreen extends ConsumerWidget {
     final straightCount = needles.where((n) => n.type == 'straight').length;
     final circularCount = needles.where((n) => n.type == 'circular').length;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SafeArea(
-        child: Column(
-          children: [
-            MoriPageHeaderShell(
-              child: MoriWideHeader(
-                title: t.needles,
-                subtitle: t.manageNeedles,
-              ),
+    return AppShellScaffold(
+      title: t.needles,
+      subtitle: t.manageNeedles,
+      aboveBody: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+        child: SummaryCard_Detail(
+          headers: [
+            isKorean ? '전체' : 'Total',
+            isKorean ? '일반' : 'Straight',
+            isKorean ? '줄바늘' : 'Circular',
+          ],
+          rows: [
+            LibrarySummaryRowData(
+              badge: isKorean ? '바늘' : 'Needle',
+              badgeColor: C.lvD,
+              values: ['${needles.length}', '$straightCount', '$circularCount'],
+              valueColors: [C.tx, C.lv, C.pk],
             ),
-            // 요약카드 틀고정
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: SummaryCard_Detail(
-                headers: [
-                  isKorean ? '전체' : 'Total',
-                  isKorean ? '일반' : 'Straight',
-                  isKorean ? '줄바늘' : 'Circular',
-                ],
-                rows: [
-                  LibrarySummaryRowData(
-                    badge: isKorean ? '바늘' : 'Needle',
-                    badgeColor: C.lvD,
-                    values: ['${needles.length}', '$straightCount', '$circularCount'],
-                    valueColors: [C.tx, C.lv, C.pk],
-                  ),
-                ],
-                addLabel: isKorean ? '추가' : 'Add',
-                onAdd: () => _showNeedleStartSheet(context, ref),
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
-                children: [
+          ],
+          addLabel: isKorean ? '추가' : 'Add',
+          onAdd: () => _showNeedleStartSheet(context, ref),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+        children: [
                   // 리스트 or 빈상태
                   GlassCard(
                     child: Column(
@@ -112,10 +103,6 @@ class NeedleListScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 

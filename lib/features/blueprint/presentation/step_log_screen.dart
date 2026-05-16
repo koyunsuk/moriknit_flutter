@@ -9,8 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/localization/app_language.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/widgets/common_widgets.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import 'step_log_view.dart';
 
 class StepLogScreen extends ConsumerWidget {
@@ -26,39 +25,15 @@ class StepLogScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
-    return Scaffold(
-      backgroundColor: C.bg,
-      body: Stack(
-        children: [
-          const BgOrbs(),
-          SafeArea(
-            child: Column(
-              children: [
-                MoriPageHeaderShell(
-                  child: MoriWideHeader(
-                    title: isKorean ? '단계로그' : 'Step Log',
-                    subtitle: isKorean
-                        ? '작업 단계를 한 곳에서 기록해요'
-                        : 'Track your work steps in one place',
-                    trailing: [
-                      IconButton(
-                        icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
-                        onPressed: () => Navigator.pop(context),
-                        tooltip: isKorean ? '뒤로' : 'Back',
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: StepLogView(
-                    blueprintId: blueprintId,
-                    runId: runId,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+    return AppShellScaffold(
+      title: isKorean ? '단계로그' : 'Step Log',
+      subtitle: isKorean
+          ? '작업 단계를 한 곳에서 기록해요'
+          : 'Track your work steps in one place',
+      showBackButton: true,
+      body: StepLogView(
+        blueprintId: blueprintId,
+        runId: runId,
       ),
     );
   }

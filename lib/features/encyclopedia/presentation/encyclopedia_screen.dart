@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/widgets/symbol_svg_widget.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/encyclopedia_provider.dart';
 import '../domain/encyclopedia_entry.dart';
@@ -40,93 +41,79 @@ class _EncyclopediaScreenState extends ConsumerState<EncyclopediaScreen> {
 
     return DefaultTabController(
       length: 3,
-      child: Scaffold(
-        backgroundColor: C.bg,
-        body: SafeArea(
-          child: Column(
-            children: [
-              MoriPageHeaderShell(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    MoriWideHeader(
-                      title: t.myEncyclopedia,
-                      subtitle: t.myEncyclopediaDescription,
-                    ),
-                    const SizedBox(height: 8),
-                    TabBar(
-                      labelStyle: T.captionBold,
-                      unselectedLabelStyle: T.caption,
-                      labelColor: C.pkD,
-                      unselectedLabelColor: C.mu,
-                      indicatorColor: C.pkD,
-                      indicatorSize: TabBarIndicatorSize.tab,
-                      tabs: [
-                        Tab(text: isKorean ? '대바늘' : 'Knitting'),
-                        Tab(text: isKorean ? '코바늘' : 'Crochet'),
-                        Tab(text: t.encyclopediaTabPersonal),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (value) => setState(() => _searchQuery = value.trim()),
-                  decoration: InputDecoration(
-                    hintText: isKorean ? '검색...' : 'Search...',
-                    hintStyle: T.body.copyWith(color: C.mu),
-                    prefixIcon: Icon(Icons.search_rounded, color: C.mu, size: 20),
-                    filled: true,
-                    fillColor: Colors.white.withValues(alpha: 0.7),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: C.bd),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: C.bd),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: C.pkD, width: 1.5),
-                    ),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? GestureDetector(
-                            onTap: () {
-                              _searchController.clear();
-                              setState(() => _searchQuery = '');
-                            },
-                            child: Icon(Icons.clear_rounded, color: C.mu, size: 18),
-                          )
-                        : null,
+      child: AppShellScaffold(
+        showBgOrbs: false,
+        title: t.myEncyclopedia,
+        subtitle: t.myEncyclopediaDescription,
+        aboveBody: Column(
+          children: [
+            TabBar(
+              labelStyle: T.captionBold,
+              unselectedLabelStyle: T.caption,
+              labelColor: C.pkD,
+              unselectedLabelColor: C.mu,
+              indicatorColor: C.pkD,
+              indicatorSize: TabBarIndicatorSize.tab,
+              tabs: [
+                Tab(text: isKorean ? '대바늘' : 'Knitting'),
+                Tab(text: isKorean ? '코바늘' : 'Crochet'),
+                Tab(text: t.encyclopediaTabPersonal),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (value) => setState(() => _searchQuery = value.trim()),
+                decoration: InputDecoration(
+                  hintText: isKorean ? '검색...' : 'Search...',
+                  hintStyle: T.body.copyWith(color: C.mu),
+                  prefixIcon: Icon(Icons.search_rounded, color: C.mu, size: 20),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.7),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: C.bd),
                   ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: C.bd),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: C.pkD, width: 1.5),
+                  ),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? GestureDetector(
+                          onTap: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                          child: Icon(Icons.clear_rounded, color: C.mu, size: 18),
+                        )
+                      : null,
                 ),
               ),
-              Expanded(
-                child: TabBarView(
-                  children: [
-                    _CraftTab(
-                      isKorean: isKorean,
-                      uid: uid,
-                      searchQuery: _searchQuery,
-                      craftType: 'knitting',
-                    ),
-                    _CraftTab(
-                      isKorean: isKorean,
-                      uid: uid,
-                      searchQuery: _searchQuery,
-                      craftType: 'crochet',
-                    ),
-                    _PersonalTab(isKorean: isKorean, uid: uid, searchQuery: _searchQuery),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
+        ),
+        body: TabBarView(
+          children: [
+            _CraftTab(
+              isKorean: isKorean,
+              uid: uid,
+              searchQuery: _searchQuery,
+              craftType: 'knitting',
+            ),
+            _CraftTab(
+              isKorean: isKorean,
+              uid: uid,
+              searchQuery: _searchQuery,
+              craftType: 'crochet',
+            ),
+            _PersonalTab(isKorean: isKorean, uid: uid, searchQuery: _searchQuery),
+          ],
         ),
       ),
     );
@@ -517,9 +504,11 @@ class _OfficialEntryCardState extends ConsumerState<_OfficialEntryCard> {
               child: hasSvg
                   ? Padding(
                       padding: const EdgeInsets.all(6),
-                      child: SvgPicture.network(
-                        e.referenceUrl,
-                        placeholderBuilder: (_) => Icon(Icons.texture_rounded, size: 18, color: C.mu),
+                      child: SymbolSvgWidget(
+                        symbolId: e.abbreviation.isNotEmpty ? e.abbreviation : null,
+                        svgUrl: e.referenceUrl,
+                        size: 32,
+                        fallback: Icon(Icons.texture_rounded, size: 18, color: C.mu),
                       ),
                     )
                   : Icon(Icons.menu_book_rounded, size: 20, color: C.mu),

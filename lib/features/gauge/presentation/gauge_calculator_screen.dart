@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/swatch_provider.dart';
@@ -213,24 +214,10 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
     final t = ref.watch(appStringsProvider);
     final isKorean = ref.watch(appLanguageProvider).isKorean;
 
-    return Scaffold(
-      backgroundColor: C.bg,
-      body: Stack(
-        children: [
-          const BgOrbs(),
-          SafeArea(
-            child: Column(
-              children: [
-                MoriPageHeaderShell(
-                  child: MoriWideHeader(
-                    title: t.gaugeCalculator,
-                    subtitle: isKorean
-                        ? '게이지 변환·도안 생성'
-                        : 'Gauge conversion & generator',
-                  ),
-                ),
-                Expanded(
-                  child: ListView(
+    return AppShellScaffold(
+      title: t.gaugeCalculator,
+      subtitle: isKorean ? '게이지 변환·도안 생성' : 'Gauge conversion & generator',
+      body: ListView(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
                     children: [
               // 모드 선택
@@ -274,12 +261,6 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
               ),
             ],
                   ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 

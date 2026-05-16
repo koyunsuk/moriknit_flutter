@@ -12,6 +12,7 @@ import '../../../core/localization/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_colors.dart';
+import '../../../core/widgets/account_upgrade_dialog.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/app_config_provider.dart';
 import '../../../providers/auth_provider.dart';
@@ -20,6 +21,7 @@ import '../../../providers/market_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/swatch_provider.dart';
 import '../../../providers/fab_settings_provider.dart';
+import '../../../providers/font_provider.dart';
 import '../../../providers/theme_provider.dart';
 import '../../auth/domain/user_model.dart';
 import '../../tools/presentation/widgets/knit_dashboard_card.dart';
@@ -59,6 +61,23 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
   bool _uploadingPhoto = false;
 
   UserModel get user => widget.user;
+
+  @override
+  void initState() {
+    super.initState();
+    // 익명 사용자에게 데이터 양 기반 회원가입 권유 (주 1회 제한 — 다이얼로그 내부 조건 검사)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final patternCount = user.usage.editorSaveCount;
+      final counterTaps = user.usage.counterCount * 20; // 누적 추정치
+      maybeShowAccountUpgradeDialog(
+        context,
+        ref,
+        patternCount: patternCount,
+        counterTotalTaps: counterTaps,
+      );
+    });
+  }
 
   Future<void> _pickAndUploadPhoto() async {
     final picker = ImagePicker();
@@ -158,6 +177,7 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
     final t = ref.watch(appStringsProvider);
     final language = ref.watch(appLanguageProvider);
     final isKorean = language.isKorean;
+    final isAnonymous = ref.watch(isAnonymousUserProvider);
     final social = ref.watch(socialIntegrationsProvider).valueOrNull;
     final youtubeUrl = social?.youtubeUrl ?? 'https://www.youtube.com/@moriknit';
     final instagramUrl = social?.instagramUrl ?? 'https://instagram.com/moriknit_official';
@@ -189,6 +209,12 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 4),
+
+                      // ── 0. 게스트 모드 안내 (익명 사용자만) ─────────
+                      if (isAnonymous) ...[
+                        _GuestModeBanner(isKorean: isKorean),
+                        const SizedBox(height: 16),
+                      ],
 
                       // ── 1. 기본정보 ─────────────────────────────────
                       SectionTitle(title: isKorean ? '👤 기본정보' : '👤 Basic Info'),
@@ -679,16 +705,19 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
               const SizedBox(height: 20),
               GlassCard(
                 child: Column(children: [
-                  ListTile(
-                    leading: Icon(Icons.logout, color: C.og),
-                    title: Text(t.logout),
-                    subtitle: Text(t.logoutDescription),
-                    onTap: () async {
-                      await ref.read(authRepositoryProvider).signOut();
-                      if (context.mounted) context.go('/login');
-                    },
-                  ),
-                  Divider(height: 1, color: Colors.grey.shade100),
+                  // 익명(게스트) 사용자는 로그아웃 시 데이터가 사라질 위험이 있어 노출 X
+                  if (!isAnonymous) ...[
+                    ListTile(
+                      leading: Icon(Icons.logout, color: C.og),
+                      title: Text(t.logout),
+                      subtitle: Text(t.logoutDescription),
+                      onTap: () async {
+                        await ref.read(authRepositoryProvider).signOut();
+                        if (context.mounted) context.go('/login');
+                      },
+                    ),
+                    Divider(height: 1, color: Colors.grey.shade100),
+                  ],
                   ListTile(
                     leading: Icon(Icons.person_remove_outlined, color: C.mu),
                     title: Text(
@@ -923,11 +952,51 @@ class _FabSettingsCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(fabSettingsProvider);
+    final currentFont = ref.watch(fontProvider);
 
     return GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 폰트 선택
+          Text(isKorean ? '폰트' : 'Font', style: T.bodyBold),
+          const SizedBox(height: 4),
+          Text(
+            isKorean ? '앱 전체에 적용되는 글꼴을 선택하세요' : 'Choose a font applied across the app',
+            style: T.caption.copyWith(color: C.tx2),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final f in AppFont.values)
+                GestureDetector(
+                  onTap: () => ref.read(fontProvider.notifier).setFont(f),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: currentFont == f ? C.lv : C.lvL,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: currentFont == f ? C.lv : C.lv.withValues(alpha: 0.20),
+                      ),
+                    ),
+                    child: Text(
+                      isKorean ? f.labelKo : f.labelEn,
+                      style: T.caption.copyWith(
+                        color: currentFont == f ? Colors.white : C.lvD,
+                        fontWeight: currentFont == f ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Divider(height: 1, color: C.bd.withValues(alpha: 0.4)),
+          const SizedBox(height: 14),
           // 퀵버튼 숨기기 토글
           Row(
             children: [
@@ -1234,7 +1303,14 @@ class _SubscriptionCard extends ConsumerWidget {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () => _showManageDialog(context, ref),
+              onPressed: () {
+                // 익명(게스트) 사용자는 Pro 결제 차단 — 회원가입 권유 다이얼로그로 유도
+                if (ref.read(isAnonymousUserProvider)) {
+                  showProUpgradeBlockedDialog(context, ref);
+                  return;
+                }
+                _showManageDialog(context, ref);
+              },
               icon: const Icon(Icons.settings_outlined, size: 16, color: Colors.white),
               label: Text(isKorean ? '구독 관리하기' : 'Manage subscription',
                   style: T.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w600)),
@@ -1490,6 +1566,72 @@ class _ProBookmarkPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// ── 게스트 모드 배너 (익명 사용자) ─────────────────────────────────
+class _GuestModeBanner extends StatelessWidget {
+  final bool isKorean;
+  const _GuestModeBanner({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      radius: 20,
+      borderColor: C.og.withValues(alpha: 0.22),
+      color: Color.alphaBlend(
+          C.og.withValues(alpha: 0.06), Colors.white.withValues(alpha: 0.92)),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: C.og.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.shield_outlined, color: C.og, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isKorean ? '지금은 게스트 모드예요' : 'You are in guest mode',
+                  style: T.bodyBold,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  isKorean
+                      ? '계정을 만들면 기기 변경 시에도 데이터가 안전하게 보존돼요.'
+                      : 'Create an account to keep your data safe across devices.',
+                  style: T.caption.copyWith(color: C.tx2, height: 1.35),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            onPressed: () => context.push('/login'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: C.og,
+              foregroundColor: Colors.white,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text(
+              isKorean ? '계정 만들기' : 'Sign up',
+              style: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _PlanBadgeRow extends StatelessWidget {

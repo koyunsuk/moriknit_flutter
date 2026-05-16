@@ -10,6 +10,7 @@ import '../../../core/localization/app_language.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/needle_provider.dart';
 import '../../swatch/data/public_brand_repository.dart';
@@ -104,9 +105,26 @@ class _NeedleInputScreenState extends ConsumerState<NeedleInputScreen> {
         if (didPop) return;
         await _handleUnsavedBack(context, t);
       },
-      child: Scaffold(
-      backgroundColor: Colors.transparent,
-      bottomNavigationBar: SafeArea(
+      child: AppShellScaffold(
+      title: widget.initialNeedle == null
+          ? (widget.copyFrom != null
+              ? (isKorean ? '바늘 복사' : 'Copy Needle')
+              : (isKorean ? '바늘 추가' : 'Add Needle'))
+          : (isKorean ? '바늘 수정' : 'Edit Needle'),
+      subtitle: isKorean ? '바늘 정보를 기록해요' : 'Record your needle info',
+      trailing: [
+        IconButton(
+          icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
+          onPressed: () async {
+            if (!_isDirty) {
+              Navigator.pop(context);
+              return;
+            }
+            await _handleUnsavedBack(context, t);
+          },
+        ),
+      ],
+      bottom: SafeArea(
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -126,42 +144,7 @@ class _NeedleInputScreenState extends ConsumerState<NeedleInputScreen> {
           ),
         ),
       ),
-      body: Stack(
-        children: [
-          const BgOrbs(),
-          SafeArea(
-            child: Column(
-              children: [
-                Stack(
-                  children: [
-                    MoriPageHeaderShell(
-                      child: MoriWideHeader(
-                        title: widget.initialNeedle == null
-                            ? (widget.copyFrom != null
-                                ? (isKorean ? '바늘 복사' : 'Copy Needle')
-                                : (isKorean ? '바늘 추가' : 'Add Needle'))
-                            : (isKorean ? '바늘 수정' : 'Edit Needle'),
-                        subtitle: isKorean ? '바늘 정보를 기록해요' : 'Record your needle info',
-                      ),
-                    ),
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: IconButton(
-                        icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-                        onPressed: () async {
-                          if (!_isDirty) {
-                            Navigator.pop(context);
-                            return;
-                          }
-                          await _handleUnsavedBack(context, t);
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
+      body: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -339,12 +322,6 @@ class _NeedleInputScreenState extends ConsumerState<NeedleInputScreen> {
               ],
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     ),
     );
   }

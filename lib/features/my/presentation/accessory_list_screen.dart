@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/async_loading_state.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/accessory_provider.dart';
@@ -20,38 +21,28 @@ class AccessoryListScreen extends ConsumerWidget {
     final items = listAsync.valueOrNull ?? const <AccessoryModel>[];
     final isKorean = Localizations.localeOf(context).languageCode == 'ko';
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SafeArea(
-        child: Column(
-          children: [
-            MoriPageHeaderShell(
-              child: MoriWideHeader(
-                title: isKorean ? '나의 악세사리' : 'My Accessories',
-                subtitle: isKorean ? '니팅 도구를 관리해요' : 'Manage your knitting tools',
-              ),
+    return AppShellScaffold(
+      title: isKorean ? '나의 악세사리' : 'My Accessories',
+      subtitle: isKorean ? '니팅 도구를 관리해요' : 'Manage your knitting tools',
+      aboveBody: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+        child: SummaryCard_Detail(
+          headers: [isKorean ? '전체' : 'Total'],
+          rows: [
+            LibrarySummaryRowData(
+              badge: isKorean ? '악세사리' : 'Accessories',
+              badgeColor: C.pkD,
+              values: ['${items.length}'],
+              valueColors: [C.tx],
             ),
-            // 요약카드 틀고정
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: SummaryCard_Detail(
-                headers: [isKorean ? '전체' : 'Total'],
-                rows: [
-                  LibrarySummaryRowData(
-                    badge: isKorean ? '악세사리' : 'Accessories',
-                    badgeColor: C.pkD,
-                    values: ['${items.length}'],
-                    valueColors: [C.tx],
-                  ),
-                ],
-                addLabel: isKorean ? '추가' : 'Add',
-                onAdd: () => _showAccessoryStartSheet(context, ref),
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
-                children: [
+          ],
+          addLabel: isKorean ? '추가' : 'Add',
+          onAdd: () => _showAccessoryStartSheet(context, ref),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+        children: [
                   GlassCard(
                     child: listAsync.isLoading
                         ? AsyncLoadingFriendly(
@@ -96,10 +87,6 @@ class AccessoryListScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 

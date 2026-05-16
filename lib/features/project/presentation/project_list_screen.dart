@@ -7,6 +7,7 @@ import 'package:moriknit_flutter/core/router/app_router.dart';
 import 'package:moriknit_flutter/core/router/routes.dart';
 import 'package:moriknit_flutter/core/theme/app_colors.dart';
 import 'package:moriknit_flutter/core/theme/app_theme.dart';
+import 'package:moriknit_flutter/core/widgets/app_shell_scaffold.dart';
 import 'package:moriknit_flutter/core/widgets/async_loading_state.dart';
 import 'package:moriknit_flutter/core/widgets/common_widgets.dart';
 import 'package:moriknit_flutter/features/project/presentation/project_detail_screen.dart';
@@ -1019,21 +1020,16 @@ class ProjectAllListScreen extends ConsumerWidget {
     final inProgress = projects.where((p) => p.status == 'in_progress').length;
     final done = projects.where((p) => p.status == 'finished').length;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SafeArea(
-        child: Column(
-          children: [
-            MoriPageHeaderShell(
-              child: MoriWideHeader(
-                title: isKorean ? '내 프로젝트' : 'My Projects',
-                subtitle: isKorean
-                    ? '${projects.length}개의 프로젝트'
-                    : '${projects.length} projects',
-              ),
-            ),
-            Expanded(
-              child: projectsAsync.when(
+    return AppShellScaffold(
+      title: isKorean ? '내 프로젝트' : 'My Projects',
+      subtitle: isKorean ? '${projects.length}개의 프로젝트' : '${projects.length} projects',
+      showBackButton: true,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => context.push(Routes.projectInput),
+        backgroundColor: C.lv,
+        child: const Icon(Icons.add_rounded, color: Colors.white),
+      ),
+      body: projectsAsync.when(
                 loading: () => AsyncLoadingFriendly(
                   isKorean: isKorean,
                   onRetry: () => ref.invalidate(projectListProvider),
@@ -1115,15 +1111,6 @@ class ProjectAllListScreen extends ConsumerWidget {
                   ],
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push(Routes.projectInput),
-        backgroundColor: C.lv,
-        child: const Icon(Icons.add_rounded, color: Colors.white),
-      ),
     );
   }
 

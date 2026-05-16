@@ -75,6 +75,8 @@ class RoundCell {
   final Color? symbolColor;
 
   /// 자동 회전 (true 시 심볼이 중심을 향함).
+  /// #682 — 기본 OFF. SVG 원본 방향(위가 위) 유지가 일관성 있고 가독성 좋음.
+  /// 사용자가 외곽 향하게 하려면 셀 인스펙터에서 ON.
   final bool autoRotate;
 
   /// 사용자 미세 회전 (라디안, autoRotate 위에 추가됨).
@@ -90,7 +92,7 @@ class RoundCell {
     this.symbolId,
     this.color,
     this.symbolColor,
-    this.autoRotate = true,
+    this.autoRotate = false,
     this.rotationDelta = 0,
     this.spanS = 1,
     this.align = CellAlign.cellArea,
@@ -141,7 +143,7 @@ class RoundCell {
         if (symbolId != null) 'symbolId': symbolId,
         if (color != null) 'color': color!.toARGB32(),
         if (symbolColor != null) 'symbolColor': symbolColor!.toARGB32(),
-        if (!autoRotate) 'autoRotate': false,
+        if (autoRotate) 'autoRotate': true,
         if (rotationDelta != 0) 'rotationDelta': rotationDelta,
         if (spanS != 1) 'spanS': spanS,
         if (align != CellAlign.cellArea) 'align': align.name,
@@ -155,7 +157,7 @@ class RoundCell {
         symbolColor: json['symbolColor'] != null
             ? Color((json['symbolColor'] as num).toInt())
             : null,
-        autoRotate: json['autoRotate'] as bool? ?? true,
+        autoRotate: json['autoRotate'] as bool? ?? false,
         rotationDelta:
             (json['rotationDelta'] as num?)?.toDouble() ?? 0,
         spanS: (json['spanS'] as num?)?.toInt() ?? 1,

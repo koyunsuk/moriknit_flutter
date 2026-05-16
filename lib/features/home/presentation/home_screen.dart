@@ -1470,22 +1470,20 @@ class _HomeGalleryVerticalSection extends ConsumerWidget {
     final projectsAsync = ref.watch(publicProjectsProvider);
     const galleryItemH = 68.0;
     const galleryCount = 4;
-    const galleryTotalH = galleryItemH * galleryCount + 10.0 * (galleryCount - 1);
-    // 이슈 #722 — AsyncDataView 통일.
-    return SizedBox(
-      height: galleryTotalH,
-      child: AsyncDataView<List<dynamic>>(
-        async: projectsAsync,
-        placeholderRows: 4,
+    // 픽셀 오버플로우 fix — SizedBox(height) 제거하여 EmptyBlockPlaceholder가 자체 크기로 표시되도록.
+    // 데이터 있을 때 ListView.separated가 shrinkWrap으로 자체 크기 결정.
+    return AsyncDataView<List<dynamic>>(
+      async: projectsAsync,
+      placeholderRows: 4,
+      rowHeight: galleryItemH,
+      onRetry: () => ref.invalidate(publicProjectsProvider),
+      isEmpty: (entries) => entries.isEmpty,
+      emptyBuilder: () => EmptyBlockPlaceholder(
+        message: isKorean ? '아직 공개된 작품이 없어요.' : 'No public projects yet.',
+        rows: 4,
         rowHeight: galleryItemH,
-        onRetry: () => ref.invalidate(publicProjectsProvider),
-        isEmpty: (entries) => entries.isEmpty,
-        emptyBuilder: () => EmptyBlockPlaceholder(
-          message: isKorean ? '아직 공개된 작품이 없어요.' : 'No public projects yet.',
-          rows: 4,
-          rowHeight: galleryItemH,
-        ),
-        builder: (entries) {
+      ),
+      builder: (entries) {
           final visible = entries.take(galleryCount).toList();
           return ListView.separated(
           shrinkWrap: true,
@@ -1536,8 +1534,7 @@ class _HomeGalleryVerticalSection extends ConsumerWidget {
             );
           },
         );
-        },
-      ),
+      },
     );
   }
 }

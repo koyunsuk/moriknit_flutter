@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/async_loading_state.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/counter_provider.dart';
@@ -26,20 +27,10 @@ class CounterListScreen extends ConsumerWidget {
     final counterListAsync = ref.watch(counterListProvider);
     final projectListAsync = ref.watch(projectListProvider);
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SafeArea(
-        child: Column(
-          children: [
-            MoriPageHeaderShell(
-              child: MoriWideHeader(
-                title: isKorean ? '카운터' : 'Counters',
-                subtitle:
-                    isKorean ? '프로젝트별 카운터 모음' : 'Counter groups by project',
-              ),
-            ),
-            Expanded(
-              child: counterListAsync.when(
+    return AppShellScaffold(
+      title: isKorean ? '카운터' : 'Counters',
+      subtitle: isKorean ? '프로젝트별 카운터 모음' : 'Counter groups by project',
+      body: counterListAsync.when(
                 loading: () => AsyncLoadingFriendly(
                   isKorean: isKorean,
                   onRetry: () => ref.invalidate(counterListProvider),
@@ -123,10 +114,6 @@ class CounterListScreen extends ConsumerWidget {
                   );
                 },
               ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -199,9 +186,7 @@ class _SummaryView extends StatelessWidget {
         ),
         const SizedBox(height: 14),
 
-        // 자유 카운터 카드 (눈에 띄게 상단)
-        SectionTitle(title: isKorean ? '자유 카운터' : 'Free Counters'),
-        const SizedBox(height: 8),
+        // 자유 카운터 블록 (블록 안에 진입 행 포함)
         _FreeCountersCard(
           isKorean: isKorean,
           counters: freeCounters,
@@ -211,25 +196,31 @@ class _SummaryView extends StatelessWidget {
             isKorean ? '자유 카운터' : 'Free Counters',
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 14),
 
-        // 프로젝트별 카드
-        SectionTitle(title: isKorean ? '프로젝트별' : 'By Project'),
-        const SizedBox(height: 8),
-        if (projectGroups.isEmpty)
-          _EmptyProjectsPlaceholder(isKorean: isKorean)
-        else
-          ...projectGroups.map(
-            (g) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _ProjectGroupCard(
-                isKorean: isKorean,
-                project: g.project,
-                counters: g.counters,
-                onTap: () => _openGroup(context, g.project.id, g.project.title),
-              ),
-            ),
-          ),
+        // 프로젝트별 블록 (블록 안에 카드 목록 포함)
+        MoriBlockShell(
+          label: isKorean ? '프로젝트별' : 'By Project',
+          icon: Icons.folder_outlined,
+          accent: C.lv,
+          child: projectGroups.isEmpty
+              ? _EmptyProjectsPlaceholder(isKorean: isKorean)
+              : Column(
+                  children: [
+                    for (int i = 0; i < projectGroups.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 10),
+                      _ProjectGroupCard(
+                        isKorean: isKorean,
+                        project: projectGroups[i].project,
+                        counters: projectGroups[i].counters,
+                        onTap: () => _openGroup(context,
+                            projectGroups[i].project.id,
+                            projectGroups[i].project.title),
+                      ),
+                    ],
+                  ],
+                ),
+        ),
 
         if (!hasAny) ...[
           const SizedBox(height: 24),
@@ -262,57 +253,53 @@ class _FreeCountersCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GlassCard(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: Row(
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: C.lmD.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: C.lmD.withValues(alpha: 0.28)),
+      child: MoriBlockShell(
+        label: isKorean ? '자유 카운터' : 'Free Counters',
+        icon: Icons.exposure_plus_1,
+        accent: C.lvD,
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: C.lmD.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: C.lmD.withValues(alpha: 0.28)),
+              ),
+              child: Icon(Icons.bookmark_outline_rounded,
+                  color: C.lmD, size: 26),
             ),
-            child: Icon(Icons.bookmark_outline_rounded,
-                color: C.lmD, size: 26),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isKorean ? '자유 카운터' : 'Free Counters',
-                  style: T.bodyBold,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  isKorean
-                      ? '프로젝트와 연결되지 않은 카운터'
-                      : 'Counters not linked to any project',
-                  style: T.caption.copyWith(color: C.mu),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                isKorean
+                    ? '프로젝트와 연결되지 않은 카운터'
+                    : 'Counters not linked to any project',
+                style: T.caption.copyWith(color: C.mu),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: C.lmD.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(10),
+            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: C.lmD.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '${counters.length}',
+                style: T.bodyBold.copyWith(color: C.lmD),
+              ),
             ),
-            child: Text(
-              '${counters.length}',
-              style: T.bodyBold.copyWith(color: C.lmD),
-            ),
-          ),
-          const SizedBox(width: 4),
-          Icon(Icons.chevron_right_rounded, color: C.mu),
-        ],
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right_rounded, color: C.mu),
+          ],
+        ),
       ),
     );
   }

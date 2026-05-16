@@ -9,7 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/common_widgets.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../data/onedrive_auth_provider.dart';
 
 const Color _kOneDriveBlue = Color(0xFF0078D4);
@@ -22,53 +22,35 @@ class OneDriveScreen extends ConsumerWidget {
     final auth = ref.watch(oneDriveAuthProvider);
     final isKorean = ref.watch(appLanguageProvider).isKorean;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          const BgOrbs(),
-          SafeArea(
-            child: Column(
-              children: [
-                MoriPageHeaderShell(
-                  child: MoriWideHeader(
-                    title: 'OneDrive',
-                    subtitle: auth.isLoggedIn
-                        ? (isKorean
-                            ? '${auth.email ?? ''} 연결됨'
-                            : 'Connected as ${auth.email ?? ''}')
-                        : (isKorean
-                            ? 'Microsoft 계정을 연결하세요'
-                            : 'Connect your Microsoft account'),
-                    trailing: auth.isLoggedIn
-                        ? [
-                            TextButton(
-                              onPressed: () => ref
-                                  .read(oneDriveAuthProvider.notifier)
-                                  .logout(),
-                              child: Text(
-                                isKorean ? '연결 해제' : 'Disconnect',
-                                style: T.caption.copyWith(color: C.og),
-                              ),
-                            ),
-                          ]
-                        : null,
-                  ),
+    return AppShellScaffold(
+      title: 'OneDrive',
+      subtitle: auth.isLoggedIn
+          ? (isKorean
+              ? '${auth.email ?? ''} 연결됨'
+              : 'Connected as ${auth.email ?? ''}')
+          : (isKorean
+              ? 'Microsoft 계정을 연결하세요'
+              : 'Connect your Microsoft account'),
+      trailing: auth.isLoggedIn
+          ? [
+              TextButton(
+                onPressed: () => ref
+                    .read(oneDriveAuthProvider.notifier)
+                    .logout(),
+                child: Text(
+                  isKorean ? '연결 해제' : 'Disconnect',
+                  style: T.caption.copyWith(color: C.og),
                 ),
-                Expanded(
-                  child: auth.isLoading
-                      ? const Center(
-                          child:
-                              CircularProgressIndicator(color: _kOneDriveBlue))
-                      : auth.isLoggedIn
-                          ? _FileListPlaceholder(isKorean: isKorean)
-                          : _ConnectPrompt(isKorean: isKorean),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+              ),
+            ]
+          : null,
+      body: auth.isLoading
+          ? const Center(
+              child:
+                  CircularProgressIndicator(color: _kOneDriveBlue))
+          : auth.isLoggedIn
+              ? _FileListPlaceholder(isKorean: isKorean)
+              : _ConnectPrompt(isKorean: isKorean),
     );
   }
 }

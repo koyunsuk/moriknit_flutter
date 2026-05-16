@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/dm_provider.dart';
@@ -86,8 +87,8 @@ class _DmListScreenState extends ConsumerState<DmListScreen> {
     );
 
     if (user == null) {
-      return Scaffold(
-        backgroundColor: Colors.transparent,
+      return AppShellScaffold(
+        showHeader: false,
         body: Center(
           child: MoriEmptyState(
             icon: Icons.chat_bubble_outline_rounded,
@@ -104,52 +105,37 @@ class _DmListScreenState extends ConsumerState<DmListScreen> {
         ? user.displayName!
         : (user.email?.split('@').first ?? '');
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SafeArea(
-        child: Column(
-          children: [
-            MoriPageHeaderShell(
-              child: MoriWideHeader(
-                title: isKorean ? '모리톡' : 'MoriTalk',
-                subtitle: subtitle,
-              ),
-            ),
-            // 검색창
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-              child: TextField(
-                controller: _searchCtrl,
-                focusNode: _searchFocus,
-                onChanged: (q) => _onSearchChanged(q, user.uid),
-                decoration: InputDecoration(
-                  hintText: isKorean ? '닉네임 검색' : 'Search nickname',
-                  prefix: Text('@', style: TextStyle(color: C.mu, fontWeight: FontWeight.w500)),
-                  suffixIcon: _searchCtrl.text.isNotEmpty
-                      ? GestureDetector(
-                          onTap: () {
-                            _searchCtrl.clear();
-                            _searchFocus.unfocus();
-                            setState(() { _searching = false; _searchResults = []; });
-                          },
-                          child: Icon(Icons.close_rounded, color: C.mu, size: 18),
-                        )
-                      : Icon(Icons.person_search_rounded, color: C.mu, size: 20),
-                  filled: true,
-                  fillColor: C.gx,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                ),
-              ),
-            ),
-            // 검색 결과 또는 DM 목록
-            Expanded(
-              child: _searching
-                  ? _buildSearchResults(isKorean, user.uid, myName)
-                  : _buildRoomList(roomsAsync, user.uid, isKorean),
-            ),
-          ],
+    return AppShellScaffold(
+      title: isKorean ? '모리톡' : 'MoriTalk',
+      subtitle: subtitle,
+      aboveBody: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+        child: TextField(
+          controller: _searchCtrl,
+          focusNode: _searchFocus,
+          onChanged: (q) => _onSearchChanged(q, user.uid),
+          decoration: InputDecoration(
+            hintText: isKorean ? '닉네임 검색' : 'Search nickname',
+            prefix: Text('@', style: TextStyle(color: C.mu, fontWeight: FontWeight.w500)),
+            suffixIcon: _searchCtrl.text.isNotEmpty
+                ? GestureDetector(
+                    onTap: () {
+                      _searchCtrl.clear();
+                      _searchFocus.unfocus();
+                      setState(() { _searching = false; _searchResults = []; });
+                    },
+                    child: Icon(Icons.close_rounded, color: C.mu, size: 18),
+                  )
+                : Icon(Icons.person_search_rounded, color: C.mu, size: 20),
+            filled: true,
+            fillColor: C.gx,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          ),
         ),
       ),
+      body: _searching
+          ? _buildSearchResults(isKorean, user.uid, myName)
+          : _buildRoomList(roomsAsync, user.uid, isKorean),
     );
   }
 

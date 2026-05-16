@@ -237,6 +237,16 @@ class PatternChart {
   final String? sourceOwnerName;
   final PatternSourceType sourceType;
 
+  /// 이슈 #629 — Fork 관계 식별자. 이 도안이 다른 도안에서 Fork된 경우 원본 ID.
+  /// `sourcePatternId`와 의미는 동일하나, 명시적 Fork 관계 표현용으로 분리.
+  /// 마켓·커뮤니티에서 "이 도안은 X 도안을 Fork한 것" 표시·집계에 사용.
+  /// 호환을 위해 nullable. fromJson 시 sourcePatternId 백필.
+  final String? forkOfId;
+
+  /// 이슈 #629 — 도안 판매가(원). 0이면 무료(자유 Fork·공유). 기본 0.
+  /// 마켓·결제 도입 전까지는 0으로만 사용.
+  final int priceWon;
+
   /// AI 변환 도안 섹션 데이터 (aiConverted 타입에서 사용)
   ///
   /// #687 Phase E1 — 단계 데이터는 step_blueprints/units로 단방향 이전됨.
@@ -305,6 +315,8 @@ class PatternChart {
     this.sourcePatternId,
     this.sourceOwnerName,
     this.sourceType = PatternSourceType.editor,
+    this.forkOfId,
+    this.priceWon = 0,
     this.aiSections,
     this.createdAt,
     this.linkedProjectId,
@@ -540,6 +552,8 @@ class PatternChart {
     String? sourcePatternId,
     String? sourceOwnerName,
     PatternSourceType? sourceType,
+    Object? forkOfId = _sentinel,
+    int? priceWon,
     List<AiSection>? aiSections,
     DateTime? createdAt,
     Object? linkedProjectId = _sentinel,
@@ -557,7 +571,8 @@ class PatternChart {
     id: id, title: title, rows: rows, cols: cols, mode: mode, grid: grid,
     narrativeText: narrativeText, type: type, imageUrl: imageUrl, pdfUrl: pdfUrl,
     forkCount: forkCount, sourcePatternId: sourcePatternId,
-    sourceOwnerName: sourceOwnerName, sourceType: sourceType, aiSections: aiSections,
+    sourceOwnerName: sourceOwnerName, sourceType: sourceType,
+    forkOfId: forkOfId, priceWon: priceWon, aiSections: aiSections,
     createdAt: createdAt, linkedProjectId: linkedProjectId,
     mirrorMode: mirrorMode, category: category,
     knittingDirection: knittingDirection, gauge: gauge, repeatRegions: repeatRegions,
@@ -585,6 +600,8 @@ class PatternChart {
     String? sourcePatternId,
     String? sourceOwnerName,
     PatternSourceType? sourceType,
+    Object? forkOfId = _sentinel,
+    int? priceWon,
     List<AiSection>? aiSections,
     DateTime? createdAt,
     Object? linkedProjectId = _sentinel,
@@ -614,6 +631,8 @@ class PatternChart {
       sourcePatternId: sourcePatternId ?? this.sourcePatternId,
       sourceOwnerName: sourceOwnerName ?? this.sourceOwnerName,
       sourceType: sourceType ?? this.sourceType,
+      forkOfId: identical(forkOfId, _sentinel) ? this.forkOfId : forkOfId as String?,
+      priceWon: priceWon ?? this.priceWon,
       aiSections: aiSections ?? this.aiSections,
       createdAt: createdAt ?? this.createdAt,
       linkedProjectId: identical(linkedProjectId, _sentinel) ? this.linkedProjectId : linkedProjectId as String?,
@@ -653,6 +672,9 @@ class PatternChart {
         if (sourcePatternId != null) 'sourcePatternId': sourcePatternId,
         if (sourceOwnerName != null) 'sourceOwnerName': sourceOwnerName,
         'sourceType': sourceType.name,
+        // 이슈 #629 — Fork 관계 + 판매가. forkOfId는 null이면 생략(호환).
+        if (forkOfId != null) 'forkOfId': forkOfId,
+        if (priceWon != 0) 'priceWon': priceWon,
         // #687 Phase E1 — aiSections는 더 이상 pattern_charts에 저장하지 않는다.
         // 단계 데이터는 step_blueprints + units 단방향 흐름.
         // 기존 데이터 호환을 위해 fromJson은 그대로 읽음.
@@ -704,6 +726,12 @@ class PatternChart {
       sourceOwnerName: json['sourceOwnerName'] as String?,
       sourceType: PatternSourceType.values.byName(
           json['sourceType'] as String? ?? 'editor'),
+      // 이슈 #629 — Fork 관계: 신규 필드 우선, 없으면 sourcePatternId 백필.
+      forkOfId: (json['forkOfId'] as String?) ?? (json['sourcePatternId'] as String?),
+      // 판매가: 없으면 0 (무료).
+      priceWon: (json['priceWon'] is num)
+          ? (json['priceWon'] as num).toInt()
+          : 0,
       aiSections: (json['aiSections'] as List?)
           ?.map((s) => AiSection.fromMap(Map<String, dynamic>.from(s as Map)))
           .toList(),

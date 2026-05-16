@@ -18,6 +18,8 @@ import '../../../core/localization/app_language.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/cache/pattern_media_cache.dart';
+import '../../../core/widgets/cached_pattern_image.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/counter_provider.dart';
@@ -539,6 +541,17 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
       if (!rawUrl.startsWith('http')) {
         url = await FirebaseStorage.instance.ref(rawUrl).getDownloadURL();
       }
+      // #704 Phase 2 — PatternMediaCache 통해 영구 캐시 시도 (오프라인 재진입 시 보장).
+      final cached = await PatternMediaCache.instance.getOrFetch(
+        url,
+        patternId: widget.chart.id.isNotEmpty ? widget.chart.id : 'pattern_$_id',
+        type: 'pdf',
+      );
+      if (cached != null) {
+        if (mounted) setState(() { _localPdfPath = cached.path; _pdfLoading = false; });
+        return;
+      }
+      // 캐시 사용 불가(웹 등) — 기존 임시 디렉터리 폴백.
       final client = HttpClient();
       final req = await client.getUrl(Uri.parse(url));
       final res = await req.close();
@@ -1750,11 +1763,10 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
         }
         return InteractiveViewer(
           child: Center(
-            child: Image.network(
-              widget.chart.imageUrl,
+            child: CachedPatternImage(
+              url: widget.chart.imageUrl,
+              patternId: widget.chart.id.isNotEmpty ? widget.chart.id : 'pattern_viewer',
               fit: BoxFit.contain,
-              errorBuilder: (ctx, e, s) =>
-                  const Icon(Icons.broken_image_rounded, size: 64),
             ),
           ),
         );

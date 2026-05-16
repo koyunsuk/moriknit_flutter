@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../core/errors/firestore_timeout_extension.dart';
 import '../domain/accessory_model.dart';
 
 class AccessoryRepository {
@@ -34,7 +35,7 @@ class AccessoryRepository {
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
       if (photoUrl != null && photoUrl.isNotEmpty) 'photoUrl': photoUrl,
-    });
+    }).withServerTimeout(op: 'create_accessory');
     return item.copyWith(id: docRef.id);
   }
 
@@ -45,16 +46,14 @@ class AccessoryRepository {
       ...item.toJson(),
       'updatedAt': FieldValue.serverTimestamp(),
       if (photoUrl != null && photoUrl.isNotEmpty) 'photoUrl': photoUrl,
-    });
+    }).withServerTimeout(op: 'update_accessory');
     return item;
   }
 
   Future<void> deleteAccessory(String id) async {
     if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
     try {
-      await _col.doc(id).delete().timeout(const Duration(seconds: 5));
-    } on TimeoutException {
-      throw Exception('인터넷 연결을 확인해 주세요');
+      await _col.doc(id).delete().withServerTimeout(op: 'delete_accessory');
     } catch (e) {
       debugPrint('[deleteAccessory] error: $e');
       rethrow;

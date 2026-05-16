@@ -12,6 +12,7 @@ import 'package:record/record.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/async_loading_state.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
@@ -196,37 +197,25 @@ class _ToolMemoScreenState extends ConsumerState<ToolMemoScreen> {
   Widget build(BuildContext context) {
     final memosAsync = ref.watch(memoListProvider);
 
-    return Scaffold(
-      backgroundColor: C.bg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            MoriPageHeaderShell(
-              child: MoriWideHeader(
-                title: '나만의 메모장',
-                subtitle: '도안, 재료, 아이디어를 자유롭게 기록해요',
-              ),
-            ),
-            Expanded(
-              child: !_migrated || !_lockChecked
-                  ? Center(child: CircularProgressIndicator(color: C.lv))
-                  : _isLocked
-                      ? _buildLockScreen()
-                      : memosAsync.when(
-                          loading: () => AsyncLoadingFriendly(
-                            isKorean: true,
-                            onRetry: () => ref.invalidate(memoListProvider),
-                          ),
-                          error: (e, _) => AsyncDelayedFriendly(
-                            isKorean: true,
-                            onRetry: () => ref.invalidate(memoListProvider),
-                          ),
-                          data: (memos) => _buildList(memos),
-                        ),
-            ),
-          ],
-        ),
-      ),
+    return AppShellScaffold(
+      title: '나만의 메모장',
+      subtitle: '도안, 재료, 아이디어를 자유롭게 기록해요',
+      showBgOrbs: false,
+      body: !_migrated || !_lockChecked
+          ? Center(child: CircularProgressIndicator(color: C.lv))
+          : _isLocked
+              ? _buildLockScreen()
+              : memosAsync.when(
+                  loading: () => AsyncLoadingFriendly(
+                    isKorean: true,
+                    onRetry: () => ref.invalidate(memoListProvider),
+                  ),
+                  error: (e, _) => AsyncDelayedFriendly(
+                    isKorean: true,
+                    onRetry: () => ref.invalidate(memoListProvider),
+                  ),
+                  data: (memos) => _buildList(memos),
+                ),
     );
   }
 

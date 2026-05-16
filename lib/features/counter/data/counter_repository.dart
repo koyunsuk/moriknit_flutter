@@ -1,11 +1,15 @@
 // lib/features/counter/data/counter_repository.dart
 
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import '../domain/counter_model.dart';
 import '../../../core/constants/subscription_constants.dart';
+import '../../../core/errors/firestore_timeout_extension.dart';
+import '../../../core/utils/firestore_json.dart';
 
 class CounterRepository {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -44,7 +48,7 @@ class CounterRepository {
         tx.update(_userRef, {
           'usage.counterCount': FieldValue.increment(1),
         });
-      });
+      }).withServerTimeout(op: 'create_counter_tx');
 
       final saved = prepared.copyWith(id: docRef.id, isDirty: false);
       await _saveToHive(saved);
@@ -71,44 +75,148 @@ class CounterRepository {
   }
 
   // ── READ (목록) ──────────────────────────────────────────
+  // 이슈 #704 Phase A — Hive 폴백.
   Stream<List<CounterModel>> watchCounters() {
     if (_uid.isEmpty) return Stream.value([]);
-    return _countersRef
+
+    final controller = StreamController<List<CounterModel>>();
+
+    final cached = _readListFromHive();
+    if (cached.isNotEmpty) {
+      controller.add(cached);
+    }
+
+    final sub = _countersRef
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => CounterModel.fromFirestore(doc))
-            .toList());
+        .listen(
+      (snap) {
+        final list = snap.docs.map((doc) => CounterModel.fromFirestore(doc)).toList();
+        controller.add(list);
+        unawaited(_writeListToHive(list));
+      },
+      onError: (Object e, StackTrace st) {
+        debugPrint('[watchCounters] firestore error → hive fallback: $e');
+        controller.add(_readListFromHive());
+      },
+    );
+
+    controller.onCancel = () async {
+      await sub.cancel();
+      await controller.close();
+    };
+
+    return controller.stream;
   }
 
   // ── READ (프로젝트별) ─────────────────────────────────────
+  // 이슈 #704 Phase A — Hive 폴백.
   Stream<List<CounterModel>> watchCountersByProject(String projectId) {
     if (_uid.isEmpty) return Stream.value([]);
-    return _countersRef
+
+    final controller = StreamController<List<CounterModel>>();
+
+    final cached = _readListFromHive(projectId: projectId);
+    if (cached.isNotEmpty) {
+      controller.add(cached);
+    }
+
+    final sub = _countersRef
         .where('projectId', isEqualTo: projectId)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => CounterModel.fromFirestore(doc))
-            .toList());
+        .listen(
+      (snap) {
+        final list = snap.docs.map((doc) => CounterModel.fromFirestore(doc)).toList();
+        controller.add(list);
+        unawaited(_writeListToHive(list));
+      },
+      onError: (Object e, StackTrace st) {
+        debugPrint('[watchCountersByProject] firestore error → hive fallback: $e');
+        controller.add(_readListFromHive(projectId: projectId));
+      },
+    );
+
+    controller.onCancel = () async {
+      await sub.cancel();
+      await controller.close();
+    };
+
+    return controller.stream;
   }
 
   // ── READ (도안 차트별) ────────────────────────────────────
+  // 이슈 #704 Phase A — Hive 폴백.
   Stream<CounterModel?> watchCounterByChartId(String chartId) {
     if (_uid.isEmpty || chartId.isEmpty) return Stream.value(null);
-    return _countersRef
+
+    final controller = StreamController<CounterModel?>();
+
+    final cached = _readListFromHive(chartId: chartId);
+    if (cached.isNotEmpty) {
+      controller.add(cached.first);
+    }
+
+    final sub = _countersRef
         .where('patternChartId', isEqualTo: chartId)
         .limit(1)
         .snapshots()
-        .map((snap) => snap.docs.isEmpty ? null : CounterModel.fromFirestore(snap.docs.first));
+        .listen(
+      (snap) {
+        final model = snap.docs.isEmpty
+            ? null
+            : CounterModel.fromFirestore(snap.docs.first);
+        controller.add(model);
+        if (model != null) unawaited(_saveToHive(model));
+      },
+      onError: (Object e, StackTrace st) {
+        debugPrint('[watchCounterByChartId] firestore error → hive fallback: $e');
+        final fallback = _readListFromHive(chartId: chartId);
+        controller.add(fallback.isEmpty ? null : fallback.first);
+      },
+    );
+
+    controller.onCancel = () async {
+      await sub.cancel();
+      await controller.close();
+    };
+
+    return controller.stream;
   }
 
   // ── READ (단건) ──────────────────────────────────────────
+  // 이슈 #704 Phase A — Hive 폴백.
   Stream<CounterModel?> watchCounter(String id) {
     if (_uid.isEmpty) return Stream.value(null);
-    return _countersRef.doc(id).snapshots().map((doc) {
-      if (!doc.exists) return null;
-      return CounterModel.fromFirestore(doc);
-    });
+
+    final controller = StreamController<CounterModel?>();
+
+    final cached = _readFromHive(id);
+    if (cached != null) {
+      controller.add(cached);
+    }
+
+    final sub = _countersRef.doc(id).snapshots().listen(
+      (doc) {
+        if (!doc.exists) {
+          controller.add(null);
+          return;
+        }
+        final model = CounterModel.fromFirestore(doc);
+        controller.add(model);
+        unawaited(_saveToHive(model));
+      },
+      onError: (Object e, StackTrace st) {
+        debugPrint('[watchCounter] firestore error → hive fallback: $e');
+        controller.add(_readFromHive(id));
+      },
+    );
+
+    controller.onCancel = () async {
+      await sub.cancel();
+      await controller.close();
+    };
+
+    return controller.stream;
   }
 
   // ── UPDATE ───────────────────────────────────────────────
@@ -125,7 +233,7 @@ class CounterRepository {
         ..remove('createdAt');
       json['updatedAt'] = FieldValue.serverTimestamp();
       json['isDirty'] = false;
-      await _countersRef.doc(counter.id).update(json);
+      await _countersRef.doc(counter.id).update(json).withServerTimeout(op: 'update_counter');
       return updated.copyWith(isDirty: false);
     } catch (e) {
       final dirty = updated.copyWith(isDirty: true);
@@ -135,18 +243,34 @@ class CounterRepository {
   }
 
   // ── INCREMENT (카운터 값만 빠르게 업데이트) ───────────────
+  // 이슈 #704 Phase B — Hive 즉시 반영 → Firestore best-effort.
+  // ConflictPolicy.lastWriteWins: updatedAt 비교는 Firestore serverTimestamp 우선.
   Future<void> incrementStitch(String id, int delta) async {
-    await _countersRef.doc(id).update({
-      'stitchCount': FieldValue.increment(delta),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    // 1) Hive 즉시 반영 (사용자 +/- 버튼 응답성 보장)
+    _bumpHive(id, stitchDelta: delta);
+    // 2) Firestore best-effort
+    try {
+      await _countersRef.doc(id).update({
+        'stitchCount': FieldValue.increment(delta),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }).withServerTimeout(op: 'increment_stitch');
+    } catch (e) {
+      debugPrint('[incrementStitch] firestore best-effort failed: $e');
+      _markDirtyHive(id);
+    }
   }
 
   Future<void> incrementRow(String id, int delta) async {
-    await _countersRef.doc(id).update({
-      'rowCount': FieldValue.increment(delta),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    _bumpHive(id, rowDelta: delta);
+    try {
+      await _countersRef.doc(id).update({
+        'rowCount': FieldValue.increment(delta),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }).withServerTimeout(op: 'increment_row');
+    } catch (e) {
+      debugPrint('[incrementRow] firestore best-effort failed: $e');
+      _markDirtyHive(id);
+    }
   }
 
   // ── ADD MARK ─────────────────────────────────────────────
@@ -154,14 +278,14 @@ class CounterRepository {
     await _countersRef.doc(id).update({
       'marks': FieldValue.arrayUnion([mark.toJson()]),
       'updatedAt': FieldValue.serverTimestamp(),
-    });
+    }).withServerTimeout(op: 'add_mark');
   }
 
   Future<void> removeMark(String id, CounterMark mark) async {
     await _countersRef.doc(id).update({
       'marks': FieldValue.arrayRemove([mark.toJson()]),
       'updatedAt': FieldValue.serverTimestamp(),
-    });
+    }).withServerTimeout(op: 'remove_mark');
   }
 
   Future<void> updateTargets(String id, {required int targetStitchCount, required int targetRowCount}) async {
@@ -169,7 +293,7 @@ class CounterRepository {
       'targetStitchCount': targetStitchCount,
       'targetRowCount': targetRowCount,
       'updatedAt': FieldValue.serverTimestamp(),
-    });
+    }).withServerTimeout(op: 'update_targets');
   }
 
   // ── DELETE ───────────────────────────────────────────────
@@ -182,7 +306,7 @@ class CounterRepository {
       tx.update(_userRef, {
         'usage.counterCount': FieldValue.increment(-1),
       });
-    });
+    }).withServerTimeout(op: 'delete_counter_tx');
   }
 
   // ── Hive ─────────────────────────────────────────────────
@@ -201,8 +325,96 @@ class CounterRepository {
 
   Future<void> _removeFromHive(String id) async {
     if (kIsWeb) return;
-    final box = Hive.box<Map>(SubscriptionConstants.boxCounters);
-    await box.delete(id);
+    try {
+      final box = Hive.box<Map>(SubscriptionConstants.boxCounters);
+      await box.delete(id);
+    } catch (_) {}
+  }
+
+  // 이슈 #704 Phase A — Hive 읽기 헬퍼.
+  // projectId/chartId 필터 옵션 제공 (Firestore where 절 대응).
+  List<CounterModel> _readListFromHive({String? projectId, String? chartId}) {
+    if (kIsWeb) return const [];
+    try {
+      final box = Hive.box<Map>(SubscriptionConstants.boxCounters);
+      final uid = _uid;
+      final items = <CounterModel>[];
+      for (final key in box.keys) {
+        final data = box.get(key);
+        if (data == null) continue;
+        try {
+          final json = normalizeFirestoreMap(Map<String, dynamic>.from(data));
+          final model = CounterModel.fromJson(json);
+          if (uid.isNotEmpty && model.uid.isNotEmpty && model.uid != uid) continue;
+          if (projectId != null && model.projectId != projectId) continue;
+          if (chartId != null && model.patternChartId != chartId) continue;
+          items.add(model);
+        } catch (_) {}
+      }
+      items.sort((a, b) {
+        final ad = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bd = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bd.compareTo(ad);
+      });
+      return items;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  CounterModel? _readFromHive(String id) {
+    if (kIsWeb || id.isEmpty) return null;
+    try {
+      final box = Hive.box<Map>(SubscriptionConstants.boxCounters);
+      final data = box.get(id);
+      if (data == null) return null;
+      final json = normalizeFirestoreMap(Map<String, dynamic>.from(data));
+      return CounterModel.fromJson(json);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _writeListToHive(List<CounterModel> counters) async {
+    if (kIsWeb) return;
+    try {
+      final box = Hive.box<Map>(SubscriptionConstants.boxCounters);
+      for (final c in counters) {
+        if (c.id.isEmpty) continue;
+        await box.put(c.id, c.toJson());
+      }
+    } catch (_) {}
+  }
+
+  // 이슈 #704 Phase B — Hive 즉시 increment.
+  // stitchDelta/rowDelta 만 받아 in-place 가산. Firestore가 따라잡으면 write-through로 덮어씀.
+  void _bumpHive(String id, {int stitchDelta = 0, int rowDelta = 0}) {
+    if (kIsWeb || id.isEmpty) return;
+    try {
+      final box = Hive.box<Map>(SubscriptionConstants.boxCounters);
+      final data = box.get(id);
+      if (data == null) return;
+      final json = normalizeFirestoreMap(Map<String, dynamic>.from(data));
+      final current = CounterModel.fromJson(json);
+      final updated = current.copyWith(
+        stitchCount: current.stitchCount + stitchDelta,
+        rowCount: current.rowCount + rowDelta,
+        updatedAt: DateTime.now(),
+      );
+      box.put(id, updated.toJson());
+    } catch (_) {}
+  }
+
+  void _markDirtyHive(String id) {
+    if (kIsWeb || id.isEmpty) return;
+    try {
+      final box = Hive.box<Map>(SubscriptionConstants.boxCounters);
+      final data = box.get(id);
+      if (data == null) return;
+      final json = normalizeFirestoreMap(Map<String, dynamic>.from(data));
+      final current = CounterModel.fromJson(json);
+      box.put(id, current.copyWith(isDirty: true).toJson());
+    } catch (_) {}
   }
 
   Future<void> syncDirtyCounters() async {

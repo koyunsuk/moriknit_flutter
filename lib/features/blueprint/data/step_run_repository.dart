@@ -15,6 +15,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../../core/errors/firestore_timeout_extension.dart';
 import '../../project/domain/project_step.dart';
 import '../domain/step_run.dart';
 import '../domain/step_run_progress.dart';
@@ -76,7 +77,7 @@ class StepRunRepository {
       ...prepared.toMap(),
       'startedAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: false));
+    }, SetOptions(merge: false)).withServerTimeout(op: 'create_step_run');
     return prepared;
   }
 
@@ -84,11 +85,11 @@ class StepRunRepository {
     await _runDoc(rid).set({
       ...patch,
       'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    }, SetOptions(merge: true)).withServerTimeout(op: 'update_step_run');
   }
 
   Future<StepRun?> get(String rid) async {
-    final snap = await _runDoc(rid).get();
+    final snap = await _runDoc(rid).get().withServerTimeout(op: 'get_step_run');
     if (!snap.exists) return null;
     return _readRun(snap);
   }
@@ -116,7 +117,7 @@ class StepRunRepository {
       .snapshots()
       .map((s) => s.docs.map(_readRun).toList());
 
-  Future<void> delete(String rid) async => _runDoc(rid).delete();
+  Future<void> delete(String rid) async => _runDoc(rid).delete().withServerTimeout(op: 'delete_step_run');
 
   Future<void> markCompleted(String rid) async => update(rid, {
         'completedAt': FieldValue.serverTimestamp(),
@@ -177,11 +178,11 @@ class StepRunRepository {
       }, SetOptions(merge: true));
 
       return progress.copyWith(updatedAt: DateTime.now());
-    });
+    }).withServerTimeout(op: 'save_step_run_progress_tx');
   }
 
   Future<void> deleteProgress(String rid, String unitId) async =>
-      _progressCol(rid).doc(unitId).delete();
+      _progressCol(rid).doc(unitId).delete().withServerTimeout(op: 'delete_step_run_progress');
 
   // ── Phase I-C: legacy fallback ─────────────────────────────────────────────
   //
@@ -203,7 +204,8 @@ class StepRunRepository {
         .doc(projectId)
         .collection('steps')
         .orderBy('order')
-        .get();
+        .get()
+        .withServerTimeout(op: 'fetch_legacy_project_steps');
     return snap.docs
         .map((d) => ProjectStep.fromMap(d.data(), d.id))
         .toList();
@@ -223,7 +225,8 @@ class StepRunRepository {
         .where('projectId', isEqualTo: projectId)
         .orderBy('updatedAt', descending: true)
         .limit(1)
-        .get();
+        .get()
+        .withServerTimeout(op: 'get_or_adapt_step_run_by_project');
     if (newSnap.docs.isNotEmpty) {
       return _readRun(newSnap.docs.first);
     }

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/localization/app_language.dart';
+import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/async_loading_state.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
@@ -49,21 +52,18 @@ class _SwatchListScreenState extends ConsumerState<SwatchListScreen> {
     final gates = ref.watch(featureGatesProvider);
     final count = ref.watch(swatchCountProvider);
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // 고정 헤더
-            MoriPageHeaderShell(
-              child: MoriWideHeader(
-                title: t.swatches,
-                subtitle: t.swatchLibrary,
-              ),
-            ),
-            // 스크롤 바디
-            Expanded(
-              child: swatchListAsync.when(
+    return AppShellScaffold(
+      title: t.swatches,
+      subtitle: t.swatchLibrary,
+      trailing: [
+        // 이슈 #723 — 스와치 그룹 진입점
+        IconButton(
+          tooltip: isKorean ? '스와치 그룹' : 'Swatch groups',
+          icon: Icon(Icons.folder_rounded, color: C.lvD),
+          onPressed: () => context.push(Routes.swatchGroups),
+        ),
+      ],
+      body: swatchListAsync.when(
                 loading: () => AsyncLoadingFriendly(
                   isKorean: isKorean,
                   onRetry: () => ref.invalidate(swatchListProvider),
@@ -125,85 +125,95 @@ class _SwatchListScreenState extends ConsumerState<SwatchListScreen> {
                   }
                   final done = swatches.where(isSwatchDone).length;
                   final unset = swatches.where((s) => !isSwatchDone(s) && s.beforeStitchCount == 0).length;
+                  final sortLabels = isKorean
+                      ? ['최근순', '오래된순', '바늘크기순']
+                      : ['Recent', 'Oldest', 'Needle size'];
+                  final selectedIndex = _SwatchSort.values.indexOf(_sortMode);
+                  final linkedProjects = projectListAsync.valueOrNull ?? [];
                   return Stack(
                     children: [
                       const BgOrbs(),
-                      Column(
+                      ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
                         children: [
-                          // 요약카드 고정
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                            child: SummaryCard_Detail(
-                              headers: [
-                                isKorean ? '전체' : 'Total',
-                                isKorean ? '완료' : 'Done',
-                                isKorean ? '미지정' : 'Free',
-                              ],
-                              rows: [
-                                LibrarySummaryRowData(
-                                  badge: 'MoriKnit',
-                                  badgeColor: C.pkD,
-                                  values: ['${swatches.length}', '$done', '$unset'],
-                                  valueColors: [C.tx, C.lmD, C.mu],
-                                ),
-                              ],
-                              addLabel: isKorean ? '추가' : 'Add',
-                              onAdd: isLimitReached
-                                  ? () => _showLimitDialog(isKorean)
-                                  : () => _showSwatchStartSheet(context),
-                            ),
+                          // 요약카드
+                          SummaryCard_Detail(
+                            headers: [
+                              isKorean ? '전체' : 'Total',
+                              isKorean ? '완료' : 'Done',
+                              isKorean ? '미지정' : 'Free',
+                            ],
+                            rows: [
+                              LibrarySummaryRowData(
+                                badge: 'MoriKnit',
+                                badgeColor: C.pkD,
+                                values: ['${swatches.length}', '$done', '$unset'],
+                                valueColors: [C.tx, C.lmD, C.mu],
+                              ),
+                            ],
+                            addLabel: isKorean ? '추가' : 'Add',
+                            onAdd: isLimitReached
+                                ? () => _showLimitDialog(isKorean)
+                                : () => _showSwatchStartSheet(context),
                           ),
-                          // 스크롤 목록
-                          Expanded(
-                            child: ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
-                              itemCount: sorted.length + 1,
-                              separatorBuilder: (_, i) => i == 0 ? const SizedBox(height: 8) : const SizedBox(height: 10),
-                              itemBuilder: (context, index) {
-                                if (index == 0) {
-                                  return Column(
-                                    children: [
-                                      if (gates.isFree) ...[
-                                        GlassCard(
-                                          child: SwatchLimitBar(
-                                            current: count,
-                                            max: 5,
-                                            progress: progress,
-                                            isReached: isLimitReached,
-                                            onUpgrade: () {},
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                      ],
-                                      _LibrarySectionHeader(
-                                        title: isKorean ? '스와치 목록' : 'Swatches',
-                                        total: swatches.length,
-                                        sortLabels: isKorean
-                                            ? ['최근순', '오래된순', '바늘크기순']
-                                            : ['Recent', 'Oldest', 'Needle size'],
-                                        selectedIndex: _SwatchSort.values.indexOf(_sortMode),
-                                        onSort: (i) => setState(() => _sortMode = _SwatchSort.values[i]),
+                          const SizedBox(height: 8),
+                          if (gates.isFree) ...[
+                            GlassCard(
+                              child: SwatchLimitBar(
+                                current: count,
+                                max: 5,
+                                progress: progress,
+                                isReached: isLimitReached,
+                                onUpgrade: () {},
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          // 블록 안에 카드 목록 포함
+                          MoriBlockShell(
+                            label: isKorean ? '스와치 목록' : 'Swatches',
+                            icon: Icons.texture,
+                            accent: C.lv,
+                            moreLabel: sortLabels[selectedIndex],
+                            onMoreTap: () => _showSortMenu(context, sortLabels, selectedIndex),
+                            child: Column(
+                              children: [
+                                // 헤더 카운트 배지
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: C.pkD.withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(10),
                                       ),
-                                    ],
-                                  );
-                                }
-                                final swatch = sorted[index - 1];
-                                final linkedProjects = projectListAsync.valueOrNull ?? [];
-                                final linked = linkedProjects.where((p) => p.id == swatch.projectId).firstOrNull;
-                                return _NumberedItem(
-                                  number: index,
-                                  child: SwatchCard(
-                                    swatch: swatch,
-                                    projectName: linked?.title,
-                                    onTap: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => SwatchDetailScreen(swatchId: swatch.id),
+                                      child: Text('${swatches.length}',
+                                          style: T.caption.copyWith(color: C.pkD, fontWeight: FontWeight.w700)),
+                                    ),
+                                    const Spacer(),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                for (int i = 0; i < sorted.length; i++) ...[
+                                  if (i > 0) const SizedBox(height: 10),
+                                  _NumberedItem(
+                                    number: i + 1,
+                                    child: SwatchCard(
+                                      swatch: sorted[i],
+                                      projectName: linkedProjects
+                                          .where((p) => p.id == sorted[i].projectId)
+                                          .firstOrNull
+                                          ?.title,
+                                      onTap: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => SwatchDetailScreen(swatchId: sorted[i].id),
+                                        ),
                                       ),
                                     ),
                                   ),
-                                );
-                              },
+                                ],
+                              ],
                             ),
                           ),
                         ],
@@ -212,10 +222,6 @@ class _SwatchListScreenState extends ConsumerState<SwatchListScreen> {
                   );
                 },
               ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -365,6 +371,48 @@ class _SwatchListScreenState extends ConsumerState<SwatchListScreen> {
     );
   }
 
+  void _showSortMenu(BuildContext context, List<String> sortLabels, int selectedIndex) async {
+    final result = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: C.bd2, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 12),
+            ...sortLabels.asMap().entries.map(
+                  (e) => ListTile(
+                    leading: Icon(
+                      Icons.sort_rounded,
+                      color: e.key == selectedIndex ? C.lv : C.mu,
+                    ),
+                    title: Text(
+                      e.value,
+                      style: T.body.copyWith(
+                        color: e.key == selectedIndex ? C.lv : C.tx,
+                        fontWeight:
+                            e.key == selectedIndex ? FontWeight.w700 : FontWeight.w400,
+                      ),
+                    ),
+                    onTap: () => Navigator.pop(ctx, e.key),
+                  ),
+                ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (result != null) setState(() => _sortMode = _SwatchSort.values[result]);
+  }
+
   void _showLimitDialog(bool isKorean) {
     final gates = ref.read(featureGatesProvider);
     final count = ref.read(swatchCountProvider);
@@ -379,72 +427,6 @@ class _SwatchListScreenState extends ConsumerState<SwatchListScreen> {
             style: ElevatedButton.styleFrom(backgroundColor: C.lm, foregroundColor: const Color(0xFF1a3000)),
             onPressed: () => Navigator.pop(ctx),
             child: Text(isKorean ? '업그레이드' : 'Upgrade'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── 섹션 헤더 (목록 제목 + 개수 + 정렬) ──────────────────────────────
-class _LibrarySectionHeader extends StatelessWidget {
-  final String title;
-  final int total;
-  final List<String> sortLabels;
-  final int selectedIndex;
-  final ValueChanged<int> onSort;
-
-  const _LibrarySectionHeader({
-    required this.title,
-    required this.total,
-    required this.sortLabels,
-    required this.selectedIndex,
-    required this.onSort,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GlassCard(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      child: Row(
-        children: [
-          Text(title, style: T.bodyBold),
-          const SizedBox(width: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-            decoration: BoxDecoration(
-              color: C.pkD.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text('$total', style: T.caption.copyWith(color: C.pkD, fontWeight: FontWeight.w700)),
-          ),
-          const Spacer(),
-          PopupMenuButton<int>(
-            onSelected: onSort,
-            color: C.bg,
-            offset: const Offset(0, 32),
-            icon: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.sort_rounded, size: 16, color: C.mu),
-                const SizedBox(width: 2),
-                Text(sortLabels[selectedIndex], style: T.caption.copyWith(color: C.mu)),
-              ],
-            ),
-            itemBuilder: (ctx) => sortLabels
-                .asMap()
-                .entries
-                .map((e) => PopupMenuItem<int>(
-                      value: e.key,
-                      child: Text(
-                        e.value,
-                        style: T.body.copyWith(
-                          color: e.key == selectedIndex ? C.lv : C.tx,
-                          fontWeight: e.key == selectedIndex ? FontWeight.w700 : FontWeight.w400,
-                        ),
-                      ),
-                    ))
-                .toList(),
           ),
         ],
       ),

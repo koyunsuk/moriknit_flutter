@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/counter_provider.dart';
@@ -38,19 +39,11 @@ class CounterGroupScreen extends ConsumerWidget {
     final projectListAsync = ref.watch(projectListProvider);
     final projects = projectListAsync.valueOrNull ?? [];
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SafeArea(
-        child: Column(
-          children: [
-            MoriPageHeaderShell(
-              child: MoriWideHeader(
-                title: title,
-                subtitle: isKorean ? '카운터 그룹' : 'Counter group',
-              ),
-            ),
-            Expanded(
-              child: counterListAsync.when(
+    return AppShellScaffold(
+      title: title,
+      subtitle: isKorean ? '카운터 그룹' : 'Counter group',
+      showBackButton: true,
+      body: counterListAsync.when(
         loading: () => Center(child: CircularProgressIndicator(color: C.lmD)),
         error: (e, _) => Center(child: Text('$e', style: T.body)),
         data: (all) {
@@ -107,10 +100,6 @@ class CounterGroupScreen extends ConsumerWidget {
           );
         },
               ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -539,179 +528,158 @@ class _SortableCounterListState extends State<_SortableCounterList> {
     return list;
   }
 
+  void _showSortMenu(BuildContext context, List<String> sortLabels, int selectedIndex) async {
+    final result = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: C.bd2, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 12),
+            ...sortLabels.asMap().entries.map(
+                  (e) => ListTile(
+                    leading: Icon(
+                      Icons.sort_rounded,
+                      color: e.key == selectedIndex ? C.lmD : C.mu,
+                    ),
+                    title: Text(
+                      e.value,
+                      style: T.body.copyWith(
+                        color: e.key == selectedIndex ? C.lmD : C.tx,
+                        fontWeight:
+                            e.key == selectedIndex ? FontWeight.w700 : FontWeight.w400,
+                      ),
+                    ),
+                    onTap: () => Navigator.pop(ctx, e.key),
+                  ),
+                ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (result != null) {
+      setState(() => _sortMode = _CounterSort.values[result]);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final sorted = _sorted(widget.counters);
     final isKorean = widget.isKorean;
-    return Column(
+    final sortLabels = isKorean ? ['최근순', '오래된순'] : ['Recent', 'Oldest'];
+    final selectedIndex = _CounterSort.values.indexOf(_sortMode);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
       children: [
-        // 요약카드 고정
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: SummaryCard_Detail(
-            headers: [
-              isKorean ? '전체' : 'Total',
-              isKorean ? '진행' : 'Active',
-              isKorean ? '완료' : 'Done',
-            ],
-            rows: [
-              LibrarySummaryRowData(
-                badge: isKorean ? '카운터' : 'Counter',
-                badgeColor: C.lmD,
-                values: [
-                  '${widget.counters.length}',
-                  '${widget.inProgress}',
-                  '${widget.done}'
-                ],
-                valueColors: [C.tx, C.lv, C.pkD],
-              ),
-            ],
-            addLabel: isKorean ? '추가' : 'Add',
-            onAdd: widget.onAdd,
-          ),
+        // 요약카드
+        SummaryCard_Detail(
+          headers: [
+            isKorean ? '전체' : 'Total',
+            isKorean ? '진행' : 'Active',
+            isKorean ? '완료' : 'Done',
+          ],
+          rows: [
+            LibrarySummaryRowData(
+              badge: isKorean ? '카운터' : 'Counter',
+              badgeColor: C.lmD,
+              values: [
+                '${widget.counters.length}',
+                '${widget.inProgress}',
+                '${widget.done}'
+              ],
+              valueColors: [C.tx, C.lv, C.pkD],
+            ),
+          ],
+          addLabel: isKorean ? '추가' : 'Add',
+          onAdd: widget.onAdd,
         ),
-        // 스크롤 목록
-        Expanded(
+        const SizedBox(height: 8),
+        // 블록 안에 카운터 카드 목록 포함
+        MoriBlockShell(
+          label: isKorean ? '카운터 목록' : 'Counters',
+          icon: Icons.exposure_plus_1_rounded,
+          accent: C.lvD,
+          moreLabel: sortLabels[selectedIndex],
+          onMoreTap: () => _showSortMenu(context, sortLabels, selectedIndex),
           child: widget.counters.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 72,
-                          height: 72,
-                          decoration: BoxDecoration(
-                            color: C.lmD.withValues(alpha: 0.10),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Icon(Icons.exposure_plus_1_rounded,
-                              color: C.lmD, size: 36),
+              ? Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 72,
+                        height: 72,
+                        decoration: BoxDecoration(
+                          color: C.lmD.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(20),
                         ),
-                        const SizedBox(height: 16),
-                        Text(widget.emptyMessage, style: T.bodyBold),
-                        const SizedBox(height: 8),
-                        Text(
-                          isKorean
-                              ? '추가 버튼으로 새 카운터를 만들어보세요.'
-                              : 'Tap Add to create one.',
-                          style: T.caption.copyWith(color: C.mu),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
+                        child: Icon(Icons.exposure_plus_1_rounded,
+                            color: C.lmD, size: 36),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(widget.emptyMessage, style: T.bodyBold),
+                      const SizedBox(height: 8),
+                      Text(
+                        isKorean
+                            ? '추가 버튼으로 새 카운터를 만들어보세요.'
+                            : 'Tap Add to create one.',
+                        style: T.caption.copyWith(color: C.mu),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ),
                 )
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
-                  itemCount: sorted.length + 1,
-                  separatorBuilder: (_, i) => i == 0
-                      ? const SizedBox(height: 8)
-                      : const SizedBox(height: 10),
-                  itemBuilder: (context, index) {
-                    if (index == 0) {
-                      return _LibrarySectionHeader(
-                        title: isKorean ? '카운터 목록' : 'Counters',
-                        total: widget.counters.length,
-                        sortLabels: isKorean
-                            ? ['최근순', '오래된순']
-                            : ['Recent', 'Oldest'],
-                        selectedIndex: _CounterSort.values.indexOf(_sortMode),
-                        onSort: (i) => setState(
-                            () => _sortMode = _CounterSort.values[i]),
-                      );
-                    }
-                    final counter = sorted[index - 1];
-                    final linked = counter.projectId.isNotEmpty
-                        ? widget.projects
-                            .where((p) => p.id == counter.projectId)
-                            .firstOrNull
-                        : null;
-                    return _NumberedItem(
-                      number: index,
-                      child: _CounterListCard(
-                        counter: counter,
-                        isKorean: isKorean,
-                        projectName: linked?.title,
-                        onTap: () => widget.onTap(counter.id),
+              : Column(
+                  children: [
+                    // 헤더 카운트 배지
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: C.lmD.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text('${widget.counters.length}',
+                              style: T.caption.copyWith(
+                                  color: C.lmD, fontWeight: FontWeight.w700)),
+                        ),
+                        const Spacer(),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    for (int i = 0; i < sorted.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 10),
+                      _NumberedItem(
+                        number: i + 1,
+                        child: _CounterListCard(
+                          counter: sorted[i],
+                          isKorean: isKorean,
+                          projectName: sorted[i].projectId.isNotEmpty
+                              ? widget.projects
+                                  .where((p) => p.id == sorted[i].projectId)
+                                  .firstOrNull
+                                  ?.title
+                              : null,
+                          onTap: () => widget.onTap(sorted[i].id),
+                        ),
                       ),
-                    );
-                  },
+                    ],
+                  ],
                 ),
         ),
       ],
-    );
-  }
-}
-
-// ── 섹션 헤더 ─────────────────────────────────────────────────────────
-class _LibrarySectionHeader extends StatelessWidget {
-  final String title;
-  final int total;
-  final List<String> sortLabels;
-  final int selectedIndex;
-  final ValueChanged<int> onSort;
-
-  const _LibrarySectionHeader({
-    required this.title,
-    required this.total,
-    required this.sortLabels,
-    required this.selectedIndex,
-    required this.onSort,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GlassCard(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      child: Row(
-        children: [
-          Text(title, style: T.bodyBold),
-          const SizedBox(width: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-            decoration: BoxDecoration(
-              color: C.lmD.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text('$total',
-                style: T.caption.copyWith(
-                    color: C.lmD, fontWeight: FontWeight.w700)),
-          ),
-          const Spacer(),
-          PopupMenuButton<int>(
-            onSelected: onSort,
-            color: C.bg,
-            offset: const Offset(0, 32),
-            icon: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.sort_rounded, size: 16, color: C.mu),
-                const SizedBox(width: 2),
-                Text(sortLabels[selectedIndex],
-                    style: T.caption.copyWith(color: C.mu)),
-              ],
-            ),
-            itemBuilder: (ctx) => sortLabels
-                .asMap()
-                .entries
-                .map((e) => PopupMenuItem<int>(
-                      value: e.key,
-                      child: Text(
-                        e.value,
-                        style: T.body.copyWith(
-                          color: e.key == selectedIndex ? C.lmD : C.tx,
-                          fontWeight: e.key == selectedIndex
-                              ? FontWeight.w700
-                              : FontWeight.w400,
-                        ),
-                      ),
-                    ))
-                .toList(),
-          ),
-        ],
-      ),
     );
   }
 }

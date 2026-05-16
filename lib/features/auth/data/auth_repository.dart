@@ -35,6 +35,90 @@ class AuthRepository {
   Stream<User?> get authStateChanges => _auth.authStateChanges();
   User? get currentUser => _auth.currentUser;
 
+  /// 익명 여부 확인 — 게스트 모드(Pro 차단, 가입 권유 대상)
+  bool get isAnonymous => _auth.currentUser?.isAnonymous ?? false;
+
+  /// 익명 자동 로그인 — Splash에서 미로그인 시 호출.
+  /// Firebase Console → Authentication → Sign-in method → Anonymous 활성화 필요.
+  Future<User?> signInAnonymously() async {
+    try {
+      final credential = await _auth
+          .signInAnonymously()
+          .timeout(const Duration(seconds: 15));
+      final user = credential.user;
+      if (user != null) {
+        // 익명 사용자도 users/{uid} 문서를 만들어 둠 (Free 플랜으로 시작)
+        try {
+          await _ensureAnonymousUserDoc(user);
+        } catch (_) {}
+      }
+      return user;
+    } on FirebaseAuthException {
+      // 콘솔에서 익명 로그인이 비활성화되어 있거나 네트워크 실패 — 호출자가 처리
+      rethrow;
+    } on TimeoutException {
+      rethrow;
+    }
+  }
+
+  /// 익명 → 진짜 계정 업그레이드 (uid 보존, 모든 데이터 그대로 유지).
+  /// 이메일/Google/Kakao 자격 증명을 전달받아 현재 익명 사용자에 연결한다.
+  Future<UserModel?> linkWithCredential(AuthCredential credential) async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('로그인 상태가 아닙니다.');
+    try {
+      final result = await user
+          .linkWithCredential(credential)
+          .timeout(const Duration(seconds: 20));
+      final linkedUser = result.user;
+      if (linkedUser == null) {
+        throw Exception('Failed to link credential.');
+      }
+      return await _getOrCreateUser(linkedUser);
+    } on FirebaseAuthException catch (e) {
+      throw LoginException(_handleAuthException(e), code: e.code);
+    }
+  }
+
+  /// 익명 사용자용 users/{uid} 최소 문서 생성 — Free 플랜으로 시작.
+  Future<void> _ensureAnonymousUserDoc(User firebaseUser) async {
+    final docRef = _db.collection('users').doc(firebaseUser.uid);
+    final doc = await docRef.get().timeout(const Duration(seconds: 12));
+    if (doc.exists) {
+      // 마지막 활동 시간만 갱신
+      await docRef.set({
+        'lastActiveAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true)).timeout(const Duration(seconds: 12));
+      return;
+    }
+    final newUser = UserModel.initial(
+      uid: firebaseUser.uid,
+      email: '',
+      displayName: '게스트',
+      photoURL: '',
+    );
+    await docRef.set({
+      ...newUser.toJson(),
+      'isAnonymous': true,
+      'createdAt': FieldValue.serverTimestamp(),
+      'lastActiveAt': FieldValue.serverTimestamp(),
+      'moriBalance': 0,
+      // 익명 사용자는 무조건 Free 플랜
+      'subscription': {
+        'planId': 'free',
+        'status': 'active',
+        'cancelAtPeriodEnd': false,
+      },
+      'usage': {
+        'swatchCount': 0,
+        'projectCount': 0,
+        'counterCount': 0,
+        'editorSaveCount': 0,
+        'postsThisMonth': 0,
+      },
+    }).timeout(const Duration(seconds: 12));
+  }
+
   Future<void> _ensureGoogleInitialized() async {
     if (_googleInitialized || kIsWeb) return;
     await _googleSignIn.initialize(serverClientId: _googleServerClientId);
@@ -127,19 +211,41 @@ class AuthRepository {
 
   Future<UserModel?> signInWithKakao() async {
     try {
-      // 1. 카카오 로그인
-      final kakao.OAuthToken token;
+      // 1. 카카오 로그인 (kakao_flutter_sdk 웹 미지원 — 모바일 전용)
+      if (kIsWeb) {
+        throw Exception('카카오 로그인은 모바일 앱에서만 지원합니다.');
+      }
+      kakao.OAuthToken token;
       if (await kakao.isKakaoTalkInstalled()) {
-        token = await kakao.UserApi.instance.loginWithKakaoTalk();
+        try {
+          token = await kakao.UserApi.instance.loginWithKakaoTalk();
+        } catch (_) {
+          // 카카오톡 설치돼 있어도 사용자가 카카오톡 로그인을 취소하면 계정 로그인 폴백
+          token = await kakao.UserApi.instance.loginWithKakaoAccount();
+        }
       } else {
         token = await kakao.UserApi.instance.loginWithKakaoAccount();
       }
 
-      // 2. Firebase Function으로 커스텀 토큰 발급
+      // 2. 현재 익명 사용자이면 ID 토큰을 함께 전달해 uid를 유지한 채 업그레이드
+      String? anonymousIdToken;
+      final current = _auth.currentUser;
+      if (current != null && current.isAnonymous) {
+        try {
+          anonymousIdToken = await current.getIdToken();
+        } catch (_) {
+          anonymousIdToken = null;
+        }
+      }
+
+      // 3. Firebase Function으로 커스텀 토큰 발급
       final response = await http.post(
         Uri.parse(_kakaoFunctionUrl),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'accessToken': token.accessToken}),
+        body: jsonEncode({
+          'accessToken': token.accessToken,
+          'anonymousIdToken': ?anonymousIdToken,
+        }),
       ).timeout(const Duration(seconds: 20));
 
       if (response.statusCode != 200) {
@@ -151,7 +257,8 @@ class AuthRepository {
         throw Exception('No custom token returned');
       }
 
-      // 3. Firebase 로그인
+      // 4. 익명 → 카카오 업그레이드일 경우 signOut 없이 그대로 signInWithCustomToken 호출.
+      //    같은 uid로 발급된 토큰이라 데이터는 그대로 유지됨.
       final credential = await _auth
           .signInWithCustomToken(customToken)
           .timeout(const Duration(seconds: 20));
@@ -195,7 +302,7 @@ class AuthRepository {
       'createdAt': FieldValue.serverTimestamp(),
       'lastActiveAt': FieldValue.serverTimestamp(),
       'moriBalance': 10000,
-      if (signupSource != null) 'signupSource': signupSource,
+      'signupSource': ?signupSource,
       'subscription': {
         'planId': 'pro', // 베타 기간: 신규 회원 전원 Pro
         'status': 'trial',

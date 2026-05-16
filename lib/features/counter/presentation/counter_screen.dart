@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/counter_provider.dart';
 import '../../../providers/project_provider.dart';
@@ -675,20 +676,13 @@ class _CounterScreenState extends ConsumerState<CounterScreen> {
             ),
           ];
 
-    return Scaffold(
-      backgroundColor: C.bg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            MoriPageHeaderShell(
-              child: MoriWideHeader(
-                title: headerTitle,
-                subtitle: headerSubtitle,
-                trailing: trailing,
-              ),
-            ),
-            Expanded(
-              child: counterAsync.when(
+    return AppShellScaffold(
+      title: headerTitle,
+      subtitle: headerSubtitle,
+      trailing: trailing,
+      showBackButton: true,
+      showBgOrbs: false,
+      body: counterAsync.when(
         data: (counter) {
           if (counter == null) {
             return Center(child: Text(isKorean ? '카운터를 찾을 수 없어요.' : 'Counter not found.', style: T.body));
@@ -907,10 +901,6 @@ class _CounterScreenState extends ConsumerState<CounterScreen> {
         },
         loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
         error: (e, _) => Center(child: Text('$e', style: T.body)),
-      ),
-            ),
-          ],
-        ),
       ),
     );
   }

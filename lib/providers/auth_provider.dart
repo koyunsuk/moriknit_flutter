@@ -33,6 +33,12 @@ final isLoggedInProvider = Provider<bool>((ref) {
   return ref.watch(authStateProvider).valueOrNull != null;
 });
 
+/// 익명(게스트) 로그인 여부 — Splash 자동 로그인 / Pro 차단 / 가입 권유 트리거에 사용
+final isAnonymousUserProvider = Provider<bool>((ref) {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  return user?.isAnonymous ?? false;
+});
+
 /// Firebase Custom Claims 기반으로 isAdmin을 실시간 확인합니다.
 /// idTokenChanges()는 로그인/로그아웃/토큰 갱신 시 발생합니다.
 final isAdminProvider = StreamProvider<bool>((ref) {
@@ -54,6 +60,10 @@ final hasAnyAdminProvider = FutureProvider<bool>((ref) async {
 });
 
 final currentPlanProvider = Provider<String>((ref) {
+  // 익명(게스트) 사용자는 무조건 Free — Pro 결제 차단
+  final isAnonymous = ref.watch(isAnonymousUserProvider);
+  if (isAnonymous) return SubscriptionConstants.planFree;
+
   final user = ref.watch(currentUserProvider).valueOrNull;
   if (user == null) return SubscriptionConstants.planFree;
   final sub = user.subscription;

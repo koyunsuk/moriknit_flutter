@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/project_provider.dart';
@@ -330,18 +331,13 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
       (list) => list.cast<YarnModel?>().firstWhere((y) => y?.id == widget.yarnId, orElse: () => null),
     );
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SafeArea(
-        child: Column(
-          children: [
-            MoriPageHeaderShell(
-              child: MoriWideHeader(
-                title: _isEditing
-                    ? (isKorean ? '실 수정' : 'Edit Yarn')
-                    : (isKorean ? '실 정보' : 'Yarn Details'),
-                subtitle: isKorean ? '실 상세' : 'Yarn details',
-                trailing: _isEditing
+    return AppShellScaffold(
+      title: _isEditing
+          ? (isKorean ? '실 수정' : 'Edit Yarn')
+          : (isKorean ? '실 정보' : 'Yarn Details'),
+      subtitle: isKorean ? '실 상세' : 'Yarn details',
+      showBackButton: true,
+      trailing: _isEditing
                     ? [
                         TextButton(
                           onPressed: _cancelEdit,
@@ -404,10 +400,7 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
                             ) ??
                             const SizedBox.shrink(),
                       ],
-              ),
-            ),
-            Expanded(
-              child: yarnAsync.when(
+      body: yarnAsync.when(
                 data: (yarn) {
                   if (yarn == null) {
                     return Center(child: Text(isKorean ? '실 정보를 찾을 수 없어요.' : 'Yarn not found.', style: T.body.copyWith(color: C.mu)));
@@ -420,10 +413,6 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
                 loading: () => Center(child: CircularProgressIndicator(color: C.lm)),
                 error: (e, _) => Center(child: Text('$e', style: T.body.copyWith(color: C.og))),
               ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -436,9 +425,10 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
           children: [
             // 기본 정보
-            SectionTitle(title: isKorean ? '📝 기본 정보' : '📝 Basic Info'),
-            const SizedBox(height: 8),
-            GlassCard(
+            MoriBlockShell(
+              label: isKorean ? '기본 정보' : 'Basic Info',
+              icon: Icons.info_outline,
+              accent: C.lm,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -494,9 +484,10 @@ class _YarnDetailScreenState extends ConsumerState<YarnDetailScreen> {
             ),
             const SizedBox(height: 14),
             // 상세 정보
-            SectionTitle(title: isKorean ? '🔍 상세 정보' : '🔍 Details'),
-            const SizedBox(height: 8),
-            GlassCard(
+            MoriBlockShell(
+              label: isKorean ? '상세 정보' : 'Details',
+              icon: Icons.search_rounded,
+              accent: C.lmD,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

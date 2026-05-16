@@ -22,11 +22,11 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/mori_symbol_view.dart';
+import '../../../../core/widgets/symbol_svg_widget.dart';
 import '../../../../providers/knit_symbol_provider.dart';
 import '../../domain/crochet_symbols.dart';
 import '../../domain/knit_symbols.dart';
@@ -1158,12 +1158,12 @@ class _SymbolCard extends ConsumerWidget {
     // 코바늘: 직접 firebaseUrl 사용 — Firestore 매핑 충돌 회피 (사각 그리드와 동일).
     final c = symbol as CrochetSymbol;
     if (c.hasSvg) {
-      return SvgPicture.network(
-        c.firebaseUrl,
-        width: 22,
-        height: 22,
+      return SymbolSvgWidget(
+        symbolId: c.id,
+        svgUrl: c.firebaseUrl,
+        size: 22,
         fit: BoxFit.contain,
-        placeholderBuilder: (_) => Text(
+        fallback: Text(
           c.abbreviation.length > 4
               ? c.abbreviation.substring(0, 4)
               : c.abbreviation,

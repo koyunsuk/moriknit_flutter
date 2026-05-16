@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/async_loading_state.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/market_provider.dart';
@@ -22,32 +23,15 @@ class MyMarketDashboardScreen extends ConsumerWidget {
     final purchasesAsync = ref.watch(myPurchasesProvider);
 
     if (user == null) {
-      return Scaffold(
-        backgroundColor: Colors.transparent,
-        body: Stack(
-          children: [
-            const BgOrbs(),
-            SafeArea(
-              child: Column(
-                children: [
-                  MoriPageHeaderShell(
-                    child: MoriWideHeader(
-                      title: isKorean ? '내 마켓' : 'My Market',
-                      subtitle: isKorean ? '판매·구매 한눈에 보기' : 'Sales and purchases at a glance',
-                    ),
-                  ),
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        isKorean ? '로그인이 필요해요.' : 'Login required.',
-                        style: T.body.copyWith(color: C.mu),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+      return AppShellScaffold(
+        title: isKorean ? '내 마켓' : 'My Market',
+        subtitle: isKorean ? '판매·구매 한눈에 보기' : 'Sales and purchases at a glance',
+        showBackButton: true,
+        body: Center(
+          child: Text(
+            isKorean ? '로그인이 필요해요.' : 'Login required.',
+            style: T.body.copyWith(color: C.mu),
+          ),
         ),
       );
     }
@@ -59,59 +43,45 @@ class MyMarketDashboardScreen extends ConsumerWidget {
     final soldItems = myItems.where((i) => i.isSoldOut).toList();
     final totalRevenue = sales.fold<int>(0, (sum, s) => sum + s.price);
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
+    return AppShellScaffold(
+      title: isKorean ? '내 마켓' : 'My Market',
+      subtitle: isKorean ? '판매 대기·구매 도안' : 'Pending sales & purchases',
+      showBackButton: true,
+      aboveBody: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+        child: SummaryCard_Main(
+          headers: [
+            isKorean ? '판매대기' : 'Pending',
+            isKorean ? '판매완료' : 'Sold',
+            isKorean ? '구매' : 'Bought',
+          ],
+          rows: [
+            LibrarySummaryRowData(
+              badge: isKorean ? '내 마켓' : 'My Market',
+              badgeColor: C.lv,
+              values: [
+                '${pendingItems.length}',
+                '${soldItems.length}',
+                '${purchases.length}',
+              ],
+              valueColors: [C.lvD, C.pkD, C.og],
+            ),
+            LibrarySummaryRowData(
+              badge: isKorean ? '수익' : 'Revenue',
+              badgeColor: C.pkD,
+              values: [
+                '${myItems.length}${isKorean ? '개' : ''}',
+                '$totalRevenue원',
+                '-',
+              ],
+              valueColors: [C.lvD, C.pkD, C.mu],
+            ),
+          ],
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
         children: [
-          const BgOrbs(),
-          SafeArea(
-            child: Column(
-              children: [
-                // 공통 헤더 (상단 고정)
-                MoriPageHeaderShell(
-                  child: MoriWideHeader(
-                    title: isKorean ? '내 마켓' : 'My Market',
-                    subtitle: isKorean ? '판매 대기·구매 도안' : 'Pending sales & purchases',
-                  ),
-                ),
-                // 상단 요약카드 (나의 실 라이브러리 패턴)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                  child: SummaryCard_Main(
-                    headers: [
-                      isKorean ? '판매대기' : 'Pending',
-                      isKorean ? '판매완료' : 'Sold',
-                      isKorean ? '구매' : 'Bought',
-                    ],
-                    rows: [
-                      LibrarySummaryRowData(
-                        badge: isKorean ? '내 마켓' : 'My Market',
-                        badgeColor: C.lv,
-                        values: [
-                          '${pendingItems.length}',
-                          '${soldItems.length}',
-                          '${purchases.length}',
-                        ],
-                        valueColors: [C.lvD, C.pkD, C.og],
-                      ),
-                      LibrarySummaryRowData(
-                        badge: isKorean ? '수익' : 'Revenue',
-                        badgeColor: C.pkD,
-                        values: [
-                          '${myItems.length}${isKorean ? '개' : ''}',
-                          '$totalRevenue원',
-                          '-',
-                        ],
-                        valueColors: [C.lvD, C.pkD, C.mu],
-                      ),
-                    ],
-                  ),
-                ),
-                // 스크롤 바디
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-                    children: [
                       // 섹션 1: 판매 대기중
                       GlassCard(
                         child: Column(
@@ -233,12 +203,6 @@ class MyMarketDashboardScreen extends ConsumerWidget {
                         ),
                       ),
                     ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

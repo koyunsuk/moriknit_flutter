@@ -10,6 +10,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/errors/firestore_timeout_extension.dart';
+
 class FreeTimerState {
   final int totalSeconds;
   final DateTime? currentSessionStart;
@@ -88,7 +90,7 @@ class FreeTimerRepository {
   Future<FreeTimerState> load() async {
     final ref = _docRef;
     if (ref == null) return const FreeTimerState();
-    final snap = await ref.get();
+    final snap = await ref.get().withServerTimeout(op: 'free_timer_load');
     if (!snap.exists) return const FreeTimerState();
     return FreeTimerState.fromMap(snap.data() ?? {});
   }
@@ -111,7 +113,7 @@ class FreeTimerRepository {
         data['timerName'] = _autoFreeTimerName(DateTime.now());
       }
       tx.set(ref, data, SetOptions(merge: true));
-    });
+    }).withServerTimeout(op: 'free_timer_start_tx');
   }
 
   /// 타이머 이름 수동 변경
@@ -121,7 +123,7 @@ class FreeTimerRepository {
     await ref.set({
       'timerName': name,
       'lastUpdatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    }, SetOptions(merge: true)).withServerTimeout(op: 'free_timer_update_name');
   }
 
   static String _autoFreeTimerName(DateTime now) {
@@ -150,7 +152,7 @@ class FreeTimerRepository {
         },
         SetOptions(merge: true),
       );
-    });
+    }).withServerTimeout(op: 'free_timer_pause_tx');
   }
 
   /// 누적 시간 리셋 — 다음 시작 시 새 자동 이름이 부여되도록 timerName도 비움
@@ -162,7 +164,7 @@ class FreeTimerRepository {
       'currentSessionStart': null,
       'timerName': null,
       'lastUpdatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    }, SetOptions(merge: true)).withServerTimeout(op: 'free_timer_reset');
   }
 }
 

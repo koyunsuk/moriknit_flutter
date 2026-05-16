@@ -13,6 +13,7 @@ import '../../../core/localization/app_language.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/dropbox_provider.dart';
 import '../../pattern_converter/presentation/pattern_converter_screen.dart';
@@ -178,78 +179,65 @@ class _DropboxScreenState extends ConsumerState<DropboxScreen> {
           _goUp();
         }
       },
-      child: Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SafeArea(
-        child: Column(
-          children: [
-            MoriPageHeaderShell(
-              child: MoriWideHeader(
-                title: 'Dropbox',
-                subtitle: auth.isLoggedIn
-                    ? (isKorean ? '${auth.email ?? ''} 연결됨' : 'Connected as ${auth.email ?? ''}')
-                    : (isKorean ? '드롭박스 계정을 연결하세요' : 'Connect your Dropbox account'),
-                trailing: auth.isLoggedIn
-                    ? [
-                        TextButton(
-                          onPressed: () async {
-                            await ref.read(dropboxAuthProvider.notifier).logout();
-                            if (mounted) setState(() => _pathStack..clear()..add(''));
-                          },
-                          child: Text(
-                            isKorean ? '연결 해제' : 'Disconnect',
-                            style: T.caption.copyWith(color: C.og),
-                          ),
+      child: AppShellScaffold(
+        title: 'Dropbox',
+        subtitle: auth.isLoggedIn
+            ? (isKorean ? '${auth.email ?? ''} 연결됨' : 'Connected as ${auth.email ?? ''}')
+            : (isKorean ? '드롭박스 계정을 연결하세요' : 'Connect your Dropbox account'),
+        trailing: auth.isLoggedIn
+            ? [
+                TextButton(
+                  onPressed: () async {
+                    await ref.read(dropboxAuthProvider.notifier).logout();
+                    if (mounted) setState(() => _pathStack..clear()..add(''));
+                  },
+                  child: Text(
+                    isKorean ? '연결 해제' : 'Disconnect',
+                    style: T.caption.copyWith(color: C.og),
+                  ),
+                ),
+              ]
+            : null,
+        body: auth.isLoading
+            ? Center(child: CircularProgressIndicator(color: _kDropboxBlue))
+            : auth.isLoggedIn
+                ? DefaultTabController(
+                    length: 2,
+                    child: Column(
+                      children: [
+                        // 탭바 — 일반 / 즐겨찾기
+                        TabBar(
+                          labelColor: _kDropboxBlue,
+                          unselectedLabelColor: C.mu,
+                          indicatorColor: _kDropboxBlue,
+                          tabs: [
+                            Tab(text: isKorean ? '일반' : 'Browse'),
+                            Tab(text: isKorean ? '즐겨찾기' : 'Favorites'),
+                          ],
                         ),
-                      ]
-                    : null,
-              ),
-            ),
-            Expanded(
-              child: auth.isLoading
-                  ? Center(child: CircularProgressIndicator(color: _kDropboxBlue))
-                  : auth.isLoggedIn
-                      ? DefaultTabController(
-                          length: 2,
-                          child: Column(
+                        Expanded(
+                          child: TabBarView(
                             children: [
-                              // 탭바 — 일반 / 즐겨찾기
-                              TabBar(
-                                labelColor: _kDropboxBlue,
-                                unselectedLabelColor: C.mu,
-                                indicatorColor: _kDropboxBlue,
-                                tabs: [
-                                  Tab(text: isKorean ? '일반' : 'Browse'),
-                                  Tab(text: isKorean ? '즐겨찾기' : 'Favorites'),
-                                ],
+                              _FileBrowser(
+                                path: _currentPath,
+                                displayPath: _displayPath(),
+                                canGoUp: _pathStack.length > 1,
+                                onEnterFolder: _enterFolder,
+                                onGoUp: _goUp,
+                                onFileSelected: _importFile,
+                                isKorean: isKorean,
                               ),
-                              Expanded(
-                                child: TabBarView(
-                                  children: [
-                                    _FileBrowser(
-                                      path: _currentPath,
-                                      displayPath: _displayPath(),
-                                      canGoUp: _pathStack.length > 1,
-                                      onEnterFolder: _enterFolder,
-                                      onGoUp: _goUp,
-                                      onFileSelected: _importFile,
-                                      isKorean: isKorean,
-                                    ),
-                                    _FavoritesTab(
-                                      isKorean: isKorean,
-                                      onEnterFolder: _enterFolder,
-                                    ),
-                                  ],
-                                ),
+                              _FavoritesTab(
+                                isKorean: isKorean,
+                                onEnterFolder: _enterFolder,
                               ),
                             ],
                           ),
-                        )
-                      : _ConnectPrompt(isKorean: isKorean),
-            ),
-          ],
-        ),
-      ),
+                        ),
+                      ],
+                    ),
+                  )
+                : _ConnectPrompt(isKorean: isKorean),
       ),
     );
   }

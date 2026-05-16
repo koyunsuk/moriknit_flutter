@@ -15,6 +15,7 @@ import '../../../core/localization/app_language.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/cached_pattern_image.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../blueprint/presentation/step_log_screen.dart';
 import '../data/pattern_export_service.dart';
@@ -1097,7 +1098,15 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
                     final linked = project.id == _chart.linkedProjectId;
                     return ListTile(
                       leading: project.coverPhotoUrl.isNotEmpty
-                          ? ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.network(project.coverPhotoUrl, width: 40, height: 40, fit: BoxFit.cover))
+                          ? CachedPatternImage(
+                              url: project.coverPhotoUrl,
+                              patternId: 'project_${project.id}',
+                              width: 40,
+                              height: 40,
+                              fit: BoxFit.cover,
+                              borderRadius: BorderRadius.circular(6),
+                              placeholderIcon: Icons.folder_rounded,
+                            )
                           : Container(width: 40, height: 40, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(6)), child: Icon(Icons.folder_rounded, color: C.lv)),
                       title: Text(project.title, style: T.bodyBold),
                       trailing: linked ? Icon(Icons.check_circle_rounded, color: C.lv, size: 20) : null,

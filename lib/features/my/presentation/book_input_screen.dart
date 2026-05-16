@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/book_provider.dart';
@@ -283,9 +284,13 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
   Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      bottomNavigationBar: SafeArea(
+    return AppShellScaffold(
+      title: widget.initialBook == null
+          ? (isKorean ? '도서 추가' : 'Add Book')
+          : (isKorean ? '도서 수정' : 'Edit Book'),
+      subtitle: isKorean ? '도서 정보를 기록해요' : 'Record your book info',
+      showBackButton: true,
+      bottom: SafeArea(
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -299,38 +304,11 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
           ),
         ),
       ),
-      body: Stack(
-        children: [
-          const BgOrbs(),
-          SafeArea(
-            child: Column(
-              children: [
-                Stack(
-                  children: [
-                    MoriPageHeaderShell(
-                      child: MoriWideHeader(
-                        title: widget.initialBook == null
-                            ? (isKorean ? '도서 추가' : 'Add Book')
-                            : (isKorean ? '도서 수정' : 'Edit Book'),
-                        subtitle: isKorean ? '도서 정보를 기록해요' : 'Record your book info',
-                      ),
-                    ),
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: IconButton(
-                        icon: Icon(Icons.arrow_back_ios, color: C.tx, size: 20),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ),
-                  ],
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
                 // ISBN 입력 + 검색
                 SectionTitle(title: isKorean ? 'ISBN *' : 'ISBN *'),
                 const SizedBox(height: 8),
@@ -511,12 +489,6 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
                       ],
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

@@ -7,6 +7,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
+import '../../../core/cache/local_cache.dart';
+import '../../../core/constants/subscription_constants.dart';
+import '../../../core/errors/firestore_timeout_extension.dart';
+import '../../../core/errors/network_errors.dart';
 import '../../blueprint/data/chart_to_units_converter.dart';
 import '../../blueprint/data/step_blueprint_repository.dart';
 import '../../blueprint/domain/step_blueprint_unit.dart';
@@ -20,10 +24,22 @@ class PatternRepository {
   /// #687 — StepBlueprintRepository를 선택적 주입 받아 모든 저장 시
   /// step_blueprints + units에도 동일 id로 청사진을 기록한다.
   /// 영역 분리: pattern_charts는 시각/메타, step_blueprints는 단계.
-  PatternRepository({StepBlueprintRepository? blueprintRepo})
-      : _blueprintRepo = blueprintRepo ?? StepBlueprintRepository();
+  PatternRepository({
+    StepBlueprintRepository? blueprintRepo,
+    LocalCache<PatternChart>? cache,
+  })  : _blueprintRepo = blueprintRepo ?? StepBlueprintRepository(),
+        _cache = cache ??
+            LocalCache<PatternChart>(
+              // #704 Phase A-A — 오프라인 폴백용 Hive 캐시.
+              // #685 에서 이미 main.dart 에서 box 가 열려 있음 (boxCachePatternCharts).
+              boxName: SubscriptionConstants.boxCachePatternCharts,
+              fromJson: PatternChart.fromJson,
+              toJson: (c) => c.toJson(),
+              idOf: (c) => c.id,
+            );
 
   final StepBlueprintRepository _blueprintRepo;
+  final LocalCache<PatternChart> _cache;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
@@ -79,6 +95,10 @@ class PatternRepository {
     } catch (e) {
       debugPrint('[PatternRepository.save] mirror to blueprint failed: $e');
     }
+
+    // 3) #704 Phase A-A — write-through 캐시 (오프라인 폴백용).
+    //    저장 성공 시점에만 캐시 갱신, 실패는 무음 (UX 영향 X).
+    await _cache.writeOne(saved);
 
     return saved;
   }
@@ -157,13 +177,30 @@ class PatternRepository {
 
   Future<void> delete(String id) async {
     // pattern_charts 삭제
-    await _ref.doc(id).delete();
+    await _ref.doc(id).delete().withServerTimeout(op: 'delete_pattern');
     // step_blueprints + units subcollection 일괄 삭제 (#687)
     await _blueprintRepo.delete(id);
+    // #704 Phase A-A — Hive 캐시에서도 제거 (성공 시점에만).
+    await _cacheRemoveOne(id);
+  }
+
+  /// #704 Phase A-A — Hive 캐시 단건 삭제 헬퍼.
+  /// LocalCache 가 단건 삭제 API 를 노출하지 않으므로 box 에 직접 접근.
+  /// 실패는 무음 (UX 영향 X).
+  Future<void> _cacheRemoveOne(String id) async {
+    try {
+      // 캐시 박스가 닫혀 있거나 웹이면 readOne 도 null 이므로 skip.
+      if (_cache.readOne(id) == null) return;
+      // 전체 재기록 — N 이 작아 비용 미미. delete 자체가 흔치 않은 액션.
+      final remaining = _cache.readAll().where((c) => c.id != id).toList();
+      await _cache.writeAll(remaining);
+    } catch (_) {
+      // 무음
+    }
   }
 
   Future<void> linkToProject(String chartId, String? projectId) async {
-    await _ref.doc(chartId).update({'linkedProjectId': projectId});
+    await _ref.doc(chartId).update({'linkedProjectId': projectId}).withServerTimeout(op: 'link_pattern_to_project');
   }
 
   Future<PatternChart> duplicate(PatternChart original) async {
@@ -181,6 +218,10 @@ class PatternRepository {
 
   /// 다른 사용자의 chart 타입 도안을 Fork하여 내 컬렉션에 복사합니다.
   /// 원본의 forkCount를 +1 업데이트하고 새 패턴 ID를 반환합니다.
+  ///
+  /// 이슈 #629 — complete 도안만 Fork 가능(호출부 가드 권장).
+  /// 이슈 #687 — pattern_charts와 step_blueprints(+units)를 같은 ID로 동시 복제.
+  /// 새 PatternChart는 `forkOfId`, `sourcePatternId`, `sourceOwnerName`을 모두 보유.
   Future<PatternChart> forkPattern({
     required String sourceOwnerId,
     required String sourceOwnerName,
@@ -204,23 +245,112 @@ class PatternRepository {
       type: PatternType.chart,
       sourcePatternId: sourcePattern.id,
       sourceOwnerName: sourceOwnerName,
+      // 이슈 #629 — Fork 관계 식별자(sourcePatternId와 동일 값, 명시적 표현).
+      forkOfId: sourcePattern.id,
+      // Fork 결과물은 무료 사본. 마켓 도입 후 가격 정책은 별도.
+      priceWon: 0,
+      narrativeBlocks: sourcePattern.narrativeBlocks,
+      repeatRegions: sourcePattern.repeatRegions,
+      gauge: sourcePattern.gauge,
+      knittingDirection: sourcePattern.knittingDirection,
+      mirrorMode: sourcePattern.mirrorMode,
+      category: sourcePattern.category,
+      chartType: sourcePattern.chartType,
+      roundData: sourcePattern.roundData,
+      guidePathData: sourcePattern.guidePathData,
     );
     await docRef.set({
       ...forked.toJson(),
       // #687 Phase E1 — 단계 데이터는 step_blueprints/units에만.
       'aiSections': const <Map<String, dynamic>>[],
       'updatedAt': FieldValue.serverTimestamp(),
-    });
+      'createdAt': FieldValue.serverTimestamp(),
+    }).withServerTimeout(op: 'fork_pattern');
 
-    // 2. 원본 패턴의 forkCount를 +1 증가
+    // 2. step_blueprints + units 복제 (#687 — 단계 영역 동기 복제).
+    //    blueprint.id == new chart.id 보장. 실패해도 본 도안 저장은 유효.
+    try {
+      await _copyBlueprintForFork(
+        sourceOwnerName: sourceOwnerName,
+        sourcePatternId: sourcePattern.id,
+        newPatternId: docRef.id,
+        forked: forked,
+      ).timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('[PatternRepository.forkPattern] blueprint copy failed: $e');
+      // 본 도안에 청사진이 없거나 권한 부족 시에도 도안 자체 Fork는 성공 유지.
+    }
+
+    // 3. 원본 패턴의 forkCount를 +1 증가
     final sourceRef = _db
         .collection('users')
         .doc(sourceOwnerId)
         .collection('pattern_charts')
         .doc(sourcePattern.id);
-    await sourceRef.update({'forkCount': FieldValue.increment(1)});
+    await sourceRef.update({'forkCount': FieldValue.increment(1)}).withServerTimeout(op: 'increment_fork');
+
+    // #704 Phase A-A — Fork 본인 컬렉션 사본은 캐시에 기록.
+    await _cache.writeOne(forked);
 
     return forked;
+  }
+
+  /// #629/#687 — Fork 시 원본 청사진(step_blueprints + units)을 새 chart.id로 복제.
+  /// `StepBlueprintRepository.fork()`는 새 ID를 생성하므로 직접 batch 작업으로
+  /// blueprint.id == newPatternId 일치를 보장한다.
+  Future<void> _copyBlueprintForFork({
+    required String sourceOwnerName,
+    required String sourcePatternId,
+    required String newPatternId,
+    required PatternChart forked,
+  }) async {
+    // 원본 blueprint 조회. 권한이 없으면 Exception → 호출부 try/catch에서 무음 처리.
+    final srcBlueprintRef =
+        _db.collection('step_blueprints').doc(sourcePatternId);
+    final srcDoc = await srcBlueprintRef.get();
+
+    final newBlueprintRef =
+        _db.collection('step_blueprints').doc(newPatternId);
+
+    if (srcDoc.exists) {
+      // 원본 blueprint 존재 — 그대로 복제 + units 일괄 복사.
+      final srcUnitsSnap = await srcBlueprintRef.collection('units').get();
+      final srcData = Map<String, dynamic>.from(srcDoc.data()!);
+      final batch = _db.batch();
+      batch.set(newBlueprintRef, {
+        ...srcData,
+        'id': newPatternId,
+        'ownerUid': _uid,
+        // Fork 결과물은 비공개 초안. 마켓 게이트는 호출부에서 별도 처리.
+        'visibility': 'draft',
+        'provider': 'user',
+        'fromBlueprintId': sourcePatternId,
+        'fromAttribution': 'forked from @$sourceOwnerName',
+        'publishedVersions': const <dynamic>[],
+        'version': '1.0.0',
+        'isFeatured': false,
+        'isCurated': false,
+        'moriknitVerified': false,
+        'members': const <String, dynamic>{},
+        'autoSyncOwnerRuns': false,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      // units 복제 — 새 unit.id, blueprintId=newPatternId
+      for (final unitDoc in srcUnitsSnap.docs) {
+        final unitData = Map<String, dynamic>.from(unitDoc.data());
+        final newUnitRef = newBlueprintRef.collection('units').doc();
+        unitData['id'] = newUnitRef.id;
+        unitData['blueprintId'] = newPatternId;
+        unitData['createdAt'] = FieldValue.serverTimestamp();
+        unitData['updatedAt'] = FieldValue.serverTimestamp();
+        batch.set(newUnitRef, unitData);
+      }
+      await batch.commit().withServerTimeout(op: 'fork_blueprint_batch');
+    } else {
+      // 원본 blueprint 부재(레거시 도안) — chart 본문 기반 미러만 수행.
+      await _mirrorToBlueprint(forked);
+    }
   }
 
   /// 원본 도안의 forkCount를 +1 증가시킵니다.
@@ -233,31 +363,49 @@ class PatternRepository {
         .doc(sourceOwnerId)
         .collection('pattern_charts')
         .doc(patternId)
-        .update({'forkCount': FieldValue.increment(1)});
+        .update({'forkCount': FieldValue.increment(1)}).withServerTimeout(op: 'increment_fork_count');
   }
 
-  Stream<List<PatternChart>> watchAll() {
+  Stream<List<PatternChart>> watchAll() async* {
     // 이슈 #700 — 비로그인/지연 시에도 빈 리스트 첫 emit 보장 (무한로딩 차단).
-    if (_uid.isEmpty) return Stream.value(const <PatternChart>[]);
+    if (_uid.isEmpty) {
+      yield const <PatternChart>[];
+      return;
+    }
+
+    // #704 Phase A-A — Hive 캐시 즉시 emit (오프라인 폴백).
+    //   비행기/기차 등 인터넷 없는 상황에서 이미 본 도안을 즉시 표시.
+    final cached = _cache.readAll();
+    if (cached.isNotEmpty) {
+      // updatedAt 정렬은 Firestore 쿼리 책임 — 캐시는 단순 list 그대로 emit.
+      yield cached;
+    }
+
     // 이슈 #701 재발 fix — 기존 `.timeout(5s)` 는 Stream inactivity 기반이라
     //   첫 emit 후 5초간 변경 없으면 빈 리스트로 강제 reset → 도안이 사라지는 회귀 원인.
     //   Firestore snapshots 는 정상 상태에서 첫 도착 후 침묵하므로 timeout 부적합.
     //   인덱스 빌드/네트워크 지연은 error 콜백(AsyncDelayedFriendly)로 별도 처리.
-    return _ref
+    yield* _ref
         .orderBy('updatedAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map((d) {
-              final data = Map<String, dynamic>.from(d.data() as Map<String, dynamic>);
-              // id 필드가 없는 구버전 문서는 doc.id로 보완
-              if ((data['id'] as String?)?.isEmpty != false) data['id'] = d.id;
-              return PatternChart.fromJson(data);
-            }).toList());
+        .map((snap) {
+      final list = snap.docs.map((d) {
+        final data = Map<String, dynamic>.from(d.data() as Map<String, dynamic>);
+        // id 필드가 없는 구버전 문서는 doc.id로 보완
+        if ((data['id'] as String?)?.isEmpty != false) data['id'] = d.id;
+        return PatternChart.fromJson(data);
+      }).toList();
+      // #704 Phase A-A — 서버 응답 도착 시 캐시 전체 갱신 (fire-and-forget).
+      //   다음 콜드 스타트/오프라인 진입 시 즉시 표시 가능하도록 항상 캐시한다.
+      _cache.writeAll(list);
+      return list;
+    });
   }
 
   /// id 필드가 없는 구버전 도안에 id 필드를 자동 등록합니다.
   Future<void> migrateIds() async {
     if (_uid.isEmpty) return;
-    final snap = await _ref.get();
+    final snap = await _ref.get().withServerTimeout(op: 'migrate_ids_get');
     final batch = _db.batch();
     bool hasUpdates = false;
     for (final doc in snap.docs) {
@@ -267,23 +415,37 @@ class PatternRepository {
         hasUpdates = true;
       }
     }
-    if (hasUpdates) await batch.commit();
+    if (hasUpdates) await batch.commit().withServerTimeout(op: 'migrate_ids_commit');
   }
 
   Future<PatternChart?> get(String id) async {
-    final doc = await _ref.doc(id).get();
-    if (!doc.exists) return null;
-    return PatternChart.fromJson(doc.data() as Map<String, dynamic>);
+    try {
+      final doc = await _ref.doc(id).get().withServerTimeout(op: 'get_pattern');
+      if (!doc.exists) return null;
+      final data = Map<String, dynamic>.from(doc.data() as Map<String, dynamic>);
+      if ((data['id'] as String?)?.isEmpty != false) data['id'] = doc.id;
+      final chart = PatternChart.fromJson(data);
+      // #704 Phase A-A — 성공 시 캐시 write-through.
+      await _cache.writeOne(chart);
+      return chart;
+    } on ServerUnavailableException {
+      // #704 Phase A-A — 오프라인/타임아웃 시 Hive 캐시 폴백.
+      final cached = _cache.readOne(id);
+      if (cached != null) return cached;
+      rethrow;
+    }
   }
 
   /// 타인의 도안을 UID + patternId로 조회합니다 (Fork 출처 보기 등).
+  /// 타인 소유 도안은 본인 캐시에 저장하지 않음 (소유자별 분리 원칙).
   Future<PatternChart?> getFromUser(String ownerUid, String patternId) async {
     final doc = await _db
         .collection('users')
         .doc(ownerUid)
         .collection('pattern_charts')
         .doc(patternId)
-        .get();
+        .get()
+        .withServerTimeout(op: 'get_pattern_from_user');
     if (!doc.exists) return null;
     return PatternChart.fromJson(doc.data() as Map<String, dynamic>);
   }
@@ -387,6 +549,8 @@ class PatternRepository {
     } catch (e) {
       debugPrint('[PatternRepository.saveImagePattern] mirror failed: $e');
     }
+    // #704 Phase A-A — write-through 캐시.
+    await _cache.writeOne(chart);
     return chart;
   }
 
@@ -429,6 +593,8 @@ class PatternRepository {
     } catch (e) {
       debugPrint('[PatternRepository.savePdfPattern] mirror failed: $e');
     }
+    // #704 Phase A-A — write-through 캐시.
+    await _cache.writeOne(chart);
     // 백그라운드 fire-and-forget — 사용자 흐름 차단 X
     _extractAndSetPdfCover(chart.id, pdfFile);
     return chart;
@@ -444,7 +610,7 @@ class PatternRepository {
       await _ref.doc(patternId).update({
         'imageUrl': coverUrl,
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      }).withServerTimeout(op: 'set_pdf_cover');
       await _syncBlueprintCover(patternId, coverUrl);
     } catch (e) {
       // 백그라운드 실패는 무음 (사용자 흐름 영향 없음)
@@ -505,6 +671,8 @@ class PatternRepository {
     } catch (e) {
       debugPrint('[PatternRepository.saveImagePatternFromBytes] mirror failed: $e');
     }
+    // #704 Phase A-A — write-through 캐시.
+    await _cache.writeOne(chart);
     return chart;
   }
 
@@ -548,6 +716,8 @@ class PatternRepository {
     } catch (e) {
       debugPrint('[PatternRepository.savePdfPatternFromBytes] mirror failed: $e');
     }
+    // #704 Phase A-A — write-through 캐시.
+    await _cache.writeOne(chart);
     // 백그라운드 fire-and-forget — 사용자 흐름 차단 X
     _extractAndSetPdfCoverFromBytes(chart.id, bytes);
     return chart;
@@ -573,7 +743,7 @@ class PatternRepository {
       await _ref.doc(patternId).update({
         'imageUrl': coverUrl,
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      }).withServerTimeout(op: 'set_pdf_cover_bytes');
       await _syncBlueprintCover(patternId, coverUrl);
     } catch (_) {
       // 백그라운드 실패 무음
@@ -597,7 +767,7 @@ class PatternRepository {
     }
     try {
       // 멱등성: 최신 imageUrl 재확인 (race condition 방지)
-      final snap = await _ref.doc(patternId).get();
+      final snap = await _ref.doc(patternId).get().withServerTimeout(op: 'ensure_cover_check');
       if (!snap.exists) {
         debugPrint('[ensureCoverFromPdf] doc not exists — abort');
         return;
@@ -682,7 +852,7 @@ class PatternRepository {
     }
 
     // 모든 pattern_charts 중 PDF 타입 + imageUrl 비어있는 것 추출
-    final snap = await _db.collectionGroup('pattern_charts').get();
+    final snap = await _db.collectionGroup('pattern_charts').get().withServerTimeout(op: 'migrate_admin_get');
     final candidates = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
     for (final doc in snap.docs) {
       final data = doc.data();
@@ -750,7 +920,7 @@ class PatternRepository {
         await doc.reference.update({
           'imageUrl': url,
           'updatedAt': FieldValue.serverTimestamp(),
-        });
+        }).withServerTimeout(op: 'migrate_admin_update');
         success++;
       } catch (_) {
         // 개별 도안 실패는 skip
@@ -782,7 +952,7 @@ class PatternRepository {
     await _ref.doc(patternId).update({
       'imageUrl': url,
       'updatedAt': FieldValue.serverTimestamp(),
-    });
+    }).withServerTimeout(op: 'update_cover');
     // #687 — step_blueprints attachedImageUrls 동기.
     await _syncBlueprintCover(patternId, url);
     return url;

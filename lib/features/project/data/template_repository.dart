@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../../core/errors/firestore_timeout_extension.dart';
 import '../domain/builtin_template.dart';
 import '../domain/user_template.dart';
 
@@ -40,7 +41,7 @@ class TemplateRepository {
       'photoUrl': photoUrl,
       'createdAt': DateTime.now().toIso8601String(),
       'updatedAt': null,
-    });
+    }).withServerTimeout(op: 'create_template');
   }
 
   Future<void> update({
@@ -59,17 +60,17 @@ class TemplateRepository {
       'stepDescs': stepDescs,
       'photoUrl': photoUrl,
       'updatedAt': DateTime.now().toIso8601String(),
-    });
+    }).withServerTimeout(op: 'update_template');
   }
 
   Future<void> delete(String id) async {
     if (_uid.isEmpty) return;
-    await _col.doc(id).delete();
+    await _col.doc(id).delete().withServerTimeout(op: 'delete_template');
   }
 
   Future<void> addStepToTemplate(String templateId, String stepName, String stepDesc) async {
     if (_uid.isEmpty) return;
-    final doc = await _col.doc(templateId).get();
+    final doc = await _col.doc(templateId).get().withServerTimeout(op: 'get_template_for_add_step');
     if (!doc.exists) return;
     final data = doc.data()!;
     final titles = List<String>.from(data['stepTitles'] as List? ?? []);
@@ -80,7 +81,7 @@ class TemplateRepository {
       'stepTitles': titles,
       'stepDescs': descs,
       'updatedAt': DateTime.now().toIso8601String(),
-    });
+    }).withServerTimeout(op: 'add_step_to_template');
   }
 
   // ── 기본 템플릿 (builtin_templates 컬렉션) ────────────────────────────────
@@ -407,12 +408,13 @@ class TemplateRepository {
     final existing = await _builtinCol
         .where('titleKo', isEqualTo: '크롭 레글런 탑다운')
         .limit(1)
-        .get();
+        .get()
+        .withServerTimeout(op: 'check_crop_raglan_seed');
     if (existing.docs.isNotEmpty) return;
     final cropRaglan = _builtinSeedData().lastWhere(
       (t) => t['titleKo'] == '크롭 레글런 탑다운',
     );
-    await _builtinCol.add(cropRaglan);
+    await _builtinCol.add(cropRaglan).withServerTimeout(op: 'add_crop_raglan_seed');
   }
 
   /// #639 — 인형 치수 프리셋을 BuiltinTemplate(kind=bodyMeasurement)으로 통합
@@ -422,13 +424,14 @@ class TemplateRepository {
     final existing = await _builtinCol
         .where('kind', isEqualTo: 'body_measurement')
         .limit(1)
-        .get();
+        .get()
+        .withServerTimeout(op: 'check_doll_preset_seed');
     if (existing.docs.isNotEmpty) return;
     final batch = _db.batch();
     for (final doll in _dollPresetSeedData()) {
       batch.set(_builtinCol.doc(), doll);
     }
-    await batch.commit();
+    await batch.commit().withServerTimeout(op: 'commit_doll_preset_seed');
   }
 
   /// 인형 치수 프리셋 seed 데이터 (doll_presets.dart 값 기반)
@@ -522,34 +525,34 @@ class TemplateRepository {
   }
 
   Future<void> seedBuiltinTemplates({bool forceSeed = false}) async {
-    final existing = await _builtinCol.limit(1).get();
+    final existing = await _builtinCol.limit(1).get().withServerTimeout(op: 'check_builtin_template_seed');
     if (existing.docs.isNotEmpty && !forceSeed) return;
 
     if (forceSeed && existing.docs.isNotEmpty) {
-      final allDocs = await _builtinCol.get();
+      final allDocs = await _builtinCol.get().withServerTimeout(op: 'get_all_builtin_templates');
       final deleteBatch = _db.batch();
       for (final doc in allDocs.docs) {
         deleteBatch.delete(doc.reference);
       }
-      await deleteBatch.commit();
+      await deleteBatch.commit().withServerTimeout(op: 'delete_builtin_templates_batch');
     }
 
     final batch = _db.batch();
     for (final tmpl in _builtinSeedData()) {
       batch.set(_builtinCol.doc(), tmpl);
     }
-    await batch.commit();
+    await batch.commit().withServerTimeout(op: 'seed_builtin_templates_batch');
   }
 
   Future<void> createBuiltinTemplate(BuiltinTemplate tmpl) async {
-    await _builtinCol.add(tmpl.toJson());
+    await _builtinCol.add(tmpl.toJson()).withServerTimeout(op: 'create_builtin_template');
   }
 
   Future<void> updateBuiltinTemplate(BuiltinTemplate tmpl) async {
-    await _builtinCol.doc(tmpl.id).update(tmpl.toJson());
+    await _builtinCol.doc(tmpl.id).update(tmpl.toJson()).withServerTimeout(op: 'update_builtin_template');
   }
 
   Future<void> deleteBuiltinTemplate(String id) async {
-    await _builtinCol.doc(id).delete();
+    await _builtinCol.doc(id).delete().withServerTimeout(op: 'delete_builtin_template');
   }
 }

@@ -10,7 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/common_widgets.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../data/google_drive_auth_provider.dart';
 
 const Color _kGoogleBlue = Color(0xFF1A73E8);
@@ -23,52 +23,34 @@ class GoogleDriveScreen extends ConsumerWidget {
     final auth = ref.watch(googleDriveAuthProvider);
     final isKorean = ref.watch(appLanguageProvider).isKorean;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          const BgOrbs(),
-          SafeArea(
-            child: Column(
-              children: [
-                MoriPageHeaderShell(
-                  child: MoriWideHeader(
-                    title: 'Google Drive',
-                    subtitle: auth.isLoggedIn
-                        ? (isKorean
-                            ? '${auth.email ?? ''} 연결됨'
-                            : 'Connected as ${auth.email ?? ''}')
-                        : (isKorean
-                            ? 'Google 드라이브 계정을 연결하세요'
-                            : 'Connect your Google Drive account'),
-                    trailing: auth.isLoggedIn
-                        ? [
-                            TextButton(
-                              onPressed: () => ref
-                                  .read(googleDriveAuthProvider.notifier)
-                                  .logout(),
-                              child: Text(
-                                isKorean ? '연결 해제' : 'Disconnect',
-                                style: T.caption.copyWith(color: C.og),
-                              ),
-                            ),
-                          ]
-                        : null,
-                  ),
+    return AppShellScaffold(
+      title: 'Google Drive',
+      subtitle: auth.isLoggedIn
+          ? (isKorean
+              ? '${auth.email ?? ''} 연결됨'
+              : 'Connected as ${auth.email ?? ''}')
+          : (isKorean
+              ? 'Google 드라이브 계정을 연결하세요'
+              : 'Connect your Google Drive account'),
+      trailing: auth.isLoggedIn
+          ? [
+              TextButton(
+                onPressed: () => ref
+                    .read(googleDriveAuthProvider.notifier)
+                    .logout(),
+                child: Text(
+                  isKorean ? '연결 해제' : 'Disconnect',
+                  style: T.caption.copyWith(color: C.og),
                 ),
-                Expanded(
-                  child: auth.isLoading
-                      ? const Center(
-                          child: CircularProgressIndicator(color: _kGoogleBlue))
-                      : auth.isLoggedIn
-                          ? _FileListPlaceholder(isKorean: isKorean)
-                          : _ConnectPrompt(isKorean: isKorean),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+              ),
+            ]
+          : null,
+      body: auth.isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: _kGoogleBlue))
+          : auth.isLoggedIn
+              ? _FileListPlaceholder(isKorean: isKorean)
+              : _ConnectPrompt(isKorean: isKorean),
     );
   }
 }

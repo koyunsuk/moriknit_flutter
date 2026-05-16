@@ -15,6 +15,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/dropbox_theme.dart';
 import '../../../core/widgets/async_loading_state.dart';
+import '../../../core/widgets/cached_pattern_image.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/blueprint_provider.dart';
 import '../../../providers/pattern_library_provider.dart';
@@ -1617,7 +1618,15 @@ class _PatternFileViewerScreenState extends ConsumerState<_PatternFileViewerScre
                     final project = allProjects[i];
                     return ListTile(
                       leading: project.coverPhotoUrl.isNotEmpty
-                          ? ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.network(project.coverPhotoUrl, width: 40, height: 40, fit: BoxFit.cover))
+                          ? CachedPatternImage(
+                              url: project.coverPhotoUrl,
+                              patternId: 'project_${project.id}',
+                              width: 40,
+                              height: 40,
+                              fit: BoxFit.cover,
+                              borderRadius: BorderRadius.circular(6),
+                              placeholderIcon: Icons.folder_rounded,
+                            )
                           : Container(width: 40, height: 40, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(6)), child: Icon(Icons.folder_rounded, color: C.lv)),
                       title: Text(project.title, style: T.bodyBold),
                       onTap: () async {
@@ -1818,7 +1827,7 @@ class _PatternFileViewerScreenState extends ConsumerState<_PatternFileViewerScre
               child: _isPdf
                   ? _buildPdfBody()
                   : _isImage
-                      ? InteractiveViewer(child: Center(child: Image.network(_file.storageUrl, fit: BoxFit.contain, errorBuilder: (_, _, _) => const Icon(Icons.broken_image_rounded, color: Colors.white54, size: 64))))
+                      ? InteractiveViewer(child: Center(child: CachedPatternImage(url: _file.storageUrl, patternId: 'pattern_file_${_file.id}', fit: BoxFit.contain)))
                       : Center(child: Text(_file.fileName, style: const TextStyle(color: Colors.white))),
             ),
             if (_hairlineEnabled) _buildHairline(constraints),

@@ -6,6 +6,7 @@ import '../../../core/localization/app_language.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/async_data_view.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../features/pattern/domain/pattern_chart.dart';
@@ -19,70 +20,40 @@ class MyParsedPatternsScreen extends ConsumerWidget {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
     final patternsAsync = ref.watch(aiPatternsProvider);
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          const BgOrbs(),
-          SafeArea(
-            child: Column(
-              children: [
-                Stack(
-                  children: [
-                    MoriPageHeaderShell(
-                      child: MoriWideHeader(
-                        title: isKorean ? '변환된 도안' : 'Converted Patterns',
-                        subtitle: isKorean ? 'AI로 변환한 도안 목록' : 'AI converted patterns',
-                        trailing: [
-                          IconButton(
-                            icon: Icon(Icons.add_rounded, color: C.lv),
-                            onPressed: () => context.push(Routes.toolsPatternConverter),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: IconButton(
-                        icon: const Icon(Icons.arrow_back_ios, size: 20),
-                        color: C.tx,
-                        onPressed: () => context.pop(),
-                      ),
-                    ),
-                  ],
-                ),
-                Expanded(
-                  // 이슈 #724 — raw 에러 노출 차단. AsyncDataView로 통일.
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-                    child: AsyncDataView<List<PatternChart>>(
-                      async: patternsAsync,
-                      placeholderRows: 4,
-                      rowHeight: 80,
-                      onRetry: () => ref.invalidate(aiPatternsProvider),
-                      isEmpty: (patterns) => patterns.isEmpty,
-                      emptyBuilder: () => _EmptyState(isKorean: isKorean),
-                      builder: (patterns) => ListView.separated(
-                        padding: EdgeInsets.zero,
-                        itemCount: patterns.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 10),
-                        itemBuilder: (ctx, i) => _PatternCard(
-                          pattern: patterns[i],
-                          isKorean: isKorean,
-                          onTap: () => context.push(
-                              '${Routes.toolsMyParsedPatterns}/${patterns[i].id}'),
-                          onDelete: () =>
-                              _confirmDelete(context, ref, patterns[i], isKorean),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+    return AppShellScaffold(
+      title: isKorean ? '변환된 도안' : 'Converted Patterns',
+      subtitle: isKorean ? 'AI로 변환한 도안 목록' : 'AI converted patterns',
+      showBackButton: true,
+      trailing: [
+        IconButton(
+          icon: Icon(Icons.add_rounded, color: C.lv),
+          onPressed: () => context.push(Routes.toolsPatternConverter),
+        ),
+      ],
+      // 이슈 #724 — raw 에러 노출 차단. AsyncDataView로 통일.
+      body: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        child: AsyncDataView<List<PatternChart>>(
+          async: patternsAsync,
+          placeholderRows: 4,
+          rowHeight: 80,
+          onRetry: () => ref.invalidate(aiPatternsProvider),
+          isEmpty: (patterns) => patterns.isEmpty,
+          emptyBuilder: () => _EmptyState(isKorean: isKorean),
+          builder: (patterns) => ListView.separated(
+            padding: EdgeInsets.zero,
+            itemCount: patterns.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 10),
+            itemBuilder: (ctx, i) => _PatternCard(
+              pattern: patterns[i],
+              isKorean: isKorean,
+              onTap: () => context.push(
+                  '${Routes.toolsMyParsedPatterns}/${patterns[i].id}'),
+              onDelete: () =>
+                  _confirmDelete(context, ref, patterns[i], isKorean),
             ),
           ),
-        ],
+        ),
       ),
     );
   }

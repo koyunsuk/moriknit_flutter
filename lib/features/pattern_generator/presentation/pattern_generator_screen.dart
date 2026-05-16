@@ -19,6 +19,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../data/raglan_pdf_exporter.dart';
 import '../domain/body_measurement.dart';
@@ -264,63 +265,34 @@ class _PatternGeneratorScreenState extends ConsumerState<PatternGeneratorScreen>
   @override
   Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          const BgOrbs(),
-          SafeArea(
-            child: Column(
-              children: [
-                Stack(
-                  children: [
-                    MoriPageHeaderShell(
-                      child: MoriWideHeader(
-                        title: isKorean ? '패턴 생성기 (래글런)' : 'Pattern Generator (Raglan)',
-                        subtitle: isKorean ? '치수와 게이지로 도안 자동 생성' : 'Auto-generate from measurements',
-                      ),
-                    ),
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: IconButton(
-                        icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ),
-                  ],
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildSizePresetCard(isKorean),
-                  const SizedBox(height: 12),
-                  _buildGaugeCard(isKorean),
-                  const SizedBox(height: 12),
-                  _buildMeasurementCard(isKorean),
-                  const SizedBox(height: 12),
-                  _buildEaseAndColorCard(isKorean),
-                  const SizedBox(height: 12),
-                  _buildGenerateButton(isKorean),
-                  if (_genError != null) ...[
-                    const SizedBox(height: 12),
-                    _buildErrorCard(isKorean, _genError!),
-                  ],
-                  if (_generated != null) ...[
-                    const SizedBox(height: 16),
-                    _buildResultCard(isKorean, _generated!),
-                  ],
-                ],
-              ),
-            ),
-                ),
-              ],
-            ),
-          ),
-        ],
+    return AppShellScaffold(
+      title: isKorean ? '패턴 생성기 (래글런)' : 'Pattern Generator (Raglan)',
+      subtitle: isKorean ? '치수와 게이지로 도안 자동 생성' : 'Auto-generate from measurements',
+      showBackButton: true,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSizePresetCard(isKorean),
+            const SizedBox(height: 12),
+            _buildGaugeCard(isKorean),
+            const SizedBox(height: 12),
+            _buildMeasurementCard(isKorean),
+            const SizedBox(height: 12),
+            _buildEaseAndColorCard(isKorean),
+            const SizedBox(height: 12),
+            _buildGenerateButton(isKorean),
+            if (_genError != null) ...[
+              const SizedBox(height: 12),
+              _buildErrorCard(isKorean, _genError!),
+            ],
+            if (_generated != null) ...[
+              const SizedBox(height: 16),
+              _buildResultCard(isKorean, _generated!),
+            ],
+          ],
+        ),
       ),
     );
   }

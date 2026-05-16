@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 
+import '../../../core/errors/firestore_timeout_extension.dart';
 import '../domain/yarn_model.dart';
 
 class YarnRepository {
@@ -36,7 +37,7 @@ class YarnRepository {
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
         'isDirty': false,
-      });
+      }).withServerTimeout(op: 'create_yarn');
 
       final saved = prepared.copyWith(id: docRef.id, isDirty: false);
       await _saveToHive(saved);
@@ -62,7 +63,7 @@ class YarnRepository {
   Future<List<YarnModel>> getYarns() async {
     if (_uid.isEmpty) return [];
     final snapshot =
-        await _yarnsRef.orderBy('createdAt', descending: true).get();
+        await _yarnsRef.orderBy('createdAt', descending: true).get().withServerTimeout(op: 'get_yarns');
     return snapshot.docs
         .map((doc) => YarnModel.fromFirestore(doc))
         .toList();
@@ -82,7 +83,7 @@ class YarnRepository {
         ..remove('createdAt');
       json['updatedAt'] = FieldValue.serverTimestamp();
       json['isDirty'] = false;
-      await _yarnsRef.doc(yarn.id).update(json);
+      await _yarnsRef.doc(yarn.id).update(json).withServerTimeout(op: 'update_yarn');
       return updated.copyWith(isDirty: false);
     } catch (_) {
       final dirty = updated.copyWith(isDirty: true);

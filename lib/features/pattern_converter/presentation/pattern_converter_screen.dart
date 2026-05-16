@@ -13,6 +13,7 @@ import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/dropbox_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../features/pattern/data/pattern_repository.dart';
 import '../../../features/pattern/domain/pattern_chart.dart';
@@ -695,114 +696,84 @@ class _PatternConverterScreenState
   Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          const BgOrbs(),
-          SafeArea(
-            child: Column(
-              children: [
-                Stack(
-                  children: [
-                    MoriPageHeaderShell(
-                      child: MoriWideHeader(
-                        title: isKorean ? '도안 변환기' : 'Pattern Converter',
-                        subtitle: isKorean ? 'PDF/이미지 도안을 AI로 변환' : 'AI converts PDF/image patterns',
-                      ),
-                    ),
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: IconButton(
-                        icon: const Icon(Icons.arrow_back_ios, size: 20),
-                        color: C.tx,
-                        onPressed: () => context.pop(),
-                      ),
-                    ),
-                  ],
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 안내 카드
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: C.lv.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                        color: C.lv.withValues(alpha: 0.25)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+    return AppShellScaffold(
+      title: isKorean ? '도안 변환기' : 'Pattern Converter',
+      subtitle: isKorean ? 'PDF/이미지 도안을 AI로 변환' : 'AI converts PDF/image patterns',
+      showBackButton: true,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 안내 카드
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: C.lv.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                    color: C.lv.withValues(alpha: 0.25)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          Icon(Icons.auto_awesome_rounded,
-                              color: C.lv, size: 20),
-                          const SizedBox(width: 8),
-                          Text(
-                            isKorean
-                                ? 'AI 도안 변환기'
-                                : 'AI Pattern Converter',
-                            style: T.h3.copyWith(color: C.lv),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
+                      Icon(Icons.auto_awesome_rounded,
+                          color: C.lv, size: 20),
+                      const SizedBox(width: 8),
                       Text(
                         isKorean
-                            ? 'PDF 또는 이미지로 된 뜨개 도안을\n단계별로 따라하기 쉽게 변환해 드려요.\n\n저작권 보호를 위해 앱 내에서만 볼 수 있어요.'
-                            : 'Convert your knitting pattern PDF or image\ninto easy step-by-step instructions.\n\nFor copyright protection, only visible within the app.',
-                        style: T.sm.copyWith(color: C.tx2, height: 1.6),
+                            ? 'AI 도안 변환기'
+                            : 'AI Pattern Converter',
+                        style: T.h3.copyWith(color: C.lv),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 24),
+                  const SizedBox(height: 12),
+                  Text(
+                    isKorean
+                        ? 'PDF 또는 이미지로 된 뜨개 도안을\n단계별로 따라하기 쉽게 변환해 드려요.\n\n저작권 보호를 위해 앱 내에서만 볼 수 있어요.'
+                        : 'Convert your knitting pattern PDF or image\ninto easy step-by-step instructions.\n\nFor copyright protection, only visible within the app.',
+                    style: T.sm.copyWith(color: C.tx2, height: 1.6),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
 
-                SectionTitle(
-                    title: isKorean ? '지원 형식' : 'Supported Formats'),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    _FormatChip(
-                        label: 'PDF', icon: Icons.picture_as_pdf),
-                    const SizedBox(width: 8),
-                    _FormatChip(
-                        label: 'JPG', icon: Icons.image_rounded),
-                    const SizedBox(width: 8),
-                    _FormatChip(
-                        label: 'PNG', icon: Icons.image_rounded),
-                  ],
-                ),
-                const SizedBox(height: 32),
-
-                if (_isUploading)
-                  _UploadProgress(
-                      progress: _progress,
-                      message: _statusMessage,
-                      stage: _stage)
-                else
-                  _UploadButton(onTap: _showSourceSheet),
-
-                const SizedBox(height: 32),
-
-                // 변환된 도안 리스트 인라인 표시
-                _InlinePatternList(isKorean: isKorean),
+            SectionTitle(
+                title: isKorean ? '지원 형식' : 'Supported Formats'),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _FormatChip(
+                    label: 'PDF', icon: Icons.picture_as_pdf),
+                const SizedBox(width: 8),
+                _FormatChip(
+                    label: 'JPG', icon: Icons.image_rounded),
+                const SizedBox(width: 8),
+                _FormatChip(
+                    label: 'PNG', icon: Icons.image_rounded),
               ],
             ),
-          ),
-                ),
-              ],
-            ),
-          ),
-        ],
+            const SizedBox(height: 32),
+
+            if (_isUploading)
+              _UploadProgress(
+                  progress: _progress,
+                  message: _statusMessage,
+                  stage: _stage)
+            else
+              _UploadButton(onTap: _showSourceSheet),
+
+            const SizedBox(height: 32),
+
+            // 변환된 도안 리스트 인라인 표시
+            _InlinePatternList(isKorean: isKorean),
+          ],
+        ),
       ),
     );
   }

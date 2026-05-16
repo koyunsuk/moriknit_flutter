@@ -1,11 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/sync/sync_queue.dart';
 import '../features/swatch/data/swatch_repository.dart';
 import '../features/swatch/domain/swatch_model.dart';
 import 'auth_provider.dart';
 
 final swatchRepositoryProvider = Provider<SwatchRepository>((ref) {
-  return SwatchRepository();
+  return SwatchRepository(syncQueue: ref.watch(syncQueueProvider));
 });
 
 final swatchListProvider = StreamProvider<List<SwatchModel>>((ref) {

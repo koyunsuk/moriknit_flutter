@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/template_provider.dart';
 import '../domain/user_template.dart';
@@ -240,70 +241,58 @@ class _TemplateDetailScreenState extends ConsumerState<TemplateDetailScreen> {
   Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SafeArea(
-        child: Column(
-          children: [
-            MoriPageHeaderShell(
-              child: MoriWideHeader(
-                title: _isEditing ? (isKorean ? '템플릿 수정' : 'Edit Template') : widget.template.title,
-                subtitle: isKorean ? '단계로그 템플릿' : 'Step template',
-                trailing: _isEditing
-                    ? [
-                        TextButton(
-                          onPressed: _cancelEdit,
-                          child: Text(isKorean ? '취소' : 'Cancel', style: T.body.copyWith(color: C.mu)),
-                        ),
-                        TextButton(
-                          onPressed: _isSaving ? null : () => _saveEdit(isKorean),
-                          child: Text(isKorean ? '저장' : 'Save', style: T.bodyBold.copyWith(color: C.lv)),
-                        ),
-                      ]
-                    : [
-                        PopupMenuButton<String>(
-                          icon: Icon(Icons.more_vert_rounded, color: C.tx),
-                          onSelected: (v) {
-                            if (v == 'edit') _enterEditMode();
-                            if (v == 'copy') _duplicate(isKorean);
-                            if (v == 'delete') _confirmDelete(isKorean);
-                          },
-                          itemBuilder: (_) => [
-                            PopupMenuItem(
-                              value: 'edit',
-                              child: Row(children: [
-                                Icon(Icons.edit_outlined, size: 18, color: C.lv),
-                                const SizedBox(width: 8),
-                                Text(isKorean ? '수정' : 'Edit'),
-                              ]),
-                            ),
-                            PopupMenuItem(
-                              value: 'copy',
-                              child: Row(children: [
-                                Icon(Icons.copy_rounded, size: 18, color: C.lv),
-                                const SizedBox(width: 8),
-                                Text(isKorean ? '복사' : 'Duplicate'),
-                              ]),
-                            ),
-                            PopupMenuItem(
-                              value: 'delete',
-                              child: Row(children: [
-                                Icon(Icons.delete_outline, size: 18, color: C.og),
-                                const SizedBox(width: 8),
-                                Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og)),
-                              ]),
-                            ),
-                          ],
-                        ),
-                      ],
+    return AppShellScaffold(
+      title: _isEditing ? (isKorean ? '템플릿 수정' : 'Edit Template') : widget.template.title,
+      subtitle: isKorean ? '단계로그 템플릿' : 'Step template',
+      showBackButton: true,
+      trailing: _isEditing
+          ? [
+              TextButton(
+                onPressed: _cancelEdit,
+                child: Text(isKorean ? '취소' : 'Cancel', style: T.body.copyWith(color: C.mu)),
               ),
-            ),
-            Expanded(
-              child: _isEditing ? _buildEditBody(isKorean) : _buildDetailBody(isKorean),
-            ),
-          ],
-        ),
-      ),
+              TextButton(
+                onPressed: _isSaving ? null : () => _saveEdit(isKorean),
+                child: Text(isKorean ? '저장' : 'Save', style: T.bodyBold.copyWith(color: C.lv)),
+              ),
+            ]
+          : [
+              PopupMenuButton<String>(
+                icon: Icon(Icons.more_vert_rounded, color: C.tx),
+                onSelected: (v) {
+                  if (v == 'edit') _enterEditMode();
+                  if (v == 'copy') _duplicate(isKorean);
+                  if (v == 'delete') _confirmDelete(isKorean);
+                },
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Row(children: [
+                      Icon(Icons.edit_outlined, size: 18, color: C.lv),
+                      const SizedBox(width: 8),
+                      Text(isKorean ? '수정' : 'Edit'),
+                    ]),
+                  ),
+                  PopupMenuItem(
+                    value: 'copy',
+                    child: Row(children: [
+                      Icon(Icons.copy_rounded, size: 18, color: C.lv),
+                      const SizedBox(width: 8),
+                      Text(isKorean ? '복사' : 'Duplicate'),
+                    ]),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Row(children: [
+                      Icon(Icons.delete_outline, size: 18, color: C.og),
+                      const SizedBox(width: 8),
+                      Text(isKorean ? '삭제' : 'Delete', style: TextStyle(color: C.og)),
+                    ]),
+                  ),
+                ],
+              ),
+            ],
+      body: _isEditing ? _buildEditBody(isKorean) : _buildDetailBody(isKorean),
     );
   }
 

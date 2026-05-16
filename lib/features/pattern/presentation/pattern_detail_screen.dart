@@ -14,6 +14,7 @@ import '../../../core/router/routes.dart';
 import '../../../core/router/step_unit_entry_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/cached_pattern_image.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/blueprint_provider.dart';
@@ -590,9 +591,14 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                           final alreadyLinked = project.sourcePatternId == widget.chart.id;
                           return ListTile(
                             leading: project.coverPhotoUrl.isNotEmpty
-                                ? ClipRRect(
+                                ? CachedPatternImage(
+                                    url: project.coverPhotoUrl,
+                                    patternId: 'project_${project.id}',
+                                    width: 40,
+                                    height: 40,
+                                    fit: BoxFit.cover,
                                     borderRadius: BorderRadius.circular(6),
-                                    child: Image.network(project.coverPhotoUrl, width: 40, height: 40, fit: BoxFit.cover),
+                                    placeholderIcon: Icons.folder_outlined,
                                   )
                                 : Container(
                                     width: 40,
@@ -834,6 +840,12 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
             message: isKorean
                 ? '도안이 내 라이브러리에 추가됐어요.'
                 : 'Pattern added to your library.');
+        // 이슈 #629 — Fork 성공 후 도안 라이브러리로 이동.
+        // 현재 화면(다른 사용자 도안 상세)에서 빠져나오고 내 도안 목록으로 진입.
+        // mounted 재검증 → 마이크로태스크로 안전하게 push.
+        Future.microtask(() {
+          if (mounted) context.go(Routes.toolsPatterns);
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -1059,15 +1071,13 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: C.bd),
             ),
-            child: ClipRRect(
+            child: CachedPatternImage(
+              url: coverUrl,
+              patternId: widget.chart.id.isNotEmpty ? widget.chart.id : 'pattern_cover',
+              width: double.infinity,
+              height: 220,
+              fit: BoxFit.contain,
               borderRadius: BorderRadius.circular(16),
-              child: Image.network(
-                coverUrl,
-                width: double.infinity,
-                height: 220,
-                fit: BoxFit.contain,
-                errorBuilder: (context, e, s) => _placeholderBox(220),
-              ),
             ),
           ),
           // 본인 도안일 때만 커버 변경 버튼 노출
@@ -1254,6 +1264,10 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                               if (v == 'change_cover') _changeImage();
                               if (v == 'copy') _duplicatePattern(isKorean);
                               if (v == 'link_project') _linkToProject(context, isKorean);
+                              if (v == 'edit_steps') {
+                                // 이슈 #687 — 단계 편집 화면으로 진입.
+                                context.push('/blueprints/${widget.chart.id}/edit');
+                              }
                               if (v == 'export_pdf') _sharePdfMagazine(context, isKorean);
                               if (v == 'export_mori') _exportMori(context, isKorean);
                               if (v == 'delete') _confirmDelete(isKorean);
@@ -1290,6 +1304,15 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                                   Icon(Icons.folder_outlined, size: 18, color: C.lv),
                                   const SizedBox(width: 8),
                                   Text(isKorean ? '프로젝트 연결' : 'Link to project'),
+                                ]),
+                              ),
+                              // 이슈 #687 — 단계 편집 (그룹/단계 직접 추가·재배열)
+                              PopupMenuItem(
+                                value: 'edit_steps',
+                                child: Row(children: [
+                                  Icon(Icons.format_list_numbered_rounded, size: 18, color: C.lv),
+                                  const SizedBox(width: 8),
+                                  Text(isKorean ? '단계 편집' : 'Edit steps'),
                                 ]),
                               ),
                               if (widget.chart.type == PatternType.chart) ...[

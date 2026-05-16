@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/async_loading_state.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/book_provider.dart';
@@ -19,40 +20,31 @@ class BookListScreen extends ConsumerWidget {
     final isKorean = Localizations.localeOf(context).languageCode == 'ko';
     final books = booksAsync.valueOrNull ?? const <BookModel>[];
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SafeArea(
-        child: Column(
-          children: [
-            MoriPageHeaderShell(
-              child: MoriWideHeader(
-                title: isKorean ? '나의 도서' : 'My Books',
-                subtitle: isKorean ? '참고 도서 라이브러리' : 'Reference book library',
-              ),
+    return AppShellScaffold(
+      title: isKorean ? '나의 도서' : 'My Books',
+      subtitle: isKorean ? '참고 도서 라이브러리' : 'Reference book library',
+      aboveBody: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+        child: SummaryCard_Detail(
+          headers: [isKorean ? '전체' : 'Total'],
+          rows: [
+            LibrarySummaryRowData(
+              badge: isKorean ? '도서' : 'Books',
+              badgeColor: C.lvD,
+              values: ['${books.length}'],
+              valueColors: [C.tx],
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: SummaryCard_Detail(
-                headers: [isKorean ? '전체' : 'Total'],
-                rows: [
-                  LibrarySummaryRowData(
-                    badge: isKorean ? '도서' : 'Books',
-                    badgeColor: C.lvD,
-                    values: ['${books.length}'],
-                    valueColors: [C.tx],
-                  ),
-                ],
-                addLabel: isKorean ? '추가' : 'Add',
-                onAdd: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const BookInputScreen()),
-                ),
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
-                children: [
+          ],
+          addLabel: isKorean ? '추가' : 'Add',
+          onAdd: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const BookInputScreen()),
+          ),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+        children: [
                   GlassCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -112,10 +104,6 @@ class BookListScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 

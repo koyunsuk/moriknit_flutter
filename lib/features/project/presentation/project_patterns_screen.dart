@@ -9,6 +9,7 @@ import '../../../core/localization/app_strings.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/market_provider.dart';
@@ -40,21 +41,13 @@ class ProjectPatternsScreen extends ConsumerWidget {
       ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
     final myListedCount = listedPatterns.where((item) => item.sellerUid == user?.uid && item.status != 'library').length;
 
-    return Scaffold(
-      backgroundColor: C.bg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            MoriPageHeaderShell(
-              child: MoriWideHeader(
-                title: t.projectPatternsTitle,
-                subtitle: t.projectPatternsSubtitle,
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
-                children: [
+    return AppShellScaffold(
+      title: t.projectPatternsTitle,
+      subtitle: t.projectPatternsSubtitle,
+      showBgOrbs: false,
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+        children: [
                   GlassCard(
                     child: Row(
                       children: [
@@ -177,10 +170,6 @@ class ProjectPatternsScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
