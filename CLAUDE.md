@@ -237,6 +237,52 @@ firebase deploy --only hosting                             # ❌ (스크립트 �
 - UI는 Shell 개념을 높은 중요도로 인지 (공통 Shell → 개별 화면 구성).
 - UI / DB / Code 개념 분리 원칙 매우 중요.
 
+## ⛔ 신기능 구현 시 토큰/공통 위젯 사용 의무 (절대 준수)
+
+> **신기능을 만들 때 인라인 Container/하드코딩 색상/임의 TextStyle 사용 금지.**
+> 항상 공통 위젯 + ThemeExtension 토큰 참조로 구현. 한 곳 수정 = 전체 반영 보장.
+
+### 강제 사용 대상
+
+| 용도 | 사용 위젯/토큰 | 직접 사용 금지 |
+|---|---|---|
+| 페이지 섹션 블록 | `MoriBlockShell` (BlockTheme 토큰 자동) | 인라인 GlassCard + 헤더 직접 그리기 |
+| 페이지 헤더 | `MoriPageHeaderShell` + `MoriWideHeader` | 인라인 AppBar 커스텀 |
+| 칩/태그/필터 | `MoriChip`, `MoriOptionChips`, `MoriToggleChip` | 인라인 Container chip |
+| 저장 액션 | `runWithMoriLoadingDialog` (CLAUDE.md 표준) | `showSavingOverlay`/`runWithSaveFeedback` 직접 호출 |
+| 로딩/에러/빈상태 | `AsyncDataView<T>` + `EmptyBlockPlaceholder` | `.when(loading/error/data)` 인라인 |
+| 색상 | `C.lv` / `C.pk` / `C.lm` / `C.og` / `C.tx` ... (app_colors.dart) | `Color(0xFF...)` 직접 입력 |
+| 타이포 | `T.h1`/`T.h2`/`T.h3`/`T.body`/`T.bodyBold`/`T.caption` ... | 인라인 `TextStyle(fontSize:, fontWeight:)` |
+| 배경 | `BgOrbs()` (모든 Scaffold 배경 첫 자식) | 인라인 그라데이션/단색 |
+
+### 새 외형 패턴이 필요할 때
+1. 인라인 작성 금지
+2. **공통 위젯을 신설** (`lib/core/widgets/`) — 동일 패턴이 2번 이상 등장하면 즉시 컴포넌트화
+3. **외형 토큰이 있으면 ThemeExtension 신설** (`lib/core/theme/xxx_theme.dart`) — radius/padding/alpha 등 외형 변수
+4. ThemeData `extensions:` 등록 → `XxxTheme.of(context)`로 참조
+
+### 위반 시 처리
+- 인라인 Container/하드코딩 색상이 발견되면 → 즉시 공통 위젯/토큰으로 리팩토링
+- PR 단위로 grep 점검: `Color\(0xFF`, `BoxDecoration\(`, `GlassCard\(\s*padding`, `EdgeInsets.fromLTRB.*BorderRadius.circular`
+
+### 자동 검증 (Claude가 신기능 작업 시)
+1. 신기능 위젯 작성 전: `grep` 으로 동일/유사 공통 위젯 존재 확인
+2. 동일 패턴 있으면 그대로 사용
+3. 없으면 공통 위젯 신설 후 사용
+4. 색상/타이포/패딩 값은 토큰(C, T, BlockTheme 등)에서만 가져옴
+
+### 현재 토큰 인프라
+- `BlockTheme` (`lib/core/theme/block_theme.dart`) — 블록 외형 (radius/border/padding/icon)
+- `C` (`lib/core/theme/app_colors.dart`) — 색상 팔레트
+- `T` (`lib/core/theme/app_theme.dart`) — 타이포 스타일
+- `AppTheme.light/dark` — Material 테마
+
+### 향후 추가 예정 토큰
+- `HeaderTheme` — 헤더 높이/로고/타이틀 크기
+- `ChipTheme` — 칩 라운드/패딩/색상
+- `AsyncStateTheme` — 로딩/에러 톤
+- `SummaryBarTheme` — 요약바 외형
+
 ## UI 원칙
 - 저장 관련 UI 통일: "저장하는 중입니다." 작은 팝업 + 프로그레스 표시.
 - 중복 버튼(저장, 새로만들기 등) 발견 시 삭제.

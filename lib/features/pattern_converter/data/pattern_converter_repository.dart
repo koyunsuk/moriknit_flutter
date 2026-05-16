@@ -135,17 +135,33 @@ class PatternConverterRepository {
   }
 
   /// AI 변환 도안 목록 스트림 (pattern_charts 컬렉션에서 aiConverted 타입만)
+  /// 이슈 #722 — Stream.empty()는 emit 안 됨(무한로딩). Stream.value([])로 교체.
+  /// 이슈 #724 — 옛 도안에 sourceType 필드 누락 시 쿼리에서 누락되는 회귀 수정.
+  /// 전체 chart 가져온 뒤 클라이언트에서 aiConverted/sourceType-null 필터링.
+  /// 색인 의존 X, parse 실패 doc은 건너뛰어 raw 에러 전파 차단.
   Stream<List<PatternChart>> watchAiPatterns() {
-    if (_auth.currentUser == null) return const Stream.empty();
+    if (_auth.currentUser == null) return Stream.value(<PatternChart>[]);
     return _chartsCol
-        .where('sourceType', isEqualTo: 'aiConverted')
         .orderBy('updatedAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map((d) {
-              final data = Map<String, dynamic>.from(d.data());
-              if ((data['id'] as String?)?.isEmpty != false) data['id'] = d.id;
-              return PatternChart.fromJson(data);
-            }).toList());
+        .map((snap) {
+      final result = <PatternChart>[];
+      for (final d in snap.docs) {
+        try {
+          final data = Map<String, dynamic>.from(d.data());
+          if ((data['id'] as String?)?.isEmpty != false) data['id'] = d.id;
+          final src = data['sourceType'] as String?;
+          // aiConverted 또는 sourceType 미지정(옛 도안) 둘 다 표시.
+          // 명시적으로 다른 type(예: drawn)이면 제외.
+          if (src != null && src != 'aiConverted') continue;
+          result.add(PatternChart.fromJson(data));
+        } catch (_) {
+          // 단일 doc parse 실패는 무음 — 전체 스트림 깨뜨리지 않음.
+          continue;
+        }
+      }
+      return result;
+    });
   }
 
   /// 단일 AI 변환 도안 스트림 (pattern_charts 기반)

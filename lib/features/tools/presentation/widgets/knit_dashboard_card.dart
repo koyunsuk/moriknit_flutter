@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/async_data_view.dart';
 import '../../../../core/widgets/common_widgets.dart';
 import '../../../../providers/project_provider.dart';
 import '../../../pattern/data/pattern_session_repository.dart';
@@ -56,30 +57,16 @@ class _KnitDashboardCardState extends ConsumerState<KnitDashboardCard> {
     final aggAsync = ref.watch(patternTimeByProjectProvider);
     final projects = ref.watch(projectListProvider).valueOrNull ?? const <ProjectModel>[];
 
-    return GlassCard(
+    // 이슈 #723 — MoriBlockShell 표준으로 통일. 헤더 아이콘/라벨은 props로 이동.
+    return MoriBlockShell(
+      label: isKorean ? '뜨개 대시보드' : 'Knit Dashboard',
+      icon: Icons.dashboard_rounded,
+      accent: C.lvD,
+      moreLabel: isKorean ? '새로고침' : 'Refresh',
+      onMoreTap: () => ref.invalidate(patternTimeByProjectProvider),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 헤더
-          Row(
-            children: [
-              Icon(Icons.dashboard_rounded, color: C.lvD, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                isKorean ? '뜨개 대시보드' : 'Knit Dashboard',
-                style: T.bodyBold,
-              ),
-              const Spacer(),
-              IconButton(
-                icon: Icon(Icons.refresh_rounded, size: 18, color: C.mu),
-                tooltip: isKorean ? '새로고침' : 'Refresh',
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                onPressed: () => ref.invalidate(patternTimeByProjectProvider),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
           Text(
             isKorean
                 ? '프로젝트별 누적 작업시간을 한눈에 확인해요.'
@@ -104,24 +91,15 @@ class _KnitDashboardCardState extends ConsumerState<KnitDashboardCard> {
             ],
           ),
           const SizedBox(height: 12),
-          // 본문
-          aggAsync.when(
-            loading: () => SizedBox(
-              height: 80,
-              child: Center(
-                child: CircularProgressIndicator(color: C.lv, strokeWidth: 2),
-              ),
-            ),
-            error: (e, _) => SizedBox(
-              height: 80,
-              child: Center(
-                child: Text(
-                  isKorean ? '불러오기 실패' : 'Failed to load',
-                  style: T.caption.copyWith(color: C.og),
-                ),
-              ),
-            ),
-            data: (aggMap) => _buildList(aggMap, projects, isKorean),
+          // 본문 — 이슈 #721/#722: AsyncDataView로 로딩/장애/플레이스홀더 통일.
+          AsyncDataView<Map<String, ProjectTimeAggregate>>(
+            async: aggAsync,
+            placeholderRows: 3,
+            rowHeight: 50,
+            onRetry: () => ref.invalidate(patternTimeByProjectProvider),
+            isEmpty: (aggMap) => aggMap.isEmpty || projects.isEmpty,
+            emptyBuilder: () => _buildPlaceholder(isKorean),
+            builder: (aggMap) => _buildList(aggMap, projects, isKorean),
           ),
         ],
       ),

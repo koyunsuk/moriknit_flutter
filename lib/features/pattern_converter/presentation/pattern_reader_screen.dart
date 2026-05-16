@@ -17,7 +17,9 @@ class PatternReaderScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
-    final patternAsync = ref.watch(aiPatternDetailProvider(patternId));
+    // 이슈 #719 — 일부 옛 도안(#687 이전 생성분)에서 stream emit이 안 되는 회귀로 무한로딩.
+    // future provider는 캐시 우선 + 5s 서버 timeout + null 폴백으로 안전.
+    final patternAsync = ref.watch(aiPatternDetailFutureProvider(patternId));
 
     return patternAsync.when(
       loading: () => Scaffold(
@@ -26,7 +28,7 @@ class PatternReaderScreen extends ConsumerWidget {
       ),
       error: (e, _) => _PatternLoadErrorScreen(
         isKorean: isKorean,
-        onRetry: () => ref.invalidate(aiPatternDetailProvider(patternId)),
+        onRetry: () => ref.invalidate(aiPatternDetailFutureProvider(patternId)),
       ),
       data: (pattern) {
         if (pattern == null) {

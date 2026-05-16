@@ -50,8 +50,9 @@ class DropboxFavoritesRepository {
   }
 
   /// 즐겨찾기 목록 스트림 (path 집합).
+  /// 이슈 #722 — Stream.empty()는 emit 안 됨(무한로딩). Stream.value({})로 교체.
   Stream<Set<String>> watchFavoritePaths() {
-    if (_uid.isEmpty) return const Stream.empty();
+    if (_uid.isEmpty) return Stream.value(<String>{});
     return _ref.snapshots().map((snap) {
       return snap.docs
           .map((d) => (d.data()['path'] as String?) ?? '')

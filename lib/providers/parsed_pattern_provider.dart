@@ -9,30 +9,32 @@ final patternConverterRepositoryProvider = Provider<PatternConverterRepository>(
 );
 
 /// AI 변환 도안 목록 스트림 (pattern_charts 컬렉션, sourceType == aiConverted)
+/// 이슈 #722 — Stream.empty()는 emit 안 됨(무한로딩). Stream.value([])로 교체.
 final aiPatternsProvider = StreamProvider<List<PatternChart>>((ref) {
   final authState = ref.watch(authStateProvider);
   return authState.when(
     data: (user) {
-      if (user == null) return const Stream.empty();
+      if (user == null) return Stream.value(<PatternChart>[]);
       return ref.watch(patternConverterRepositoryProvider).watchAiPatterns();
     },
-    loading: () => const Stream.empty(),
-    error: (_, _) => const Stream.empty(),
+    loading: () => Stream.value(<PatternChart>[]),
+    error: (_, _) => Stream.value(<PatternChart>[]),
   );
 });
 
 /// 구버전 호환: 내 파싱된 도안 목록 (parsed_patterns 컬렉션)
+/// 이슈 #722 — Stream.empty()는 emit 안 됨(무한로딩). Stream.value([])로 교체.
 final myParsedPatternsProvider = StreamProvider<List<ParsedPattern>>((ref) {
   final authState = ref.watch(authStateProvider);
   return authState.when(
     data: (user) {
-      if (user == null) return const Stream.empty();
+      if (user == null) return Stream.value(<ParsedPattern>[]);
       // 구버전 parsed_patterns 컬렉션은 watchPattern/deletePattern으로만 접근
       // 신규 저장은 모두 pattern_charts로 이동됨
-      return const Stream.empty();
+      return Stream.value(<ParsedPattern>[]);
     },
-    loading: () => const Stream.empty(),
-    error: (_, _) => const Stream.empty(),
+    loading: () => Stream.value(<ParsedPattern>[]),
+    error: (_, _) => Stream.value(<ParsedPattern>[]),
   );
 });
 

@@ -816,19 +816,14 @@ class _AssetSummaryCard extends ConsumerWidget {
     final bookAsync = ref.watch(bookListProvider);
     final bookCount = bookAsync.maybeWhen(data: (b) => b.length, orElse: () => 0);
 
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: C.bd),
-        color: C.bg,
-      ),
-      padding: const EdgeInsets.all(16),
+    // 이슈 #723 — 블록 외형 표준 MoriBlockShell 사용.
+    return MoriBlockShell(
+      label: isKorean ? '나의 Asset' : 'My Assets',
+      icon: Icons.inventory_2_rounded,
+      accent: C.pk,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(isKorean ? '나의 Asset' : 'My Assets',
-              style: T.caption.copyWith(color: C.mu, fontWeight: FontWeight.w700, letterSpacing: 0.4)),
-          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(child: _AssetCell(
@@ -1029,11 +1024,11 @@ class _MoriRavelryCapsuleCardState extends ConsumerState<_MoriRavelryCapsuleCard
       ravelryProjectsAsync?.isLoading == true
     );
 
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: C.bd),
-      ),
+    // 이슈 #723 — 블록 외형 표준 (도안 라이브러리 MoriBlockShell 기준):
+    // GlassCard radius 18 + 옅은 헤더 톤 보더. 듀얼 캡슐 콘텐츠는 그대로.
+    return GlassCard(
+      padding: EdgeInsets.zero,
+      borderColor: C.pk.withValues(alpha: 0.25),
       child: Column(
         children: [
           // MoriKnit 상단
@@ -1042,8 +1037,8 @@ class _MoriRavelryCapsuleCardState extends ConsumerState<_MoriRavelryCapsuleCard
             decoration: const BoxDecoration(
               color: Color(0x14FF6BA8),
               borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
+                topLeft: Radius.circular(18),
+                topRight: Radius.circular(18),
               ),
             ),
             child: Row(
@@ -1087,8 +1082,8 @@ class _MoriRavelryCapsuleCardState extends ConsumerState<_MoriRavelryCapsuleCard
             decoration: BoxDecoration(
               color: C.lv.withValues(alpha: 0.05),
               borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(20),
-                bottomRight: Radius.circular(20),
+                bottomLeft: Radius.circular(18),
+                bottomRight: Radius.circular(18),
               ),
             ),
             child: Row(

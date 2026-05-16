@@ -13,6 +13,7 @@ import '../constants/subscription_constants.dart';
 import '../router/app_router.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../theme/block_theme.dart';
 
 class GlassCard extends StatelessWidget {
   final Widget child;
@@ -1586,10 +1587,13 @@ class MoriBlockShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color borderTone = accent.withValues(alpha: 0.25); // 옅은 헤더 톤
+    // 이슈 #723 — 외형 토큰을 BlockTheme(ThemeExtension)에서 조회.
+    // BlockTheme 한 곳만 수정하면 모든 MoriBlockShell이 즉시 반영됨.
+    final tokens = BlockTheme.of(context);
+    final Color borderTone = accent.withValues(alpha: tokens.borderAlpha);
 
     final EdgeInsetsGeometry effectiveBodyPadding =
-        bodyPadding ?? const EdgeInsets.fromLTRB(14, 12, 14, 14);
+        bodyPadding ?? tokens.bodyPadding;
 
     final Widget body = scrollHeight != null
         ? SizedBox(
@@ -1610,26 +1614,26 @@ class MoriBlockShell extends StatelessWidget {
     return GlassCard(
       padding: EdgeInsets.zero,
       borderColor: borderTone,
-      radius: 18,
+      radius: tokens.containerRadius,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // 블록 제목 (padding 내부)
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 12, 10),
+            padding: tokens.headerPadding,
             child: Row(
               children: [
                 if (icon != null) ...[
                   Container(
-                    width: 30,
-                    height: 30,
+                    width: tokens.iconBoxSize,
+                    height: tokens.iconBoxSize,
                     decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
+                      color: accent.withValues(alpha: tokens.iconBoxBgAlpha),
+                      borderRadius: BorderRadius.circular(tokens.iconBoxRadius),
                     ),
-                    child: Icon(icon, color: accent, size: 17),
+                    child: Icon(icon, color: accent, size: tokens.iconSize),
                   ),
-                  const SizedBox(width: 10),
+                  SizedBox(width: tokens.iconLabelGap),
                 ],
                 Expanded(child: Text(label, style: T.bodyBold)),
                 if (onMoreTap != null)
@@ -1644,7 +1648,7 @@ class MoriBlockShell extends StatelessWidget {
             ),
           ),
           // 위쪽 보더 (양끝까지 닿음)
-          Container(height: 1.5, color: borderTone),
+          Container(height: tokens.dividerThickness, color: borderTone),
           // 본문
           body,
         ],

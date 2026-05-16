@@ -17,6 +17,7 @@ import '../../dropbox/data/dropbox_auth_provider.dart';
 import '../data/google_drive_auth_provider.dart';
 import '../data/icloud_auth_provider.dart';
 import '../data/onedrive_auth_provider.dart';
+import 'widgets/cloud_brand_icon.dart';
 
 class CloudHubScreen extends ConsumerWidget {
   const CloudHubScreen({super.key});
@@ -93,13 +94,8 @@ class _DropboxCard extends ConsumerWidget {
               color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Center(
-              child: Image.asset(
-                'assets/cloud_icons/dropbox.png',
-                width: 28,
-                height: 28,
-                errorBuilder: (_, __, ___) => const Icon(Icons.cloud_rounded, color: color),
-              ),
+            child: const Center(
+              child: CloudBrandIcon.dropbox(size: 28),
             ),
           ),
           const SizedBox(width: 14),
@@ -147,13 +143,8 @@ class _GoogleDriveCard extends ConsumerWidget {
               color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Center(
-              child: Image.asset(
-                'assets/cloud_icons/google_drive.png',
-                width: 28,
-                height: 28,
-                errorBuilder: (_, __, ___) => const Icon(Icons.cloud_rounded, color: color),
-              ),
+            child: const Center(
+              child: CloudBrandIcon.googleDrive(size: 28),
             ),
           ),
           const SizedBox(width: 14),
@@ -201,13 +192,8 @@ class _ICloudCard extends ConsumerWidget {
               color: color.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Center(
-              child: Image.asset(
-                'assets/cloud_icons/icloud.png',
-                width: 28,
-                height: 28,
-                errorBuilder: (_, __, ___) => const Icon(Icons.cloud_rounded, color: color),
-              ),
+            child: const Center(
+              child: CloudBrandIcon.iCloud(size: 28),
             ),
           ),
           const SizedBox(width: 14),
@@ -255,13 +241,8 @@ class _OneDriveCard extends ConsumerWidget {
               color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Center(
-              child: Image.asset(
-                'assets/cloud_icons/onedrive.png',
-                width: 28,
-                height: 28,
-                errorBuilder: (_, __, ___) => const Icon(Icons.cloud_rounded, color: color),
-              ),
+            child: const Center(
+              child: CloudBrandIcon.oneDrive(size: 28),
             ),
           ),
           const SizedBox(width: 14),

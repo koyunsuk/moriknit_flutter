@@ -359,21 +359,17 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                       // ── 2. 필수정보 ───────────────────────────────
                       SectionTitle(title: isKorean ? '📊 필수정보' : '📊 Essential Info'),
                       const SizedBox(height: 10),
-                      GlassCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      MoriBlockShell(
+                        label: '📈 ${t.usageSnapshot}',
+                        icon: Icons.bar_chart_rounded,
+                        accent: C.lv,
+                        child: Row(
                           children: [
-                            Text('📈 ${t.usageSnapshot}', style: T.bodyBold),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(child: _buildSnapshotItem(t.swatchLibrary, swatchCount, user.usage.swatchCount, C.lv, () => context.push('/swatch'))),
-                                Container(width: 1, height: 72, color: C.bd),
-                                Expanded(child: _buildSnapshotItem(t.projectBoard, projectCount, user.usage.projectCount, C.pk, () => context.push('/project'))),
-                                Container(width: 1, height: 72, color: C.bd),
-                                Expanded(child: _buildSnapshotItem(isKorean ? '카운터' : 'Counters', counterCount, user.usage.counterCount, C.lmD, () => context.push('/counters'))),
-                              ],
-                            ),
+                            Expanded(child: _buildSnapshotItem(t.swatchLibrary, swatchCount, user.usage.swatchCount, C.lv, () => context.push('/swatch'))),
+                            Container(width: 1, height: 72, color: C.bd),
+                            Expanded(child: _buildSnapshotItem(t.projectBoard, projectCount, user.usage.projectCount, C.pk, () => context.push('/project'))),
+                            Container(width: 1, height: 72, color: C.bd),
+                            Expanded(child: _buildSnapshotItem(isKorean ? '카운터' : 'Counters', counterCount, user.usage.counterCount, C.lmD, () => context.push('/counters'))),
                           ],
                         ),
                       ),
@@ -417,12 +413,13 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Expanded(
-                      child: GlassCard(
+                      child: MoriBlockShell(
+                        label: isKorean ? '🧾 내 구매' : '🧾 My purchases',
+                        icon: Icons.receipt_long_rounded,
+                        accent: C.pkD,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(isKorean ? '🧾 내 구매' : '🧾 My purchases', style: T.bodyBold),
-                            const SizedBox(height: 6),
                             Text(isKorean ? '최근 구입한 상품을 확인해요.' : 'See your latest purchases.', style: T.caption.copyWith(color: C.tx2)),
                             const SizedBox(height: 12),
                             purchasesAsync.when(
@@ -438,12 +435,13 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: GlassCard(
+                      child: MoriBlockShell(
+                        label: isKorean ? '🏪 내 마켓' : '🏪 My market',
+                        icon: Icons.storefront_rounded,
+                        accent: C.lmD,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(isKorean ? '🏪 내 마켓' : '🏪 My market', style: T.bodyBold),
-                            const SizedBox(height: 6),
                             Text(isKorean ? '등록한 상품을 관리해요.' : 'Manage your listings.', style: T.caption.copyWith(color: C.tx2)),
                             const SizedBox(height: 12),
                             marketItemsAsync.when(

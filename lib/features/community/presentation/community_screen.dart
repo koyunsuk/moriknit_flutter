@@ -84,7 +84,7 @@ class CommunityScreen extends ConsumerWidget {
                   const SliverToBoxAdapter(child: SizedBox(height: 12)),
                   // 이슈 #722 — 카테고리 칩 가로 스크롤 삭제 → 게시글 블록 내부 TabBar로 통합.
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 140),
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
                     sliver: SliverToBoxAdapter(
                       child: _CommunityPostsBlock(
                         isKorean: isKorean,
@@ -94,6 +94,14 @@ class CommunityScreen extends ConsumerWidget {
                         onWriteSheet: (ctx, uid, name) =>
                             _showWriteSheet(ctx, ref, uid, name),
                       ),
+                    ),
+                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                  // 이슈 #725 — 함께뜨기 블록 (FORK 한국식). complete 도안 게이트 미구현 → 플레이스홀더.
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 140),
+                    sliver: SliverToBoxAdapter(
+                      child: _ForkSection(isKorean: isKorean),
                     ),
                   ),
                 ],
@@ -506,7 +514,8 @@ class _CommunityPostsPlaceholder extends StatelessWidget {
 // 방명록 섹션
 // ────────────────────────────────────────────
 
-// 이슈 #722 — 방명록 MoriBlockShell + 자동 가로 스크롤 (Timer.periodic).
+// 이슈 #722 — 방명록 MoriBlockShell + 자동 세로 스크롤 (Timer.periodic).
+// 이슈 #717 추가 — 가로 → 세로 스크롤 전환.
 class _GuestbookSection extends ConsumerStatefulWidget {
   final bool isKorean;
   const _GuestbookSection({required this.isKorean});
@@ -523,7 +532,8 @@ class _GuestbookSectionState extends ConsumerState<_GuestbookSection> {
 
   static const Duration _tickInterval = Duration(seconds: 3);
   static const Duration _resumeDelay = Duration(seconds: 5);
-  static const double _stepPixels = 140;
+  // 세로 스크롤: 한 줄 높이(약 36) + separator(약 13) ≈ 한 행 점프
+  static const double _stepPixels = 48;
 
   @override
   void initState() {
@@ -613,8 +623,9 @@ class _GuestbookSectionState extends ConsumerState<_GuestbookSection> {
               ),
             );
           }
+          // 이슈 #717 — 세로 스크롤 (블록 내부 고정 높이, 자동 세로 스크롤)
           return SizedBox(
-            height: 44,
+            height: 180,
             child: NotificationListener<ScrollNotification>(
               onNotification: (n) {
                 if (n is UserScrollNotification ||
@@ -625,13 +636,12 @@ class _GuestbookSectionState extends ConsumerState<_GuestbookSection> {
               },
               child: ListView.separated(
                 controller: _scrollCtrl,
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
+                scrollDirection: Axis.vertical,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 itemCount: entries.length,
                 separatorBuilder: (_, _) => Container(
-                  width: 1,
-                  margin: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 10),
+                  height: 1,
+                  margin: const EdgeInsets.symmetric(vertical: 6),
                   color: C.bd2.withValues(alpha: 0.6),
                 ),
                 itemBuilder: (_, i) => _GuestbookEntryChip(
@@ -679,7 +689,7 @@ class _GuestbookSectionState extends ConsumerState<_GuestbookSection> {
   }
 }
 
-// 이슈 #722 — 가로 스크롤에 들어가는 방명록 한 줄 칩 형태 (기존 세로 Tile 대체).
+// 이슈 #717 — 세로 스크롤 한 줄 행 (가로 칩에서 전환).
 class _GuestbookEntryChip extends StatelessWidget {
   final GuestbookEntry entry;
   final bool isKorean;
@@ -696,10 +706,9 @@ class _GuestbookEntryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
           CircleAvatar(
             radius: 12,
@@ -720,9 +729,8 @@ class _GuestbookEntryChip extends StatelessWidget {
                   )
                 : null,
           ),
-          const SizedBox(width: 6),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 240),
+          const SizedBox(width: 8),
+          Expanded(
             child: RichText(
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -747,7 +755,7 @@ class _GuestbookEntryChip extends StatelessWidget {
             style: T.caption.copyWith(color: C.mu, fontSize: 11),
           ),
           if (isOwn) ...[
-            const SizedBox(width: 4),
+            const SizedBox(width: 6),
             GestureDetector(
               onTap: onDelete,
               child: Icon(Icons.close, size: 14, color: C.mu),
@@ -2157,6 +2165,129 @@ class _GalleryEmptyPlaceholder extends StatelessWidget {
           isKorean
               ? '프로젝트를 완성하면 갤러리에 자랑할 수 있어요.\n첫 작품의 주인공이 되어보세요!'
               : 'Complete a project to showcase it here.\nBe the first to share!',
+          textAlign: TextAlign.center,
+          style: T.caption.copyWith(color: C.mu, height: 1.4),
+        ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+}
+
+// 이슈 #725 — 함께뜨기 블록 (FORK 한국식). #629 게이트 미구현 → 임시 플레이스홀더.
+class _ForkSection extends StatelessWidget {
+  final bool isKorean;
+  const _ForkSection({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context) {
+    return MoriBlockShell(
+      label: isKorean ? '함께뜨기' : 'Knit Together',
+      icon: Icons.call_split_rounded,
+      accent: C.lvD,
+      moreLabel: isKorean ? '전체 보기' : 'See all',
+      onMoreTap: () {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(isKorean
+              ? '함께뜨기 전체 보기는 곧 열려요.'
+              : 'Knit-together gallery coming soon.'),
+          duration: const Duration(seconds: 2),
+        ));
+      },
+      bodyPadding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      child: _ForkEmptyPlaceholder(isKorean: isKorean),
+    );
+  }
+}
+
+class _ForkEmptyPlaceholder extends StatelessWidget {
+  final bool isKorean;
+  const _ForkEmptyPlaceholder({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 140,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: 4,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (_, _) => Container(
+              width: 110,
+              decoration: BoxDecoration(
+                color: C.gx,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: C.bd),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    width: 110,
+                    height: 90,
+                    decoration: BoxDecoration(
+                      color: C.lvL,
+                      borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(12)),
+                    ),
+                    child: Icon(
+                      Icons.menu_book_rounded,
+                      color: C.lvD.withValues(alpha: 0.6),
+                      size: 28,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          height: 8,
+                          width: 70,
+                          decoration: BoxDecoration(
+                            color: C.bd2,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          height: 6,
+                          width: 40,
+                          decoration: BoxDecoration(
+                            color: C.bd2.withValues(alpha: 0.6),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Center(
+          child: Icon(
+            Icons.call_split_rounded,
+            color: C.lvD.withValues(alpha: 0.7),
+            size: 22,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          isKorean ? '함께 뜰 도안이 곧 열려요' : 'Knit-together patterns coming soon',
+          textAlign: TextAlign.center,
+          style: T.bodyBold.copyWith(color: C.tx2),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          isKorean
+              ? '다른 니터의 완성된 도안을 가져와\n나만의 버전으로 함께 떠보세요.'
+              : 'Fork another knitter\'s pattern\nand make it your own.',
           textAlign: TextAlign.center,
           style: T.caption.copyWith(color: C.mu, height: 1.4),
         ),

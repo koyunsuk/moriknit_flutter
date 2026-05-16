@@ -11,6 +11,7 @@ import '../../../core/localization/app_strings.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/async_data_view.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/admin_config_provider.dart';
 import '../../../providers/app_config_provider.dart';
@@ -288,8 +289,11 @@ class _EcosystemHero extends StatelessWidget {
     final itemCount = itemsAsync.valueOrNull is List ? (itemsAsync.valueOrNull as List).length : 0;
     final galleryCount = publicProjectsAsync.valueOrNull is List ? (publicProjectsAsync.valueOrNull as List).length : 0;
 
-    return GlassCard(
-      padding: const EdgeInsets.all(18),
+    // 이슈 #723 — Hero 블록도 MoriBlockShell 표준으로 통일.
+    return MoriBlockShell(
+      label: isKorean ? '오늘의 모리니트' : "Today's MoriKnit",
+      icon: Icons.today_rounded,
+      accent: C.lv,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -300,11 +304,6 @@ class _EcosystemHero extends StatelessWidget {
               MoriChip(label: t.ecosystemHub, type: ChipType.white),
               MoriChip(label: t.editorialPicks, type: ChipType.lavender),
             ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            isKorean ? '오늘의 모리니트' : "Today's MoriKnit",
-            style: T.h2,
           ),
           const SizedBox(height: 8),
           Text(
@@ -800,37 +799,38 @@ class _CommunityPreviewState extends ConsumerState<_CommunityPreview> with Singl
           _buildTabRow(),
           const SizedBox(height: 8),
           if (_tab == 0)
-            postsAsync.when(
-              data: (posts) {
+            // 이슈 #722 — AsyncDataView로 통일. 장애 시 "서버 연결에 장애" 표시.
+            AsyncDataView<List<dynamic>>(
+              async: postsAsync,
+              placeholderRows: _visibleCount,
+              rowHeight: _itemHeight,
+              onRetry: () => ref.invalidate(postsProvider(communityAllCategory)),
+              isEmpty: (posts) => posts.isEmpty,
+              emptyBuilder: () => GestureDetector(
+                onTap: () => context.push(Routes.community),
+                child: SizedBox(
+                  height: _itemHeight * _visibleCount,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(_visibleCount, (i) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Container(width: 48, height: 14, decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(7))),
+                          const SizedBox(width: 8),
+                          Expanded(child: Container(height: 14, decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(7)))),
+                        ],
+                      ),
+                    )),
+                  ),
+                ),
+              ),
+              builder: (posts) {
                 final displayPosts = posts
                     .take(_visibleCount)
-                    .map((p) => _PostDisplay(category: p.category, title: p.title, timeAgo: p.timeAgo, imageUrls: p.imageUrls))
+                    .map((p) => _PostDisplay(category: p.category as String, title: p.title as String, timeAgo: p.timeAgo as String, imageUrls: (p.imageUrls as List).cast<String>()))
                     .toList();
-
-                if (displayPosts.isEmpty) {
-                  return GestureDetector(
-                    onTap: () => context.push(Routes.community),
-                    child: SizedBox(
-                      height: _itemHeight * _visibleCount,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(_visibleCount, (i) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Row(
-                            children: [
-                              Container(width: 48, height: 14, decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(7))),
-                              const SizedBox(width: 8),
-                              Expanded(child: Container(height: 14, decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(7)))),
-                            ],
-                          ),
-                        )),
-                      ),
-                    ),
-                  );
-                }
-
                 final loopPosts = [...displayPosts, ...displayPosts, ...displayPosts, ...displayPosts, ...displayPosts];
-
                 return GestureDetector(
                   onTap: () => context.push(Routes.community),
                   child: SizedBox(
@@ -847,8 +847,6 @@ class _CommunityPreviewState extends ConsumerState<_CommunityPreview> with Singl
                   ),
                 );
               },
-              loading: () => SizedBox(height: _itemHeight * _visibleCount, child: Center(child: CircularProgressIndicator(color: C.lv))),
-              error: (_, _) => SizedBox(height: _itemHeight * _visibleCount),
             )
           else
             _buildProjectsTab(inProgressProjects),
@@ -1032,84 +1030,81 @@ class _LatestPatternsPreviewState extends ConsumerState<_LatestPatternsPreview> 
   @override
   Widget build(BuildContext context) {
     final itemsAsync = ref.watch(latestPatternItemsProvider);
-    return itemsAsync.when(
-      data: (items) {
-        if (items.isEmpty) {
-          return GlassCard(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(widget.isKorean ? '등록된 도안이 아직 없어요' : 'No patterns yet', style: T.caption.copyWith(color: C.mu)),
-              ),
-            ),
-          );
-        }
-        return SizedBox(
-          height: 180,
-          child: ListView.builder(
-            controller: _scrollCtrl,
-            physics: const NeverScrollableScrollPhysics(),
-            scrollDirection: Axis.horizontal,
-            itemCount: items.length,
-            itemBuilder: (context, index) {
-              final item = items[index];
-              final accent = _parseColor(item.accentHex);
-              return GestureDetector(
-                onTap: () => context.push(Routes.market),
-                child: Container(
-                  width: 130,
-                  margin: EdgeInsets.only(right: index < items.length - 1 ? 10 : 0),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.72),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: C.bd),
-                    boxShadow: [
-                      BoxShadow(color: const Color(0x2A6D4AFF), blurRadius: 16, offset: const Offset(0, 8)),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ClipRRect(
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                        child: item.imageUrl.isNotEmpty
-                            ? Image.network(
-                                item.imageUrl,
-                                width: 130,
-                                height: 90,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => _PlaceholderIcon(accent: accent, imageType: item.imageType),
-                              )
-                            : _PlaceholderIcon(accent: accent, imageType: item.imageType),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
-                        child: Text(
-                          item.title,
-                          style: T.caption.copyWith(fontWeight: FontWeight.w700, fontSize: 12),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: Text(
-                          item.price == 0
-                              ? (widget.isKorean ? '무료 도안' : 'Free')
-                              : '${item.price}${widget.isKorean ? '원' : ' KRW'}',
-                          style: T.caption.copyWith(color: accent, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ],
-                  ),
+    // 이슈 #722 — AsyncDataView 통일. 무한로딩 차단 + 서버 장애 표시.
+    return SizedBox(
+      height: 180,
+      child: AsyncDataView<List<dynamic>>(
+        async: itemsAsync,
+        placeholderRows: 1,
+        rowHeight: 170,
+        onRetry: () => ref.invalidate(latestPatternItemsProvider),
+        isEmpty: (items) => items.isEmpty,
+        emptyBuilder: () => EmptyBlockPlaceholder(
+          message: widget.isKorean ? '등록된 도안이 아직 없어요' : 'No patterns yet',
+          rows: 1,
+          rowHeight: 170,
+        ),
+        builder: (items) => ListView.builder(
+          controller: _scrollCtrl,
+          physics: const NeverScrollableScrollPhysics(),
+          scrollDirection: Axis.horizontal,
+          itemCount: items.length,
+          itemBuilder: (context, index) {
+            final item = items[index];
+            final accent = _parseColor(item.accentHex);
+            return GestureDetector(
+              onTap: () => context.push(Routes.market),
+              child: Container(
+                width: 130,
+                margin: EdgeInsets.only(right: index < items.length - 1 ? 10 : 0),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.72),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: C.bd),
+                  boxShadow: [
+                    BoxShadow(color: const Color(0x2A6D4AFF), blurRadius: 16, offset: const Offset(0, 8)),
+                  ],
                 ),
-              );
-            },
-          ),
-        );
-      },
-      loading: () => Center(child: CircularProgressIndicator(color: C.lmD)),
-      error: (_, _) => const SizedBox.shrink(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                      child: item.imageUrl.isNotEmpty
+                          ? Image.network(
+                              item.imageUrl,
+                              width: 130,
+                              height: 90,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => _PlaceholderIcon(accent: accent, imageType: item.imageType),
+                            )
+                          : _PlaceholderIcon(accent: accent, imageType: item.imageType),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
+                      child: Text(
+                        item.title,
+                        style: T.caption.copyWith(fontWeight: FontWeight.w700, fontSize: 12),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Text(
+                        item.price == 0
+                            ? (widget.isKorean ? '무료 도안' : 'Free')
+                            : '${item.price}${widget.isKorean ? '원' : ' KRW'}',
+                        style: T.caption.copyWith(color: accent, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }
@@ -1130,13 +1125,20 @@ class _PopularCourseSection extends ConsumerWidget {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
     final coursesAsync = ref.watch(randomCoursePicksProvider);
 
-    return coursesAsync.when(
-      loading: () => const SizedBox(height: 80, child: Center(child: CircularProgressIndicator())),
-      error: (_, _) => const SizedBox.shrink(),
-      data: (courses) {
-        if (courses.isEmpty) return const SizedBox.shrink();
-        return Column(
-          children: courses.map((item) {
+    // 이슈 #722 — AsyncDataView 통일. 빈 상태도 플레이스홀더로 표시.
+    return AsyncDataView<List<dynamic>>(
+      async: coursesAsync,
+      placeholderRows: 2,
+      rowHeight: 80,
+      onRetry: () => ref.invalidate(randomCoursePicksProvider),
+      isEmpty: (courses) => courses.isEmpty,
+      emptyBuilder: () => EmptyBlockPlaceholder(
+        message: isKorean ? '추천 강의가 아직 없어요' : 'No course picks yet',
+        rows: 2,
+        rowHeight: 80,
+      ),
+      builder: (courses) => Column(
+        children: courses.map((item) {
             final videoId = _videoId(item.videoUrl);
             final thumbUrl = videoId != null ? 'https://img.youtube.com/vi/$videoId/mqdefault.jpg' : '';
             return GestureDetector(
@@ -1228,8 +1230,7 @@ class _PopularCourseSection extends ConsumerWidget {
               ),
             );
           }).toList(),
-        );
-      },
+      ),
     );
   }
 }
@@ -1242,21 +1243,19 @@ class _HomeGuestbookSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final entriesAsync = ref.watch(guestbookListProvider);
-    return entriesAsync.when(
-      loading: () => Center(child: CircularProgressIndicator(color: C.lv, strokeWidth: 2)),
-      error: (_, _) => Text(isKorean ? '불러오지 못했어요.' : 'Unable to load.', style: T.caption.copyWith(color: C.mu)),
-      data: (entries) {
-        if (entries.isEmpty) {
-          return GlassCard(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                isKorean ? '아직 방명록이 없어요. 첫 인사를 남겨보세요!' : 'No guestbook entries yet.',
-                style: T.caption.copyWith(color: C.mu),
-              ),
-            ),
-          );
-        }
+    // 이슈 #722 — AsyncDataView 통일.
+    return AsyncDataView<List<dynamic>>(
+      async: entriesAsync,
+      placeholderRows: 3,
+      rowHeight: 44,
+      onRetry: () => ref.invalidate(guestbookListProvider),
+      isEmpty: (entries) => entries.isEmpty,
+      emptyBuilder: () => EmptyBlockPlaceholder(
+        message: isKorean ? '아직 방명록이 없어요. 첫 인사를 남겨보세요!' : 'No guestbook entries yet.',
+        rows: 3,
+        rowHeight: 44,
+      ),
+      builder: (entries) {
         final visible = entries.take(10).toList();
         return GlassCard(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -1326,81 +1325,8 @@ class _HomeGallerySection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final projectsAsync = ref.watch(publicProjectsProvider);
-    return projectsAsync.when(
-      loading: () => const SizedBox(height: 100, child: Center(child: CircularProgressIndicator())),
-      error: (_, _) => const SizedBox.shrink(),
-      data: (entries) {
-        if (entries.isEmpty) {
-          return GlassCard(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(
-                  isKorean ? '아직 공개된 작품이 없어요.' : 'No public projects yet.',
-                  style: T.caption.copyWith(color: C.mu),
-                ),
-              ),
-            ),
-          );
-        }
-        return SizedBox(
-          height: 130,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: entries.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 8),
-            itemBuilder: (ctx, i) {
-              final entry = entries[i];
-              return GestureDetector(
-                onTap: () => _showGalleryDetail(context, ref, entry),
-                child: Container(
-                  width: 110,
-                  decoration: BoxDecoration(
-                    color: C.gx,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: C.bd),
-                  ),
-                  child: Column(
-                    children: [
-                      ClipRRect(
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                        child: () {
-                            final thumbUrl = entry.coverPhotoUrl.isNotEmpty
-                                ? entry.coverPhotoUrl
-                                : entry.photoUrls.firstWhere((u) => u.isNotEmpty, orElse: () => '');
-                            return thumbUrl.isNotEmpty
-                                ? Image.network(thumbUrl, width: 110, height: 80, fit: BoxFit.cover, cacheWidth: 220, cacheHeight: 160,
-                                    errorBuilder: (_, _, _) => Container(width: 110, height: 80, color: C.lvL, child: Icon(Icons.grid_view_rounded, color: C.lv)))
-                                : Container(width: 110, height: 80, color: C.lvL, child: Icon(Icons.grid_view_rounded, color: C.lv));
-                          }(),
-                      ),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(entry.title, style: T.caption.copyWith(fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
-                              Row(children: [
-                                Icon(Icons.favorite_rounded, size: 10, color: C.pk),
-                                const SizedBox(width: 2),
-                                Text('${entry.likeCount}', style: T.caption.copyWith(fontSize: 9, color: C.mu)),
-                              ]),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        );
-      },
-    );
+    // 이슈 #722 — unused 클래스. 단순 SizedBox로 대체 (구조 깨짐 복구).
+    return const SizedBox.shrink();
   }
 }
 
@@ -1462,19 +1388,19 @@ class _HomeGuestbookFadeTickerState extends ConsumerState<_HomeGuestbookFadeTick
   @override
   Widget build(BuildContext context) {
     final entriesAsync = ref.watch(guestbookListProvider);
-    return entriesAsync.when(
-      loading: () => const SizedBox(height: 40, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
-      error: (_, _) => const SizedBox.shrink(),
-      data: (entries) {
-        if (entries.isEmpty) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              widget.isKorean ? '아직 방명록이 없어요.' : 'No guestbook entries yet.',
-              style: T.caption.copyWith(color: C.mu),
-            ),
-          );
-        }
+    // 이슈 #722 — AsyncDataView 통일.
+    return AsyncDataView<List<dynamic>>(
+      async: entriesAsync,
+      placeholderRows: 1,
+      rowHeight: 44,
+      onRetry: () => ref.invalidate(guestbookListProvider),
+      isEmpty: (entries) => entries.isEmpty,
+      emptyBuilder: () => EmptyBlockPlaceholder(
+        message: widget.isKorean ? '아직 방명록이 없어요.' : 'No guestbook entries yet.',
+        rows: 1,
+        rowHeight: 44,
+      ),
+      builder: (entries) {
         if (_entries.length != entries.length) {
           _entries = entries;
           _index = _index.clamp(0, entries.length - 1);
@@ -1542,28 +1468,26 @@ class _HomeGalleryVerticalSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final projectsAsync = ref.watch(publicProjectsProvider);
-    return projectsAsync.when(
-      loading: () => const SizedBox(height: 80, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
-      error: (_, _) => const SizedBox.shrink(),
-      data: (entries) {
-        const galleryItemH = 68.0;
-        const galleryCount = 4;
-        const galleryTotalH = galleryItemH * galleryCount + 10.0 * (galleryCount - 1);
-        if (entries.isEmpty) {
-          return SizedBox(
-            height: galleryTotalH,
-            child: Center(
-              child: Text(
-                isKorean ? '아직 공개된 작품이 없어요.' : 'No public projects yet.',
-                style: T.caption.copyWith(color: C.mu),
-              ),
-            ),
-          );
-        }
-        final visible = entries.take(galleryCount).toList();
-        return SizedBox(
-          height: galleryTotalH,
-          child: ListView.separated(
+    const galleryItemH = 68.0;
+    const galleryCount = 4;
+    const galleryTotalH = galleryItemH * galleryCount + 10.0 * (galleryCount - 1);
+    // 이슈 #722 — AsyncDataView 통일.
+    return SizedBox(
+      height: galleryTotalH,
+      child: AsyncDataView<List<dynamic>>(
+        async: projectsAsync,
+        placeholderRows: 4,
+        rowHeight: galleryItemH,
+        onRetry: () => ref.invalidate(publicProjectsProvider),
+        isEmpty: (entries) => entries.isEmpty,
+        emptyBuilder: () => EmptyBlockPlaceholder(
+          message: isKorean ? '아직 공개된 작품이 없어요.' : 'No public projects yet.',
+          rows: 4,
+          rowHeight: galleryItemH,
+        ),
+        builder: (entries) {
+          final visible = entries.take(galleryCount).toList();
+          return ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: visible.length,
@@ -1611,9 +1535,9 @@ class _HomeGalleryVerticalSection extends ConsumerWidget {
               ),
             );
           },
-        ),
         );
-      },
+        },
+      ),
     );
   }
 }
@@ -1857,32 +1781,20 @@ class _HomeNoticesSectionState extends ConsumerState<_HomeNoticesSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        noticesAsync.when(
-          loading: () => const SizedBox.shrink(),
-          error: (e, _) => const SizedBox.shrink(),
-          data: (rawNotices) {
+        // 이슈 #722 — AsyncDataView 통일. 무한로딩 차단 + 서버 장애 표시.
+        AsyncDataView<List<LandingPost>>(
+          async: noticesAsync,
+          placeholderRows: 2,
+          rowHeight: 52,
+          onRetry: () => ref.invalidate(landingNoticesProvider),
+          isEmpty: (raw) => raw.where((n) => n.title.isNotEmpty).isEmpty,
+          emptyBuilder: () => EmptyBlockPlaceholder(
+            message: isKorean ? '등록된 공지사항이 없어요' : 'No notices yet',
+            rows: 2,
+            rowHeight: 52,
+          ),
+          builder: (rawNotices) {
             final notices = rawNotices.where((n) => n.title.isNotEmpty).toList();
-            if (notices.isEmpty) {
-              return Column(
-                children: [
-                  for (int i = 0; i < 2; i++)
-                    Container(
-                      height: 52,
-                      margin: const EdgeInsets.only(bottom: 8),
-                      decoration: BoxDecoration(
-                        color: C.bd.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: C.bd.withValues(alpha: 0.4)),
-                      ),
-                    ),
-                  const SizedBox(height: 4),
-                  Text(
-                    isKorean ? '등록된 공지사항이 없어요' : 'No notices yet',
-                    style: T.caption.copyWith(color: C.mu),
-                  ),
-                ],
-              );
-            }
             return Column(
               children: [
                 ...notices.map((notice) {

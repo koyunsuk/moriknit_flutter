@@ -4,10 +4,13 @@
 // 경로: users/{uid}/pattern_sessions/{sessionId}
 // 세션은 patternChartId 당 1개만 존재 (patternChartId == sessionId 로 사용).
 
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/errors/network_errors.dart';
 import '../domain/pattern_session.dart';
 
 class PatternSessionRepository {
@@ -175,9 +178,17 @@ class PatternSessionRepository {
   /// 이슈 #649 Phase 2 — 모든 PatternSession을 projectId 기준으로 그룹화.
   /// 반환: projectId → ProjectTimeAggregate (총 시간, 마지막 작업일, 세션 개수)
   /// projectId가 비어있는 세션은 제외 (프로젝트 미연결 세션은 집계 대상 아님).
+  /// 이슈 #721 — 5초 timeout. timeout/장애 시 ServerUnavailableException throw → 화면에서 "서버 연결에 장애가 있음" 표시.
   Future<Map<String, ProjectTimeAggregate>> aggregateByProject() async {
     if (_uid.isEmpty) return {};
-    final snap = await _sessionsRef.get();
+    final QuerySnapshot snap;
+    try {
+      snap = await _sessionsRef.get().timeout(const Duration(seconds: 5));
+    } on TimeoutException {
+      throw const ServerUnavailableException('aggregateByProject timeout');
+    } on FirebaseException catch (e) {
+      throw ServerUnavailableException('firestore: ${e.code}');
+    }
     final result = <String, ProjectTimeAggregate>{};
     for (final doc in snap.docs) {
       final data = doc.data() as Map<String, dynamic>;

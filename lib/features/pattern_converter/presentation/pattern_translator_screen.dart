@@ -44,6 +44,14 @@ class _PatternTranslatorScreenState
   int _stage = 1; // 1=업로드, 2=AI분석, 3=분석완료, 4=번역중
   String _statusMessage = '';
   String _currentFileName = '';
+  ScaffoldMessengerState? _messenger;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 이슈 #714 — messenger 참조 캐시. dispose 시 안전 사용.
+    _messenger = ScaffoldMessenger.maybeOf(context);
+  }
 
   @override
   void initState() {
@@ -64,8 +72,8 @@ class _PatternTranslatorScreenState
 
   @override
   void dispose() {
-    // 이슈 #714 — 화면 이탈 시 진행 중인 SnackBar(AI 사용량 알림 등) 강제 제거.
-    ScaffoldMessenger.maybeOf(context)?.removeCurrentSnackBar();
+    // 이슈 #714 — 화면 이탈 시 모든 SnackBar(AI 사용량 알림 포함) 큐 전체 제거.
+    _messenger?.clearSnackBars();
     super.dispose();
   }
 
@@ -265,21 +273,29 @@ class _PatternTranslatorScreenState
       if (!mounted) return;
       final info = AiErrorMapper.map(e, isKorean: isKorean);
       if (info.action == AiErrorAction.upgradeSubscription) {
-        // 이슈 #714 — 이전 SnackBar 즉시 제거 후 짧은 duration으로 표시. 액션 탭/내비 시 강제 dismiss.
-        messenger.removeCurrentSnackBar();
-        messenger.showSnackBar(
-          SnackBar(
+        // 이슈 #714 — SnackBar는 루트에 잔존. 다이얼로그로 전환해 페이지 pop 시 함께 제거.
+        messenger.clearSnackBars();
+        if (!mounted) return;
+        showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text(isKorean ? 'AI 사용량 한도' : 'AI Usage Limit'),
             content: Text(info.message),
-            duration: const Duration(seconds: 4),
-            behavior: SnackBarBehavior.floating,
-            action: SnackBarAction(
-              label: isKorean ? '구독' : 'Upgrade',
-              onPressed: () {
-                messenger.hideCurrentSnackBar();
-                if (!mounted) return;
-                context.push(Routes.my);
-              },
-            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: Text(isKorean ? '닫기' : 'Close'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  if (!mounted) return;
+                  context.push(Routes.my);
+                },
+                child: Text(isKorean ? '구독하기' : 'Upgrade'),
+              ),
+            ],
           ),
         );
       } else {

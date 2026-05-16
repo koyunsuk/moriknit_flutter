@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
+import 'block_theme.dart';
 
 class T {
   static const List<String> fallbackFonts = [
@@ -296,6 +297,8 @@ class AppTheme {
   static ThemeData get light => ThemeData(
         useMaterial3: true,
         scaffoldBackgroundColor: C.bg,
+        // 이슈 #723 — 블록 외형 토큰 (CSS 변수 개념). BlockTheme 한 곳만 수정하면 전체 반영.
+        extensions: const <ThemeExtension<dynamic>>[BlockTheme.standard],
         colorScheme: ColorScheme.light(
           primary: C.lv,
           secondary: C.pk,

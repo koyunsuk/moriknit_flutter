@@ -1,69 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
-
-/// 이슈 #706 — DB 연결 지연 시 무한로딩 차단 + 친화 메시지 통일
-///
-/// 사용법:
-/// ```dart
-/// final async = ref.watch(myProvider);
-/// return AsyncTimeoutGuard<List<Item>>(
-///   async: async,
-///   onRetry: () => ref.invalidate(myProvider),
-///   builder: (data) => MyDataView(data),
-/// );
-/// ```
-///
-/// 동작:
-/// - loading 5초 이내: CircularProgressIndicator만 표시
-/// - loading 5초 초과: "인터넷 연결이 지연되고 있어요" 친화 메시지 + 재시도 버튼
-/// - error: 친화 메시지 + 재시도 버튼 (raw 예외는 노출 안 함, debug에서만 확인)
-class AsyncTimeoutGuard<D> extends StatelessWidget {
-  final AsyncValue<D> async;
-  final Widget Function(D data) builder;
-  final VoidCallback onRetry;
-  final Duration timeout;
-  final bool isKorean;
-  final EdgeInsetsGeometry padding;
-
-  /// 압축 모드 — 인디케이터 크기·여백 축소 (목록 카드 내부용)
-  final bool compact;
-
-  const AsyncTimeoutGuard({
-    super.key,
-    required this.async,
-    required this.builder,
-    required this.onRetry,
-    required this.isKorean,
-    this.timeout = const Duration(seconds: 5),
-    this.padding = const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
-    this.compact = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return async.when(
-      data: builder,
-      error: (e, _) => AsyncDelayedFriendly(
-        isKorean: isKorean,
-        onRetry: onRetry,
-        padding: padding,
-        compact: compact,
-      ),
-      loading: () => AsyncLoadingFriendly(
-        timeout: timeout,
-        isKorean: isKorean,
-        onRetry: onRetry,
-        padding: padding,
-        compact: compact,
-      ),
-    );
-  }
-}
 
 /// 로딩 인디케이터 — 일정 시간 경과 시 친화 메시지로 전환
 class AsyncLoadingFriendly extends StatefulWidget {
