@@ -5,6 +5,7 @@ import 'async_state_theme.dart';
 import 'block_theme.dart';
 import 'chip_theme.dart';
 import 'dropbox_theme.dart';
+import 'header_theme.dart';
 import 'summary_bar_theme.dart';
 
 class T {
@@ -308,6 +309,7 @@ class AppTheme {
           SummaryBarTheme.standard,
           MoriChipTheme.standard,
           DropboxTheme.standard,
+          HeaderTheme.standard,
         ],
         colorScheme: ColorScheme.light(
           primary: C.lv,

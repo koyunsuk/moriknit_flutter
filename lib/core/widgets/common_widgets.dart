@@ -15,6 +15,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/block_theme.dart';
 import '../theme/chip_theme.dart';
+import '../theme/header_theme.dart';
 import '../theme/summary_bar_theme.dart';
 
 class GlassCard extends StatelessWidget {
@@ -625,58 +626,17 @@ class MoriBrandHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 헤더 축소 (#717): 화면설명 높이/문구 축소.
-    if (compact) {
-      return Container(
-        width: double.infinity,
-        height: 72,
-        color: Colors.transparent,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Column(
-              mainAxisAlignment: MainAxisAlignment.start,
-              children: [
-                const SizedBox(height: 2),
-                Image.asset(
-                  'assets/login_logo.png',
-                  width: 40,
-                  height: 40,
-                  fit: BoxFit.contain,
-                ),
-                const SizedBox(height: 1),
-                MoriKnitTitle(fontSize: 12, width: 78),
-              ],
-            ),
-            if (subtitle != null)
-              Positioned(
-                bottom: 2,
-                left: 0,
-                right: 0,
-                child: Container(
-                  margin: const EdgeInsets.fromLTRB(12, 0, 12, 0),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.84),
-                    borderRadius: BorderRadius.circular(7),
-                    border: Border.all(color: C.tint(C.lv, 0.18)),
-                  ),
-                  child: Text(
-                    subtitle!,
-                    style: T.caption.copyWith(color: C.tx2, height: 1.2, fontSize: 9, fontWeight: FontWeight.w600),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      );
-    }
+    // 이슈 #723 — HeaderTheme 토큰 참조 (한 곳 수정 = 67개 화면 반영).
+    final t = HeaderTheme.of(context);
+    final height = compact ? t.compactHeight : t.nonCompactHeight;
+    final logoSize = compact ? t.compactLogoSize : t.nonCompactLogoSize;
+    final titleFont = compact ? t.compactTitleFontSize : t.nonCompactTitleFontSize;
+    final titleWidth = compact ? t.compactTitleWidth : t.nonCompactTitleWidth;
+    final subtitleFont = compact ? t.compactSubtitleFontSize : t.nonCompactSubtitleFontSize;
+
     return Container(
       width: double.infinity,
-      height: 120,
+      height: height,
       color: Colors.transparent,
       child: Stack(
         fit: StackFit.expand,
@@ -684,48 +644,52 @@ class MoriBrandHeader extends StatelessWidget {
           Column(
             mainAxisAlignment: MainAxisAlignment.start,
             children: [
-              const SizedBox(height: 3),
+              SizedBox(height: compact ? 2 : 3),
               Image.asset(
                 'assets/login_logo.png',
-                width: 72,
-                height: 72,
+                width: logoSize,
+                height: logoSize,
                 fit: BoxFit.contain,
               ),
               const SizedBox(height: 1),
-              MoriKnitTitle(fontSize: 16, width: 144),
+              MoriKnitTitle(fontSize: titleFont, width: titleWidth),
             ],
           ),
           if (subtitle != null)
             Positioned(
-              bottom: 3,
+              bottom: compact ? 2 : 3,
               left: 0,
               right: 0,
               child: Container(
                 margin: const EdgeInsets.fromLTRB(12, 0, 12, 0),
-                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 10 : 11,
+                  vertical: compact ? 3 : 5,
+                ),
                 decoration: BoxDecoration(
-                  // B&W: 연회색 헤더 위 흰 카드 → 구분 명확
                   color: Colors.white.withValues(alpha: 0.84),
-                  borderRadius: BorderRadius.circular(9),
+                  borderRadius: BorderRadius.circular(compact ? 7 : 9),
                   border: Border.all(color: C.tint(C.lv, 0.18)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: C.tint(C.lv, 0.06),
-                      blurRadius: 6,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
+                  boxShadow: compact
+                      ? null
+                      : [
+                          BoxShadow(
+                            color: C.tint(C.lv, 0.06),
+                            blurRadius: 6,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
                 ),
                 child: Text(
                   subtitle!,
                   style: T.caption.copyWith(
                     color: C.tx2,
-                    height: 1.25,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                    height: compact ? 1.2 : 1.25,
+                    fontSize: subtitleFont,
+                    fontWeight: t.subtitleFontWeight,
                   ),
                   textAlign: TextAlign.center,
-                  maxLines: 2,
+                  maxLines: compact ? 1 : 2,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -755,12 +719,14 @@ class MoriWideHeader extends StatelessWidget {
     if (trailing == null || trailing!.isEmpty) {
       return MoriBrandHeader(subtitle: subtitle, compact: compact);
     }
+    // 이슈 #723 — HeaderTheme.trailingOffset 토큰.
+    final offset = HeaderTheme.of(context).trailingOffset;
     return Stack(
       children: [
         MoriBrandHeader(subtitle: subtitle, compact: compact),
         Positioned(
-          top: 8,
-          right: 8,
+          top: offset,
+          right: offset,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: trailing!,
@@ -787,16 +753,20 @@ class MoriPageHeaderShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 이슈 #723 — HeaderTheme 토큰 참조 (67개 화면 일괄 반영).
+    final t = HeaderTheme.of(context);
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: C.headerBg,
-        border: Border(bottom: BorderSide(color: C.headerBorder, width: 1.2)),
+        color: t.shellBgColor,
+        border: Border(
+          bottom: BorderSide(color: t.shellBorderColor, width: t.shellBorderWidth),
+        ),
       ),
       child: Align(
         alignment: alignment,
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth),
+          constraints: BoxConstraints(maxWidth: t.shellMaxWidth),
           child: Padding(
             padding: padding,
             child: child,
