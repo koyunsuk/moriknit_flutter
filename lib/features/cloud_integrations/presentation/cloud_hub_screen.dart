@@ -12,6 +12,7 @@ import '../../../core/localization/app_language.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/dropbox_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../dropbox/data/dropbox_auth_provider.dart';
 import '../data/google_drive_auth_provider.dart';
@@ -82,7 +83,8 @@ class _DropboxCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(dropboxAuthProvider);
-    const color = Color(0xFF0061FF);
+    // 이슈 #723 — DropboxTheme 토큰 (한 곳 수정 = 모든 Dropbox UI 반영).
+    final color = DropboxTheme.of(context).brandColor;
     return GlassCard(
       onTap: () => context.push(Routes.dropbox),
       child: Row(
@@ -115,7 +117,7 @@ class _DropboxCard extends ConsumerWidget {
             ),
           ),
           if (auth.isLoggedIn)
-            const Icon(Icons.check_circle_rounded, color: color, size: 18)
+            Icon(Icons.check_circle_rounded, color: color, size: 18)
           else
             Icon(Icons.chevron_right_rounded, color: C.mu),
         ],

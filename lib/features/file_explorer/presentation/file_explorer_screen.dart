@@ -16,6 +16,7 @@ import '../../../core/localization/app_language.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/dropbox_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../cloud_integrations/presentation/widgets/cloud_brand_icon.dart';
 import '../../pattern/data/pattern_repository.dart';
@@ -249,7 +250,7 @@ class _FileExplorerScreenState extends ConsumerState<FileExplorerScreen> {
             isKorean: isKorean,
             icon: Icons.cloud_outlined,
             brand: CloudBrand.dropbox,
-            color: const Color(0xFF0061FF),
+            color: DropboxTheme.of(context).brandColor,
             title: 'Dropbox',
             description: isKorean
                 ? '드롭박스에 저장된 PDF·이미지 도안 가져오기'

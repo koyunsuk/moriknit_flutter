@@ -391,7 +391,7 @@ class _ToolMemoScreenState extends ConsumerState<ToolMemoScreen> {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
       children: [
         // ── 요약 카드 ────────────────────────────────────────
-        LibrarySummaryCard(
+        SummaryCard_Detail(
           headers: const ['전체', '사진', '음성'],
           rows: [
             LibrarySummaryRowData(

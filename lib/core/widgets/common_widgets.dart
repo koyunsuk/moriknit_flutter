@@ -14,6 +14,8 @@ import '../router/app_router.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/block_theme.dart';
+import '../theme/chip_theme.dart';
+import '../theme/summary_bar_theme.dart';
 
 class GlassCard extends StatelessWidget {
   final Widget child;
@@ -95,10 +97,12 @@ class MoriChip extends StatelessWidget {
     };
     final (bg, tc, border) = colors[type]!;
 
+    // 이슈 #723 — MoriChipTheme 토큰 (padding만). radius는 999 캡슐 유지 (다른 디자인).
+    final tokens = MoriChipTheme.of(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: tokens.padding,
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(999),
@@ -1333,22 +1337,21 @@ class LibrarySummaryRowData {
   });
 }
 
-class LibrarySummaryCard extends StatelessWidget {
+/// 이슈 #723 — 메인 화면 전용 요약 카드 (각 독의 메인 화면에서 표시).
+/// +추가 버튼이 필요한 한 단계 들어간 화면은 [SummaryCard_Detail] 사용.
+// ignore: camel_case_types
+class SummaryCard_Main extends StatelessWidget {
   final List<String> headers;
   final List<LibrarySummaryRowData> rows;
-  final String? addLabel;
-  final VoidCallback? onAdd;
 
   /// 셀 비율 — badge는 헤더/값보다 살짝 넓게 (1.4x). 사용자 보고 #621 — 좌측 치우침 해소.
   static const int _badgeFlex = 7;
   static const int _cellFlex = 5;
 
-  const LibrarySummaryCard({
+  const SummaryCard_Main({
     super.key,
     required this.headers,
     required this.rows,
-    this.addLabel,
-    this.onAdd,
   });
 
   Widget _headerCell(String text) => Expanded(
@@ -1394,10 +1397,108 @@ class LibrarySummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = SummaryBarTheme.of(context);
     return GlassCard(
       padding: EdgeInsets.zero,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(tokens.radius),
+        child: IntrinsicHeight(
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  const Spacer(flex: _badgeFlex),
+                  ...headers.map(_headerCell),
+                ],
+              ),
+              Divider(height: 1, thickness: 0.5, color: tokens.borderColor),
+              for (int i = 0; i < rows.length; i++) ...[
+                if (i > 0)
+                  Divider(height: 1, thickness: 0.5, color: tokens.borderColor),
+                Row(
+                  children: [
+                    _badgeCell(rows[i].badge, rows[i].badgeColor),
+                    for (int j = 0; j < rows[i].values.length; j++)
+                      _valueCell(rows[i].values[j], rows[i].valueColors[j]),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 이슈 #723 — 한 단계 들어간 화면 전용 요약바 (+추가 버튼 포함).
+/// 메인 화면은 [SummaryCard_Main] 사용.
+// ignore: camel_case_types
+class SummaryCard_Detail extends StatelessWidget {
+  final List<String> headers;
+  final List<LibrarySummaryRowData> rows;
+  final String addLabel;
+  final VoidCallback onAdd;
+
+  static const int _badgeFlex = 7;
+  static const int _cellFlex = 5;
+
+  const SummaryCard_Detail({
+    super.key,
+    required this.headers,
+    required this.rows,
+    required this.addLabel,
+    required this.onAdd,
+  });
+
+  Widget _headerCell(String text) => Expanded(
+        flex: _cellFlex,
+        child: Center(
+          child: Text(
+            text,
+            style: T.caption.copyWith(color: C.mu),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
+        ),
+      );
+
+  Widget _valueCell(String text, Color color) => Expanded(
+        flex: _cellFlex,
+        child: Center(
+          child: Text(
+            text,
+            style: T.bodyBold.copyWith(color: color),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
+        ),
+      );
+
+  Widget _badgeCell(String text, Color color) => Expanded(
+        flex: _badgeFlex,
+        child: Container(
+          color: color.withValues(alpha: 0.07),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          child: Center(
+            child: Text(
+              text,
+              style: T.caption.copyWith(color: color, fontWeight: FontWeight.w700),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = SummaryBarTheme.of(context);
+    return GlassCard(
+      padding: EdgeInsets.zero,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(tokens.radius),
         child: IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1411,9 +1512,10 @@ class LibrarySummaryCard extends StatelessWidget {
                         ...headers.map(_headerCell),
                       ],
                     ),
-                    Divider(height: 1, thickness: 0.5, color: C.bd),
+                    Divider(height: 1, thickness: 0.5, color: tokens.borderColor),
                     for (int i = 0; i < rows.length; i++) ...[
-                      if (i > 0) Divider(height: 1, thickness: 0.5, color: C.bd),
+                      if (i > 0)
+                        Divider(height: 1, thickness: 0.5, color: tokens.borderColor),
                       Row(
                         children: [
                           _badgeCell(rows[i].badge, rows[i].badgeColor),
@@ -1425,34 +1527,32 @@ class LibrarySummaryCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (addLabel != null && onAdd != null) ...[
-                VerticalDivider(width: 1, thickness: 1, color: C.bd),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: onAdd,
-                        icon: const Icon(Icons.add_rounded, size: 15),
-                        label: Text(
-                          addLabel!,
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: C.lv,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                          elevation: 0,
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
+              VerticalDivider(width: 1, thickness: 1, color: tokens.borderColor),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: onAdd,
+                      icon: const Icon(Icons.add_rounded, size: 15),
+                      label: Text(
+                        addLabel,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                       ),
-                    ],
-                  ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: C.lv,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        elevation: 0,
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ],
           ),
         ),

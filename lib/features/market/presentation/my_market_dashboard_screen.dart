@@ -77,7 +77,7 @@ class MyMarketDashboardScreen extends ConsumerWidget {
                 // 상단 요약카드 (나의 실 라이브러리 패턴)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                  child: LibrarySummaryCard(
+                  child: SummaryCard_Main(
                     headers: [
                       isKorean ? '판매대기' : 'Pending',
                       isKorean ? '판매완료' : 'Sold',

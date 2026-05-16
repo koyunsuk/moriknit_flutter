@@ -50,7 +50,7 @@ class _YarnListScreenState extends ConsumerState<YarnListScreen> {
                     final yarnCount = yarnListAsync.maybeWhen(data: (y) => '${y.length}', orElse: () => '$count');
                     return Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                      child: LibrarySummaryCard(
+                      child: SummaryCard_Detail(
                         headers: ['MoriKnit', 'Ravelry'],
                         rows: [
                           LibrarySummaryRowData(

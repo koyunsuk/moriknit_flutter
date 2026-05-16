@@ -38,7 +38,7 @@ class NeedleListScreen extends ConsumerWidget {
             // 요약카드 틀고정
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: LibrarySummaryCard(
+              child: SummaryCard_Detail(
                 headers: [
                   isKorean ? '전체' : 'Total',
                   isKorean ? '일반' : 'Straight',

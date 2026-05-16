@@ -172,7 +172,7 @@ class _SummaryView extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
       children: [
         // 요약 카드
-        LibrarySummaryCard(
+        SummaryCard_Main(
           headers: [
             isKorean ? '전체' : 'Total',
             isKorean ? '진행' : 'Active',

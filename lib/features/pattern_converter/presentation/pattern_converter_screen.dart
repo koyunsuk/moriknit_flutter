@@ -12,6 +12,7 @@ import '../../../core/localization/app_language.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/dropbox_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../features/pattern/data/pattern_repository.dart';
 import '../../../features/pattern/domain/pattern_chart.dart';
@@ -199,12 +200,15 @@ class _PatternConverterScreenState
                 _pickFromPhone();
               },
             ),
-            // ② 외부 클라우드 — Dropbox (활성)
+            // ② 외부 클라우드 — Dropbox (활성, DropboxTheme 토큰)
             ListTile(
               leading: Container(
                 width: 44, height: 44,
-                decoration: BoxDecoration(color: const Color(0xFF0061FF).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.cloud_rounded, color: Color(0xFF0061FF), size: 22),
+                decoration: BoxDecoration(
+                  color: DropboxTheme.of(context).brandColor.withValues(alpha: DropboxTheme.of(context).iconBoxBgAlpha),
+                  borderRadius: BorderRadius.circular(DropboxTheme.of(context).iconBoxRadius),
+                ),
+                child: Icon(DropboxTheme.of(context).icon, color: DropboxTheme.of(context).brandColor, size: 22),
               ),
               title: Text('Dropbox', style: T.bodyBold),
               subtitle: Text(

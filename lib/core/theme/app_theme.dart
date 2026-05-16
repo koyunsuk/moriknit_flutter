@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
+import 'async_state_theme.dart';
 import 'block_theme.dart';
+import 'chip_theme.dart';
+import 'dropbox_theme.dart';
+import 'summary_bar_theme.dart';
 
 class T {
   static const List<String> fallbackFonts = [
@@ -297,8 +301,14 @@ class AppTheme {
   static ThemeData get light => ThemeData(
         useMaterial3: true,
         scaffoldBackgroundColor: C.bg,
-        // 이슈 #723 — 블록 외형 토큰 (CSS 변수 개념). BlockTheme 한 곳만 수정하면 전체 반영.
-        extensions: const <ThemeExtension<dynamic>>[BlockTheme.standard],
+        // 이슈 #723 — 외형 토큰 (CSS 변수 개념). 한 곳만 수정하면 전체 반영.
+        extensions: <ThemeExtension<dynamic>>[
+          BlockTheme.standard,
+          AsyncStateTheme.standard,
+          SummaryBarTheme.standard,
+          MoriChipTheme.standard,
+          DropboxTheme.standard,
+        ],
         colorScheme: ColorScheme.light(
           primary: C.lv,
           secondary: C.pk,

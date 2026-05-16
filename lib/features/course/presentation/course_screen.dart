@@ -101,7 +101,7 @@ class _CourseScreenState extends ConsumerState<CourseScreen> {
                 builder: (context) {
                   final courses = coursesAsync.valueOrNull ?? [];
                   final counts = _countByMediaType(courses);
-                  return LibrarySummaryCard(
+                  return SummaryCard_Detail(
                     headers: [isKorean ? '동영상' : 'Video', isKorean ? '파일' : 'File', 'YouTube'],
                     rows: [
                       LibrarySummaryRowData(

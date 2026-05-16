@@ -10,6 +10,7 @@ import '../../../core/localization/app_language.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/dropbox_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../dropbox/data/dropbox_auth_provider.dart';
 import '../../dropbox/domain/dropbox_file_entry.dart';
@@ -117,11 +118,17 @@ class _PatternTranslatorScreenState
               },
             ),
             ListTile(
-              leading: Container(
-                width: 44, height: 44,
-                decoration: BoxDecoration(color: const Color(0xFF0061FF).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.cloud_rounded, color: Color(0xFF0061FF), size: 22),
-              ),
+              leading: Builder(builder: (ctx) {
+                final dt = DropboxTheme.of(ctx);
+                return Container(
+                  width: 44, height: 44,
+                  decoration: BoxDecoration(
+                    color: dt.brandColor.withValues(alpha: dt.iconBoxBgAlpha),
+                    borderRadius: BorderRadius.circular(dt.iconBoxRadius),
+                  ),
+                  child: Icon(dt.icon, color: dt.brandColor, size: 22),
+                );
+              }),
               title: Text('Dropbox', style: T.bodyBold),
               subtitle: Text(isKorean ? '드롭박스에서 파일 선택' : 'Pick from Dropbox', style: T.caption.copyWith(color: C.mu)),
               trailing: Icon(Icons.chevron_right_rounded, color: C.mu),

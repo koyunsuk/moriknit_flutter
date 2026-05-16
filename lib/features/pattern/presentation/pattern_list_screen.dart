@@ -13,6 +13,7 @@ import '../../../core/localization/app_language.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/dropbox_theme.dart';
 import '../../../core/widgets/async_loading_state.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/blueprint_provider.dart';
@@ -75,7 +76,7 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                 final libCount = libraryAsync?.maybeWhen(data: (p) => '${p.length}', orElse: () => '-') ?? '-';
                 return Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                  child: LibrarySummaryCard(
+                  child: SummaryCard_Detail(
                     headers: [isKorean ? '전체' : 'Total'],
                     rows: [
                       LibrarySummaryRowData(
@@ -1102,15 +1103,18 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                   context.push(Routes.cloudHub);
                 },
                 child: Row(children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0061FF).withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(Icons.cloud_rounded, color: Color(0xFF0061FF)),
-                  ),
+                  Builder(builder: (ctx) {
+                    final dt = DropboxTheme.of(ctx);
+                    return Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: dt.brandColor.withValues(alpha: dt.iconBoxBgAlpha),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(dt.icon, color: dt.brandColor),
+                    );
+                  }),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(

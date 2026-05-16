@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../errors/network_errors.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../theme/async_state_theme.dart';
 
 /// AsyncValue를 받아 로딩/에러/데이터 상태를 통일 UI로 표시.
 ///
@@ -73,6 +74,8 @@ class _LoadingPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 이슈 #722 후속 — AsyncStateTheme 토큰 참조 (한 곳 수정 = 전체 반영).
+    final tokens = AsyncStateTheme.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -82,9 +85,11 @@ class _LoadingPlaceholder extends StatelessWidget {
             height: rowHeight,
             margin: const EdgeInsets.only(bottom: 8),
             decoration: BoxDecoration(
-              color: C.gx,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: C.bd.withValues(alpha: 0.5)),
+              color: tokens.placeholderRowColor,
+              borderRadius: BorderRadius.circular(tokens.placeholderRowRadius),
+              border: Border.all(
+                color: C.bd.withValues(alpha: tokens.placeholderBorderAlpha),
+              ),
             ),
           ),
         if (hint != null) ...[
@@ -116,6 +121,7 @@ class _ServerErrorPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = AsyncStateTheme.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -125,9 +131,11 @@ class _ServerErrorPlaceholder extends StatelessWidget {
             height: rowHeight,
             margin: const EdgeInsets.only(bottom: 8),
             decoration: BoxDecoration(
-              color: C.gx,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: C.bd.withValues(alpha: 0.5)),
+              color: tokens.placeholderRowColor,
+              borderRadius: BorderRadius.circular(tokens.placeholderRowRadius),
+              border: Border.all(
+                color: C.bd.withValues(alpha: tokens.placeholderBorderAlpha),
+              ),
             ),
           ),
         const SizedBox(height: 6),
@@ -136,12 +144,12 @@ class _ServerErrorPlaceholder extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.cloud_off_rounded, size: 16, color: C.og),
+              Icon(Icons.cloud_off_rounded, size: 16, color: tokens.errorIconColor),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
                   '서버 연결에 장애가 있어요',
-                  style: T.caption.copyWith(color: C.og),
+                  style: T.caption.copyWith(color: tokens.errorTextColor),
                 ),
               ),
               if (onRetry != null) ...[
@@ -155,7 +163,7 @@ class _ServerErrorPlaceholder extends StatelessWidget {
                   ),
                   child: Text(
                     '재시도',
-                    style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w700),
+                    style: T.caption.copyWith(color: tokens.retryButtonColor, fontWeight: FontWeight.w700),
                   ),
                 ),
               ],
@@ -181,6 +189,7 @@ class EmptyBlockPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = AsyncStateTheme.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -190,9 +199,11 @@ class EmptyBlockPlaceholder extends StatelessWidget {
             height: rowHeight,
             margin: const EdgeInsets.only(bottom: 8),
             decoration: BoxDecoration(
-              color: C.gx,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: C.bd.withValues(alpha: 0.5)),
+              color: tokens.placeholderRowColor,
+              borderRadius: BorderRadius.circular(tokens.placeholderRowRadius),
+              border: Border.all(
+                color: C.bd.withValues(alpha: tokens.placeholderBorderAlpha),
+              ),
             ),
           ),
         const SizedBox(height: 4),
