@@ -144,18 +144,36 @@ final _memberBlockedFlagProvider = StreamProvider.family<bool, String>((ref, uid
 
 final _adminCountsProvider = FutureProvider<Map<String, int>>((ref) async {
   final db = FirebaseFirestore.instance;
+  // Firestore aggregate count(): 한도 없이 정확한 카운트. 실패 시 0 fallback.
+  Future<int> safeCount(Query<Map<String, dynamic>> query) async {
+    try {
+      final snap = await query.count().get();
+      return snap.count ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   final results = await Future.wait([
-    db.collection('users').limit(300).get(),
-    db.collection('market_items').limit(300).get(),
-    db.collection('encyclopedia').limit(300).get(),
-    db.collection('posts').limit(300).get(),
+    safeCount(db.collection('users')),
+    safeCount(db.collection('market_items')),
+    safeCount(db.collection('encyclopedia')),
+    safeCount(db.collection('posts')),
+    safeCount(db.collection('step_blueprints')),
+    safeCount(db.collectionGroup('swatches')),
+    safeCount(db.collectionGroup('projects')),
+    safeCount(db.collection('bug_reports')),
   ]);
 
   return {
-    'users': results[0].size,
-    'market': results[1].size,
-    'encyclopedia': results[2].size,
-    'posts': results[3].size,
+    'users': results[0],
+    'market': results[1],
+    'encyclopedia': results[2],
+    'posts': results[3],
+    'blueprints': results[4],
+    'swatches': results[5],
+    'projects': results[6],
+    'bugReports': results[7],
   };
 });
 
@@ -2150,9 +2168,13 @@ class _DashboardTab extends ConsumerWidget {
               runSpacing: 12,
               children: [
                 _CountCard(label: isKorean ? '회원' : 'Users', value: '${data['users'] ?? 0}', accent: C.lvD, onTap: () => onTabChange?.call(4)),
-                _CountCard(label: isKorean ? '마켓/도안' : 'Market', value: '${data['market'] ?? 0}', accent: C.pkD, onTap: () => onTabChange?.call(8)),
+                _CountCard(label: isKorean ? '도안 (청사진)' : 'Blueprints', value: '${data['blueprints'] ?? 0}', accent: C.lv, onTap: () => onTabChange?.call(5)),
+                _CountCard(label: isKorean ? '스와치' : 'Swatches', value: '${data['swatches'] ?? 0}', accent: C.pk, onTap: () => onTabChange?.call(6)),
+                _CountCard(label: isKorean ? '프로젝트' : 'Projects', value: '${data['projects'] ?? 0}', accent: C.lmG, onTap: () => onTabChange?.call(7)),
+                _CountCard(label: isKorean ? '마켓 상품' : 'Market', value: '${data['market'] ?? 0}', accent: C.pkD, onTap: () => onTabChange?.call(8)),
                 _CountCard(label: isKorean ? '백과사전' : 'Encyclopedia', value: '${data['encyclopedia'] ?? 0}', accent: C.lmD, onTap: () => onTabChange?.call(1)),
                 _CountCard(label: isKorean ? '커뮤니티 글' : 'Posts', value: '${data['posts'] ?? 0}', accent: C.og, onTap: () => onTabChange?.call(9)),
+                _CountCard(label: isKorean ? '버그리포트' : 'Bug reports', value: '${data['bugReports'] ?? 0}', accent: const Color(0xFFFB7185), onTap: () => onTabChange?.call(11)),
               ],
             ),
           ),
