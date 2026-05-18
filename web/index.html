@@ -47,6 +47,20 @@
     src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.5/kakao.min.js"
     integrity="sha384-DKYJZ8NLiK8MN4/C5P2dtSmLQ4KwPaoqAfyA/DfmEc1VDxu4yyC7wy6K1Hs90nka"
     crossorigin="anonymous"></script>
+  <script>
+    // 명시적 Kakao.init — Dart KakaoSdk.init()이 자동 호출하지 않을 수 있어 강제.
+    // 카카오 개발자 콘솔에 도메인(app.moriknit.com / admin.moriknit.com / moriknit.com) 등록 필수.
+    if (typeof Kakao !== 'undefined' && !Kakao.isInitialized()) {
+      try {
+        Kakao.init('b69570c25792e78f96988f7425a256ec');
+        console.log('[Kakao] JS SDK initialized. isInitialized:', Kakao.isInitialized());
+      } catch (e) {
+        console.error('[Kakao] init error:', e);
+      }
+    } else if (typeof Kakao === 'undefined') {
+      console.error('[Kakao] SDK script not loaded');
+    }
+  </script>
   <!-- splash: 이벤트 리스너를 head에서 먼저 등록해야 flutter-first-frame을 놓치지 않음 -->
   <style>
     #_mori_splash {
