@@ -23,55 +23,113 @@ import '../../../providers/blueprint_provider.dart';
 import '../../blueprint/domain/step_blueprint.dart';
 import '../../knit_along/presentation/knit_along_group_screen.dart';
 
+/// Phase 2 폴리시:
+///   - SellerDashboardScreen 컨테이너 안에서 호출되므로 자체 Scaffold/BgOrbs/SafeArea 제거.
+///   - 상단 통계 요약 카드 (전체 도안 / 활성 그룹 / 누적 참여자) — placeholder 가능.
+///   - 본문: 본인 도안의 함께뜨기 그룹 리스트 (forkCount > 0).
 class SellerKnitAlongScreen extends ConsumerWidget {
   const SellerKnitAlongScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final myPatternsAsync = ref.watch(myAuthoredBlueprintsProvider);
+    final myPatterns = myPatternsAsync.valueOrNull ?? const <StepBlueprint>[];
+    final activeGroupCount =
+        myPatterns.where((p) => p.forkCount > 0).length;
+    final totalParticipants = myPatterns.fold<int>(
+      0,
+      (sum, p) => sum + p.forkCount,
+    );
 
-    return Scaffold(
-      backgroundColor: C.bg,
-      body: Stack(
-        children: [
-          const BgOrbs(),
-          SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-              children: [
-                MoriBlockShell(
-                  label: '함께뜨기 그룹',
-                  icon: Icons.group_rounded,
-                  accent: C.lvD,
-                  child: AsyncDataView<List<StepBlueprint>>(
-                    async: myPatternsAsync,
-                    isEmpty: (list) =>
-                        list.where((p) => p.forkCount > 0).isEmpty,
-                    emptyBuilder: () => const EmptyBlockPlaceholder(
-                      message:
-                          '아직 함께뜨기 참여자가 없어요.\n도안을 발행하고 fork 가 발생하면 여기에 표시돼요.',
-                      rows: 3,
-                      rowHeight: 60,
-                    ),
-                    builder: (list) {
-                      final active =
-                          list.where((p) => p.forkCount > 0).toList();
-                      return Column(
-                        children: [
-                          for (final p in active) ...[
-                            _KnitAlongRow(pattern: p),
-                            const SizedBox(height: 8),
-                          ],
-                        ],
-                      );
-                    },
-                  ),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+      children: [
+        // 상단 통계 요약
+        MoriBlockShell(
+          label: '함께뜨기 요약',
+          icon: Icons.bar_chart_rounded,
+          accent: C.lm,
+          child: Row(
+            children: [
+              Expanded(
+                child: _SummaryMetric(
+                  value: '${myPatterns.length}',
+                  label: '전체 도안',
+                  color: C.tx,
                 ),
-              ],
-            ),
+              ),
+              Expanded(
+                child: _SummaryMetric(
+                  value: '$activeGroupCount',
+                  label: '활성 그룹',
+                  color: C.lvD,
+                ),
+              ),
+              Expanded(
+                child: _SummaryMetric(
+                  value: '$totalParticipants',
+                  label: '누적 참여자',
+                  color: C.lmD,
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 12),
+
+        // 그룹 리스트
+        MoriBlockShell(
+          label: '함께뜨기 그룹',
+          icon: Icons.group_rounded,
+          accent: C.lvD,
+          child: AsyncDataView<List<StepBlueprint>>(
+            async: myPatternsAsync,
+            isEmpty: (list) =>
+                list.where((p) => p.forkCount > 0).isEmpty,
+            emptyBuilder: () => const EmptyBlockPlaceholder(
+              message:
+                  '아직 함께뜨기 참여자가 없어요.\n도안을 발행하고 fork 가 발생하면 여기에 표시돼요.',
+              rows: 3,
+              rowHeight: 60,
+            ),
+            builder: (list) {
+              final active =
+                  list.where((p) => p.forkCount > 0).toList();
+              return Column(
+                children: [
+                  for (final p in active) ...[
+                    _KnitAlongRow(pattern: p),
+                    const SizedBox(height: 8),
+                  ],
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SummaryMetric extends StatelessWidget {
+  final String value;
+  final String label;
+  final Color color;
+  const _SummaryMetric({
+    required this.value,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(value, style: T.h2.copyWith(color: color, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 2),
+        Text(label, style: T.caption.copyWith(color: C.tx2)),
+      ],
     );
   }
 }

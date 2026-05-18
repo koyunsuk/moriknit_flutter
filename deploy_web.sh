@@ -5,7 +5,7 @@
 
 set -e  # 에러 발생 시 즉시 중단
 
-TARGET=${1:-"both"}  # 인자: app | admin | landing | both | all (기본값: both)
+TARGET=${1:-"both"}  # 인자: app | admin | landing | seller | both | all (기본값: both)
 
 build_app() {
   echo "▶ 앱 빌드 → build/web"
@@ -25,6 +25,12 @@ build_landing() {
   echo "✅ 랜딩 빌드 완료"
 }
 
+build_seller() {
+  echo "▶ 셀러 빌드 → build/web_seller"
+  flutter build web --target lib/main_seller.dart --output build/web_seller --no-tree-shake-icons
+  echo "✅ 셀러 빌드 완료"
+}
+
 case "$TARGET" in
   app)
     build_app
@@ -38,6 +44,10 @@ case "$TARGET" in
     build_landing
     firebase deploy --only hosting:landing
     ;;
+  seller)
+    build_seller
+    firebase deploy --only hosting:seller
+    ;;
   both)
     build_app
     build_admin
@@ -47,10 +57,11 @@ case "$TARGET" in
     build_app
     build_admin
     build_landing
-    firebase deploy --only hosting:app,hosting:admin,hosting:landing
+    build_seller
+    firebase deploy --only hosting:app,hosting:admin,hosting:landing,hosting:seller
     ;;
   *)
-    echo "사용법: ./deploy_web.sh [app|admin|landing|both|all]"
+    echo "사용법: ./deploy_web.sh [app|admin|landing|seller|both|all]"
     exit 1
     ;;
 esac

@@ -47,6 +47,10 @@ final sellerAllFeedbacksProvider =
   return Stream.value(const <SellerFeedbackEntry>[]);
 });
 
+/// Phase 2 폴리시:
+///   - SellerDashboardScreen 컨테이너 안에서 호출되므로 자체 Scaffold/BgOrbs/SafeArea 제거
+///     (상위에서 BgOrbs + SafeArea 책임). 본문만 반환.
+///   - 빈 상태 placeholder 강화 — 빈 행 3개 + "받은 피드백 없음" + "테스터 모집하기" 버튼.
 class SellerTesterFeedbackScreen extends ConsumerWidget {
   const SellerTesterFeedbackScreen({super.key});
 
@@ -54,39 +58,25 @@ class SellerTesterFeedbackScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUid = ref.watch(currentUserProvider).valueOrNull?.uid;
     if (currentUid == null) {
-      return Scaffold(
-        backgroundColor: C.bg,
-        body: Center(
-          child: Text('로그인이 필요해요.', style: T.body.copyWith(color: C.mu)),
-        ),
+      return Center(
+        child: Text('로그인이 필요해요.', style: T.body.copyWith(color: C.mu)),
       );
     }
 
     final feedbacksAsync = ref.watch(sellerAllFeedbacksProvider);
 
-    return Scaffold(
-      backgroundColor: C.bg,
-      body: Stack(
-        children: [
-          const BgOrbs(),
-          SafeArea(
-            child: AsyncDataView<List<SellerFeedbackEntry>>(
-              async: feedbacksAsync,
-              isEmpty: (list) => list.isEmpty,
-              emptyBuilder: () => const _SellerFeedbackEmptyPlaceholder(),
-              builder: (entries) {
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-                  itemCount: entries.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
-                  itemBuilder: (_, i) =>
-                      _SellerFeedbackCard(entry: entries[i]),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
+    return AsyncDataView<List<SellerFeedbackEntry>>(
+      async: feedbacksAsync,
+      isEmpty: (list) => list.isEmpty,
+      emptyBuilder: () => const _SellerFeedbackEmptyPlaceholder(),
+      builder: (entries) {
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+          itemCount: entries.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 12),
+          itemBuilder: (_, i) => _SellerFeedbackCard(entry: entries[i]),
+        );
+      },
     );
   }
 }
@@ -167,7 +157,8 @@ class _SellerFeedbackCard extends StatelessWidget {
   }
 }
 
-/// 플레이스홀더 — 데이터 없어도 빈 카드 3개 + 안내 (CLAUDE.md 플레이스홀더 원칙).
+/// 플레이스홀더 — 빈 행 3개 + "받은 피드백 없음" 안내 + "테스터 모집하기" 액션.
+/// CLAUDE.md 플레이스홀더 원칙: 데이터 없어도 공간을 고정 표시.
 class _SellerFeedbackEmptyPlaceholder extends StatelessWidget {
   const _SellerFeedbackEmptyPlaceholder();
 
@@ -176,10 +167,62 @@ class _SellerFeedbackEmptyPlaceholder extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
       children: [
-        const EmptyBlockPlaceholder(
-          message: '아직 받은 피드백이 없어요.\n테스터가 본인 도안에 피드백을 남기면 여기에 표시돼요.',
-          rows: 3,
-          rowHeight: 60,
+        MoriBlockShell(
+          label: '받은 피드백',
+          icon: Icons.chat_bubble_rounded,
+          accent: C.lvD,
+          child: const EmptyBlockPlaceholder(
+            message: '아직 받은 피드백이 없어요.\n테스터가 본인 도안에 피드백을 남기면 여기에 표시돼요.',
+            rows: 3,
+            rowHeight: 60,
+          ),
+        ),
+        const SizedBox(height: 12),
+        MoriBlockShell(
+          label: '테스터 모집',
+          icon: Icons.person_add_alt_1_rounded,
+          accent: C.lv,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '본인 도안을 미리 테스트할 테스터를 모집해 피드백을 받아보세요.',
+                style: T.caption.copyWith(color: C.tx2, height: 1.5),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 44,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          '테스터 모집 화면은 Phase 3 에서 지원돼요.',
+                          style: T.body.copyWith(color: Colors.white),
+                        ),
+                        backgroundColor: C.lvD,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                  label: Text(
+                    '테스터 모집하기',
+                    style: T.body.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: C.lv,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );

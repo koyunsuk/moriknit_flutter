@@ -26,6 +26,9 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/blueprint_provider.dart';
 import '../../blueprint/domain/step_blueprint.dart';
 
+/// Phase 2 폴리시:
+///   - SellerDashboardScreen 컨테이너 안에서 호출되므로 자체 Scaffold/BgOrbs/SafeArea 제거.
+///   - 빈 상태: "도안 등록하기" 큰 버튼 + 안내 placeholder.
 class SellerPatternManagementScreen extends ConsumerWidget {
   const SellerPatternManagementScreen({super.key});
 
@@ -33,69 +36,96 @@ class SellerPatternManagementScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final patternsAsync = ref.watch(myBlueprintsWithLegacyProvider);
 
-    return Scaffold(
-      backgroundColor: C.bg,
-      body: Stack(
-        children: [
-          const BgOrbs(),
-          SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-              children: [
-                _NewPatternCard(
-                  onTap: () {
-                    // GoRouter 라우트 정의 시 '/pattern/new' 로 연결.
-                    // 셀러 앱 라우트 미정 시 placeholder snackbar.
-                    final router = GoRouter.maybeOf(context);
-                    if (router != null) {
-                      try {
-                        context.push('/pattern/new');
-                        return;
-                      } catch (_) {
-                        // 라우트 미등록 시 fallback.
-                      }
-                    }
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          '도안 등록 라우트 등록 예정',
-                          style: T.body.copyWith(color: Colors.white),
-                        ),
-                        backgroundColor: C.lvD,
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 16),
-                MoriBlockShell(
-                  label: '나의 도안',
-                  icon: Icons.grid_on_rounded,
-                  accent: C.lv,
-                  child: AsyncDataView<List<StepBlueprint>>(
-                    async: patternsAsync,
-                    isEmpty: (list) => list.isEmpty,
-                    emptyBuilder: () => const EmptyBlockPlaceholder(
-                      message: '아직 등록한 도안이 없어요.\n위 "새 도안 등록"으로 첫 도안을 만들어보세요.',
-                      rows: 3,
-                      rowHeight: 60,
-                    ),
-                    builder: (list) {
-                      return Column(
-                        children: [
-                          for (final p in list) ...[
-                            _MyPatternCard(pattern: p),
-                            const SizedBox(height: 8),
-                          ],
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              ],
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+      children: [
+        _NewPatternCard(onTap: () => _openNewPattern(context)),
+        const SizedBox(height: 16),
+        MoriBlockShell(
+          label: '나의 도안',
+          icon: Icons.grid_on_rounded,
+          accent: C.lv,
+          child: AsyncDataView<List<StepBlueprint>>(
+            async: patternsAsync,
+            isEmpty: (list) => list.isEmpty,
+            emptyBuilder: () => _MyPatternsEmptyPlaceholder(
+              onCreate: () => _openNewPattern(context),
+            ),
+            builder: (list) {
+              return Column(
+                children: [
+                  for (final p in list) ...[
+                    _MyPatternCard(pattern: p),
+                    const SizedBox(height: 8),
+                  ],
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 도안 등록 — 셀러 앱 라우트 미정 시 snackbar fallback.
+  void _openNewPattern(BuildContext context) {
+    final router = GoRouter.maybeOf(context);
+    if (router != null) {
+      try {
+        context.push('/pattern/new');
+        return;
+      } catch (_) {
+        // 라우트 미등록 시 fallback.
+      }
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '도안 등록 라우트 등록 예정',
+          style: T.body.copyWith(color: Colors.white),
+        ),
+        backgroundColor: C.lvD,
+      ),
+    );
+  }
+}
+
+/// 빈 상태 placeholder — "도안 등록하기" 큰 버튼 + 안내.
+/// CLAUDE.md 플레이스홀더 원칙: 빈 행 + 안내 문구로 공간 고정.
+class _MyPatternsEmptyPlaceholder extends StatelessWidget {
+  final VoidCallback onCreate;
+  const _MyPatternsEmptyPlaceholder({required this.onCreate});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const EmptyBlockPlaceholder(
+          message: '아직 등록한 도안이 없어요.\n첫 도안을 등록하고 마켓에 발행해 보세요.',
+          rows: 3,
+          rowHeight: 60,
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 48,
+          child: ElevatedButton.icon(
+            onPressed: onCreate,
+            icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
+            label: Text(
+              '도안 등록하기',
+              style: T.bodyBold.copyWith(color: Colors.white),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: C.lm,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

@@ -14,6 +14,10 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/common_widgets.dart';
 import '../../../my/domain/bug_report.dart';
 
+/// 작업 중 (진행률 바 노출) 상태.
+bool _isWorking(String status) =>
+    status == 'analyzing' || status == 'fixing' || status == 'building' || status == 'installing';
+
 /// 단계 순서 (8단계). 순환 정의 외 상태 (failed/rejected) 는 별도 처리.
 const List<String> _kFixSteps = [
   'pending',
@@ -58,16 +62,24 @@ class AdminAIFixPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MoriBlockShell(
-      label: 'AI 자동 fix',
+      label: '🚨 119 — AI 자동 fix',
       icon: Icons.smart_toy,
       accent: C.lv,
       trailing: _StatusBadge(status: report.aiFixStatus),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ProgressBar(status: report.aiFixStatus),
-          const SizedBox(height: 14),
+          // 진행률 바 — 작업 중일 때만 노출 (pending/done/failed/rejected 는 숨김)
+          if (_isWorking(report.aiFixStatus)) ...[
+            _ProgressBar(status: report.aiFixStatus),
+            const SizedBox(height: 14),
+          ],
           _StepChecklist(report: report),
+          // 단계별 timeline 로그 — aiFixSteps 가 있을 때만
+          if (report.aiFixSteps.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            _StepTimeline(steps: report.aiFixSteps),
+          ],
           if (report.aiFixStatus == 'failed' &&
               report.aiFixErrorMessage.isNotEmpty) ...[
             const SizedBox(height: 14),
@@ -252,6 +264,8 @@ class _StepChecklist extends StatelessWidget {
     final currentIdx = _stepIndex(report.aiFixStatus);
     final isAbnormal =
         report.aiFixStatus == 'failed' || report.aiFixStatus == 'rejected';
+    // pending(대기)는 아무것도 시작하지 않은 상태 — spinner 표시하지 않음.
+    final isWaiting = report.aiFixStatus == 'pending';
 
     return Column(
       children: List.generate(_kFixSteps.length, (i) {
@@ -259,9 +273,10 @@ class _StepChecklist extends StatelessWidget {
         final completedAt = completedMap[stepName];
 
         final bool isCompleted = completedAt != null ||
-            (!isAbnormal && currentIdx >= 0 && i < currentIdx);
+            (!isAbnormal && !isWaiting && currentIdx >= 0 && i < currentIdx);
+        // pending 상태에선 현재 단계 표시 안 함 (혼란 방지)
         final bool isCurrent =
-            !isAbnormal && currentIdx >= 0 && i == currentIdx && !isCompleted;
+            !isAbnormal && !isWaiting && currentIdx >= 0 && i == currentIdx && !isCompleted;
 
         return _StepRow(
           label: _kStepLabels[stepName] ?? stepName,
@@ -620,6 +635,116 @@ class _ActionButton extends StatelessWidget {
         textStyle: T.bodyBold.copyWith(fontSize: 13),
       ),
       child: Text(label),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// 단계별 실시간 timeline 로그 (워커 동작 가시화)
+
+class _StepTimeline extends StatelessWidget {
+  final List<Map<String, dynamic>> steps;
+  const _StepTimeline({required this.steps});
+
+  String _formatTime(dynamic ts) {
+    DateTime? dt;
+    if (ts is DateTime) {
+      dt = ts;
+    } else if (ts != null) {
+      try {
+        dt = (ts as dynamic).toDate() as DateTime?;
+      } catch (_) {
+        dt = null;
+      }
+    }
+    if (dt == null) return '--:--:--';
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 최신순 위로 (역순)
+    final entries = steps.reversed.toList();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.timeline_rounded, size: 14, color: C.tx2),
+              const SizedBox(width: 6),
+              Text('워커 단계 로그 (${steps.length})',
+                  style: T.captionBold.copyWith(color: C.tx2)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ...entries.map((s) {
+            final step = (s['step'] ?? '') as String;
+            final stepLabel = _kStepLabels[step] ?? step;
+            final startedAt = s['startedAt'];
+            final completedAt = s['completedAt'];
+            final log = (s['log'] ?? '') as String;
+            final ts = completedAt ?? startedAt;
+            final isComplete = completedAt != null;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 타임스탬프
+                  SizedBox(
+                    width: 64,
+                    child: Text(
+                      _formatTime(ts),
+                      style: T.caption.copyWith(
+                        color: C.mu,
+                        fontFamily: 'monospace',
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+                  // 상태 아이콘
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6, top: 1),
+                    child: Icon(
+                      isComplete ? Icons.check_circle : Icons.circle_outlined,
+                      size: 12,
+                      color: isComplete ? C.lmD : C.lv,
+                    ),
+                  ),
+                  // 단계 + 로그
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(stepLabel,
+                            style: T.caption.copyWith(
+                              color: C.tx,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 11,
+                            )),
+                        if (log.isNotEmpty)
+                          Text(log,
+                              style: T.caption.copyWith(
+                                color: C.tx2,
+                                fontSize: 10,
+                                height: 1.3,
+                              )),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
     );
   }
 }
