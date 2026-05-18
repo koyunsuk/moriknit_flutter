@@ -133,4 +133,145 @@ ${report.steps.isEmpty ? '없음' : report.steps}$imageSection''';
 
     return null;
   }
+
+  // ── AI 개발자 상주 시스템 Phase 1 (#813) ─────────────────────────────────
+  // 어드민/PC 워커가 호출. 기존 submitBugReport 로직과 분리된 신규 메서드 묶음.
+
+  CollectionReference<Map<String, dynamic>> get _bugReports =>
+      _firestore.collection('bug_reports');
+
+  /// 단계 시작/완료를 기록하면서 aiFixStatus를 변경한다.
+  /// - status가 '동작 중' 단계명(analyzing/fixing/building/installing)이면
+  ///   해당 step을 startedAt 와 함께 push.
+  /// - 종료 단계(analyzed/approved/done/failed/rejected)이면 마지막 동일 step의
+  ///   completedAt 을 채우고, 없으면 새 step을 startedAt + completedAt 으로 push.
+  Future<void> updateAiFixStatus(
+    String reportId,
+    String status, {
+    String? log,
+  }) async {
+    final docRef = _bugReports.doc(reportId);
+    final snap = await docRef.get();
+    final data = snap.data() ?? <String, dynamic>{};
+
+    final steps = ((data['aiFixSteps'] as List<dynamic>?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+
+    const inProgressStatuses = <String>{
+      'analyzing',
+      'fixing',
+      'building',
+      'installing',
+    };
+    const terminalStatuses = <String>{
+      'analyzed',
+      'approved',
+      'done',
+      'failed',
+      'rejected',
+    };
+
+    // 동일 단계의 미완료 step을 찾는다.
+    int openIndex = -1;
+    for (var i = steps.length - 1; i >= 0; i--) {
+      if (steps[i]['step'] == status && steps[i]['completedAt'] == null) {
+        openIndex = i;
+        break;
+      }
+    }
+
+    if (inProgressStatuses.contains(status)) {
+      // 진행 단계 시작: 이미 열린 동일 step이 없으면 새로 추가
+      if (openIndex == -1) {
+        steps.add({
+          'step': status,
+          'startedAt': Timestamp.now(),
+          'completedAt': null,
+          'log': log ?? '',
+        });
+      } else if (log != null) {
+        // 진행 중 log 보강
+        steps[openIndex] = {
+          ...steps[openIndex],
+          'log': log,
+        };
+      }
+    } else if (terminalStatuses.contains(status)) {
+      // 종료 단계: 직전 진행 step 완료 마크
+      for (var i = steps.length - 1; i >= 0; i--) {
+        if (steps[i]['completedAt'] == null) {
+          steps[i] = {
+            ...steps[i],
+            'completedAt': Timestamp.now(),
+            'log': log ?? (steps[i]['log'] ?? ''),
+          };
+          break;
+        }
+      }
+      // 종료 그 자체도 별도 step으로 push (시각화용)
+      steps.add({
+        'step': status,
+        'startedAt': Timestamp.now(),
+        'completedAt': Timestamp.now(),
+        'log': log ?? '',
+      });
+    } else {
+      // pending 등 그 외 — 단순 step push
+      steps.add({
+        'step': status,
+        'startedAt': Timestamp.now(),
+        'completedAt': Timestamp.now(),
+        'log': log ?? '',
+      });
+    }
+
+    await docRef.update({
+      'aiFixStatus': status,
+      'aiFixSteps': steps,
+    });
+  }
+
+  /// Claude 분석 결과(텍스트) 저장.
+  Future<void> updateFixPlan(String reportId, String plan) async {
+    await _bugReports.doc(reportId).update({
+      'fixPlan': plan,
+    });
+  }
+
+  /// git diff 미리보기 + 변경 파일 목록 + commit SHA 저장.
+  Future<void> updateFixDiff(
+    String reportId,
+    String diff, {
+    required List<String> fixedFiles,
+    required String commitSha,
+  }) async {
+    await _bugReports.doc(reportId).update({
+      'fixDiffPreview': diff,
+      'fixedFiles': fixedFiles,
+      'fixCommitSha': commitSha,
+    });
+  }
+
+  /// APK 설치 완료 시각 기록. aiFixStatus 는 별도 updateAiFixStatus로 진행.
+  Future<void> markApkInstalled(String reportId) async {
+    await _bugReports.doc(reportId).update({
+      'apkInstalledAt': Timestamp.now(),
+    });
+  }
+
+  /// AI fix 실패 처리 — 상태를 failed 로 변경 + 사유 기록.
+  Future<void> markAiFixFailed(String reportId, String errorMessage) async {
+    await updateAiFixStatus(reportId, 'failed', log: errorMessage);
+    await _bugReports.doc(reportId).update({
+      'aiFixErrorMessage': errorMessage,
+    });
+  }
+
+  /// 단일 버그리포트 실시간 스트림 — 어드민 패널에서 단계 시각화용.
+  Stream<BugReport> watchBugReport(String reportId) {
+    return _bugReports.doc(reportId).snapshots().map(
+          (snap) => BugReport.fromFirestore(snap),
+        );
+  }
 }

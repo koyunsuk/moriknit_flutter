@@ -32,6 +32,14 @@ import '../../blueprint/data/blueprint_migration.dart';
 import '../../landing/data/landing_board_repository.dart';
 import '../../pattern/data/pattern_repository.dart';
 import 'widgets/admin_list_shell.dart';
+import 'widgets/admin_ai_fix_panel.dart';
+import 'widgets/dashboard/usage_metrics_section.dart';
+import 'widgets/dashboard/traffic_metrics_section.dart';
+import 'widgets/dashboard/ops_metrics_section.dart';
+import 'widgets/dashboard/market_metrics_section.dart';
+import 'widgets/dashboard/ai_metrics_section.dart';
+import '../../my/data/bug_report_repository.dart';
+import '../../my/domain/bug_report.dart';
 
 /// Firestore 일괄 삭제 헬퍼 — 500건 단위 batch 분할. (이슈 #805)
 Future<void> _bulkDeleteDocs(List<DocumentReference> refs) async {
@@ -2099,6 +2107,21 @@ class _DashboardTab extends ConsumerWidget {
             ],
           ),
         ),
+        const SizedBox(height: 16),
+        // 이슈 #814 — 운영 대시보드 풍부화 (호스팅/스토리지/AI토큰/마켓/트래픽)
+        OpsMetricsSection(
+          onOpenBugReports: () => onTabChange?.call(11),
+          onOpenInquiries: () => onTabChange?.call(19),
+          onOpenPendingPatterns: () => onTabChange?.call(8),
+        ),
+        const SizedBox(height: 16),
+        const TrafficMetricsSection(),
+        const SizedBox(height: 16),
+        const UsageMetricsSection(),
+        const SizedBox(height: 16),
+        const MarketMetricsSection(),
+        const SizedBox(height: 16),
+        const AiMetricsSection(),
         const SizedBox(height: 16),
         _OperationalSupportSection(isKorean: isKorean),
         const SizedBox(height: 12),
@@ -4382,11 +4405,32 @@ class _BugReportDetailState extends State<_BugReportDetail> {
     final deviceInfo = data['deviceInfo'] as String? ?? '';
     final osVersion = data['osVersion'] as String? ?? '';
 
+    final repo = BugReportRepository();
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 이슈 #813 — AI 자동 fix 패널 (실시간 상태 구독)
+          StreamBuilder<BugReport>(
+            stream: repo.watchBugReport(widget.doc.id),
+            initialData: BugReport.fromFirestore(widget.doc),
+            builder: (context, snap) {
+              final report = snap.data;
+              if (report == null) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 20),
+                child: AdminAIFixPanel(
+                  report: report,
+                  onAnalysisStart: () => repo.updateAiFixStatus(report.id, 'analyzing', log: '본인 트리거: AI 분석 시작'),
+                  onApprove: () => repo.updateAiFixStatus(report.id, 'approved', log: '본인 승인: 수정 진행'),
+                  onReleaseApprove: () => repo.updateAiFixStatus(report.id, 'done', log: '본인 승인: 릴리즈'),
+                  onReject: () => repo.updateAiFixStatus(report.id, 'rejected', log: '본인 거부'),
+                ),
+              );
+            },
+          ),
           // 제목 + GitHub 링크
           Row(
             children: [
