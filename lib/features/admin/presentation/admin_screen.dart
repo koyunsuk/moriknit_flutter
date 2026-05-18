@@ -33,6 +33,7 @@ import '../../landing/data/landing_board_repository.dart';
 import '../../pattern/data/pattern_repository.dart';
 import 'widgets/admin_list_shell.dart';
 import 'widgets/admin_ai_fix_panel.dart';
+import 'widgets/admin_mobile_sidebar.dart';
 import 'widgets/dashboard/usage_metrics_section.dart';
 import 'widgets/dashboard/traffic_metrics_section.dart';
 import 'widgets/dashboard/ops_metrics_section.dart';
@@ -343,8 +344,60 @@ class _AdminConsoleState extends State<_AdminConsole> {
     return '대시보드';
   }
 
+  /// 모바일 폭에서 Drawer 로 띄울 navItems 변환.
+  List<AdminMobileNavItem> get _mobileNavItems => _navItems.map((item) {
+        if (item.isGroup) {
+          return AdminMobileNavItem.group(
+            label: item.label,
+            color: item.color,
+            groupIcon: item.icon,
+          );
+        }
+        return AdminMobileNavItem.tab(
+          index: item.tabIndex!,
+          icon: item.icon!,
+          label: item.label,
+          color: item.color,
+        );
+      }).toList();
+
   @override
   Widget build(BuildContext context) {
+    // 이슈 #815 Phase 2 — 모바일 폭(< 800)에서는 Drawer 햄버거 메뉴로 전환.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 800;
+        return isMobile ? _buildMobileLayout(context) : _buildDesktopLayout();
+      },
+    );
+  }
+
+  Widget _buildMobileLayout(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F172A),
+      drawer: AdminMobileSidebar(
+        navItems: _mobileNavItems,
+        selectedIndex: _selectedIndex,
+        onSelect: (i) {
+          setState(() => _selectedIndex = i);
+          Navigator.of(context).pop(); // Drawer 닫기
+        },
+      ),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1E293B),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: Text(
+          _currentPageLabel,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC)),
+        ),
+        iconTheme: const IconThemeData(color: Color(0xFFF8FAFC)),
+      ),
+      body: _buildContent(),
+    );
+  }
+
+  Widget _buildDesktopLayout() {
     return Row(
       children: [
         // ── 사이드바 ─────────────────────────────────────────────────────────
@@ -386,6 +439,43 @@ class _AdminConsoleState extends State<_AdminConsole> {
   }
 
   Widget _buildContent() {
+    // 사용자 요청: 어드민 사이트 블록톤 가독성 — 모든 탭을 라이트 카드로 wrap.
+    // 다크 사이드바/헤더와 명확히 구분되는 라이트 콘텐츠 영역.
+    return Container(
+      color: const Color(0xFFF3F4F6),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          brightness: Brightness.light,
+          scaffoldBackgroundColor: const Color(0xFFF3F4F6),
+          iconTheme: const IconThemeData(color: Color(0xFF374151)),
+          textTheme: Theme.of(context).textTheme.apply(
+            bodyColor: const Color(0xFF1F2937),
+            displayColor: const Color(0xFF1F2937),
+          ),
+          checkboxTheme: CheckboxThemeData(
+            fillColor: WidgetStateProperty.resolveWith((states) =>
+                states.contains(WidgetState.selected) ? C.lv : Colors.white),
+            checkColor: WidgetStateProperty.all(Colors.white),
+            side: const BorderSide(color: Color(0xFFD1D5DB)),
+          ),
+          inputDecorationTheme: const InputDecorationTheme(
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFD1D5DB))),
+            enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFD1D5DB))),
+            hintStyle: TextStyle(color: Color(0xFF9CA3AF)),
+            labelStyle: TextStyle(color: Color(0xFF6B7280)),
+          ),
+        ),
+        child: DefaultTextStyle.merge(
+          style: const TextStyle(color: Color(0xFF1F2937)),
+          child: _buildTabContent(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabContent() {
     switch (_selectedIndex) {
       case 0:  return _DashboardTab(isKorean: widget.isKorean, onTabChange: (i) => setState(() => _selectedIndex = i));
       case 1:  return _EncyclopediaTab(isKorean: widget.isKorean, adminUid: widget.user.uid);
