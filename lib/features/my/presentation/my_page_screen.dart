@@ -20,6 +20,7 @@ import '../../../core/theme/theme_colors.dart';
 import '../../../core/widgets/account_upgrade_dialog.dart';
 import '../../../core/widgets/common_widgets.dart';
 import 'widgets/admin_alert_card.dart';
+import 'widgets/seller_summary_card.dart';
 import '../../../providers/app_config_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/counter_provider.dart';
@@ -411,6 +412,9 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
 
                       // 이슈 #815 — 어드민 알림 카드 (isAdmin 가드 — 일반 사용자에게는 보이지 않음)
                       const AdminAlertCard(),
+
+                      // 이슈 #816 Phase 2 — 셀러 요약 카드 (isSeller 가드 — Pro/Business 만 노출)
+                      const SellerSummaryCard(),
 
                       // ═══════════════════════════════════════════════════
                       // 📌 1. 기본정보 (정체성) — 프로필 / 구독 / 추가정보 / 휴대폰
