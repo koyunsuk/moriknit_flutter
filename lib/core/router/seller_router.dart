@@ -40,8 +40,8 @@ final sellerRouterProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: '/', builder: (_, _) => const _SellerSplashScreen()),
-      // 셀러 앱은 일반 사용자 로그인 화면 재사용 (isAdmin: false).
-      GoRoute(path: '/login', builder: (_, _) => const LoginScreen(isAdmin: false)),
+      // 셀러 앱은 일반 사용자 로그인 화면 재사용 + 게스트 진입 차단 (Pro/Business 전용).
+      GoRoute(path: '/login', builder: (_, _) => const LoginScreen(isAdmin: false, showGuestLogin: false)),
       GoRoute(path: '/seller', builder: (_, _) => const SellerDashboardScreen()),
     ],
     errorBuilder: (_, state) => Scaffold(

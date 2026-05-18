@@ -702,45 +702,26 @@ class _SidebarUtilBtn extends StatelessWidget {
   }
 }
 
-class _AdminNotLoggedIn extends StatelessWidget {
+/// 비로그인 상태에서 어드민 진입 시 안내 화면을 거치지 않고 즉시 /login 으로 redirect.
+/// admin_router 의 redirect 로직과 함께 작동 — 일시적 timing 진입을 즉시 우회.
+class _AdminNotLoggedIn extends StatefulWidget {
   const _AdminNotLoggedIn();
 
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 380),
-        child: GlassCard(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(child: Image.asset('assets/login_logo.png', width: 64, height: 64, fit: BoxFit.contain)),
-              const SizedBox(height: 16),
-              const Text('모리니트 관리자페이지', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-              const SizedBox(height: 8),
-              Text(
-                '로그인 페이지에서 관리자 체크박스를 선택하고\n로그인해 주세요.',
-                style: TextStyle(fontSize: 13, color: Colors.grey[600], height: 1.5),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: () => context.go('/login'),
-                icon: const Icon(Icons.login_rounded),
-                label: const Text('로그인 페이지로 이동'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: C.lv,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  State<_AdminNotLoggedIn> createState() => _AdminNotLoggedInState();
+}
+
+class _AdminNotLoggedInState extends State<_AdminNotLoggedIn> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.go('/login');
+    });
   }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 class _AdminMessageState extends StatelessWidget {
@@ -4408,11 +4389,44 @@ class _BugReportDetailState extends State<_BugReportDetail> {
 
     final repo = BugReportRepository();
 
+    // 사용자 요청: 어드민 다크 테마에서 버그리포트 상세 가독성 fix
+    // 전체를 흰 카드로 wrap → 모든 텍스트/체크박스/버튼 라이트 톤으로 정상 표시
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      padding: const EdgeInsets.all(16),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: DefaultTextStyle.merge(
+          style: const TextStyle(color: Color(0xFF1F2937)),
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              brightness: Brightness.light,
+              iconTheme: const IconThemeData(color: Color(0xFF374151)),
+              textTheme: Theme.of(context).textTheme.apply(
+                bodyColor: const Color(0xFF1F2937),
+                displayColor: const Color(0xFF1F2937),
+              ),
+              checkboxTheme: CheckboxThemeData(
+                fillColor: WidgetStateProperty.resolveWith((states) =>
+                    states.contains(WidgetState.selected) ? C.lv : Colors.white),
+                checkColor: WidgetStateProperty.all(Colors.white),
+                side: const BorderSide(color: Color(0xFFD1D5DB)),
+              ),
+              inputDecorationTheme: const InputDecorationTheme(
+                filled: true,
+                fillColor: Color(0xFFF9FAFB),
+                border: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFD1D5DB))),
+                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFD1D5DB))),
+                hintStyle: TextStyle(color: Color(0xFF9CA3AF)),
+                labelStyle: TextStyle(color: Color(0xFF6B7280)),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
           // 이슈 #813 — AI 자동 fix 패널 (실시간 상태 구독)
           StreamBuilder<BugReport>(
             stream: repo.watchBugReport(widget.doc.id),
@@ -4420,14 +4434,23 @@ class _BugReportDetailState extends State<_BugReportDetail> {
             builder: (context, snap) {
               final report = snap.data;
               if (report == null) return const SizedBox.shrink();
+              // 어드민 다크 테마에서 패널 라이트 톤 보이도록 Material로 감싸기
               return Padding(
                 padding: const EdgeInsets.only(bottom: 20),
-                child: AdminAIFixPanel(
-                  report: report,
-                  onAnalysisStart: () => repo.updateAiFixStatus(report.id, 'analyzing', log: '본인 트리거: AI 분석 시작'),
-                  onApprove: () => repo.updateAiFixStatus(report.id, 'approved', log: '본인 승인: 수정 진행'),
-                  onReleaseApprove: () => repo.updateAiFixStatus(report.id, 'done', log: '본인 승인: 릴리즈'),
-                  onReject: () => repo.updateAiFixStatus(report.id, 'rejected', log: '본인 거부'),
+                child: Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  clipBehavior: Clip.antiAlias,
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: AdminAIFixPanel(
+                      report: report,
+                      onAnalysisStart: () => repo.updateAiFixStatus(report.id, 'analyzing', log: '본인 트리거: AI 분석 시작'),
+                      onApprove: () => repo.updateAiFixStatus(report.id, 'approved', log: '본인 승인: 수정 진행'),
+                      onReleaseApprove: () => repo.updateAiFixStatus(report.id, 'done', log: '본인 승인: 릴리즈'),
+                      onReject: () => repo.updateAiFixStatus(report.id, 'rejected', log: '본인 거부'),
+                    ),
+                  ),
                 ),
               );
             },
@@ -4615,7 +4638,11 @@ class _BugReportDetailState extends State<_BugReportDetail> {
               ),
             ),
           ),
-        ],
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

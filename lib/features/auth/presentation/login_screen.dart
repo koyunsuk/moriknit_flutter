@@ -18,7 +18,9 @@ import 'social_login_button.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   final bool isAdmin;
-  const LoginScreen({super.key, this.isAdmin = false});
+  /// 게스트 로그인 버튼 노출 여부 — 셀러 앱(#816)은 게스트 진입 차단을 위해 false 전달.
+  final bool showGuestLogin;
+  const LoginScreen({super.key, this.isAdmin = false, this.showGuestLogin = true});
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -129,7 +131,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           onLoginEmail: _loginEmail,
                           onLoginGoogle: _loginGoogle,
                           onLoginKakao: _loginKakao,
-                          onLoginGuest: _loginGuest,
+                          onLoginGuest: widget.showGuestLogin ? _loginGuest : null,
                           onShowSignUp: () => showSignUpSheet(context, ref, mounted),
                         ),
                       ),
@@ -178,7 +180,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     onLoginEmail: _loginEmail,
                     onLoginGoogle: _loginGoogle,
                     onLoginKakao: _loginKakao,
-                    onLoginGuest: _loginGuest,
+                    onLoginGuest: widget.showGuestLogin ? _loginGuest : null,
                     onShowSignUp: () => showSignUpSheet(context, ref, mounted),
                   ),
                 ),

@@ -39,13 +39,19 @@ final isAnonymousUserProvider = Provider<bool>((ref) {
   return user?.isAnonymous ?? false;
 });
 
-/// Firebase Custom Claims 기반으로 isAdmin을 실시간 확인합니다.
-/// idTokenChanges()는 로그인/로그아웃/토큰 갱신 시 발생합니다.
+/// admins/{uid} Firestore 컬렉션 기반으로 isAdmin을 실시간 확인합니다.
+/// 회원 관리 모달의 "관리자" 토글은 admins/{uid} 문서를 set/delete하므로
+/// Custom Claims 대신 컬렉션 존재 여부로 판정하면 즉시 반영됩니다.
+/// (Cloud Function으로 Custom Claims sync는 별도 작업 — 향후 #813 워커에 통합 가능)
 final isAdminProvider = StreamProvider<bool>((ref) {
-  return FirebaseAuth.instance.idTokenChanges().asyncMap((user) async {
-    if (user == null) return false;
-    final result = await user.getIdTokenResult(false);
-    return result.claims?['admin'] == true;
+  return FirebaseAuth.instance.authStateChanges().asyncExpand((user) {
+    if (user == null) return Stream.value(false);
+    return FirebaseFirestore.instance
+        .collection('admins')
+        .doc(user.uid)
+        .snapshots()
+        .map((doc) => doc.exists)
+        .handleError((_) => false);
   });
 });
 
