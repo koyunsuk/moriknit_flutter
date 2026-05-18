@@ -801,17 +801,17 @@ class LoginPanel extends ConsumerWidget {
             leading: const _GoogleIcon(),
             onTap: onLoginGoogle,
           ),
-          // #788 — 카카오 SDK 웹 미지원 → 웹에서는 버튼 숨김 (LateInitializationError 차단)
-          if (!kIsWeb) ...[
-            const SizedBox(height: 8),
-            SocialLoginButton(
-              color: const Color(0xFFFEE500),
-              textColor: const Color(0xFF191919),
-              label: t.continueWithKakao,
-              leading: const _KakaoIcon(),
-              onTap: onLoginKakao,
-            ),
-          ],
+          // #784 — 카카오 로그인은 웹/모바일 모두 지원 (사용자 정책)
+          // 웹: kakao_flutter_sdk + web/index.html의 JS SDK
+          // 모바일: 카카오톡 앱 우선, 미설치 시 카카오 계정 로그인
+          const SizedBox(height: 8),
+          SocialLoginButton(
+            color: const Color(0xFFFEE500),
+            textColor: const Color(0xFF191919),
+            label: t.continueWithKakao,
+            leading: const _KakaoIcon(),
+            onTap: onLoginKakao,
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Row(

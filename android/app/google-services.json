@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "683285854424-59pbihnaph1eba2ar3il9v1d8mujp54q.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.moriknit.admin_mobile",
+            "certificate_hash": "d9208ab67b713db3154abc87d8600f902b04d89d"
+          }
+        },
+        {
           "client_id": "683285854424-obadmfjoc5p3no1fijq7t2n9phk1s53j.apps.googleusercontent.com",
           "client_type": 3
         }

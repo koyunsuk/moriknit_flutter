@@ -2819,7 +2819,8 @@ class _MemberDetailDialogState extends ConsumerState<_MemberDetailDialog> {
                         Switch(
                           value: isAdmin,
                           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          onChanged: isSelf ? null : (value) async {
+                          // 본인 토글 제약 해제 (사용자 결정) — 셀프 권한 박탈 가능
+                          onChanged: (value) async {
                             final adminDoc = FirebaseFirestore.instance
                                 .collection('admins')
                                 .doc(user.uid);
