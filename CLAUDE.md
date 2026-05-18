@@ -357,15 +357,125 @@ flutter analyze lib/ 2>&1 | grep -E "^  error" | wc -l
 
 ---
 
-## 도메인 구조 (절대 변경 금지)
+## 플랫폼 명칭 표준 (절대 변경 금지)
 
-| 사이트 | 도메인 | Firebase Hosting Target |
-|--------|--------|------------------------|
-| 랜딩 | moriknit.com | landing (moriknit-landing) |
-| 웹앱 | app.moriknit.com | app (moriknit-ceea9) |
-| 어드민 | admin.moriknit.com | admin (moriknit-admin) |
+| 명칭 | 종류 | 패키지/도메인 | Entry / Build | 아이콘 |
+|---|---|---|---|---|
+| **모바일유저** | Android/iOS 앱 | `com.moriknit.moriknit_flutter` | `lib/main.dart` · `--flavor user` | 기본 라벤더 로고 |
+| **모바일어드민** | Android 앱 (iOS 향후) | `com.moriknit.admin_mobile` | `lib/main_admin_mobile.dart` · `--flavor admin` | 모리니트 로고 + **오렌지 배경** |
+| **모바일셀러** | Android 앱 (Pro/Business 셀러) | `com.moriknit.seller_mobile` | `lib/main_seller_mobile.dart` · `--flavor seller` | 모리니트 로고 + **라임 배경** |
+| **웹유저(웹앱)** | 웹 (Flutter Web) | `app.moriknit.com` | `lib/main.dart` (웹 빌드) | — |
+| **웹어드민(어드민)** | 웹 (Flutter Web) | `admin.moriknit.com` | `lib/main_admin.dart` | — |
+| **랜딩** | 웹 (Flutter Web) | `moriknit.com` | `lib/main_landing.dart` | — |
+
+### Firebase 등록 앱 (5개)
+| Firebase 닉네임 | 플랫폼 | 패키지 |
+|---|---|---|
+| moriknit_flutter (android) | Android | com.moriknit.moriknit_flutter |
+| moriknit_flutter (ios) | iOS | com.moriknit.moriknitFlutter |
+| moriknit-web (공유) | Web | (3개 웹 사이트 모두 사용) |
+| moriknit_admin_mobile (android) | Android | com.moriknit.admin_mobile |
+| moriknit_seller_mobile (android) | Android | com.moriknit.seller_mobile |
+
+### Firebase Hosting Target
+| Target | 사이트 ID | 도메인 |
+|---|---|---|
+| `app` | moriknit-ceea9 | app.moriknit.com |
+| `admin` | moriknit-admin | admin.moriknit.com |
+| `landing` | moriknit-landing | moriknit.com |
 
 ⛔ `_mainAppUrl` 항상 `'https://app.moriknit.com'` — 절대 변경 금지
+
+---
+
+## ⛔⛔⛔ 모바일 3앱 안전장치 (이슈 #815/#816, 절대 준수)
+
+> **모바일유저 앱이 절대 덮어쓰여지거나 영향 받지 않도록 한다.**
+> 3개 앱은 다른 패키지로 분리되어 디바이스에 공존:
+> - 모바일유저: `com.moriknit.moriknit_flutter`
+> - 모바일어드민: `com.moriknit.admin_mobile`
+> - 모바일셀러: `com.moriknit.android.seller`
+
+### ✅ 허용되는 유일한 빌드·설치 방법 — `deploy_mobile.sh` 사용
+
+```bash
+bash deploy_mobile.sh user      # 모바일유저 (MoriKnit) 빌드 + 설치
+bash deploy_mobile.sh admin     # 모바일어드민 빌드 + 설치
+bash deploy_mobile.sh seller    # 모바일셀러 빌드 + 설치
+
+bash deploy_mobile.sh build_user    # 빌드만
+bash deploy_mobile.sh install_user  # 설치만 (APK 패키지 검증)
+```
+
+### ⛔ 절대 금지 명령어 (이유 불문, 예외 없음)
+
+```bash
+# 아래 명령어는 어떤 경우에도 직접 실행 금지 — 반드시 deploy_mobile.sh 사용
+flutter build apk --debug                                                   # ❌ flavor 미지정
+flutter build apk --target=lib/main_admin_mobile.dart                       # ❌ flavor 누락 = 혼합 망가진 APK
+flutter build apk --target=lib/main_seller_mobile.dart                      # ❌ 동일
+adb install -r build/app/outputs/flutter-apk/app-debug.apk                  # ❌ 패키지 검증 없이 설치
+adb install -r build/app/outputs/flutter-apk/app-admin-debug.apk            # ❌ deploy_mobile.sh 우회
+```
+
+### 안전장치 내역 (`deploy_mobile.sh` 내장)
+
+1. **flavor 강제 명시** — 모든 빌드 명령은 `--flavor user|admin|seller` 필수
+2. **target 강제 명시** — 모든 빌드는 명시적 entry 지정
+3. **APK 산출물 자동 분리** — `app-user-debug.apk` / `app-admin-debug.apk` / `app-seller-debug.apk`
+4. **설치 직전 aapt 패키지 검증** — APK 안의 패키지명이 기대값과 다르면 즉시 중단
+5. **install_user는 절대 admin/seller APK 안 건드림** — 함수별로 자기 APK만
+6. **`missingDimensionStrategy("app", "user")`** — flavor 누락 시 자동 user fallback (실수 방지)
+
+### Android 빌드 명령 표준 (스크립트 내부 — 참고용)
+
+```bash
+# 모바일유저
+flutter build apk --debug --flavor user --target=lib/main.dart
+# → build/app/outputs/flutter-apk/app-user-debug.apk
+
+# 모바일어드민
+flutter build apk --debug --flavor admin --target=lib/main_admin_mobile.dart
+# → build/app/outputs/flutter-apk/app-admin-debug.apk
+
+# 모바일셀러
+flutter build apk --debug --flavor seller --target=lib/main_seller_mobile.dart
+# → build/app/outputs/flutter-apk/app-seller-debug.apk
+```
+
+### ⛔ 절대 금지 시나리오
+1. **모바일어드민 빌드를 모바일유저 APK 파일명으로 만들지 말 것**
+   - 결과 파일은 자동으로 `app-admin-debug.apk` 와 `app-debug.apk` 로 분리됨
+   - 임의로 `--output` 으로 같은 경로 지정 금지
+2. **`--flavor` 생략한 admin entry 빌드 금지**
+   - `flutter build apk --target=lib/main_admin_mobile.dart` (flavor 없음) → user flavor + admin entry 혼합 = 망가진 APK 생성. 절대 금지.
+3. **google-services.json 수동 편집 금지**
+   - 반드시 Firebase Console에서 받은 파일 그대로 사용
+   - 두 클라이언트 (com.moriknit.moriknit_flutter + com.moriknit.admin_mobile) 모두 포함된 파일이어야 함
+
+### 안전장치 메커니즘
+- `build.gradle.kts` `missingDimensionStrategy("app", "user")` → flavor 없이 빌드 시 자동으로 user fallback
+- `applicationId` 완전 분리 → 디바이스에 별도 앱으로 공존
+- `resValue("string", "app_name", ...)` → 사용자 앱 "MoriKnit", 어드민 "모리니트 어드민" 자동 분기
+- 빌드 산출물 자동 분리: `app-debug.apk` vs `app-admin-debug.apk`
+
+### 의심 발생 시 검증
+```bash
+# 디바이스 설치된 모리니트 앱 확인
+adb shell pm list packages | grep moriknit
+# 정상 결과:
+#   package:com.moriknit.moriknit_flutter   (모바일유저)
+#   package:com.moriknit.admin_mobile       (모바일어드민)
+
+# 각 앱 버전/설치시각
+adb shell dumpsys package com.moriknit.moriknit_flutter | grep -E "versionName|lastUpdateTime"
+adb shell dumpsys package com.moriknit.admin_mobile | grep -E "versionName|lastUpdateTime"
+```
+
+### APK 빌드·설치 자동 진행 시 (CLAUDE.md 상단 규칙 보완)
+- 모바일유저 코드 수정 시: `flutter build apk --debug` → 자동으로 user flavor로 빌드 → `app-debug.apk` 설치
+- 모바일어드민 코드 수정 시: `flutter build apk --debug --flavor admin --target=lib/main_admin_mobile.dart` → `app-admin-debug.apk` 설치
+- **두 앱은 절대 같은 APK 파일을 공유하지 않음**
 
 ---
 
