@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -89,12 +90,12 @@ class _EditorialPostCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (post.imageUrl.isNotEmpty)
-              Image.network(
-                post.imageUrl,
+              CachedNetworkImage(
+                imageUrl: post.imageUrl,
                 width: double.infinity,
                 height: 160,
                 fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                errorWidget: (_, _, _) => const SizedBox.shrink(),
               ),
             Padding(
               padding: const EdgeInsets.all(16),
@@ -163,12 +164,12 @@ class _YoutubeCard extends StatelessWidget {
               Stack(
                 alignment: Alignment.center,
                 children: [
-                  Image.network(
-                    thumbUrl,
+                  CachedNetworkImage(
+                    imageUrl: thumbUrl,
                     width: double.infinity,
                     height: 180,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
+                    errorWidget: (_, _, _) => Container(
                       width: double.infinity,
                       height: 180,
                       color: C.og.withValues(alpha: 0.12),

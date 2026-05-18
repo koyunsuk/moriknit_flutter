@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -306,11 +307,11 @@ class _TemplateDetailScreenState extends ConsumerState<TemplateDetailScreen> {
             if (widget.template.photoUrl.isNotEmpty) ...[
               ClipRRect(
                 borderRadius: BorderRadius.circular(16),
-                child: Image.network(
-                  widget.template.photoUrl,
+                child: CachedNetworkImage(
+                  imageUrl: widget.template.photoUrl,
                   width: double.infinity,
                   fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                  errorWidget: (_, _, _) => const SizedBox.shrink(),
                 ),
               ),
               const SizedBox(height: 14),
@@ -531,11 +532,11 @@ class _TemplatePhotoSection extends StatelessWidget {
                         width: double.infinity,
                         fit: BoxFit.contain,
                       )
-                    : Image.network(
-                        networkUrl!,
+                    : CachedNetworkImage(
+                        imageUrl: networkUrl!,
                         width: double.infinity,
                         fit: BoxFit.contain,
-                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                        errorWidget: (_, _, _) => const SizedBox.shrink(),
                       ),
               ),
               Positioned(

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -368,12 +369,12 @@ class _BookInputScreenState extends ConsumerState<BookInputScreen> {
                   const SizedBox(height: 8),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10),
-                    child: Image.network(
-                      _coverUrl,
+                    child: CachedNetworkImage(
+                      imageUrl: _coverUrl,
                       height: 160,
                       fit: BoxFit.contain,
                       alignment: Alignment.centerLeft,
-                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                      errorWidget: (_, _, _) => const SizedBox.shrink(),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -517,8 +518,8 @@ class _MemoPhotoGrid extends StatelessWidget {
       // 기존 URL 사진
       for (int i = 0; i < existingUrls.length; i++)
         _PhotoThumb(
-          child: Image.network(existingUrls[i], fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => const Icon(Icons.broken_image_rounded)),
+          child: CachedNetworkImage(imageUrl: existingUrls[i], fit: BoxFit.cover,
+              errorWidget: (_, _, _) => const Icon(Icons.broken_image_rounded)),
           onRemove: () => onRemoveExisting(i),
         ),
       // 새 로컬 사진

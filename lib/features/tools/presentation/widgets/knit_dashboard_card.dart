@@ -5,6 +5,7 @@
 // 데이터 소스: PatternSession.totalSeconds + PatternSession.projectId 기준 그룹화.
 // 정렬: 최근 작업순 / 시간 많은 순 토글.
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -238,12 +239,12 @@ class _DashboardRowTile extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: row.coverPhotoUrl.isNotEmpty
-                  ? Image.network(
-                      row.coverPhotoUrl,
+                  ? CachedNetworkImage(
+                      imageUrl: row.coverPhotoUrl,
                       width: 36,
                       height: 36,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => _placeholderIcon(),
+                      errorWidget: (_, _, _) => _placeholderIcon(),
                     )
                   : _placeholderIcon(),
             ),

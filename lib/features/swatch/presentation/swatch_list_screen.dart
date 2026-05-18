@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,6 +13,7 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/swatch_provider.dart';
 import '../data/swatch_group_repository.dart';
+import '../domain/swatch_group.dart';
 import 'swatch_detail_screen.dart';
 import 'swatch_input_screen.dart';
 import 'widgets/swatch_list_sections.dart';
@@ -495,6 +497,8 @@ class _UserGroupedSwatches extends ConsumerWidget {
       label: isKorean ? '그룹별' : 'By Group',
       icon: Icons.folder_rounded,
       accent: C.pkD,
+      moreLabel: isKorean ? '+ 그룹 추가' : '+ Add group',
+      onMoreTap: () => _showCreateGroupDialog(context, ref, isKorean),
       child: groupsAsync.when(
         loading: () => const Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
@@ -564,6 +568,7 @@ class _SwatchGroupRow extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
+          // #772 (재수정) — 컴팩트 타일 (이미지 + 1줄 제목)로 교체. SwatchCard는 가로 스크롤에 너무 큼.
           SizedBox(
             height: 140,
             child: swatches.isEmpty
@@ -579,15 +584,12 @@ class _SwatchGroupRow extends StatelessWidget {
                     separatorBuilder: (_, _) => const SizedBox(width: 8),
                     itemBuilder: (ctx, i) {
                       final s = swatches[i];
-                      return SizedBox(
-                        width: 220,
-                        child: SwatchCard(
-                          swatch: s,
-                          onTap: () => Navigator.push(
-                            ctx,
-                            MaterialPageRoute(
-                              builder: (_) => SwatchDetailScreen(swatchId: s.id),
-                            ),
+                      return _SwatchCompactTile(
+                        swatch: s,
+                        onTap: () => Navigator.push(
+                          ctx,
+                          MaterialPageRoute(
+                            builder: (_) => SwatchDetailScreen(swatchId: s.id),
                           ),
                         ),
                       );
@@ -601,6 +603,107 @@ class _SwatchGroupRow extends StatelessWidget {
 }
 
 // ── 번호 표시 래퍼 ──────────────────────────────────────────────────
+/// #772 후속 — 신규 스와치 그룹 생성 다이얼로그.
+Future<void> _showCreateGroupDialog(BuildContext context, WidgetRef ref, bool isKorean) async {
+  final ctrl = TextEditingController();
+  final name = await showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text(isKorean ? '새 그룹 만들기' : 'New group', style: T.h3),
+      content: TextField(
+        controller: ctrl,
+        autofocus: true,
+        decoration: InputDecoration(
+          labelText: isKorean ? '그룹 이름' : 'Group name',
+          hintText: isKorean ? '예: 겨울 스와치 / 코바늘 연습' : 'e.g. Winter / Crochet practice',
+          filled: true,
+          fillColor: C.gx,
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text(isKorean ? '취소' : 'Cancel')),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+          child: Text(isKorean ? '만들기' : 'Create'),
+        ),
+      ],
+    ),
+  );
+  if (name == null || name.isEmpty) return;
+  try {
+    final repo = ref.read(swatchGroupRepositoryProvider);
+    await repo.createGroup(SwatchGroup(id: '', name: name));
+    ref.invalidate(swatchGroupListProvider);
+  } catch (e) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(isKorean ? '그룹 생성 실패: $e' : 'Failed: $e')),
+    );
+  }
+}
+
+// #772 (재수정) — 가로 스크롤용 컴팩트 스와치 타일 (이미지 + 1줄 제목 + 게이지).
+class _SwatchCompactTile extends StatelessWidget {
+  final dynamic swatch;
+  final VoidCallback onTap;
+  const _SwatchCompactTile({required this.swatch, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final photo = (swatch.beforePhotoUrl as String?) ?? '';
+    final gauge = swatch.beforeStitchCount > 0
+        ? '${swatch.beforeStitchCount}x${swatch.beforeRowCount}'
+        : '';
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 110,
+        decoration: BoxDecoration(
+          color: C.bg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: C.bd.withValues(alpha: 0.5)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AspectRatio(
+              aspectRatio: 1,
+              child: photo.isEmpty
+                  ? Container(
+                      color: C.bd.withValues(alpha: 0.15),
+                      child: Icon(Icons.grid_view_rounded, color: C.mu, size: 28),
+                    )
+                  : CachedNetworkImage(
+                      imageUrl: photo,
+                      fit: BoxFit.cover,
+                      placeholder: (_, _) => Container(
+                        color: C.bd.withValues(alpha: 0.15),
+                        child: Icon(Icons.grid_view_rounded, color: C.mu, size: 24),
+                      ),
+                      errorWidget: (_, _, _) => Container(
+                        color: C.bd.withValues(alpha: 0.15),
+                        child: Icon(Icons.broken_image_rounded, color: C.mu, size: 24),
+                      ),
+                    ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
+              child: Text(
+                gauge.isEmpty ? '${swatch.needleSize ?? ''}mm' : gauge,
+                style: T.caption.copyWith(color: C.tx2, fontWeight: FontWeight.w700),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _NumberedItem extends StatelessWidget {
   final int number;
   final Widget child;

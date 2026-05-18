@@ -54,9 +54,28 @@ class BugReportRepository {
       final tierLabel = report.userTier == 'premium' ? '⭐ 유료회원 (우선처리)' : '무료회원';
       final replyLabel = report.wantsReply ? '✅ 예 (이메일: ${report.userEmail})' : '아니오';
 
+      final onlineLabel = report.isOnline == 'true'
+          ? '예'
+          : report.isOnline == 'false'
+              ? '아니오'
+              : '알수없음';
+      final screenLine = report.currentRoute.isEmpty
+          ? ''
+          : '**현재화면:** ${report.currentRoute}'
+              '${report.currentScreenName.isNotEmpty ? ' (${report.currentScreenName})' : ''}';
+      final screenSizeLine =
+          report.screenSize.isEmpty ? '' : '**화면크기:** ${report.screenSize}';
+      final localeLine =
+          report.localeName.isEmpty ? '' : '**언어:** ${report.localeName}';
+      final extraLine1 = [screenSizeLine, screenLine]
+          .where((s) => s.isNotEmpty)
+          .join(' | ');
+      final extraLine2 =
+          [localeLine, '**온라인:** $onlineLabel'].where((s) => s.isNotEmpty).join(' | ');
+
       final body = '''**카테고리:** ${report.category}
 **플랫폼:** ${report.platform} | **OS:** ${report.osVersion} | **앱버전:** ${report.appVersion}
-**기기:** ${report.deviceInfo}
+**기기:** ${report.deviceInfo}${extraLine1.isEmpty ? '' : '\n$extraLine1'}${extraLine2.isEmpty ? '' : '\n$extraLine2'}
 **제출자:** ${report.userEmail} (${report.userName}) · uid: `${report.uid}`
 **회원 등급:** $tierLabel
 **답변 요청:** $replyLabel

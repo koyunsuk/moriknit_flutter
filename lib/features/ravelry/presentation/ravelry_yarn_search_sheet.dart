@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -262,10 +263,10 @@ class _YarnTile extends StatelessWidget {
                 width: 56,
                 height: 56,
                 child: item.photoUrl != null
-                    ? Image.network(
-                        item.photoUrl!,
+                    ? CachedNetworkImage(
+                        imageUrl: item.photoUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
+                        errorWidget: (_, __, ___) => Container(
                           color: C.lvL,
                           child: Icon(Icons.texture, color: C.lv),
                         ),

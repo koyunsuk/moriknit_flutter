@@ -56,7 +56,8 @@ class SwatchModel with _$SwatchModel {
     @Default('') String myAccessoryName,
   }) = _SwatchModel;
 
-  factory SwatchModel.fromJson(Map<String, dynamic> json) => _$SwatchModelFromJson(json);
+  factory SwatchModel.fromJson(Map<String, dynamic> json) =>
+      _$SwatchModelFromJson(_sanitizeSwatchJson(json));
 
   factory SwatchModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -71,6 +72,31 @@ class SwatchModel with _$SwatchModel {
       updatedAt: DateTime.now(),
     );
   }
+}
+
+/// Firestore 문서가 createdAt/updatedAt 등을 Timestamp / ISO String / DateTime / int millis
+/// 등 혼합 타입으로 저장한 경우에도 안전하게 fromJson 으로 전달되도록 ISO String 으로 정규화.
+/// 일부 옛 문서가 ISO String 으로 저장되어 있어 generated fromJson 의 DateTime.parse 가
+/// 실패하지 않도록 보장.
+Map<String, dynamic> _sanitizeSwatchJson(Map<String, dynamic> json) {
+  const dateKeys = ['createdAt', 'updatedAt', 'archivedDate', 'startedAt'];
+  final out = Map<String, dynamic>.from(json);
+  for (final k in dateKeys) {
+    final v = out[k];
+    if (v == null) continue;
+    if (v is String) continue; // 이미 ISO String
+    if (v is Timestamp) {
+      out[k] = v.toDate().toIso8601String();
+    } else if (v is DateTime) {
+      out[k] = v.toIso8601String();
+    } else if (v is int) {
+      out[k] = DateTime.fromMillisecondsSinceEpoch(v).toIso8601String();
+    } else {
+      // 알 수 없는 타입은 안전하게 제거 (DateTime.parse 실패 방지)
+      out[k] = null;
+    }
+  }
+  return out;
 }
 
 extension SwatchCalculations on SwatchModel {

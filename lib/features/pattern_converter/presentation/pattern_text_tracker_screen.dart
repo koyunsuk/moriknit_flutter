@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -632,27 +633,45 @@ class _SourcePaneState extends State<_SourcePane> {
     if (widget.chart.type == PatternType.pdf && !kIsWeb) _loadPdf();
   }
 
+  /// #704 — 오프라인 우선: 캐시된 PDF가 있으면 네트워크 호출 없이 즉시 사용.
   Future<void> _loadPdf() async {
     final raw = widget.chart.pdfUrl;
     if (raw.isEmpty) return;
     setState(() => _pdfLoading = true);
     try {
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/tracker_split_${widget.chart.id}.pdf');
+
+      // 1) 캐시 우선 (오프라인 + 재진입 시 즉시 표시)
+      if (await file.exists() && await file.length() > 0) {
+        if (mounted) setState(() { _localPdfPath = file.path; _pdfLoading = false; });
+        return;
+      }
+
+      // 2) 네트워크 다운로드
       String url = raw;
       if (!raw.startsWith('http')) {
         url = await FirebaseStorage.instance.ref(raw).getDownloadURL();
       }
       final client = HttpClient();
-      final req = await client.getUrl(Uri.parse(url));
-      final res = await req.close();
-      if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
-      final bytes = await res.expand((b) => b).toList();
-      client.close();
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/tracker_split_${widget.chart.id}.pdf');
-      await file.writeAsBytes(bytes);
-      if (mounted) setState(() { _localPdfPath = file.path; _pdfLoading = false; });
+      try {
+        final req = await client.getUrl(Uri.parse(url));
+        final res = await req.close();
+        if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
+        final bytes = await res.expand((b) => b).toList();
+        await file.writeAsBytes(bytes);
+        if (mounted) setState(() { _localPdfPath = file.path; _pdfLoading = false; });
+      } finally {
+        client.close();
+      }
     } catch (e) {
-      if (mounted) setState(() { _pdfError = '$e'; _pdfLoading = false; });
+      // 3) 네트워크 실패 + 캐시 없음 → 명확한 메시지
+      if (mounted) setState(() {
+        _pdfError = widget.isKorean
+            ? '오프라인 상태에서는 다운로드되지 않은 PDF를 열 수 없습니다.\n인터넷 연결 후 다시 시도해 주세요.'
+            : 'Cannot open PDF offline if not previously downloaded.\nReconnect and try again.';
+        _pdfLoading = false;
+      });
     }
   }
 
@@ -666,10 +685,10 @@ class _SourcePaneState extends State<_SourcePane> {
             ? const Center(child: Icon(Icons.broken_image_rounded, color: Colors.white38, size: 48))
             : InteractiveViewer(
                 child: Center(
-                  child: Image.network(
-                    c.imageUrl,
+                  child: CachedNetworkImage(
+                    imageUrl: c.imageUrl,
                     fit: BoxFit.contain,
-                    errorBuilder: (_, _, _) =>
+                    errorWidget: (_, _, _) =>
                         const Icon(Icons.broken_image_rounded, color: Colors.white38, size: 48),
                   ),
                 ),

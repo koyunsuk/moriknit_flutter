@@ -21,10 +21,54 @@ enum BuiltinTemplateKind {
       };
 }
 
+/// 이슈 #787 — 기본 템플릿 카테고리 분류.
+/// 4그룹: 의상 / 소품 / 인형 / 아기용.
+/// 라벨은 화면에서 카테고리 칩으로 사용.
+enum BuiltinTemplateCategory {
+  clothing,
+  accessory,
+  doll,
+  baby;
+
+  /// Firestore/JSON 저장값.
+  String get value => switch (this) {
+        BuiltinTemplateCategory.clothing => 'clothing',
+        BuiltinTemplateCategory.accessory => 'accessory',
+        BuiltinTemplateCategory.doll => 'doll',
+        BuiltinTemplateCategory.baby => 'baby',
+      };
+
+  /// 저장값 → enum 복원. 기본값은 의상(clothing).
+  static BuiltinTemplateCategory fromValue(String? v) => switch (v) {
+        'accessory' => BuiltinTemplateCategory.accessory,
+        'doll' => BuiltinTemplateCategory.doll,
+        'baby' => BuiltinTemplateCategory.baby,
+        _ => BuiltinTemplateCategory.clothing,
+      };
+
+  String label({required bool isKorean}) {
+    if (isKorean) {
+      return switch (this) {
+        BuiltinTemplateCategory.clothing => '의상',
+        BuiltinTemplateCategory.accessory => '소품',
+        BuiltinTemplateCategory.doll => '인형',
+        BuiltinTemplateCategory.baby => '아기용',
+      };
+    }
+    return switch (this) {
+      BuiltinTemplateCategory.clothing => 'Clothing',
+      BuiltinTemplateCategory.accessory => 'Accessory',
+      BuiltinTemplateCategory.doll => 'Doll',
+      BuiltinTemplateCategory.baby => 'Baby',
+    };
+  }
+}
+
 @Deprecated('Phase E3 (#687) — step_blueprints/kind=template 로 통합 (마이그레이션 완료). Phase E4에서 삭제 예정.')
 class BuiltinTemplate {
   final String id;
   final BuiltinTemplateKind kind;
+  final BuiltinTemplateCategory category;
   final String titleKo;
   final String titleEn;
   final String descKo;
@@ -45,6 +89,7 @@ class BuiltinTemplate {
   const BuiltinTemplate({
     required this.id,
     this.kind = BuiltinTemplateKind.projectSteps,
+    this.category = BuiltinTemplateCategory.clothing,
     required this.titleKo,
     required this.titleEn,
     required this.descKo,
@@ -66,6 +111,7 @@ class BuiltinTemplate {
     return BuiltinTemplate(
       id: doc.id,
       kind: BuiltinTemplateKind.fromValue(data['kind'] as String?),
+      category: BuiltinTemplateCategory.fromValue(data['category'] as String?),
       titleKo: data['titleKo'] as String? ?? '',
       titleEn: data['titleEn'] as String? ?? '',
       descKo: data['descKo'] as String? ?? '',
@@ -85,6 +131,7 @@ class BuiltinTemplate {
 
   Map<String, dynamic> toJson() => {
         'kind': kind.value,
+        'category': category.value,
         'titleKo': titleKo,
         'titleEn': titleEn,
         'descKo': descKo,
@@ -104,6 +151,7 @@ class BuiltinTemplate {
   BuiltinTemplate copyWith({
     String? id,
     BuiltinTemplateKind? kind,
+    BuiltinTemplateCategory? category,
     String? titleKo,
     String? titleEn,
     String? descKo,
@@ -122,6 +170,7 @@ class BuiltinTemplate {
     return BuiltinTemplate(
       id: id ?? this.id,
       kind: kind ?? this.kind,
+      category: category ?? this.category,
       titleKo: titleKo ?? this.titleKo,
       titleEn: titleEn ?? this.titleEn,
       descKo: descKo ?? this.descKo,

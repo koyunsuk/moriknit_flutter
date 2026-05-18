@@ -27,6 +27,7 @@ import '../../../core/errors/firestore_timeout_extension.dart';
 import '../../../core/errors/network_errors.dart';
 import '../../pattern/data/pattern_repository.dart';
 import '../../pattern/domain/pattern_chart.dart' as pat;
+import '../../project/domain/builtin_template.dart' as bt;
 import '../domain/step_blueprint.dart';
 import '../domain/step_blueprint_unit.dart';
 import '../domain/step_unit_groupmeta.dart';
@@ -216,11 +217,15 @@ class StepBlueprintRepository {
       createdAt: blueprint.createdAt,
       updatedAt: now,
     );
+    // 이슈 #803 — create timeout 5s → 15s (단일 set 인데 5s 는 너무 짧음).
     await ref.set({
       ...prepared.toMap(),
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: false)).withServerTimeout(op: 'create_step_blueprint');
+    }, SetOptions(merge: false)).withServerTimeout(
+          op: 'create_step_blueprint',
+          d: const Duration(seconds: 15),
+        );
     // #704 Phase 2 — write-through (Firestore 성공 시에만).
     await _cacheBlueprint(prepared);
     return prepared;
@@ -228,10 +233,14 @@ class StepBlueprintRepository {
 
   /// 부분 업데이트(merge). updatedAt 자동.
   Future<void> update(String id, Map<String, dynamic> patch) async {
+    // 이슈 #803 — update timeout 5s → 15s.
     await _doc(id).set({
       ...patch,
       'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true)).withServerTimeout(op: 'update_step_blueprint');
+    }, SetOptions(merge: true)).withServerTimeout(
+          op: 'update_step_blueprint',
+          d: const Duration(seconds: 15),
+        );
     // #704 Phase 2 — write-through. 캐시에 기존 blueprint 가 있으면 patch 반영.
     final cached = _readBlueprintFromHive(id);
     if (cached != null) {
@@ -253,10 +262,14 @@ class StepBlueprintRepository {
     if (blueprint.id.isEmpty) return create(blueprint);
     final now = DateTime.now();
     final next = blueprint.copyWith(updatedAt: now);
+    // 이슈 #803 — save timeout 5s → 15s.
     await _doc(blueprint.id).set({
       ...next.toMap(),
       'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true)).withServerTimeout(op: 'save_step_blueprint');
+    }, SetOptions(merge: true)).withServerTimeout(
+          op: 'save_step_blueprint',
+          d: const Duration(seconds: 15),
+        );
     // #704 Phase 2 — write-through (Firestore 성공 시에만).
     await _cacheBlueprint(next);
     return next;
@@ -697,6 +710,114 @@ class StepBlueprintRepository {
       .snapshots()
       .map((s) => s.docs.map(_readBlueprint).toList());
 
+  /// #791 — 함께 뜨기(Knit-Along) 대상 청사진 — forkCount > 0 + 공개 범위.
+  /// 누구나 한 번이라도 함께 뜨기를 시작한 도안만 노출. orderBy(forkCount desc).
+  /// 색인 부재/오류 시 빈 리스트 폴백 (broadcast controller 로 안전 처리).
+  Stream<List<StepBlueprint>> watchKnitAlongGroups({int limit = 20}) {
+    final controller = StreamController<List<StepBlueprint>>();
+    final sub = _root
+        .where('forkCount', isGreaterThan: 0)
+        .orderBy('forkCount', descending: true)
+        .limit(limit)
+        .snapshots()
+        .listen(
+      (s) {
+        if (!controller.isClosed) {
+          controller.add(s.docs.map(_readBlueprint).toList());
+        }
+      },
+      onError: (Object e) {
+        debugPrint('StepBlueprintRepository.watchKnitAlongGroups error: $e');
+        if (!controller.isClosed) controller.add(const <StepBlueprint>[]);
+      },
+    );
+    controller.onCancel = () => sub.cancel();
+    return controller.stream;
+  }
+
+  /// #791 — 내가 함께 뜨고 있는(=fork 한) 청사진. fromBlueprintId 가 비어있지 않은 내 청사진.
+  Stream<List<StepBlueprint>> watchMyKnitAlongs(String ownerUid,
+      {int limit = 10}) {
+    if (ownerUid.isEmpty) return Stream.value(const <StepBlueprint>[]);
+    final controller = StreamController<List<StepBlueprint>>();
+    final sub = _root
+        .where('ownerUid', isEqualTo: ownerUid)
+        .orderBy('updatedAt', descending: true)
+        .limit(50)
+        .snapshots()
+        .listen(
+      (s) {
+        final list = s.docs
+            .map(_readBlueprint)
+            .where((b) =>
+                b.fromBlueprintId != null && b.fromBlueprintId!.isNotEmpty)
+            .take(limit)
+            .toList();
+        if (!controller.isClosed) controller.add(list);
+      },
+      onError: (Object e) {
+        debugPrint('StepBlueprintRepository.watchMyKnitAlongs error: $e');
+        if (!controller.isClosed) controller.add(const <StepBlueprint>[]);
+      },
+    );
+    controller.onCancel = () => sub.cancel();
+    return controller.stream;
+  }
+
+  /// #791 — 특정 도안(origin blueprint)에 대해 함께 뜨고 있는 사용자들의 청사진.
+  /// fromBlueprintId == originBlueprintId.
+  Stream<List<StepBlueprint>> watchKnitAlongParticipants(
+    String originBlueprintId, {
+    int limit = 50,
+  }) {
+    if (originBlueprintId.isEmpty) {
+      return Stream.value(const <StepBlueprint>[]);
+    }
+    final controller = StreamController<List<StepBlueprint>>();
+    final sub = _root
+        .where('fromBlueprintId', isEqualTo: originBlueprintId)
+        .limit(limit)
+        .snapshots()
+        .listen(
+      (s) {
+        if (!controller.isClosed) {
+          controller.add(s.docs.map(_readBlueprint).toList());
+        }
+      },
+      onError: (Object e) {
+        debugPrint(
+            'StepBlueprintRepository.watchKnitAlongParticipants error: $e');
+        if (!controller.isClosed) controller.add(const <StepBlueprint>[]);
+      },
+    );
+    controller.onCancel = () => sub.cancel();
+    return controller.stream;
+  }
+
+  /// #792 — 작성자(나)의 도안들의 테스터/협업자 진척 집계용. 내 ownerUid 청사진만.
+  Stream<List<StepBlueprint>> watchMyAuthoredBlueprints(String ownerUid) {
+    if (ownerUid.isEmpty) return Stream.value(const <StepBlueprint>[]);
+    final controller = StreamController<List<StepBlueprint>>();
+    final sub = _root
+        .where('ownerUid', isEqualTo: ownerUid)
+        .orderBy('updatedAt', descending: true)
+        .snapshots()
+        .listen(
+      (s) {
+        if (!controller.isClosed) {
+          controller.add(s.docs.map(_readBlueprint).toList());
+        }
+      },
+      onError: (Object e) {
+        debugPrint(
+            'StepBlueprintRepository.watchMyAuthoredBlueprints error: $e');
+        if (!controller.isClosed) controller.add(const <StepBlueprint>[]);
+      },
+    );
+    controller.onCancel = () => sub.cancel();
+    return controller.stream;
+  }
+
   Stream<List<StepBlueprint>> watchByKind(BlueprintKind kind) => _root
       .where('kind', isEqualTo: kind.name)
       .orderBy('updatedAt', descending: true)
@@ -736,6 +857,263 @@ class StepBlueprintRepository {
     final chart = await patternRepo.get(id);
     if (chart == null) return null;
     return adaptFromPatternChart(chart, ownerUid: _uid);
+  }
+
+  // ── #788 — 빌트인 템플릿 네트워크 폴백 ─────────────────────────────────────
+  //
+  // step_blueprints 의 빌트인 청사진(`tmpl_builtin_*`)이 Hive 캐시에 없고
+  // Firestore 가 지연/오프라인 상태일 때, `builtin_templates/{originalId}` 컬렉션을
+  // 직접 조회해 메모리상 청사진으로 즉시 구성한다. 본 메서드는 ServerUnavailableException
+  // 을 자체 catch 하여 호출자에게 친화적인 흐름을 제공한다.
+
+  /// 빌트인 청사진 id 패턴 검사 + 원본 builtin_templates 문서 id 추출.
+  /// 예: `tmpl_builtin_abc123` → `abc123`.
+  String? _builtinSourceId(String blueprintId) {
+    const prefix = 'tmpl_builtin_';
+    if (!blueprintId.startsWith(prefix)) return null;
+    return blueprintId.substring(prefix.length);
+  }
+
+  /// BuiltinTemplate → StepBlueprint 메모리 변환 (네트워크 폴백 전용).
+  ///
+  /// 마이그레이션의 `migrateBuiltinTemplates` 로직을 1건만 적용해 청사진을 만든다.
+  /// `tmpl_builtin_{srcId}` 형식의 id 를 유지하므로 후속 호출자가 동일 id 로 다시
+  /// 조회해도 일관된 결과가 나온다.
+  ({StepBlueprint blueprint, List<StepBlueprintUnit> units}) _adaptFromBuiltin(
+    bt.BuiltinTemplate tmpl, {
+    required String blueprintId,
+  }) {
+    final useKo = tmpl.stepsKo.isNotEmpty;
+    final titles = useKo ? tmpl.stepsKo : tmpl.stepsEn;
+    final notesKo = tmpl.stepNotesKo;
+    final notesEn = tmpl.stepNotesEn;
+    final targets = tmpl.stepTargetRows;
+
+    final units = <StepBlueprintUnit>[];
+    final unitIds = <String>[];
+    for (var i = 0; i < titles.length; i++) {
+      final unitId = '${blueprintId}_u$i';
+      unitIds.add(unitId);
+      final ko = i < notesKo.length ? notesKo[i] : '';
+      final en = i < notesEn.length ? notesEn[i] : '';
+      final target = i < targets.length ? targets[i] : 0;
+      units.add(StepBlueprintUnit(
+        id: unitId,
+        blueprintId: blueprintId,
+        order: i,
+        title: titles[i],
+        titleKo: i < tmpl.stepsKo.length ? tmpl.stepsKo[i] : null,
+        titleEn: i < tmpl.stepsEn.length ? tmpl.stepsEn[i] : null,
+        instruction: ko.isNotEmpty ? ko : en,
+        instructionKo: ko.isEmpty ? null : ko,
+        instructionEn: en.isEmpty ? null : en,
+        targetRows: target,
+        referenceImages: const [],
+        chartRegion: null,
+        isPreview: false,
+        tags: const [],
+        createdAt: DateTime.now(),
+      ));
+    }
+
+    final groups = <StepGroupMeta>[
+      StepGroupMeta(
+        id: 'main',
+        title: tmpl.titleKo.isNotEmpty ? tmpl.titleKo : tmpl.titleEn,
+        titleKo: tmpl.titleKo,
+        titleEn: tmpl.titleEn,
+        order: 0,
+        unitIds: unitIds,
+      ),
+    ];
+
+    final blueprint = StepBlueprint(
+      id: blueprintId,
+      ownerUid: _uid, // 호출자(사용자) uid 로 표시 — 권한 비교용. 진짜 owner 는 official.
+      title: tmpl.titleKo.isNotEmpty ? tmpl.titleKo : tmpl.titleEn,
+      titleKo: tmpl.titleKo,
+      titleEn: tmpl.titleEn,
+      kind: BlueprintKind.template,
+      visibility: BlueprintVisibility.public,
+      license: const BlueprintLicense(type: LicenseType.moriknit_official),
+      provider: BlueprintProvider.official,
+      version: '1.0.0',
+      publishedVersions: const [],
+      autoSyncOwnerRuns: false,
+      members: const {},
+      discoverability: BlueprintDiscoverability.curated_only,
+      isFeatured: false,
+      isCurated: true,
+      moriknitVerified: true,
+      tags: const ['fallback:builtin'],
+      groups: groups,
+      iconName: tmpl.iconName.isEmpty ? null : tmpl.iconName,
+      colorHex: tmpl.colorHex.isEmpty ? null : tmpl.colorHex,
+      order: tmpl.order,
+      measurementData: tmpl.measurementData,
+      description: tmpl.descKo.isNotEmpty
+          ? tmpl.descKo
+          : (tmpl.descEn.isNotEmpty ? tmpl.descEn : null),
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+
+    return (blueprint: blueprint, units: units);
+  }
+
+  /// 빌트인 청사진 보장 조회 — get() 실패 시 builtin_templates 폴백 + Hive write-through.
+  ///
+  /// 흐름:
+  ///   1) `get(blueprintId)` 시도 (Firestore 우선, Hive 폴백 포함)
+  ///   2) null/실패 시 id 가 `tmpl_builtin_*` 이면 builtin_templates 컬렉션에서 원본 조회
+  ///   3) 원본 → 메모리 청사진 합성 + Hive write-through (다음 호출부터는 즉시 표시)
+  ///   4) units 도 함께 캐시.
+  ///
+  /// 본 메서드는 ServerUnavailableException 을 호출자에게 노출하지 않고, 폴백 실패 시에만
+  /// null 반환한다. 호출부는 null → 친화 안내 표시.
+  Future<StepBlueprint?> ensureBuiltinBlueprint(String blueprintId) async {
+    // 1) Firestore + Hive 우선.
+    try {
+      final existing = await get(blueprintId);
+      if (existing != null) return existing;
+    } on ServerUnavailableException {
+      // 폴백 흐름으로 진행.
+    }
+
+    // 2) 빌트인 id 가 아니면 폴백 없음.
+    final srcId = _builtinSourceId(blueprintId);
+    if (srcId == null) return null;
+
+    // 3) builtin_templates/{srcId} 조회 — 짧은 timeout.
+    try {
+      final snap = await _db
+          .collection('builtin_templates')
+          .doc(srcId)
+          .get()
+          .withServerTimeout(op: 'get_builtin_template_fallback');
+      if (!snap.exists) return null;
+      final tmpl = bt.BuiltinTemplate.fromFirestore(snap);
+      final result = _adaptFromBuiltin(tmpl, blueprintId: blueprintId);
+
+      // 4) Hive write-through (오프라인에서도 다음 호출 즉시 표시).
+      await _cacheBlueprint(result.blueprint);
+      await _cacheUnits(blueprintId, result.units);
+      return result.blueprint;
+    } on ServerUnavailableException {
+      // 빌트인 원본도 못 가져옴 — 진짜 오프라인.
+      return null;
+    }
+  }
+
+  /// 빌트인/공식 청사진을 사용자 본인 사본으로 복제 (#788).
+  ///
+  /// 흐름:
+  ///   1) 원본 청사진 + units 보장 조회 (ensureBuiltinBlueprint).
+  ///   2) 새 doc id 발급 (`user_${uid}_${...}`) — 사용자 sub 영역 아님, step_blueprints 루트.
+  ///   3) blueprint deep copy (ownerUid=self, kind=template, provider=user, visibility=draft,
+  ///      sourceBuiltinId=srcId 추적용 tag).
+  ///   4) units deep copy + 새 unit id 발급, groups.unitIds 매핑 갱신.
+  ///   5) batch 저장 + Hive write-through.
+  ///
+  /// 라이선스: 빌트인은 moriknit_official 라이선스로 modify 허용 — 사본은 user 라이선스(reserved) 시작.
+  Future<StepBlueprint> duplicateAsUserCopy(String sourceBlueprintId) async {
+    if (_uid.isEmpty) throw Exception('로그인이 필요해요.');
+
+    // 1) 원본 확보 (빌트인 폴백 포함).
+    final source = await ensureBuiltinBlueprint(sourceBlueprintId);
+    if (source == null) {
+      throw Exception('원본 템플릿을 불러올 수 없어요. 잠시 후 다시 시도해 주세요.');
+    }
+    // units 도 함께 확보 (Firestore → Hive 폴백 → builtin 폴백 순으로 캐시됨).
+    List<StepBlueprintUnit> srcUnits;
+    try {
+      srcUnits = await listUnits(sourceBlueprintId);
+    } on ServerUnavailableException {
+      // Hive 캐시는 listUnits 내부에서 폴백 시도됨 → 그래도 실패면 폴백 hive 직접 읽기.
+      srcUnits = _readUnitsFromHive(sourceBlueprintId) ?? const [];
+    }
+    if (srcUnits.isEmpty) {
+      // builtin 폴백으로 ensureBuiltinBlueprint 가 Hive 에 units 를 미리 캐싱했다면 한 번 더 시도.
+      srcUnits = _readUnitsFromHive(sourceBlueprintId) ?? const [];
+    }
+
+    // 2) 새 ID 발급.
+    final newRef = _root.doc();
+    final newId = newRef.id;
+    final now = DateTime.now();
+    final srcBuiltinId = _builtinSourceId(sourceBlueprintId);
+
+    // 3) blueprint deep copy.
+    // unit id 매핑 (옛 unit id → 새 unit id) — groups.unitIds 갱신용.
+    final unitIdMap = <String, String>{};
+    final newUnits = <StepBlueprintUnit>[];
+    for (final u in srcUnits) {
+      final newUnitRef = _unitsCol(newId).doc();
+      unitIdMap[u.id] = newUnitRef.id;
+      newUnits.add(u.copyWith(
+        id: newUnitRef.id,
+        blueprintId: newId,
+        createdAt: now,
+        updatedAt: now,
+      ));
+    }
+    final newGroups = source.groups
+        .map((g) => g.copyWith(
+              unitIds: g.unitIds
+                  .map((id) => unitIdMap[id] ?? id)
+                  .where((id) => unitIdMap.containsValue(id))
+                  .toList(),
+            ))
+        .toList();
+
+    final copy = source.copyWith(
+      id: newId,
+      ownerUid: _uid,
+      kind: BlueprintKind.template,
+      visibility: BlueprintVisibility.draft,
+      provider: BlueprintProvider.user,
+      license: const BlueprintLicense(),
+      fromBlueprintId: source.id,
+      fromAttribution: srcBuiltinId == null
+          ? 'duplicated from blueprint'
+          : 'duplicated from builtin:$srcBuiltinId',
+      publishedVersions: const [],
+      version: '1.0.0',
+      isFeatured: false,
+      isCurated: false,
+      moriknitVerified: false,
+      members: const {},
+      autoSyncOwnerRuns: false,
+      discoverability: BlueprintDiscoverability.hidden,
+      tags: <String>[
+        'user_template',
+        if (srcBuiltinId != null) 'sourceBuiltinId:$srcBuiltinId',
+      ],
+      groups: newGroups,
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    // 4) batch 저장.
+    final batch = _db.batch();
+    batch.set(newRef, {
+      ...copy.toMap(),
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    for (final u in newUnits) {
+      batch.set(_unitsCol(newId).doc(u.id), {
+        ...u.toMap(),
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit().withServerTimeout(op: 'duplicate_blueprint_batch');
+
+    // 5) Hive write-through.
+    await _cacheBlueprint(copy);
+    await _cacheUnits(newId, newUnits);
+    return copy;
   }
 
   /// 내 청사진 목록 — step_blueprints 우선 + pattern_charts 어댑터 보충 (중복 제거).

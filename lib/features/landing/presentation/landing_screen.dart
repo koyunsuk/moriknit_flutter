@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/app_config_provider.dart' show mockupImagesProvider;
@@ -671,7 +672,7 @@ class _AppScreensSectionState extends ConsumerState<_AppScreensSection> {
     final key = _screens[i].mockupKey;
     final url = _mockupImages[key] ?? '';
     if (url.isNotEmpty) {
-      return Image.network(url, fit: BoxFit.cover, errorBuilder: (_, _, _) => _buildFallbackScreen(i));
+      return CachedNetworkImage(imageUrl: url, fit: BoxFit.cover, errorWidget: (_, _, _) => _buildFallbackScreen(i));
     }
     return _buildFallbackScreen(i);
   }
@@ -2574,8 +2575,8 @@ Widget _thumb({String? url, IconData icon = Icons.image_outlined, Color color = 
     height: 130,
     width: double.infinity,
     child: url != null && url.isNotEmpty
-        ? Image.network(url, fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => _thumbIcon(icon, color))
+        ? CachedNetworkImage(imageUrl: url, fit: BoxFit.cover,
+            errorWidget: (_, _, _) => _thumbIcon(icon, color))
         : _thumbIcon(icon, color),
   );
 }

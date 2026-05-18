@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/errors/network_errors.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/router/step_unit_entry_router.dart';
@@ -795,6 +796,22 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
     }
   }
 
+  /// 이슈 #629 — 도안을 마켓에 등록 (0원 무료 도안 우선 지원).
+  /// draft 도안도 등록 자체는 허용 (publish 화면 내 배너 안내).
+  /// 저장된 도안만 등록 가능 (id 비어 있으면 차단).
+  void _publishToMarket(bool isKorean) {
+    if (widget.chart.id.isEmpty) {
+      showSaveErrorSnackBar(
+        ScaffoldMessenger.of(context),
+        message: isKorean
+            ? '저장된 도안만 마켓에 등록할 수 있어요.'
+            : 'Save the pattern first.',
+      );
+      return;
+    }
+    context.push(Routes.marketPublish, extra: widget.chart);
+  }
+
   Future<void> _forkPattern() async {
     final isKorean = ref.read(appLanguageProvider).isKorean;
     // 이슈 #629 — complete 도안만 Fork 허용
@@ -804,11 +821,11 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
         builder: (ctx) => AlertDialog(
           backgroundColor: C.bg,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text(isKorean ? 'Fork할 수 없어요' : 'Cannot Fork', style: T.h3),
+          title: Text(isKorean ? '함께 뜨기를 시작할 수 없어요' : 'Knit-along unavailable', style: T.h3),
           content: Text(
             isKorean
-                ? '이 도안은 초안 상태라 Fork할 수 없어요. 작성자가 섹션을 완성한 후에 Fork해 주세요.'
-                : 'This pattern is a draft. Fork will be available once the author completes the sections.',
+                ? '이 도안은 초안 상태라 함께 뜨기를 시작할 수 없어요. 작성자가 섹션을 완성한 후에 다시 시도해 주세요.'
+                : 'This pattern is a draft. Knit-along will be available once the author completes the sections.',
             style: T.body,
           ),
           actions: [
@@ -825,7 +842,7 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
     try {
       await runWithMoriLoadingDialog<void>(
         context,
-        message: isKorean ? 'Fork하는 중입니다.' : 'Forking...',
+        message: isKorean ? '함께 뜨기를 시작하는 중입니다.' : 'Joining knit-along...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
         task: () async {
           await ref.read(patternRepositoryProvider).forkPattern(
@@ -1268,6 +1285,11 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                                 // 이슈 #687 — 단계 편집 화면으로 진입.
                                 context.push('/blueprints/${widget.chart.id}/edit');
                               }
+                              if (v == 'tester_group') {
+                                // 이슈 #792 — 테스터 그룹 권한 관리 화면.
+                                context.push('/blueprints/${widget.chart.id}/testers');
+                              }
+                              if (v == 'publish_market') _publishToMarket(isKorean);
                               if (v == 'export_pdf') _sharePdfMagazine(context, isKorean);
                               if (v == 'export_mori') _exportMori(context, isKorean);
                               if (v == 'delete') _confirmDelete(isKorean);
@@ -1313,6 +1335,24 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                                   Icon(Icons.format_list_numbered_rounded, size: 18, color: C.lv),
                                   const SizedBox(width: 8),
                                   Text(isKorean ? '단계 편집' : 'Edit steps'),
+                                ]),
+                              ),
+                              // 이슈 #792 — 테스터 그룹 권한 관리
+                              PopupMenuItem(
+                                value: 'tester_group',
+                                child: Row(children: [
+                                  Icon(Icons.group_add_rounded, size: 18, color: C.lvD),
+                                  const SizedBox(width: 8),
+                                  Text(isKorean ? '테스터 그룹 관리' : 'Tester Group'),
+                                ]),
+                              ),
+                              // 이슈 #629 — 마켓 등록 (0원 무료 도안 우선 지원)
+                              PopupMenuItem(
+                                value: 'publish_market',
+                                child: Row(children: [
+                                  Icon(Icons.storefront_rounded, size: 18, color: C.lv),
+                                  const SizedBox(width: 8),
+                                  Text(isKorean ? '마켓에 등록' : 'Publish to Market'),
                                 ]),
                               ),
                               if (widget.chart.type == PatternType.chart) ...[
@@ -1562,7 +1602,7 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                     child: ElevatedButton.icon(
                       onPressed: _forkPattern,
                       icon: const Icon(Icons.fork_right_rounded),
-                      label: Text(isKorean ? '내 도안으로 Fork' : 'Fork to my library'),
+                      label: Text(isKorean ? '나도 이 도안으로 뜨기' : 'Knit along'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: C.pkD,
                         foregroundColor: Colors.white,
@@ -1932,6 +1972,14 @@ class _BlueprintMetaCard extends ConsumerWidget {
                     isKorean ? '라이선스' : 'License',
                     style: T.caption.copyWith(color: C.mu),
                   ),
+                  const SizedBox(width: 4),
+                  // 이슈 #939 — 라이선스 옆 ? 도움말. 현재 적용된 라이선스의 FAQ 페이지로 이동.
+                  _LicenseHelpButton(
+                    url: blueprintLicenseHelpUrl(bp.license.type),
+                    tooltip: isKorean
+                        ? '${blueprintLicenseLabel(bp.license.type, true)} 자세히 보기'
+                        : 'About ${blueprintLicenseLabel(bp.license.type, false)}',
+                  ),
                   const Spacer(),
                   BlueprintLicenseChip(
                     license: bp.license.type,
@@ -1942,6 +1990,17 @@ class _BlueprintMetaCard extends ConsumerWidget {
                   ),
                 ],
               ),
+              // 이슈 #939 — 라이선스 미설정(reserved 기본값) + 편집 가능 시 안내.
+              // 등록 흐름에서 라이선스 선택 단계가 제거되었으므로, 도안 상세에서 설정 유도.
+              if (canEdit && bp.license.type == LicenseType.reserved) ...[
+                const SizedBox(height: 6),
+                Text(
+                  isKorean
+                      ? '※ 라이선스가 설정되지 않았어요. 마켓 등록·Fork 허용 전 라이선스를 선택해 주세요.'
+                      : '※ License not set. Pick a license before publishing or allowing forks.',
+                  style: T.caption.copyWith(color: C.mu, fontSize: 11),
+                ),
+              ],
               if (bp.tags.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Wrap(
@@ -2013,6 +2072,13 @@ class _BlueprintMetaCard extends ConsumerWidget {
 
   /// 어댑터(legacy) 청사진은 step_blueprints에 아직 없을 수 있으므로
   /// repository.get() 으로 존재 확인 후 없으면 create로 fallback.
+  ///
+  /// 이슈 #803:
+  ///   - legacy 어댑터 청사진의 ownerUid 가 비어있거나 다른 uid 인 경우
+  ///     create() 시 rules 의 `request.resource.data.ownerUid == request.auth.uid`
+  ///     조건에 걸려 permission-denied → ServerUnavailableException 으로 전달되었음.
+  ///   - 본인 화면에서 호출하는 액션이므로 현재 uid 로 자동 보강 후 create.
+  ///   - 에러 라벨도 timeout(서버 장애) vs 권한 부족 으로 분기 표시.
   Future<void> _persistBlueprint(
     BuildContext context,
     WidgetRef ref,
@@ -2020,6 +2086,7 @@ class _BlueprintMetaCard extends ConsumerWidget {
     required Map<String, dynamic> patch,
   }) async {
     final repo = ref.read(stepBlueprintRepositoryProvider);
+    final currentUid = ref.read(authStateProvider).valueOrNull?.uid ?? '';
     try {
       await runWithMoriLoadingDialog<void>(
         context,
@@ -2036,7 +2103,13 @@ class _BlueprintMetaCard extends ConsumerWidget {
             final visibility = patch['visibility'] is String
                 ? BlueprintVisibility.fromName(patch['visibility'] as String)
                 : bp.visibility;
+            // 이슈 #803 — ownerUid 자동 보강. 비어있거나 본인이 아니면 본인으로.
+            // legacy 어댑터 청사진은 ownerUid 가 누락된 채 전달될 수 있음.
+            final ownerUid = (bp.ownerUid.isEmpty || bp.ownerUid != currentUid)
+                ? currentUid
+                : bp.ownerUid;
             await repo.create(bp.copyWith(
+              ownerUid: ownerUid,
               license: license,
               visibility: visibility,
             ));
@@ -2050,6 +2123,24 @@ class _BlueprintMetaCard extends ConsumerWidget {
       showSavedSnackBar(
         ScaffoldMessenger.of(context),
         message: isKorean ? '저장됐어요.' : 'Saved.',
+      );
+    } on PermissionDeniedException {
+      // 이슈 #803 — 권한 거부 친화 안내.
+      if (!context.mounted) return;
+      showSaveErrorSnackBar(
+        ScaffoldMessenger.of(context),
+        message: isKorean
+            ? '저장 권한이 없어요. 도안 소유자만 변경할 수 있습니다.'
+            : 'No permission to save. Only the pattern owner can change this.',
+      );
+    } on ServerUnavailableException {
+      // 이슈 #803 — 서버 일시 장애 친화 안내 + 재시도 유도.
+      if (!context.mounted) return;
+      showSaveErrorSnackBar(
+        ScaffoldMessenger.of(context),
+        message: isKorean
+            ? '서버 연결이 불안정해요. 잠시 후 다시 시도해 주세요.'
+            : 'Server is unstable. Please try again in a moment.',
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -2097,6 +2188,30 @@ String blueprintLicenseLabel(LicenseType t, bool ko) {
       return ko ? '모리니트 공식' : 'MoriKnit Official';
     case LicenseType.custom:
       return ko ? '사용자 정의' : 'Custom';
+  }
+}
+
+/// 이슈 #939 — 라이선스 종류별 FAQ 페이지 URL.
+/// `https://moriknit.com/faq/license/{key}` 패턴. 랜딩 사이트에 별도 페이지 구성 예정.
+String blueprintLicenseHelpUrl(LicenseType t) {
+  return 'https://moriknit.com/faq/license/${t.name}';
+}
+
+/// 이슈 #939 — 마켓 publish 화면용 단순 라이선스 키('personal_use'/'commercial'/'fork_only')
+/// 의 FAQ URL.
+String marketLicenseHelpUrl(String key) {
+  return 'https://moriknit.com/faq/license/$key';
+}
+
+/// 이슈 #939 — 라이선스 도움말 외부 링크 열기.
+/// `url_launcher`의 `LaunchMode.externalApplication`로 외부 브라우저 띄움.
+Future<void> openLicenseHelp(BuildContext context, String url) async {
+  final uri = Uri.tryParse(url);
+  if (uri == null) return;
+  try {
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  } catch (_) {
+    // 외부 브라우저 실패 시 무시 (사용자에게 노출되는 정책 안내는 추가하지 않음).
   }
 }
 
@@ -2327,6 +2442,32 @@ class _BlueprintVisibilityPickerSheet extends StatelessWidget {
   }
 }
 
+/// 이슈 #939 — 라이선스 옆 ? 도움말 아이콘. 탭 시 외부 FAQ 페이지 열기.
+class _LicenseHelpButton extends StatelessWidget {
+  final String url;
+  final String tooltip;
+  const _LicenseHelpButton({required this.url, required this.tooltip});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkResponse(
+        onTap: () => openLicenseHelp(context, url),
+        radius: 18,
+        child: Padding(
+          padding: const EdgeInsets.all(2),
+          child: Icon(
+            Icons.help_outline_rounded,
+            size: 18,
+            color: C.mu,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _BlueprintLicensePickerSheet extends StatelessWidget {
   final LicenseType current;
   final bool isKorean;
@@ -2394,19 +2535,33 @@ class _BlueprintLicensePickerSheet extends StatelessWidget {
             ),
             Text(isKorean ? '라이선스 선택' : 'License', style: T.h3),
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            // 이슈 #939 — 각 라이선스 옆 ? 도움말 아이콘. 탭 시 FAQ 외부 링크.
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: kBlueprintLicenseOptions.map((t) {
                 final isCurrent = t == current;
-                return BlueprintSelectableChip(
-                  label: blueprintLicenseLabel(t, isKorean),
-                  selected: isCurrent,
-                  onTap: () => Navigator.pop(context, t),
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      BlueprintSelectableChip(
+                        label: blueprintLicenseLabel(t, isKorean),
+                        selected: isCurrent,
+                        onTap: () => Navigator.pop(context, t),
+                      ),
+                      const SizedBox(width: 6),
+                      _LicenseHelpButton(
+                        url: blueprintLicenseHelpUrl(t),
+                        tooltip: isKorean
+                            ? '${blueprintLicenseLabel(t, true)} 자세히 보기'
+                            : 'About ${blueprintLicenseLabel(t, false)}',
+                      ),
+                    ],
+                  ),
                 );
               }).toList(),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
             Text(
               _description(current),
               style: T.caption.copyWith(color: C.mu),

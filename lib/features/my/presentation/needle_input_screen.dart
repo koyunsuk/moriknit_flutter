@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -671,8 +672,8 @@ class _NeedlePhotoSection extends StatelessWidget {
     } else if (existingPhotoUrl != null) {
       child = ClipRRect(
         borderRadius: BorderRadius.circular(14),
-        child: Image.network(existingPhotoUrl!, fit: BoxFit.contain, width: double.infinity,
-            errorBuilder: (_, _, _) => const SizedBox()),
+        child: CachedNetworkImage(imageUrl: existingPhotoUrl!, fit: BoxFit.contain, width: double.infinity,
+            errorWidget: (_, _, _) => const SizedBox()),
       );
     } else {
       child = Column(

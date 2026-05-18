@@ -1,6 +1,7 @@
 import 'dart:io' as io;
 
 import 'package:flutter/foundation.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
@@ -608,12 +609,12 @@ class _MemoListTile extends StatelessWidget {
                 : ClipRRect(
                     borderRadius: BorderRadius.circular(10),
                     child: firstImageUrl != null
-                        ? Image.network(
-                            firstImageUrl,
+                        ? CachedNetworkImage(
+                            imageUrl: firstImageUrl,
                             width: 52,
                             height: 52,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => _noImageBox(),
+                            errorWidget: (_, _, _) => _noImageBox(),
                           )
                         : _noImageBox(),
                   ),
@@ -1004,12 +1005,12 @@ class _MemoEditScreenState extends ConsumerState<_MemoEditScreen> {
                                   children: [
                                     ClipRRect(
                                       borderRadius: BorderRadius.circular(12),
-                                      child: Image.network(
-                                        entry.value,
+                                      child: CachedNetworkImage(
+                                        imageUrl: entry.value,
                                         width: 84,
                                         height: 84,
                                         fit: BoxFit.cover,
-                                        errorBuilder: (_, _, _) => _imagePlaceholder(),
+                                        errorWidget: (_, _, _) => _imagePlaceholder(),
                                       ),
                                     ),
                                     _removeButton(() => setState(() =>

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../providers/font_provider.dart';
+import 'admin_table_theme.dart';
 import 'app_colors.dart';
 import 'async_state_theme.dart';
 import 'block_theme.dart';
@@ -312,6 +313,7 @@ class AppTheme {
           MoriChipTheme.standard,
           DropboxTheme.standard,
           HeaderTheme.standard,
+          AdminTableTheme.standard,
         ],
         colorScheme: ColorScheme.light(
           primary: C.lv,

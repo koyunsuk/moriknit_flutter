@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -766,7 +767,7 @@ class _YarnPhotoPicker extends StatelessWidget {
                                 fit: BoxFit.contain,
                                 width: double.infinity,
                                 height: double.infinity)
-                            : Image.network(photoUrl,
+                            : CachedNetworkImage(imageUrl: photoUrl,
                                 fit: BoxFit.contain,
                                 width: double.infinity,
                                 height: double.infinity),

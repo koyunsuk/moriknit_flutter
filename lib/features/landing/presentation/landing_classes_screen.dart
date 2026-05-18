@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -752,12 +753,12 @@ class _EditorialCard extends StatelessWidget {
               Stack(
                 alignment: Alignment.center,
                 children: [
-                  Image.network(
-                    thumbUrl,
+                  CachedNetworkImage(
+                    imageUrl: thumbUrl,
                     width: double.infinity,
                     height: 140,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
+                    errorWidget: (_, _, _) => Container(
                       width: double.infinity,
                       height: 140,
                       color: const Color(0xFFF5F3FF),

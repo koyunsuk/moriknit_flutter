@@ -14,6 +14,7 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -743,12 +744,12 @@ class _ProgressEditor extends StatelessWidget {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10),
-                    child: Image.network(
-                      img.url,
+                    child: CachedNetworkImage(
+                      imageUrl: img.url,
                       width: 76,
                       height: 76,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => Container(
+                      errorWidget: (_, _, _) => Container(
                         width: 76,
                         height: 76,
                         color: C.bd,

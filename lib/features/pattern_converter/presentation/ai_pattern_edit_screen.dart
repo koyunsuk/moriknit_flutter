@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -47,6 +49,11 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
   bool _loading = true;
   bool _showKorean = true;
   bool _showEnglish = false;
+
+  /// 갭 #4 fix — uploadAndParse 직후 자동 임시 저장(draft) 시 발급된 도안 ID.
+  /// 사용자가 [저장] 안 눌러도 라이브러리에 draft 로 남아 손실되지 않도록 보장.
+  /// 이후 본 화면의 [저장] 액션은 동일 ID 를 덮어써서 정식 상태로 승격.
+  String? _autoSavedDraftId;
 
   // 커버 이미지
   String? _coverImageUrl;   // 기존 네트워크 URL
@@ -100,6 +107,13 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
       _coverImageUrl = chart.imageUrl.isNotEmpty ? chart.imageUrl : null;
       _buildControllers();
       if (mounted) setState(() => _loading = false);
+
+      // 갭 #4 fix — uploadAndParse 직후 자동 임시 저장(draft).
+      // 사용자가 [저장] 누르지 않고 화면을 닫아도 pattern_charts +
+      // step_blueprints 양쪽에 draft 로 남는다. 본 화면의 [저장] 액션은
+      // 동일 id 를 덮어써서 정식 상태로 승격한다.
+      // 실패해도 흐름은 유지 (사용자가 직접 [저장] 누르면 됨).
+      unawaited(_autoSaveDraft(chart));
     } else {
       final repo = PatternConverterRepository();
       final chart = await repo.watchAiPattern(widget.patternId!).first;
@@ -110,6 +124,22 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
         _buildControllers();
       }
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// 갭 #4 — AI 변환 직후 자동 임시 저장 (draft).
+  ///
+  /// PatternRepository.save 는 이미 step_blueprints + units 미러링까지 수행하므로
+  /// 본 호출만으로 라이브러리·청사진 양쪽에 노출된다. 본 화면의 [저장] 액션은
+  /// 동일 id 를 덮어써서 사용자 편집 결과를 반영한다.
+  Future<void> _autoSaveDraft(PatternChart chart) async {
+    try {
+      final patternRepo = ref.read(patternRepositoryProvider);
+      final saved = await patternRepo.save(chart);
+      if (!mounted) return;
+      _autoSavedDraftId = saved.id;
+    } catch (_) {
+      // 자동 임시 저장 실패는 무음 — 사용자가 [저장] 누르면 정상 흐름으로 복귀.
     }
   }
 
@@ -223,7 +253,10 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
           }
 
           if (widget.unsavedChart != null) {
+            // 갭 #4 — _autoSavedDraftId 가 있으면 동일 doc 을 덮어쓰기.
+            // 새 문서가 또 생성되지 않도록 명시적으로 id 를 채워 둔다.
             await patternRepo.save(widget.unsavedChart!.copyWith(
+              id: _autoSavedDraftId ?? widget.unsavedChart!.id,
               title: title,
               aiSections: syncedSections,
               imageUrl: finalImageUrl,
@@ -639,7 +672,7 @@ class _CoverImagePicker extends StatelessWidget {
             child: localPath != null
                 ? Image.file(File(localPath!),
                     height: 160, width: double.infinity, fit: BoxFit.cover)
-                : Image.network(networkUrl!,
+                : CachedNetworkImage(imageUrl: networkUrl!,
                     height: 160, width: double.infinity, fit: BoxFit.cover),
           ),
           Positioned(

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
@@ -497,12 +498,12 @@ class _RecentCourseCard extends StatelessWidget {
                   fit: StackFit.expand,
                   children: [
                   if (thumbUrl.isNotEmpty)
-                    Image.network(
-                      thumbUrl,
+                    CachedNetworkImage(
+                      imageUrl: thumbUrl,
                       width: double.infinity,
                       height: 200,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => _ThumbPlaceholder(height: 200),
+                      errorWidget: (_, _, _) => _ThumbPlaceholder(height: 200),
                     )
                   else
                     _ThumbPlaceholder(height: 200),
@@ -665,12 +666,12 @@ class _CourseTitleRow extends StatelessWidget {
                 alignment: Alignment.center,
                 children: [
                   if (thumbUrl.isNotEmpty)
-                    Image.network(
-                      thumbUrl,
+                    CachedNetworkImage(
+                      imageUrl: thumbUrl,
                       width: 100,
                       height: 70,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, e, s) => Container(
+                      errorWidget: (_, e, s) => Container(
                         width: 100, height: 70,
                         color: C.lvL,
                         child: Icon(isAudio ? Icons.music_note_rounded : Icons.play_circle_filled_rounded, color: C.lvD, size: 28),
@@ -1021,7 +1022,7 @@ class _CourseDetailScreenState extends ConsumerState<CourseDetailScreen> {
           alignment: Alignment.center,
           children: [
             if (thumbUrl.isNotEmpty)
-              Image.network(thumbUrl, width: double.infinity, height: 220, fit: BoxFit.cover)
+              CachedNetworkImage(imageUrl: thumbUrl, width: double.infinity, height: 220, fit: BoxFit.cover)
             else
               Container(height: 220, color: Colors.black),
             Container(

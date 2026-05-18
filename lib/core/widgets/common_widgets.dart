@@ -1,4 +1,5 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
 
 export 'save_feedback.dart';
 
@@ -307,10 +308,10 @@ class _ProfileBadge extends StatelessWidget {
         padding: const EdgeInsets.all(2),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(8),
-          child: Image.network(
-            url!,
+          child: CachedNetworkImage(
+            imageUrl: url!,
             fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => _fallback(),
+            errorWidget: (_, _, _) => _fallback(),
           ),
         ),
       );
@@ -1639,6 +1640,8 @@ class MoriBlockShell extends StatelessWidget {
   final Color accent;
   final VoidCallback? onMoreTap;
   final String? moreLabel;
+  /// #770 — 헤더 우측 끝(중앙 정렬)에 표시할 위젯 (뱃지 등). onMoreTap보다 우선.
+  final Widget? trailing;
   final Widget child;
   final double? scrollHeight;
   final EdgeInsetsGeometry? bodyPadding;
@@ -1651,6 +1654,7 @@ class MoriBlockShell extends StatelessWidget {
     this.icon,
     this.onMoreTap,
     this.moreLabel,
+    this.trailing,
     this.scrollHeight,
     this.bodyPadding,
   });
@@ -1706,7 +1710,7 @@ class MoriBlockShell extends StatelessWidget {
                   SizedBox(width: tokens.iconLabelGap),
                 ],
                 Expanded(child: Text(label, style: T.bodyBold)),
-                if (onMoreTap != null)
+                if (trailing != null) trailing! else if (onMoreTap != null)
                   GestureDetector(
                     onTap: onMoreTap,
                     child: Text(

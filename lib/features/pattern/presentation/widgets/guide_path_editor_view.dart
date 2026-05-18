@@ -132,6 +132,20 @@ class _GuidePathEditorViewState extends ConsumerState<GuidePathEditorView> {
   /// #679 — 측정 도구 임시 점들.
   final List<Offset> _measurePoints = [];
 
+  /// #689 — 패턴 브러쉬: 현재 드래그 중인 stroke의 raw 샘플 점들.
+  /// 드래그 종료 시 다운샘플링해서 RowPath.anchors로 저장.
+  final List<Offset> _brushStrokePoints = [];
+
+  /// #689 — 패턴 브러쉬: 현재 선택된 심볼 ID (팔레트에서 탭).
+  /// null이면 brush 모드라도 anchor만 추가됨(빈 패턴).
+  String? _brushSymbolId;
+
+  /// #689 — 패턴 브러쉬: 심볼 간격(px). 너무 좁으면 겹침, 너무 넓으면 띄엄띄엄.
+  double _brushCellWidth = 24;
+
+  /// #689 — 패턴 브러쉬: 자동 회전 (접선 방향에 맞춰 심볼 회전).
+  bool _brushAutoRotate = true;
+
   /// #671 — 핀치줌/팬 컨트롤러 (화면맞춤 버튼용).
   final TransformationController _transformCtrl = TransformationController();
 
@@ -481,7 +495,8 @@ class _GuidePathEditorViewState extends ConsumerState<GuidePathEditorView> {
           break;
         case PathTool.grid:
         case PathTool.square:
-          // grid/square는 다른 핸들러에서 처리.
+        case PathTool.brush:
+          // grid/square/brush는 다른 핸들러에서 처리 (pan 기반).
           break;
       }
     } catch (e) {
@@ -513,6 +528,73 @@ class _GuidePathEditorViewState extends ConsumerState<GuidePathEditorView> {
     ];
     _emit(_data.replaceRow(row.copyWith(anchors: newAnchors)));
     setState(() => _lineFirstPoint = null);
+  }
+
+  // ── #689 — 패턴 브러쉬 (드래그한 path 위에 심볼 자동 배치) ──────────
+  /// 브러쉬 stroke 시작 — 드래그 첫 점 캡처.
+  void _brushStart(Offset point) {
+    if (_readOnly) return;
+    _brushStrokePoints
+      ..clear()
+      ..add(point);
+  }
+
+  /// 브러쉬 stroke 진행 중 — pan update마다 점 추가.
+  /// 인접 점이 너무 가까우면(<3px) 스킵해서 메모리 절약 + 노이즈 감소.
+  void _brushUpdate(Offset point) {
+    if (_readOnly) return;
+    if (_brushStrokePoints.isEmpty) {
+      _brushStrokePoints.add(point);
+      return;
+    }
+    final last = _brushStrokePoints.last;
+    if ((point - last).distance < 3) return;
+    _brushStrokePoints.add(point);
+    // setState로 미리보기 갱신 (오버레이는 별도 painter로 그림).
+    setState(() {});
+  }
+
+  /// 브러쉬 stroke 종료 — 캡처한 점들을 다운샘플링해서 RowPath로 저장.
+  /// 너무 가까운 점 제거(8px 이하) → 부드러운 path 생성.
+  void _brushEnd() {
+    if (_readOnly) return;
+    if (_brushStrokePoints.length < 2) {
+      _brushStrokePoints.clear();
+      return;
+    }
+    // 다운샘플링: 8px 이상 떨어진 점만 유지 (성능 + 부드러움).
+    final downsampled = <Offset>[_brushStrokePoints.first];
+    const minSpacing = 8.0;
+    for (final p in _brushStrokePoints.skip(1)) {
+      if ((p - downsampled.last).distance >= minSpacing) {
+        downsampled.add(p);
+      }
+    }
+    // 마지막 점이 빠졌으면 추가 (drag end 위치 유지).
+    final lastRaw = _brushStrokePoints.last;
+    if ((lastRaw - downsampled.last).distance > 1) {
+      downsampled.add(lastRaw);
+    }
+    _brushStrokePoints.clear();
+
+    if (downsampled.length < 2) return;
+
+    _pushUndo();
+    final row = _ensureActiveRow();
+    // 새 brush stroke로 row의 anchors를 덮어씀 (이전 stroke 누적 X — 한 단=한 stroke).
+    //   기존 데이터 보존하려면 새 row를 생성하는 방식도 가능 — 현재는 명확성 우선.
+    final anchors = downsampled
+        .map((p) => PathAnchor(position: p, nextEdgeType: AnchorType.line))
+        .toList();
+    // pattern: 선택된 brush 심볼로 채움 (단일 반복 — symbolAt이 modulo로 wrap).
+    final pattern = _brushSymbolId != null ? [_brushSymbolId!] : row.pattern;
+    final updated = row.copyWith(
+      anchors: anchors,
+      pattern: pattern,
+      cellWidth: _brushCellWidth,
+      autoRotate: _brushAutoRotate,
+    );
+    _emit(_data.replaceRow(updated));
   }
 
   // ── #679 — 측정 (자/각도기) ────────────────────────────────────────
@@ -811,6 +893,46 @@ class _GuidePathEditorViewState extends ConsumerState<GuidePathEditorView> {
             label: '${_pathCornerRadius.round()}px',
             onChanged: _activeRow == null ? null : _applyPathCornerRadius,
           ),
+          // #689 — 패턴 브러쉬 옵션.
+          const Divider(height: 16),
+          Row(children: [
+            Icon(Icons.brush, size: 16, color: C.lvD),
+            const SizedBox(width: 6),
+            Text('브러쉬 심볼 간격',
+                style: T.captionBold.copyWith(color: C.tx)),
+            const Spacer(),
+            Text('${_brushCellWidth.round()}px',
+                style: T.caption.copyWith(color: C.lvD)),
+          ]),
+          Slider(
+            value: _brushCellWidth,
+            min: 12,
+            max: 80,
+            divisions: 17,
+            activeColor: C.lv,
+            label: '${_brushCellWidth.round()}px',
+            onChanged: (v) => setState(() => _brushCellWidth = v),
+          ),
+          Row(children: [
+            Icon(Icons.rotate_right, size: 16, color: C.lvD),
+            const SizedBox(width: 6),
+            Text('브러쉬 자동회전 (접선 방향)',
+                style: T.captionBold.copyWith(color: C.tx)),
+            const Spacer(),
+            Switch(
+              value: _brushAutoRotate,
+              activeThumbColor: C.lv,
+              onChanged: (v) => setState(() => _brushAutoRotate = v),
+            ),
+          ]),
+          if (_tool == PathTool.brush && _brushSymbolId == null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                '브러쉬 모드: 아래 팔레트에서 심볼을 먼저 선택하세요',
+                style: T.caption.copyWith(color: C.og),
+              ),
+            ),
         ],
       ),
     );
@@ -828,6 +950,19 @@ class _GuidePathEditorViewState extends ConsumerState<GuidePathEditorView> {
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
+            // #689 — 패턴 브러쉬 (드래그한 path 위에 심볼 자동 배치).
+            _ToolChip(
+              label: '브러쉬',
+              icon: Icons.brush,
+              selected: _tool == PathTool.brush,
+              onTap: () => setState(() {
+                _tool = PathTool.brush;
+                _arcFirstPoint = null;
+                _lineFirstPoint = null;
+                _brushStrokePoints.clear();
+              }),
+            ),
+            const SizedBox(width: 6),
             _ToolChip(
               label: '펜',
               icon: Icons.edit_outlined,
@@ -1299,10 +1434,20 @@ class _GuidePathEditorViewState extends ConsumerState<GuidePathEditorView> {
                 final id = isKnit
                     ? (s as KnitSymbol).id
                     : (s as CrochetSymbol).id;
+                // #689 — 브러쉬 모드일 때는 심볼을 brush 심볼로 설정 (선택 표시).
+                //         일반 모드에서는 패턴에 append.
+                final isBrushMode = _tool == PathTool.brush;
                 return _SymbolPaletteCard(
                   craft: _craftType,
                   symbol: s,
-                  onTap: () => _appendPatternSymbol(id),
+                  selected: isBrushMode && _brushSymbolId == id,
+                  onTap: () {
+                    if (isBrushMode) {
+                      setState(() => _brushSymbolId = id);
+                    } else {
+                      _appendPatternSymbol(id);
+                    }
+                  },
                 );
               },
             ),
@@ -1336,13 +1481,22 @@ class _GuidePathEditorViewState extends ConsumerState<GuidePathEditorView> {
             transformationController: _transformCtrl,
             minScale: 0.5,
             maxScale: 4.0,
+            // #689 — 브러쉬 모드에서는 InteractiveViewer 팬 비활성화 (드래그 = 브러쉬).
+            panEnabled: _tool != PathTool.brush,
+            scaleEnabled: _tool != PathTool.brush,
             boundaryMargin: const EdgeInsets.all(80),
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTapUp: _readOnly ? null : (d) => _handleCanvasTap(d.localPosition),
-              onPanStart: _readOnly || _tool != PathTool.square
+              onPanStart: _readOnly
                   ? null
                   : (d) {
+                      // #689 — 브러쉬: 드래그 첫 점 캡처.
+                      if (_tool == PathTool.brush) {
+                        _brushStart(d.localPosition);
+                        return;
+                      }
+                      if (_tool != PathTool.square) return;
                       // #668 — square 시작점도 스냅.
                       final p = _snap(d.localPosition);
                       setState(() {
@@ -1353,6 +1507,11 @@ class _GuidePathEditorViewState extends ConsumerState<GuidePathEditorView> {
               onPanUpdate: _readOnly
                   ? null
                   : (d) {
+                      // #689 — 브러쉬: 드래그 점 추가 (미리보기).
+                      if (_tool == PathTool.brush) {
+                        _brushUpdate(d.localPosition);
+                        return;
+                      }
                       // square 미리보기 — 끝점 스냅.
                       if (_tool == PathTool.square &&
                           _squareStartPoint != null) {
@@ -1369,9 +1528,15 @@ class _GuidePathEditorViewState extends ConsumerState<GuidePathEditorView> {
                         }
                       }
                     },
-              onPanEnd: _readOnly || _tool != PathTool.square
+              onPanEnd: _readOnly
                   ? null
                   : (_) {
+                      // #689 — 브러쉬: 캡처한 점들을 path로 변환.
+                      if (_tool == PathTool.brush) {
+                        _brushEnd();
+                        return;
+                      }
+                      if (_tool != PathTool.square) return;
                       final start = _squareStartPoint;
                       final end = _squareCurrentPoint;
                       if (start != null && end != null && (start - end).distance > 4) {
@@ -1436,6 +1601,18 @@ class _GuidePathEditorViewState extends ConsumerState<GuidePathEditorView> {
                             points: List.of(_measurePoints),
                             isProtractor: _tool == PathTool.protractor,
                             color: C.lvD,
+                          ),
+                          size: Size.infinite,
+                        ),
+                      ),
+                    // #689 — 브러쉬 stroke 미리보기 (드래그 중인 라인 표시).
+                    if (_tool == PathTool.brush &&
+                        _brushStrokePoints.length >= 2)
+                      IgnorePointer(
+                        child: CustomPaint(
+                          painter: _BrushStrokePreviewPainter(
+                            points: List.of(_brushStrokePoints),
+                            color: C.lv,
                           ),
                           size: Size.infinite,
                         ),
@@ -1737,14 +1914,17 @@ class _CraftToggleChip extends StatelessWidget {
 }
 
 /// 심볼 카드 (탭 시 패턴에 추가).
+/// #689 — selected 플래그 추가 (브러쉬 모드에서 현재 brush 심볼 강조).
 class _SymbolPaletteCard extends ConsumerWidget {
   final CraftType craft;
   final dynamic symbol;
   final VoidCallback onTap;
+  final bool selected;
   const _SymbolPaletteCard({
     required this.craft,
     required this.symbol,
     required this.onTap,
+    this.selected = false,
   });
 
   String get _label {
@@ -1765,14 +1945,18 @@ class _SymbolPaletteCard extends ConsumerWidget {
       onTap: onTap,
       child: Tooltip(
         message: '$_tooltipKo ($label)',
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
           width: 44,
           height: 56,
           margin: const EdgeInsets.symmetric(horizontal: 2),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: selected ? C.lvL : Colors.white,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey.shade300, width: 1),
+            border: Border.all(
+              color: selected ? C.lv : Colors.grey.shade300,
+              width: selected ? 2 : 1,
+            ),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -1862,6 +2046,34 @@ class _NumStepper extends StatelessWidget {
       ),
     ]);
   }
+}
+
+/// #689 — 브러쉬 stroke 드래그 미리보기 painter.
+/// 사용자가 드래그하는 동안 캡처된 raw 점들을 라인으로 연결해서 보여줌.
+class _BrushStrokePreviewPainter extends CustomPainter {
+  final List<Offset> points;
+  final Color color;
+  _BrushStrokePreviewPainter({required this.points, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.length < 2) return;
+    final paint = Paint()
+      ..color = color.withValues(alpha: 0.55)
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+    for (int i = 1; i < points.length; i++) {
+      path.lineTo(points[i].dx, points[i].dy);
+    }
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _BrushStrokePreviewPainter old) =>
+      old.points.length != points.length || old.color != color;
 }
 
 /// Square 도구 드래그 미리보기 painter.

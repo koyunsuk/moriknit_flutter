@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -410,7 +411,7 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
                 if (project.coverPhotoUrl.isNotEmpty) ...[
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.network(project.coverPhotoUrl, height: 140, width: double.infinity, fit: BoxFit.cover),
+                    child: CachedNetworkImage(imageUrl: project.coverPhotoUrl, height: 140, width: double.infinity, fit: BoxFit.cover),
                   ),
                   const SizedBox(height: 16),
                 ],
@@ -904,11 +905,11 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
                       borderRadius: BorderRadius.circular(20),
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxHeight: 500),
-                        child: Image.network(
-                          project.coverPhotoUrl,
+                        child: CachedNetworkImage(
+                          imageUrl: project.coverPhotoUrl,
                           width: double.infinity,
                           fit: BoxFit.contain,
-                          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                          errorWidget: (_, _, _) => const SizedBox.shrink(),
                         ),
                       ),
                     ),
@@ -1468,10 +1469,10 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
                                 width: 44,
                                 height: 60,
                                 child: book.coverUrl.isNotEmpty
-                                    ? Image.network(
-                                        book.coverUrl,
+                                    ? CachedNetworkImage(
+                                        imageUrl: book.coverUrl,
                                         fit: BoxFit.cover,
-                                        errorBuilder: (_, _, _) => Container(
+                                        errorWidget: (_, _, _) => Container(
                                           color: C.lvL,
                                           child: Icon(Icons.menu_book_rounded, color: C.lv, size: 24),
                                         ),
@@ -1837,7 +1838,7 @@ class _ProjectBodyState extends ConsumerState<_ProjectBody> {
                             leading: pattern.imageUrl.isNotEmpty
                                 ? ClipRRect(
                                     borderRadius: BorderRadius.circular(6),
-                                    child: Image.network(pattern.imageUrl, width: 40, height: 40, fit: BoxFit.cover),
+                                    child: CachedNetworkImage(imageUrl: pattern.imageUrl, width: 40, height: 40, fit: BoxFit.cover),
                                   )
                                 : Container(
                                     width: 40,
@@ -2495,10 +2496,10 @@ class _ProjectPhotosSectionState extends ConsumerState<_ProjectPhotosSection> {
                         tag: heroTag,
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(12),
-                          child: Image.network(
-                            url,
+                          child: CachedNetworkImage(
+                            imageUrl: url,
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => Container(
+                            errorWidget: (context, error, stackTrace) => Container(
                               color: C.bd,
                               child: Icon(Icons.broken_image, color: C.mu),
                             ),
@@ -2559,7 +2560,7 @@ class _FullScreenImageViewer extends StatelessWidget {
               maxScale: 5.0,
               child: Hero(
                 tag: heroTag,
-                child: Image.network(imageUrl, fit: BoxFit.contain),
+                child: CachedNetworkImage(imageUrl: imageUrl, fit: BoxFit.contain),
               ),
             ),
           ),

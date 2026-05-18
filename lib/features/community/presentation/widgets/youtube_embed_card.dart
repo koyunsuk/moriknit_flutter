@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -46,10 +47,10 @@ class YoutubeEmbedCard extends StatelessWidget {
                   color: C.bd,
                   border: Border.all(color: C.bd),
                 ),
-                child: Image.network(
-                  thumbUrl,
+                child: CachedNetworkImage(
+                  imageUrl: thumbUrl,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => ColoredBox(
+                  errorWidget: (_, _, _) => ColoredBox(
                     color: C.lvL,
                     child: Center(
                       child: Icon(

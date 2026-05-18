@@ -268,11 +268,6 @@ class AuthRepository {
 
   Future<UserModel?> signInWithKakao() async {
     try {
-      // 1. 카카오 로그인 (kakao_flutter_sdk 웹 미지원 — 모바일 전용)
-      if (kIsWeb) {
-        throw Exception('카카오 로그인은 모바일 앱에서만 지원합니다.');
-      }
-
       // #733 — 이전 카카오 세션을 완전 초기화하여 동의 화면을 항상 표시.
       // logout()만으로는 디바이스에 캐시된 토큰이 남아 동의 화면이 스킵되는 사례가 있어 unlink()까지 호출.
       // logout: 로컬 세션 토큰 삭제

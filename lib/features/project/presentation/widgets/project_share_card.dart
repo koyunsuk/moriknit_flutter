@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:intl/intl.dart';
@@ -58,10 +59,10 @@ class ProjectShareCard extends StatelessWidget {
                 left: 0,
                 right: 0,
                 height: 180,
-                child: Image.network(
-                  project.coverPhotoUrl,
+                child: CachedNetworkImage(
+                  imageUrl: project.coverPhotoUrl,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => Container(
+                  errorWidget: (_, _, _) => Container(
                     height: 180,
                     color: const Color(0xFFEDE9FF),
                     child: const Icon(

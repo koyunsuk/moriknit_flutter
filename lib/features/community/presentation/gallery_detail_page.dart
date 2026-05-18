@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -155,7 +156,7 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
       ProjectModel? newProject;
       await runWithMoriLoadingDialog<void>(
         context,
-        message: isKorean ? '프로젝트를 가져오는 중입니다.' : 'Forking project...',
+        message: isKorean ? '함께 뜨기를 시작하는 중입니다.' : 'Joining knit-along...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
         task: () async {
           newProject = await ref.read(projectRepositoryProvider).forkProject(
@@ -279,7 +280,7 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
               onPressed: () => _forkProject(context, isKorean),
               icon: Icon(Icons.fork_right_rounded, size: 16, color: C.lv),
               label: Text(
-                isKorean ? '나도 하기' : 'Fork',
+                isKorean ? '함께 뜨기' : 'Knit along',
                 style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w700),
               ),
               style: TextButton.styleFrom(
@@ -324,12 +325,12 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
                   if (entry.coverPhotoUrl.isNotEmpty)
                     ClipRRect(
                       borderRadius: BorderRadius.circular(14),
-                      child: Image.network(
-                        entry.coverPhotoUrl,
+                      child: CachedNetworkImage(
+                        imageUrl: entry.coverPhotoUrl,
                         width: double.infinity,
                         height: 200,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, e, s) =>
+                        errorWidget: (_, e, s) =>
                             Container(height: 200, color: C.lvL),
                       ),
                     ),
@@ -449,9 +450,9 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
                       children: entry.photoUrls
                           .map((url) => ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
-                                child: Image.network(url,
+                                child: CachedNetworkImage(imageUrl: url,
                                     fit: BoxFit.cover,
-                                    errorBuilder: (_, e, s) =>
+                                    errorWidget: (_, e, s) =>
                                         Container(color: C.lvL)),
                               ))
                           .toList(),

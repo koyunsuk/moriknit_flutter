@@ -21,6 +21,11 @@ final latestPatternItemsProvider = StreamProvider<List<MarketItem>>((ref) {
   return ref.watch(marketRepositoryProvider).watchLatestPatterns();
 });
 
+/// 이슈 #629 — 무료 도안 섹션 (price == 0). 마켓 화면 상단 노출용.
+final freePatternItemsProvider = StreamProvider<List<MarketItem>>((ref) {
+  return ref.watch(marketRepositoryProvider).watchFreePatterns();
+});
+
 final myMarketItemsProvider = StreamProvider<List<MarketItem>>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value(const []);

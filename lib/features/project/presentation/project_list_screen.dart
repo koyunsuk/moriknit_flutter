@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -551,8 +552,8 @@ class _MobileProjectList extends StatelessWidget {
                               project.coverPhotoUrl.isNotEmpty
                                   ? ClipRRect(
                                       borderRadius: BorderRadius.circular(5),
-                                      child: Image.network(project.coverPhotoUrl, width: 22, height: 22, fit: BoxFit.cover,
-                                          errorBuilder: (ctx, e, st) => Container(width: 22, height: 22, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(5)), child: Icon(Icons.folder_rounded, color: C.lv, size: 13))),
+                                      child: CachedNetworkImage(imageUrl: project.coverPhotoUrl, width: 22, height: 22, fit: BoxFit.cover,
+                                          errorWidget: (ctx, e, st) => Container(width: 22, height: 22, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(5)), child: Icon(Icons.folder_rounded, color: C.lv, size: 13))),
                                     )
                                   : Container(width: 22, height: 22, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(5)), child: Icon(Icons.folder_rounded, color: C.lv, size: 13)),
                               const SizedBox(width: 10),

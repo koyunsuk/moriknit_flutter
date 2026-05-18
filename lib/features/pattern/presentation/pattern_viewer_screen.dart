@@ -39,6 +39,7 @@ import '../domain/pattern_session.dart';
 import '../domain/round_chart.dart';
 // 이슈 #668 — 자유 Path 도안 뷰어.
 import 'widgets/guide_path_editor_view.dart';
+import 'widgets/offline_download_button.dart';
 import 'widgets/round_chart_painter.dart';
 import 'widgets/round_tracking_overlay.dart';
 
@@ -855,6 +856,18 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
+          // #782 — 오프라인 보관 버튼 (PDF 또는 이미지 도안)
+          if (!kIsWeb &&
+              ((widget.chart.type == PatternType.pdf && widget.chart.pdfUrl.isNotEmpty) ||
+                  (widget.chart.type == PatternType.image && widget.chart.imageUrl.isNotEmpty)))
+            OfflineDownloadButton(
+              patternId: widget.chart.id,
+              sourceUrl: widget.chart.type == PatternType.pdf
+                  ? widget.chart.pdfUrl
+                  : widget.chart.imageUrl,
+              kind: widget.chart.type == PatternType.pdf ? 'pdf' : 'image',
+              isKorean: isKorean,
+            ),
           // 트래킹 호 토글
           Tooltip(
             message: isKorean ? '원형 트래킹바' : 'Round Tracking',

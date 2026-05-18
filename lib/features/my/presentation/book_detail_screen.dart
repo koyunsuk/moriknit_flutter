@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -119,7 +120,7 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
           children: [
             Center(
               child: InteractiveViewer(
-                child: Image.network(url, fit: BoxFit.contain),
+                child: CachedNetworkImage(imageUrl: url, fit: BoxFit.contain),
               ),
             ),
             Positioned(
@@ -264,13 +265,13 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(14),
                   child: _book.coverUrl.isNotEmpty
-                      ? Image.network(
-                          _book.coverUrl,
+                      ? CachedNetworkImage(
+                          imageUrl: _book.coverUrl,
                           height: 320,
                           width: double.infinity,
                           fit: BoxFit.contain,
                           alignment: Alignment.center,
-                          errorBuilder: (_, _, _) => _CoverPlaceholder(),
+                          errorWidget: (_, _, _) => _CoverPlaceholder(),
                         )
                       : _CoverPlaceholder(),
                 ),
@@ -363,10 +364,10 @@ class _BookDetailScreenState extends ConsumerState<BookDetailScreen> {
                       onTap: () => _showPhotoFull(_book.photoUrls[i]),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          _book.photoUrls[i],
+                        child: CachedNetworkImage(
+                          imageUrl: _book.photoUrls[i],
                           fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => Container(
+                          errorWidget: (_, _, _) => Container(
                             color: C.lvL,
                             child: Icon(Icons.broken_image_rounded, color: C.mu),
                           ),

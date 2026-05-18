@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import '../../../core/constants/subscription_constants.dart';
 
 import '../../../core/localization/app_language.dart';
 import '../../../core/localization/app_strings.dart';
@@ -25,7 +28,9 @@ import '../../../providers/project_provider.dart';
 import '../../project/domain/project_model.dart';
 import '../../../providers/course_provider.dart';
 import '../../../providers/ui_copy_provider.dart';
-import '../../community/presentation/gallery_detail_page.dart';
+import '../../../providers/blueprint_provider.dart';
+import '../../../providers/step_run_provider.dart';
+import '../../blueprint/domain/step_blueprint.dart';
 import '../../landing/data/landing_board_repository.dart';
 import '../../project/data/public_project_service.dart';
 import '../../project/presentation/widgets/project_start_sheet.dart';
@@ -38,6 +43,11 @@ import '../domain/editorial_post.dart';
 // 공지사항 Provider
 final landingNoticesProvider = StreamProvider<List<LandingPost>>((ref) {
   return LandingBoardRepository().getNotices();
+});
+
+/// #783 후속 — 홈 화면 Q&A 미리보기 Provider (최근 5개).
+final homeQnaPostsProvider = StreamProvider<List<LandingPost>>((ref) {
+  return LandingBoardRepository().getPosts('qa');
 });
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -59,7 +69,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     // 이슈 #687 — 로그인 완료 후 첫 홈 진입 시 자동 마이그레이션 1회 실행 (백그라운드).
-    WidgetsBinding.instance.addPostFrameCallback((_) => _kickOffMigration());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _kickOffMigration();
+      // #781 — 퀵사이드바 별표에서 진입 시 즐겨찾기 탭으로 점프 후 리셋.
+      final initialTab = ref.read(homeInitialTabProvider);
+      if (initialTab != 0) {
+        _tabController.animateTo(initialTab);
+        ref.read(homeInitialTabProvider.notifier).state = 0;
+      }
+    });
   }
 
   @override
@@ -85,24 +103,62 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowPopup());
   }
 
-  void _maybeShowPopup() {
+  Future<void> _maybeShowPopup() async {
     if (_popupShown) return;
     final appConfig = ref.read(appConfigProvider).valueOrNull;
     if (appConfig == null) return;
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+
+    // [신 경로] 어드민이 입력한 팝업 (popupEnabled + title/message).
+    if (appConfig.hasAdminPopup) {
+      // 동일 popupId 다시보지않기 처리는 Hive user box.
+      final box = Hive.box<Map>(SubscriptionConstants.boxUser);
+      const seenKey = 'seen_admin_popup_id';
+      final lastSeen = (box.get('settings') ?? {})[seenKey]?.toString() ?? '';
+      if (appConfig.popupId.isNotEmpty && lastSeen == appConfig.popupId) {
+        _popupShown = true;
+        return;
+      }
+      if (!mounted) return;
+      _popupShown = true;
+      final title = appConfig.popupTitle.isNotEmpty
+          ? appConfig.popupTitle
+          : (isKorean ? '공지사항' : 'Notice');
+      final message = appConfig.popupMessage;
+      final linkUrl = appConfig.popupLinkUrl;
+      if (!mounted) return;
+      final dontShowAgain = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => _MoriAnnouncementDialog(
+          title: title,
+          message: message,
+          linkUrl: linkUrl,
+          isKorean: isKorean,
+        ),
+      );
+      // 체크박스 체크된 경우만 popupId 영구 기록 (미체크 시 다음 세션 재노출).
+      if (dontShowAgain == true && appConfig.popupId.isNotEmpty) {
+        final settings = Map<String, dynamic>.from(box.get('settings') ?? {});
+        settings[seenKey] = appConfig.popupId;
+        await box.put('settings', settings);
+      }
+      return;
+    }
+
+    // [구 경로] maintenanceNotice + noticeType == 'popup' (호환 보존).
     if (appConfig.maintenanceNotice.isNotEmpty && appConfig.noticeType == 'popup') {
       _popupShown = true;
-      final isKorean = ref.read(appLanguageProvider).isKorean;
-      showDialog<void>(
+      if (!mounted) return;
+      await showDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(isKorean ? '공지사항' : 'Notice'),
-          content: Text(appConfig.maintenanceNotice),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(isKorean ? '확인' : 'OK'),
-            ),
-          ],
+        barrierDismissible: false,
+        builder: (ctx) => _MoriAnnouncementDialog(
+          title: isKorean ? '공지사항' : 'Notice',
+          message: appConfig.maintenanceNotice,
+          linkUrl: '',
+          isKorean: isKorean,
+          showDontShowAgain: false,
         ),
       );
     }
@@ -115,10 +171,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final isKorean = language.isKorean;
     final uiCopy = ref.watch(uiCopyProvider).valueOrNull;
     final mobileSubtitle = resolveUiCopy(data: uiCopy, language: language, key: 'home_header_subtitle', fallback: t.homeHeaderSubtitleMobile);
-    final postsAsync = ref.watch(postsProvider(communityAllCategory));
-    final itemsAsync = ref.watch(marketItemsProvider);
-    final projectCount = ref.watch(projectCountProvider);
-    final publicProjectsAsync = ref.watch(publicProjectsProvider);
+    // 이슈 #775 — postsAsync/itemsAsync/projectCount/publicProjectsAsync는 _EcosystemHero가 자체 watch.
     final adminConfig = ref.watch(adminConfigProvider).valueOrNull;
     final appConfig = ref.watch(appConfigProvider).valueOrNull;
     final currentUser = ref.watch(currentUserProvider).valueOrNull;
@@ -179,14 +232,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         _EcosystemHero(
                           t: t,
                           isKorean: isKorean,
-                          projectCount: projectCount,
-                          postsAsync: postsAsync,
-                          itemsAsync: itemsAsync,
-                          publicProjectsAsync: publicProjectsAsync,
                         ),
                         const SizedBox(height: 20),
                         // 1-b. 뜨개 대시보드 (이슈 #649 Phase 2)
                         KnitDashboardCard(isKorean: isKorean),
+                        const SizedBox(height: 20),
+                        // 1-c. 모리니트 함께뜨기 (이슈 #798) — 전체 사용자 활동 중인 함께뜨기 그룹.
+                        //      ('내 함께뜨기' 블록은 마이페이지에 별도 보존 — 이슈 #798)
+                        _CommunityKnitAlongSection(isKorean: isKorean),
                         const SizedBox(height: 20),
                         // 2. 공지사항
                         _HomeNoticesSection(isKorean: isKorean),
@@ -240,6 +293,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           scrollHeight: 360,
                           child: _EditorialBoard(isKorean: isKorean, t: t),
                         ),
+                        const SizedBox(height: 20),
+                        // 6. Q&A 문의 게시판 (#783 후속) — 최근 QnA 미리보기 + 문의하기 진입
+                        _HomeQnaBoardSection(isKorean: isKorean),
                       ],
                     ),
                   ),
@@ -566,25 +622,22 @@ class _MaintenanceBanner extends StatelessWidget {
   }
 }
 
-class _EcosystemHero extends StatelessWidget {
+class _EcosystemHero extends ConsumerWidget {
   final bool isKorean;
   final AppStrings t;
-  final int projectCount;
-  final AsyncValue postsAsync;
-  final AsyncValue itemsAsync;
-  final AsyncValue publicProjectsAsync;
 
   const _EcosystemHero({
     required this.t,
     required this.isKorean,
-    required this.projectCount,
-    required this.postsAsync,
-    required this.itemsAsync,
-    required this.publicProjectsAsync,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 이슈 #775 — 자체 watch로 분리. top-level rebuild 감소.
+    final postsAsync = ref.watch(postsProvider(communityAllCategory));
+    final itemsAsync = ref.watch(marketItemsProvider);
+    final projectCount = ref.watch(projectCountProvider);
+    final publicProjectsAsync = ref.watch(publicProjectsProvider);
     final postCount = postsAsync.valueOrNull is List ? (postsAsync.valueOrNull as List).length : 0;
     final itemCount = itemsAsync.valueOrNull is List ? (itemsAsync.valueOrNull as List).length : 0;
     final galleryCount = publicProjectsAsync.valueOrNull is List ? (publicProjectsAsync.valueOrNull as List).length : 0;
@@ -840,12 +893,12 @@ class _YoutubePreviewCard extends StatelessWidget {
                   ? Stack(
                       alignment: Alignment.center,
                       children: [
-                        Image.network(
-                          thumbUrl,
+                        CachedNetworkImage(
+                          imageUrl: thumbUrl,
                           width: 80,
                           height: 56,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => Container(
+                          errorWidget: (_, _, _) => Container(
                             width: 80,
                             height: 56,
                             color: Colors.red.withValues(alpha: 0.12),
@@ -1033,12 +1086,12 @@ class _CommunityPreviewState extends ConsumerState<_CommunityPreview> with Singl
                   ClipRRect(
                     borderRadius: const BorderRadius.horizontal(left: Radius.circular(11)),
                     child: imageUrl.isNotEmpty
-                        ? Image.network(
-                            imageUrl,
+                        ? CachedNetworkImage(
+                            imageUrl: imageUrl,
                             width: _projectCardHeight,
                             height: _projectCardHeight,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => _projectImgPlaceholder(),
+                            errorWidget: (_, _, _) => _projectImgPlaceholder(),
                           )
                         : _projectImgPlaceholder(),
                   ),
@@ -1131,7 +1184,10 @@ class _CommunityPreviewState extends ConsumerState<_CommunityPreview> with Singl
                     .take(_visibleCount)
                     .map((p) => _PostDisplay(category: p.category as String, title: p.title as String, timeAgo: p.timeAgo as String, imageUrls: (p.imageUrls as List).cast<String>()))
                     .toList();
-                final loopPosts = [...displayPosts, ...displayPosts, ...displayPosts, ...displayPosts, ...displayPosts];
+                // #784 — 실제 글이 visibleCount 이상일 때만 무한 스크롤 효과(반복). 부족하면 1회만.
+                final loopPosts = displayPosts.length >= _visibleCount
+                    ? [...displayPosts, ...displayPosts, ...displayPosts, ...displayPosts, ...displayPosts]
+                    : displayPosts;
                 return GestureDetector(
                   onTap: () => context.push(Routes.community),
                   child: SizedBox(
@@ -1213,12 +1269,12 @@ class _PostTickerRow extends StatelessWidget {
         if (hasImage) ...[
           ClipRRect(
             borderRadius: BorderRadius.circular(6),
-            child: Image.network(
-              post.imageUrls.first,
+            child: CachedNetworkImage(
+              imageUrl: post.imageUrls.first,
               width: 40,
               height: 40,
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => const SizedBox(width: 40, height: 40),
+              errorWidget: (_, _, _) => const SizedBox(width: 40, height: 40),
             ),
           ),
           const SizedBox(width: 6),
@@ -1372,12 +1428,12 @@ class _LatestPatternsPreviewState extends ConsumerState<_LatestPatternsPreview> 
                     ClipRRect(
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                       child: item.imageUrl.isNotEmpty
-                          ? Image.network(
-                              item.imageUrl,
+                          ? CachedNetworkImage(
+                              imageUrl: item.imageUrl,
                               width: 130,
                               height: 90,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) => _PlaceholderIcon(accent: accent, imageType: item.imageType),
+                              errorWidget: (_, _, _) => _PlaceholderIcon(accent: accent, imageType: item.imageType),
                             )
                           : _PlaceholderIcon(accent: accent, imageType: item.imageType),
                     ),
@@ -1468,12 +1524,12 @@ class _PopularCourseSection extends ConsumerWidget {
                         alignment: Alignment.center,
                         children: [
                           if (thumbUrl.isNotEmpty)
-                            Image.network(
-                              thumbUrl,
+                            CachedNetworkImage(
+                              imageUrl: thumbUrl,
                               width: 100,
                               height: 70,
                               fit: BoxFit.cover,
-                              errorBuilder: (context, e, stack) => Container(
+                              errorWidget: (context, e, stack) => Container(
                                 width: 100, height: 70,
                                 color: C.lvL,
                                 child: Icon(Icons.play_circle_outline_rounded, color: C.lvD, size: 28),
@@ -1632,14 +1688,12 @@ class _HomeGallerySection extends ConsumerWidget {
 }
 
 void _showGalleryDetail(BuildContext context, WidgetRef ref, PublicProjectEntry entry) {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => GalleryDetailPage(
-        entry: entry,
-        currentUid: ref.read(authStateProvider).valueOrNull?.uid ?? '',
-      ),
-    ),
+  context.push(
+    Routes.galleryDetail,
+    extra: {
+      'entry': entry,
+      'currentUid': ref.read(authStateProvider).valueOrNull?.uid ?? '',
+    },
   );
 }
 
@@ -1805,8 +1859,8 @@ class _HomeGalleryVerticalSection extends ConsumerWidget {
                           ? entry.coverPhotoUrl
                           : entry.photoUrls.firstWhere((u) => u.isNotEmpty, orElse: () => '');
                       return url.isNotEmpty
-                          ? Image.network(url, width: 64, height: 64, fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) => Container(width: 64, height: 64, color: C.lvL, child: Icon(Icons.grid_view_rounded, color: C.lv, size: 20)))
+                          ? CachedNetworkImage(imageUrl: url, width: 64, height: 64, fit: BoxFit.cover,
+                              errorWidget: (_, _, _) => Container(width: 64, height: 64, color: C.lvL, child: Icon(Icons.grid_view_rounded, color: C.lv, size: 20)))
                           : Container(width: 64, height: 64, color: C.lvL, child: Icon(Icons.grid_view_rounded, color: C.lv, size: 20));
                     }(),
                   ),
@@ -2165,4 +2219,710 @@ class _HomeNoticesSectionState extends ConsumerState<_HomeNoticesSection> {
   }
 }
 
+// ── #783 후속 — 홈 Q&A 게시판 미리보기 섹션 ────────────────────────────────
 
+class _HomeQnaBoardSection extends ConsumerWidget {
+  final bool isKorean;
+  const _HomeQnaBoardSection({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final qnaAsync = ref.watch(homeQnaPostsProvider);
+    final user = ref.watch(authStateProvider).valueOrNull;
+
+    return MoriBlockShell(
+      label: isKorean ? 'Q&A 문의' : 'Q&A',
+      icon: Icons.support_agent_rounded,
+      accent: C.lmD,
+      moreLabel: isKorean ? '전체 보기' : 'View all',
+      onMoreTap: () => context.push('/board/qa'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 문의하기 진입 버튼
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () {
+                if (user == null) {
+                  context.push('/login');
+                  return;
+                }
+                context.push('/board/qa/write');
+              },
+              icon: Icon(Icons.edit_rounded, size: 16, color: C.lmD),
+              label: Text(
+                isKorean ? '+ 문의하기' : '+ Ask',
+                style: T.caption
+                    .copyWith(color: C.lmD, fontWeight: FontWeight.w700),
+              ),
+              style: TextButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: const Size(0, 0),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          qnaAsync.when(
+            loading: () => Column(
+              children: List.generate(
+                3,
+                (_) => Container(
+                  height: 44,
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(10),
+                    border:
+                        Border.all(color: C.bd.withValues(alpha: 0.5)),
+                  ),
+                ),
+              ),
+            ),
+            error: (e, _) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text('$e', style: T.caption.copyWith(color: C.og)),
+            ),
+            data: (posts) {
+              if (posts.isEmpty) {
+                return Column(
+                  children: [
+                    for (var i = 0; i < 3; i++)
+                      Container(
+                        height: 40,
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: C.bd.withValues(alpha: 0.5)),
+                        ),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        isKorean
+                            ? '아직 문의글이 없어요. 첫 문의를 남겨보세요.'
+                            : 'No questions yet. Be the first to ask.',
+                        style: T.caption.copyWith(color: C.mu),
+                      ),
+                    ),
+                  ],
+                );
+              }
+              final preview = posts.take(5).toList();
+              return Column(
+                children: [
+                  for (final p in preview)
+                    InkWell(
+                      onTap: () => context.push('/board/qa/${p.id}'),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 8),
+                        child: Row(
+                          children: [
+                            Icon(Icons.help_outline_rounded,
+                                size: 16, color: C.lmD),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    p.title.isEmpty
+                                        ? (isKorean
+                                            ? '(제목 없음)'
+                                            : '(No title)')
+                                        : p.title,
+                                    style: T.bodyBold,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        p.authorName,
+                                        style: T.caption.copyWith(
+                                            color: C.mu,
+                                            fontWeight:
+                                                FontWeight.w600),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        '${p.createdAt.year}.${p.createdAt.month}.${p.createdAt.day}',
+                                        style: T.caption
+                                            .copyWith(color: C.mu),
+                                      ),
+                                      if (p.commentCount > 0) ...[
+                                        const SizedBox(width: 8),
+                                        Icon(Icons.chat_bubble_outline,
+                                            size: 12, color: C.mu),
+                                        const SizedBox(width: 3),
+                                        Text('${p.commentCount}',
+                                            style: T.caption
+                                                .copyWith(color: C.mu)),
+                                      ],
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(Icons.chevron_right_rounded,
+                                size: 18, color: C.mu),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// #798 — 홈 "모리니트 함께뜨기" 블록 (커뮤니티 성격).
+/// 전체 사용자의 fork 활동을 받는 원본 도안 중 상위 N개 노출. forkCount desc.
+/// 탭 → KnitAlongGroupScreen 진입 (해당 도안의 함께뜨기 그룹).
+/// (기존 #791 '내 함께뜨기' 블록은 마이페이지에 보존됨 → MyKnitAlongMyPageBlock)
+class _CommunityKnitAlongSection extends ConsumerWidget {
+  final bool isKorean;
+  const _CommunityKnitAlongSection({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final groupsAsync = ref.watch(knitAlongGroupsProvider);
+
+    return MoriBlockShell(
+      label: isKorean ? '함께 뜨고 있어요' : 'Knitting Together',
+      icon: Icons.call_split_rounded,
+      accent: C.lvD,
+      moreLabel: isKorean ? '커뮤니티' : 'Community',
+      onMoreTap: () => context.go(Routes.community),
+      child: AsyncDataView<List<StepBlueprint>>(
+        async: groupsAsync,
+        placeholderRows: 2,
+        rowHeight: 56,
+        isEmpty: (list) => list.isEmpty,
+        emptyBuilder: () => _CommunityKnitAlongEmptyState(isKorean: isKorean),
+        builder: (list) {
+          final top = list.take(5).toList();
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < top.length; i++) ...[
+                _CommunityKnitAlongRow(blueprint: top[i], isKorean: isKorean),
+                if (i < top.length - 1)
+                  const Divider(height: 12, thickness: 0.5),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// #798 — 모리니트 함께뜨기 Row (원본 도안 + 참여자 수).
+class _CommunityKnitAlongRow extends StatelessWidget {
+  final StepBlueprint blueprint;
+  final bool isKorean;
+
+  const _CommunityKnitAlongRow({
+    required this.blueprint,
+    required this.isKorean,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final forkCount = blueprint.forkCount;
+    return InkWell(
+      onTap: () => context.push('/knit-along/${blueprint.id}'),
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: C.lvL,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.menu_book_rounded, color: C.lvD, size: 22),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    blueprint.localizedTitle(isKorean),
+                    style: T.bodyBold,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.people_outline_rounded,
+                        size: 13,
+                        color: C.lvD,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isKorean
+                            ? '$forkCount명 함께뜨는 중'
+                            : '$forkCount knitting together',
+                        style: T.caption.copyWith(
+                          color: C.lvD,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(Icons.chevron_right_rounded, color: C.mu, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// #798 — 모리니트 함께뜨기 빈 상태(플레이스홀더).
+class _CommunityKnitAlongEmptyState extends StatelessWidget {
+  final bool isKorean;
+  const _CommunityKnitAlongEmptyState({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (int i = 0; i < 2; i++)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: C.bd.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        height: 10,
+                        width: 110,
+                        decoration: BoxDecoration(
+                          color: C.bd,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        height: 5,
+                        width: 80,
+                        decoration: BoxDecoration(
+                          color: C.bd.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 8),
+        Text(
+          isKorean
+              ? '아직 함께뜨고 있는 도안이 없어요.\n커뮤니티에서 마음에 드는 도안에 함께해 보세요.'
+              : 'No active knit-alongs yet.\nJoin from the community.',
+          textAlign: TextAlign.center,
+          style: T.caption.copyWith(color: C.mu, height: 1.4),
+        ),
+      ],
+    );
+  }
+}
+
+/// #791 — "내 함께뜨기" 블록 (이슈 #798에서 마이페이지로 이전).
+/// 내가 fork 한 도안(=함께 뜨기 참여 중)을 최근 활동순 최대 3개 노출.
+/// 진행률 + 원본 도안 이름 표시. 탭 → KnitAlongGroupScreen 진입.
+///
+/// **외부에서 (예: my_page_screen) import 해 사용** — `_` private 이지만
+/// 같은 패키지 내라면 사용 가능. 단, 동일 파일 내에서만 사용된다면 private 유지.
+/// 이슈 #798: 마이페이지에서 사용하므로 public 으로 노출.
+class MyKnitAlongMyPageBlock extends ConsumerWidget {
+  final bool isKorean;
+  const MyKnitAlongMyPageBlock({super.key, required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final myKnitAlongsAsync = ref.watch(myKnitAlongsProvider);
+
+    return AsyncDataView<List<StepBlueprint>>(
+      async: myKnitAlongsAsync,
+      placeholderRows: 2,
+      rowHeight: 56,
+      isEmpty: (list) => list.isEmpty,
+      emptyBuilder: () => _MyKnitAlongEmptyState(isKorean: isKorean),
+      builder: (list) {
+        final top = list.take(5).toList();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < top.length; i++) ...[
+              _MyKnitAlongRow(blueprint: top[i], isKorean: isKorean),
+              if (i < top.length - 1)
+                const Divider(height: 12, thickness: 0.5),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _MyKnitAlongRow extends ConsumerWidget {
+  final StepBlueprint blueprint;
+  final bool isKorean;
+
+  const _MyKnitAlongRow({required this.blueprint, required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final originId = blueprint.fromBlueprintId ?? '';
+    final runsAsync = ref.watch(stepRunsByBlueprintProvider(blueprint.id));
+    final runs = runsAsync.valueOrNull ?? const [];
+    final pct = runs.isEmpty ? 0.0 : runs.first.summary.percentComplete;
+
+    return InkWell(
+      onTap: originId.isEmpty
+          ? null
+          : () => context.push('/knit-along/$originId'),
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: C.lvL,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.menu_book_rounded, color: C.lvD, size: 22),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    blueprint.localizedTitle(isKorean),
+                    style: T.bodyBold,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: pct.clamp(0.0, 1.0),
+                            minHeight: 5,
+                            backgroundColor: C.bd,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(C.lvD),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${(pct * 100).clamp(0, 100).toStringAsFixed(0)}%',
+                        style: T.caption.copyWith(
+                          color: C.lvD,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(Icons.chevron_right_rounded, color: C.mu, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MyKnitAlongEmptyState extends StatelessWidget {
+  final bool isKorean;
+  const _MyKnitAlongEmptyState({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (int i = 0; i < 2; i++)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: C.bd.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        height: 10,
+                        width: 110,
+                        decoration: BoxDecoration(
+                          color: C.bd,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: C.bd.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 8),
+        Text(
+          isKorean
+              ? '커뮤니티에서 마음에 드는 도안으로\n함께 뜨기를 시작해 보세요.'
+              : 'Start a knit-along from any pattern\nin the community.',
+          textAlign: TextAlign.center,
+          style: T.caption.copyWith(color: C.mu, height: 1.4),
+        ),
+      ],
+    );
+  }
+}
+
+/// 모리니트 공지 다이얼로그 — 테마 그라데이션 헤더 + 다시보지않기 체크박스.
+/// #812 후속 UI 개선 — 풍부한 디자인 + 표준 팝업 형식 (다시보지않기 + 확인).
+class _MoriAnnouncementDialog extends StatefulWidget {
+  final String title;
+  final String message;
+  final String linkUrl;
+  final bool isKorean;
+  final bool showDontShowAgain;
+
+  const _MoriAnnouncementDialog({
+    required this.title,
+    required this.message,
+    required this.linkUrl,
+    required this.isKorean,
+    this.showDontShowAgain = true,
+  });
+
+  @override
+  State<_MoriAnnouncementDialog> createState() => _MoriAnnouncementDialogState();
+}
+
+class _MoriAnnouncementDialogState extends State<_MoriAnnouncementDialog> {
+  bool _dontShowAgain = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 60),
+      child: Container(
+        decoration: BoxDecoration(
+          color: C.bg,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.16),
+              blurRadius: 32,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── 그라데이션 헤더 ──────────────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [C.lv, C.pk],
+                ),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.25),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 1.5),
+                    ),
+                    child: const Icon(Icons.campaign_rounded, color: Colors.white, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      widget.isKorean ? '모리니트 공지' : 'MoriKnit Notice',
+                      style: T.caption.copyWith(
+                        color: Colors.white.withValues(alpha: 0.92),
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // ── 본문 ────────────────────────────────────────────────────────────
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 22, 24, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.title,
+                      style: T.h3.copyWith(color: C.tx, height: 1.3),
+                    ),
+                    if (widget.message.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        widget.message,
+                        style: T.body.copyWith(color: C.tx2, height: 1.55),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            // ── 다시 보지 않기 체크박스 ──────────────────────────────────────────
+            if (widget.showDontShowAgain)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => setState(() => _dontShowAgain = !_dontShowAgain),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: Checkbox(
+                            value: _dontShowAgain,
+                            onChanged: (v) => setState(() => _dontShowAgain = v ?? false),
+                            activeColor: C.lv,
+                            visualDensity: VisualDensity.compact,
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          widget.isKorean ? '다시 보지 않기' : "Don't show again",
+                          style: T.caption.copyWith(color: C.tx2, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            // ── 액션 버튼 ───────────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (widget.linkUrl.isNotEmpty)
+                    TextButton(
+                      onPressed: () async {
+                        final uri = Uri.tryParse(widget.linkUrl);
+                        if (uri != null) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        }
+                        if (context.mounted) Navigator.pop(context, _dontShowAgain);
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: C.lvD,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                      child: Text(widget.isKorean ? '바로 가기' : 'Go to'),
+                    ),
+                  const SizedBox(width: 6),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context, _dontShowAgain),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: C.lv,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      widget.isKorean ? '확인' : 'OK',
+                      style: T.body.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

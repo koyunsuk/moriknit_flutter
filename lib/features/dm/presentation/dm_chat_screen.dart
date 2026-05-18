@@ -185,9 +185,17 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
     // Resolve other user name from room data
     final roomsAsync = ref.watch(dmRoomsProvider(user?.uid ?? ''));
     final room = roomsAsync.valueOrNull?.where((r) => r.id == widget.roomId).firstOrNull;
-    final otherName = room?.otherName(user?.uid ?? '') ?? '';
+    final myUid = user?.uid ?? '';
+    final otherName = room?.otherName(myUid) ?? '';
     // 이슈 #771 — 상대방 핸들 (AppBar 타이틀 옆 작은 표시)
-    final otherHandle = room?.otherHandle(user?.uid ?? '') ?? '';
+    final otherHandle = room?.otherHandle(myUid) ?? '';
+    // 채팅 버블 아바타용 — room 스냅샷에 저장된 photoURL.
+    final otherPhoto = room?.otherPhoto(myUid) ?? '';
+    final myProfile = ref.watch(currentUserProvider).valueOrNull;
+    final myPhoto = myProfile?.photoURL ?? '';
+    final myDisplayName = (myProfile?.displayName.isNotEmpty == true)
+        ? myProfile!.displayName
+        : (user?.displayName ?? user?.email ?? '');
 
     // Mark as read once
     if (!_didMarkRead && user != null) {
@@ -251,16 +259,25 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
                     }
                     return ListView.builder(
                       controller: _scrollController,
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
                       itemCount: messages.length,
                       itemBuilder: (context, index) {
                         final msg = messages[index];
                         final isMe = msg.senderId == user?.uid;
+                        // 같은 발신자의 연속 메시지인지 — 마지막 메시지에만 아바타/이름 표시.
+                        final next = index + 1 < messages.length ? messages[index + 1] : null;
+                        final isLastInGroup = next == null || next.senderId != msg.senderId;
                         return GestureDetector(
                           onLongPress: isMe
                               ? () => _showMessageOptions(msg, isKorean)
                               : null,
-                          child: _MessageBubble(message: msg, isMe: isMe),
+                          child: _MessageBubble(
+                            message: msg,
+                            isMe: isMe,
+                            photoUrl: isMe ? myPhoto : otherPhoto,
+                            displayName: isMe ? myDisplayName : otherName,
+                            showAvatar: isLastInGroup,
+                          ),
                         );
                       },
                     );
@@ -323,16 +340,31 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
 class _MessageBubble extends StatelessWidget {
   final DmMessage message;
   final bool isMe;
-  const _MessageBubble({required this.message, required this.isMe});
+  final String photoUrl;
+  final String displayName;
+  /// 같은 발신자 메시지 묶음의 마지막일 때만 true → 아바타 표시.
+  /// 위쪽 묶음은 빈 자리(SizedBox)로 정렬만 유지.
+  final bool showAvatar;
+  const _MessageBubble({
+    required this.message,
+    required this.isMe,
+    required this.photoUrl,
+    required this.displayName,
+    required this.showAvatar,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+    final avatar = _Avatar(photoUrl: photoUrl, displayName: displayName);
+    final spacer = const SizedBox(width: 32);
+    final timeText = Text(
+      _formatTime(message.createdAt),
+      style: T.caption.copyWith(color: C.mu, fontSize: 10),
+    );
+
+    final bubble = Flexible(
       child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        constraints: const BoxConstraints(maxWidth: 280),
         decoration: BoxDecoration(
           color: isMe ? C.lv : C.gx,
           borderRadius: BorderRadius.only(
@@ -343,26 +375,44 @@ class _MessageBubble extends StatelessWidget {
           ),
           border: isMe ? null : Border.all(color: C.bd),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              message.text,
-              style: T.body.copyWith(
-                color: isMe ? Colors.white : C.tx,
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              _formatTime(message.createdAt),
-              style: T.caption.copyWith(
-                color: isMe ? Colors.white.withValues(alpha: 0.7) : C.mu,
-                fontSize: 10,
-              ),
-            ),
-          ],
+        child: Text(
+          message.text,
+          style: T.body.copyWith(
+            color: isMe ? Colors.white : C.tx,
+            height: 1.5,
+          ),
         ),
+      ),
+    );
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: showAvatar ? 10 : 2),
+      child: Row(
+        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: isMe
+            ? [
+                // 내 메시지: [시간] [버블] [아바타]
+                timeText,
+                const SizedBox(width: 6),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 260),
+                  child: bubble,
+                ),
+                const SizedBox(width: 6),
+                if (showAvatar) avatar else spacer,
+              ]
+            : [
+                // 상대 메시지: [아바타] [버블] [시간]
+                if (showAvatar) avatar else spacer,
+                const SizedBox(width: 6),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 260),
+                  child: bubble,
+                ),
+                const SizedBox(width: 6),
+                timeText,
+              ],
       ),
     );
   }
@@ -371,5 +421,27 @@ class _MessageBubble extends StatelessWidget {
     final h = dt.hour.toString().padLeft(2, '0');
     final m = dt.minute.toString().padLeft(2, '0');
     return '$h:$m';
+  }
+}
+
+class _Avatar extends StatelessWidget {
+  final String photoUrl;
+  final String displayName;
+  const _Avatar({required this.photoUrl, required this.displayName});
+
+  @override
+  Widget build(BuildContext context) {
+    final initial = displayName.isNotEmpty ? displayName.substring(0, 1).toUpperCase() : '?';
+    return CircleAvatar(
+      radius: 16,
+      backgroundColor: C.lvL,
+      backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+      child: photoUrl.isEmpty
+          ? Text(
+              initial,
+              style: TextStyle(color: C.lvD, fontWeight: FontWeight.w700, fontSize: 13),
+            )
+          : null,
+    );
   }
 }

@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -92,10 +93,10 @@ class SwatchCard extends StatelessWidget {
               child: thumbUrl != null
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        thumbUrl,
+                      child: CachedNetworkImage(
+                        imageUrl: thumbUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Icon(Icons.texture, color: C.lv, size: 28),
+                        errorWidget: (_, _, _) => Icon(Icons.texture, color: C.lv, size: 28),
                       ),
                     )
                   : Icon(Icons.texture, color: C.lv, size: 28),

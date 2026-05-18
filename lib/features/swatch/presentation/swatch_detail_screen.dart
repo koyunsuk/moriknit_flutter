@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -236,9 +237,9 @@ class _SwatchDetailScreenState extends ConsumerState<SwatchDetailScreen> {
                             leading: yarn.photoUrl.isNotEmpty
                                 ? ClipRRect(
                                     borderRadius: BorderRadius.circular(8),
-                                    child: Image.network(yarn.photoUrl,
+                                    child: CachedNetworkImage(imageUrl: yarn.photoUrl,
                                         width: 44, height: 44, fit: BoxFit.cover,
-                                        errorBuilder: (_, _, _) => Container(
+                                        errorWidget: (_, _, _) => Container(
                                           width: 44, height: 44,
                                           decoration: BoxDecoration(
                                             color: C.lv.withValues(alpha: 0.12),
@@ -787,7 +788,7 @@ class _SwatchDetailScreenState extends ConsumerState<SwatchDetailScreen> {
                           final alreadyLinked = project.swatchId == swatchId;
                           return ListTile(
                             leading: project.coverPhotoUrl.isNotEmpty
-                                ? ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.network(project.coverPhotoUrl, width: 40, height: 40, fit: BoxFit.cover))
+                                ? ClipRRect(borderRadius: BorderRadius.circular(6), child: CachedNetworkImage(imageUrl: project.coverPhotoUrl, width: 40, height: 40, fit: BoxFit.cover))
                                 : Container(width: 40, height: 40, decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(6)), child: const Icon(Icons.folder_outlined, size: 20)),
                             title: Text(project.title, style: Theme.of(ctx).textTheme.bodyMedium),
                             trailing: alreadyLinked ? Icon(Icons.check_circle_rounded, color: Colors.green.shade400, size: 18) : null,
@@ -1068,7 +1069,7 @@ class _PhotoHeader extends StatelessWidget {
         tag: heroTag,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(18),
-          child: SizedBox(height: 220, width: double.infinity, child: Image.network(url, fit: BoxFit.contain)),
+          child: SizedBox(height: 220, width: double.infinity, child: CachedNetworkImage(imageUrl: url, fit: BoxFit.contain)),
         ),
       ),
     );
@@ -1092,7 +1093,7 @@ class _PhotoThumb extends StatelessWidget {
             tag: heroTag,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(14),
-              child: SizedBox(height: 160, width: double.infinity, child: Image.network(photoUrl, fit: BoxFit.cover)),
+              child: SizedBox(height: 160, width: double.infinity, child: CachedNetworkImage(imageUrl: photoUrl, fit: BoxFit.cover)),
             ),
           ),
           const SizedBox(height: 4),
@@ -1121,7 +1122,7 @@ class _FullScreenImageViewer extends StatelessWidget {
               maxScale: 5.0,
               child: Hero(
                 tag: heroTag,
-                child: Image.network(imageUrl, fit: BoxFit.contain),
+                child: CachedNetworkImage(imageUrl: imageUrl, fit: BoxFit.contain),
               ),
             ),
           ),
@@ -1384,11 +1385,11 @@ class _PhotoEditTile extends StatelessWidget {
                 child: localPath != null
                     ? Image.file(File(localPath!),
                         height: 160, width: double.infinity, fit: BoxFit.contain)
-                    : Image.network(networkUrl!,
+                    : CachedNetworkImage(imageUrl: networkUrl!,
                         height: 160,
                         width: double.infinity,
                         fit: BoxFit.contain,
-                        errorBuilder: (_, _, _) => const SizedBox.shrink()),
+                        errorWidget: (_, _, _) => const SizedBox.shrink()),
               ),
               Positioned(
                 top: 8,

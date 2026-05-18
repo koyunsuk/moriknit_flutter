@@ -9,7 +9,13 @@ import 'package:moriknit_flutter/core/widgets/main_tab_back_handler.dart';
 import 'package:moriknit_flutter/features/auth/presentation/login_screen.dart';
 import 'package:moriknit_flutter/features/auth/presentation/splash_screen.dart';
 import 'package:moriknit_flutter/features/counter/presentation/counter_list_screen.dart';
+import 'package:moriknit_flutter/features/board/presentation/app_board_detail_screen.dart';
+import 'package:moriknit_flutter/features/board/presentation/app_board_list_screen.dart';
+import 'package:moriknit_flutter/features/board/presentation/app_board_write_screen.dart';
 import 'package:moriknit_flutter/features/community/presentation/community_screen.dart';
+import 'package:moriknit_flutter/features/community/presentation/gallery_detail_page.dart';
+import 'package:moriknit_flutter/features/project/data/public_project_service.dart';
+import 'package:moriknit_flutter/features/knit_along/presentation/knit_along_group_screen.dart';
 import 'package:moriknit_flutter/features/counter/presentation/counter_screen.dart';
 import 'package:moriknit_flutter/features/dm/presentation/dm_list_screen.dart';
 import 'package:moriknit_flutter/features/dm/presentation/dm_chat_screen.dart';
@@ -19,6 +25,8 @@ import 'package:moriknit_flutter/features/gauge/presentation/gauge_calculator_sc
 import 'package:moriknit_flutter/features/home/presentation/home_screen.dart';
 import 'package:moriknit_flutter/features/market/presentation/market_screen.dart';
 import 'package:moriknit_flutter/features/market/presentation/my_market_dashboard_screen.dart';
+import 'package:moriknit_flutter/features/market/presentation/pattern_publish_screen.dart';
+import 'package:moriknit_flutter/features/pattern/domain/pattern_chart.dart';
 import 'package:moriknit_flutter/features/my/presentation/book_list_screen.dart';
 import 'package:moriknit_flutter/features/my/presentation/photo_album_screen.dart';
 import 'package:moriknit_flutter/features/my/presentation/delete_account_screen.dart';
@@ -47,6 +55,9 @@ import 'package:moriknit_flutter/features/swatch/presentation/swatch_list_screen
 import 'package:moriknit_flutter/features/swatch/presentation/swatch_timer_screen.dart';
 import 'package:moriknit_flutter/features/sync/presentation/conflict_inbox_screen.dart';
 import 'package:moriknit_flutter/features/blueprint/presentation/step_blueprint_editor_screen.dart';
+import 'package:moriknit_flutter/features/blueprint/presentation/tester_group_screen.dart';
+import 'package:moriknit_flutter/features/tester_feedback/presentation/tester_feedback_list_screen.dart';
+import 'package:moriknit_flutter/features/pattern/presentation/universal_pattern_viewer_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/tools_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/tool_memo_screen.dart';
 import 'package:moriknit_flutter/features/tools/presentation/free_timer_screen.dart';
@@ -300,6 +311,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: 'dashboard',
                 pageBuilder: (_, _) => _fadePage(const MyMarketDashboardScreen()),
               ),
+              // 이슈 #629 — 도안 마켓 등록 (state.extra 로 PatternChart 전달)
+              GoRoute(
+                path: 'publish',
+                pageBuilder: (_, state) {
+                  final chart = state.extra as PatternChart?;
+                  if (chart == null) {
+                    return _fadePage(const MarketScreen());
+                  }
+                  return _fadePage(PatternPublishScreen(chart: chart));
+                },
+              ),
             ],
           ),
           GoRoute(
@@ -350,6 +372,69 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: Routes.stepBlueprintEditor,
         pageBuilder: (_, state) => _fadePage(
           StepBlueprintEditorScreen(blueprintId: state.pathParameters['id']!),
+        ),
+      ),
+      // 이슈 #792 — 테스터 그룹 권한 관리
+      GoRoute(
+        path: Routes.testerGroup,
+        pageBuilder: (_, state) => _fadePage(
+          TesterGroupScreen(blueprintId: state.pathParameters['id']!),
+        ),
+      ),
+      // 이슈 #794 — 테스터 피드백 채널
+      GoRoute(
+        path: Routes.testerFeedback,
+        pageBuilder: (_, state) => _fadePage(
+          TesterFeedbackListScreen(blueprintId: state.pathParameters['id']!),
+        ),
+      ),
+      // 이슈 #795 후속 — 유니버설 도안 뷰어
+      GoRoute(
+        path: Routes.patternView,
+        pageBuilder: (_, state) => _fadePage(
+          UniversalPatternViewerScreen(patternId: state.pathParameters['id']!),
+        ),
+      ),
+      // GlobalKey 중복 fix — 홈 Navigator.push 제거 대응
+      GoRoute(
+        path: Routes.galleryDetail,
+        pageBuilder: (_, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final entry = extra?['entry'] as PublicProjectEntry?;
+          final currentUid = extra?['currentUid'] as String? ?? '';
+          if (entry == null) {
+            return _fadePage(const Scaffold(body: Center(child: Text('Gallery entry not found'))));
+          }
+          return _fadePage(GalleryDetailPage(entry: entry, currentUid: currentUid));
+        },
+      ),
+      GoRoute(
+        path: Routes.boardList,
+        pageBuilder: (_, state) => _fadePage(
+          AppBoardListScreen(boardType: state.pathParameters['type']!),
+        ),
+        routes: [
+          GoRoute(
+            path: 'write',
+            pageBuilder: (_, state) => _fadePage(
+              AppBoardWriteScreen(boardType: state.pathParameters['type']!),
+            ),
+          ),
+          GoRoute(
+            path: ':postId',
+            pageBuilder: (_, state) => _fadePage(
+              AppBoardDetailScreen(
+                boardType: state.pathParameters['type']!,
+                postId: state.pathParameters['postId']!,
+              ),
+            ),
+          ),
+        ],
+      ),
+      GoRoute(
+        path: Routes.knitAlongGroup,
+        pageBuilder: (_, state) => _fadePage(
+          KnitAlongGroupScreen(originBlueprintId: state.pathParameters['originId']!),
         ),
       ),
       GoRoute(path: '/features/:featureId', pageBuilder: (_, state) => _fadePage(LandingGenericFeaturePage(featureId: state.pathParameters['featureId']!))),

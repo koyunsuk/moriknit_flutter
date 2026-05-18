@@ -105,6 +105,8 @@ class TemplateRepository {
   static List<Map<String, dynamic>> _builtinSeedData() {
     return [
       {
+        // 이슈 #787 — 카테고리: 의상.
+        'category': 'clothing',
         'titleKo': '탑다운 스웨터',
         'titleEn': 'Top-Down Sweater',
         'descKo': '넥라인부터 시작 · 8단계 가이드 포함',
@@ -156,6 +158,8 @@ class TemplateRepository {
         'stepTargetRows': [0, 14, 40, 0, 60, 10, 50, 0],
       },
       {
+        // 이슈 #787 — 카테고리: 소품.
+        'category': 'accessory',
         'titleKo': '양말',
         'titleEn': 'Socks',
         'descKo': '커프부터 발끝까지 · 8단계 힐 가이드',
@@ -207,6 +211,8 @@ class TemplateRepository {
         'stepTargetRows': [0, 20, 40, 22, 0, 16, 30, 12],
       },
       {
+        // 이슈 #787 — 카테고리: 소품.
+        'category': 'accessory',
         'titleKo': '목도리',
         'titleEn': 'Scarf',
         'descKo': '단순하고 따뜻한 · 5단계 기본 완성',
@@ -246,6 +252,8 @@ class TemplateRepository {
         'stepTargetRows': [0, 10, 0, 0, 0],
       },
       {
+        // 이슈 #787 — 카테고리: 소품.
+        'category': 'accessory',
         'titleKo': '장갑',
         'titleEn': 'Gloves',
         'descKo': '손가락 분리까지 · 7단계 상세 가이드',
@@ -293,6 +301,8 @@ class TemplateRepository {
         'stepTargetRows': [0, 28, 20, 12, 0, 16, 12],
       },
       {
+        // 이슈 #787 — 카테고리: 소품.
+        'category': 'accessory',
         'titleKo': '모자',
         'titleEn': 'Hat',
         'descKo': '게이지 계산부터 · 5단계 크라운 완성',
@@ -333,6 +343,8 @@ class TemplateRepository {
       },
       // #637 — 크롭 레글런 탑다운 (Banul 메리노블렌드 DK 기반 12단계)
       {
+        // 이슈 #787 — 카테고리: 의상.
+        'category': 'clothing',
         'titleKo': '크롭 레글런 탑다운',
         'titleEn': 'Crop Raglan Top-Down',
         'descKo': 'Banul 도안 기반 · 12단계 · 7사이즈 지원 (XS~3XL)',
@@ -439,6 +451,8 @@ class TemplateRepository {
     return [
       {
         'kind': 'body_measurement',
+        // 이슈 #787 — 카테고리: 인형.
+        'category': 'doll',
         'titleKo': '바비 인형',
         'titleEn': 'Barbie',
         'descKo': '29.21cm · 패션 인형 대표 (가슴 13.46cm)',
@@ -467,6 +481,8 @@ class TemplateRepository {
       },
       {
         'kind': 'body_measurement',
+        // 이슈 #787 — 카테고리: 인형.
+        'category': 'doll',
         'titleKo': '태미의 작은 동생 (1963)',
         'titleEn': "Tammy's Little Sister",
         'descKo': '29.2cm (11.5") · 빈티지 비율 · 가슴 13.5cm',
@@ -495,6 +511,8 @@ class TemplateRepository {
       },
       {
         'kind': 'body_measurement',
+        // 이슈 #787 — 카테고리: 인형.
+        'category': 'doll',
         'titleKo': '파올라 레이나',
         'titleEn': 'Paola Reina',
         'descKo': '33.7cm · 아동 체형 초심자용 (가슴 15.5cm)',

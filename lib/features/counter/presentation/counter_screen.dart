@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -391,7 +392,7 @@ class _CounterScreenState extends ConsumerState<CounterScreen> {
                           final alreadyLinked = project.counterIds.contains(counterId);
                           return ListTile(
                             leading: project.coverPhotoUrl.isNotEmpty
-                                ? ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.network(project.coverPhotoUrl, width: 40, height: 40, fit: BoxFit.cover))
+                                ? ClipRRect(borderRadius: BorderRadius.circular(6), child: CachedNetworkImage(imageUrl: project.coverPhotoUrl, width: 40, height: 40, fit: BoxFit.cover))
                                 : Container(width: 40, height: 40, decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(6)), child: const Icon(Icons.folder_outlined, size: 20)),
                             title: Text(project.title, style: Theme.of(ctx).textTheme.bodyMedium),
                             trailing: alreadyLinked ? Icon(Icons.check_circle_rounded, color: Colors.green.shade400, size: 18) : null,
@@ -699,12 +700,12 @@ class _CounterScreenState extends ConsumerState<CounterScreen> {
                       padding: const EdgeInsets.only(bottom: 12),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
-                        child: Image.network(
-                          counter.photoUrl,
+                        child: CachedNetworkImage(
+                          imageUrl: counter.photoUrl,
                           width: double.infinity,
                           height: 220,
                           fit: BoxFit.contain,
-                          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                          errorWidget: (_, _, _) => const SizedBox.shrink(),
                         ),
                       ),
                     ),
@@ -1133,12 +1134,12 @@ class _CounterPhotoSection extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
                 child: localPath != null
                     ? Image.file(File(localPath!), width: double.infinity, height: 220, fit: BoxFit.contain)
-                    : Image.network(
-                        networkUrl!,
+                    : CachedNetworkImage(
+                        imageUrl: networkUrl!,
                         width: double.infinity,
                         height: 220,
                         fit: BoxFit.contain,
-                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                        errorWidget: (_, _, _) => const SizedBox.shrink(),
                       ),
               ),
               Positioned(

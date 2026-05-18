@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -531,11 +532,11 @@ void _showCopyProjectSheet(BuildContext context, bool isKorean, List<dynamic> pr
                         if (p.coverPhotoUrl.isNotEmpty)
                           ClipRRect(
                             borderRadius: BorderRadius.circular(10),
-                            child: Image.network(
-                              p.coverPhotoUrl,
+                            child: CachedNetworkImage(
+                              imageUrl: p.coverPhotoUrl,
                               width: 48, height: 48,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) => _ProjectIconPlaceholder(),
+                              errorWidget: (_, _, _) => _ProjectIconPlaceholder(),
                             ),
                           )
                         else

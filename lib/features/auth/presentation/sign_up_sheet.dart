@@ -81,29 +81,36 @@ void showSignUpSheet(BuildContext context, WidgetRef ref, bool isMounted) {
   Timer? handleDebounce;
   final handleValidator = HandleValidator();
 
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: C.bg,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
+  // #757 — BottomSheet → 풀스크린 전용 화면으로 변경.
+  Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
     builder: (ctx) {
-      return StatefulBuilder(
-        builder: (ctx, setSheetState) {
-          return Padding(
+      return Scaffold(
+        backgroundColor: C.bg,
+        appBar: AppBar(
+          backgroundColor: C.bg,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_ios, size: 20, color: C.tx),
+            onPressed: () => Navigator.of(ctx).pop(),
+          ),
+          title: Text(t.createAccount, style: T.h3),
+        ),
+        body: StatefulBuilder(
+          builder: (ctx, setSheetState) {
+          return SingleChildScrollView(
             padding: EdgeInsets.only(
               left: 24,
               right: 24,
-              top: 24,
+              top: 16,
               bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(t.createAccount, style: T.h2),
-                const SizedBox(height: 16),
+                // 풀스크린에서는 AppBar에 제목 — Text(t.createAccount) 행 제거됨
+                const SizedBox(height: 8),
+                // #786 — 순서: 구글 → 카카오. 구글 배경은 로그인 화면 톤(C.lvL)로 강화.
                 // #728 — 카카오톡 회원가입 (이메일/비번 위에 노출)
                 if (!kIsWeb) ...[
                   SocialLoginButton(
@@ -182,8 +189,9 @@ void showSignUpSheet(BuildContext context, WidgetRef ref, bool isMounted) {
                               // #760 — 취소 시 익명 사용자 잔재가 남지 않도록 정리.
                               await _signOutIfAnonymous(ref);
                               if (!ctx.mounted) return;
-                              // #759 — 인라인 영문 에러 대신 한글 알림팝업.
-                              await _showSignupNotCompletedDialog(ctx, e, isKorean);
+                              // #759 (재수정) — 다이얼로그 호출 시점 언어를 ref에서 직접 가져옴.
+                              final isKoNow = ref.read(appLanguageProvider).isKorean;
+                              await _showSignupNotCompletedDialog(ctx, e, isKoNow);
                             }
                           },
                   ),
@@ -191,8 +199,8 @@ void showSignUpSheet(BuildContext context, WidgetRef ref, bool isMounted) {
                 ],
                 // #753 — 구글 회원가입 (모바일·웹 공통)
                 SocialLoginButton(
-                  color: Colors.white,
-                  textColor: const Color(0xFF1F1F1F),
+                  color: C.lvL,
+                  textColor: C.lvD,
                   label: isKorean ? '구글로 회원가입' : 'Sign up with Google',
                   leading: const _GoogleSignUpIcon(),
                   onTap: sheetLoading
@@ -264,8 +272,9 @@ void showSignUpSheet(BuildContext context, WidgetRef ref, bool isMounted) {
                             // #760 — 취소 시 익명 사용자 잔재가 남지 않도록 정리.
                             await _signOutIfAnonymous(ref);
                             if (!ctx.mounted) return;
-                            // #759 — 인라인 영문 에러 대신 한글 알림팝업.
-                            await _showSignupNotCompletedDialog(ctx, e, isKorean);
+                            // #759 (재수정) — 다이얼로그 호출 시점 언어를 ref에서 직접 가져옴.
+                            final isKoNow = ref.read(appLanguageProvider).isKorean;
+                            await _showSignupNotCompletedDialog(ctx, e, isKoNow);
                           }
                         },
                 ),
@@ -475,9 +484,10 @@ void showSignUpSheet(BuildContext context, WidgetRef ref, bool isMounted) {
             ),
           );
         },
+        ),
       );
     },
-  );
+  ));
 }
 
 /// #771 — 카카오/구글 가입 결과에서 uid만 캡쳐하기 위한 경량 보관용 객체.

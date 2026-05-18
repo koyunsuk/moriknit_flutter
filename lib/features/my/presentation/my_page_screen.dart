@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/subscription_constants.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/localization/app_strings.dart';
+import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_colors.dart';
@@ -27,9 +29,17 @@ import '../../../providers/swatch_provider.dart';
 import '../../../providers/fab_settings_provider.dart';
 import '../../../providers/font_provider.dart';
 import '../../../providers/theme_provider.dart';
+import '../../../providers/blueprint_provider.dart';
 import '../../auth/data/handle_validator.dart';
 import '../../auth/domain/user_model.dart';
+import '../../blueprint/domain/step_blueprint.dart';
+import '../../blueprint/presentation/tester_group_screen.dart';
+import '../../board/presentation/app_board_detail_screen.dart';
+import '../../board/presentation/app_board_list_screen.dart';
+import '../../home/presentation/home_screen.dart' show MyKnitAlongMyPageBlock;
+import '../../pattern/data/pattern_offline_repository.dart';
 import '../../pattern/data/pattern_repository.dart';
+import '../data/my_activity_providers.dart';
 import 'bug_report_sheet.dart';
 
 class MyPageScreen extends ConsumerWidget {
@@ -374,12 +384,8 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
     final youtubeUrl = social?.youtubeUrl ?? 'https://www.youtube.com/@moriknit';
     final instagramUrl = social?.instagramUrl ?? 'https://instagram.com/moriknit_official';
     final currentTheme = ref.watch(appThemeProvider);
-    final swatchCount = ref.watch(swatchCountProvider);
-    final projectCount = ref.watch(projectCountProvider);
-    final counterCount = ref.watch(counterCountProvider);
-    final purchasesAsync = ref.watch(myPurchasesProvider);
-    final marketItemsAsync = ref.watch(myMarketItemsProvider);
-    final salesAsync = ref.watch(myMarketSalesProvider);
+    // 이슈 #778 — swatchCount/projectCount/counterCount/purchasesAsync/marketItemsAsync/salesAsync는
+    // 추출된 ConsumerWidget(_UsageSnapshotBlock/_PurchaseSalesSummaryRow/_PurchaseMarketLedgerRow)이 자체 watch.
     final name = user.displayName.isNotEmpty ? user.displayName : (user.email.isNotEmpty ? user.email.split('@').first : 'Maker');
     final photo = user.photoURL;
 
@@ -421,13 +427,15 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                       ],
 
                       // ── 1. 기본정보 ─────────────────────────────────
-                      Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          MoriBlockShell(
+                      // #770 (재재수정) — 뱃지를 MoriBlockShell trailing 슬롯으로 이동 (블록 우측 헤더, 중앙 정렬)
+                      MoriBlockShell(
                             label: isKorean ? '기본정보' : 'Basic Info',
                             icon: Icons.person_rounded,
                             accent: C.lv,
+                            trailing: _PlanBadgeTrailing(
+                              isBusiness: ref.watch(featureGatesProvider).isBusiness,
+                              isPro: ref.watch(isProProvider),
+                            ),
                             child: IntrinsicHeight(
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -445,12 +453,12 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                                                 width: 80,
                                                 height: 80,
                                                 child: photo.isNotEmpty
-                                                    ? Image.network(
-                                                        photo,
+                                                    ? CachedNetworkImage(
+                                                        imageUrl: photo,
                                                         width: 80,
                                                         height: 80,
                                                         fit: BoxFit.cover,
-                                                        errorBuilder: (_, _, _) => const MoriDefaultAvatar(size: 80, borderRadius: 999),
+                                                        errorWidget: (_, _, _) => const MoriDefaultAvatar(size: 80, borderRadius: 999),
                                                       )
                                                     : const MoriDefaultAvatar(size: 80, borderRadius: 999),
                                               ),
@@ -570,15 +578,7 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                                             ],
                                           ),
                                         ),
-                                        const SizedBox(height: 2),
-                                        // 3단: 특이사항 (플랜)
-                                        SizedBox(
-                                          height: 26,
-                                          child: Align(
-                                            alignment: Alignment.centerLeft,
-                                            child: MoriChip(label: _planLabel(t, user.subscription.planId), type: ChipType.lavender),
-                                          ),
-                                        ),
+                                        // #770 (재수정) — 카드 안의 플랜 칩 삭제. 뱃지는 블록 우측 헤더로 이동.
                                       ],
                                     ),
                                   ),
@@ -586,54 +586,6 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                               ),
                             ),
                           ),
-                          // #761 — Pro 뱃지: 블록의 오른쪽에 배치. Business는 왕관 👑 이모티콘.
-                          if (ref.watch(featureGatesProvider).isBusiness)
-                            Positioned(
-                              top: 6,
-                              right: 14,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: C.lmD.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: C.lmD.withValues(alpha: 0.4)),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Text('👑', style: TextStyle(fontSize: 12)),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Business',
-                                      style: TextStyle(
-                                        color: C.lmD,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: 0.3,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            )
-                          else if (ref.watch(isProProvider))
-                            Positioned(
-                              top: -2,
-                              right: 14,
-                              child: CustomPaint(
-                                size: const Size(18, 24),
-                                painter: _ProBookmarkPainter(),
-                                child: const SizedBox(
-                                  width: 18,
-                                  height: 24,
-                                  child: Center(
-                                    child: Text('PRO', style: TextStyle(color: Colors.white, fontSize: 5, fontWeight: FontWeight.w800, letterSpacing: 0.3, height: 1)),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
                       const SizedBox(height: 16),
 
                       // ── 1-b. 구독 정보 ─────────────────────────────
@@ -661,6 +613,66 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                         accent: C.lmD,
                         child: _PhoneVerifyBlock(user: user, isKorean: isKorean),
                       ),
+                      const SizedBox(height: 16),
+
+                      // ── 1-e. 내가 쓴 글 (#783 후속) ─────────────────
+                      MoriBlockShell(
+                        label: isKorean ? '내가 쓴 글' : 'My Posts',
+                        icon: Icons.article_rounded,
+                        accent: C.pk,
+                        moreLabel: isKorean ? '전체 보기' : 'View all',
+                        onMoreTap: () => context.go(Routes.community),
+                        child: _MyPostsBlock(isKorean: isKorean),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // ── 1-e2. 내가 만든 도안 (#792 — 테스터 그룹 대시보드) ──
+                      MoriBlockShell(
+                        label: isKorean ? '내가 만든 도안' : 'My Authored Patterns',
+                        icon: Icons.menu_book_rounded,
+                        accent: C.lvD,
+                        child: _MyAuthoredPatternsBlock(isKorean: isKorean),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // ── 1-e3. 내 함께뜨기 (#798 — 홈에서 마이페이지로 이전) ──
+                      // 내가 fork 한 도안(=함께 뜨기 참여 중) 목록 + 진행률.
+                      MoriBlockShell(
+                        label: isKorean ? '내 함께뜨기' : 'My Knit-Alongs',
+                        icon: Icons.call_split_rounded,
+                        accent: C.lvD,
+                        moreLabel: isKorean ? '커뮤니티' : 'Community',
+                        onMoreTap: () => context.go(Routes.community),
+                        child: MyKnitAlongMyPageBlock(isKorean: isKorean),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // ── 1-f. 내가 쓴 댓글 (#783 후속) ────────────────
+                      MoriBlockShell(
+                        label: isKorean ? '내가 쓴 댓글' : 'My Comments',
+                        icon: Icons.mode_comment_rounded,
+                        accent: C.lvD,
+                        moreLabel: isKorean ? '전체 보기' : 'View all',
+                        onMoreTap: () => context.go(Routes.community),
+                        child: _MyCommentsBlock(isKorean: isKorean),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // ── 1-g. 나의 질문 (#783 후속) ───────────────────
+                      MoriBlockShell(
+                        label: isKorean ? '나의 질문' : 'My Questions',
+                        icon: Icons.help_outline_rounded,
+                        accent: C.lmD,
+                        moreLabel: isKorean ? '더보기' : 'More',
+                        onMoreTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const AppBoardListScreen(boardType: 'qa'),
+                          ),
+                        ),
+                        child: _MyQnaBlock(isKorean: isKorean),
+                      ),
                       const SizedBox(height: 24),
 
                       // ═══════════════════════════════════════════════════
@@ -673,17 +685,14 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                             : 'Storage, AI, activity and market',
                       ),
 
-                      // ── 2-a. 저장 공간 사용량 (#739) ─────────────────
+                      // #783 — '오프라인 저장' 명칭 변경 (이전: 저장 공간 사용량)
                       MoriBlockShell(
-                        label: isKorean ? '저장 공간 사용량' : 'Storage Usage',
-                        icon: Icons.storage_rounded,
+                        label: isKorean ? '오프라인 저장' : 'Offline Storage',
+                        icon: Icons.cloud_download_rounded,
                         accent: C.lvD,
                         child: _StorageUsageBlock(
                           user: user,
                           isKorean: isKorean,
-                          swatchCount: swatchCount,
-                          projectCount: projectCount,
-                          counterCount: counterCount,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -698,107 +707,22 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                       const SizedBox(height: 16),
 
                       // ── 2-c. 사용 현황 (스와치/프로젝트/카운터) ───────
-                      MoriBlockShell(
-                        label: t.usageSnapshot,
-                        icon: Icons.bar_chart_rounded,
-                        accent: C.lv,
-                        child: Row(
-                          children: [
-                            Expanded(child: _buildSnapshotItem(t.swatchLibrary, swatchCount, user.usage.swatchCount, C.lv, () => context.push('/swatch'))),
-                            Container(width: 1, height: 72, color: C.bd),
-                            Expanded(child: _buildSnapshotItem(t.projectBoard, projectCount, user.usage.projectCount, C.pk, () => context.push('/project'))),
-                            Container(width: 1, height: 72, color: C.bd),
-                            Expanded(child: _buildSnapshotItem(isKorean ? '카운터' : 'Counters', counterCount, user.usage.counterCount, C.lmD, () => context.push('/counters'))),
-                          ],
-                        ),
+                      // 이슈 #778 — _UsageSnapshotBlock으로 추출하여 카운트 provider 3종을 자체 watch.
+                      _UsageSnapshotBlock(
+                        title: t.usageSnapshot,
+                        labelSwatch: t.swatchLibrary,
+                        labelProject: t.projectBoard,
+                        labelCounter: isKorean ? '카운터' : 'Counters',
+                        storedSwatch: user.usage.swatchCount,
+                        storedProject: user.usage.projectCount,
+                        storedCounter: user.usage.counterCount,
                       ),
                       const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: purchasesAsync.when(
-                      data: (items) => _SummaryCard(
-                        title: isKorean ? '구매 요약' : 'Purchase summary',
-                        countLabel: isKorean ? '구매 수' : 'Orders',
-                        countValue: '${items.length}',
-                        amountLabel: isKorean ? '구매 합계' : 'Spent',
-                        amountValue: _formatWon(items.fold<int>(0, (sum, item) => sum + item.price), isKorean),
-                        accent: C.pkD,
-                      ),
-                      loading: () => _LoadingSummaryCard(color: C.pkD),
-                      error: (e, _) => _ErrorCard(message: '$e'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: salesAsync.when(
-                      data: (items) => _SummaryCard(
-                        title: isKorean ? '마켓 수익' : 'Market earnings',
-                        countLabel: isKorean ? '판매 수' : 'Sales',
-                        countValue: '${items.length}',
-                        amountLabel: isKorean ? '누적 수익' : 'Revenue',
-                        amountValue: _formatWon(items.fold<int>(0, (sum, item) => sum + item.price), isKorean),
-                        accent: C.lmD,
-                      ),
-                      loading: () => _LoadingSummaryCard(color: C.lmD),
-                      error: (e, _) => _ErrorCard(message: '$e'),
-                    ),
-                  ),
-                ],
-              ),
+              // 이슈 #778 — _PurchaseSalesSummaryRow로 추출하여 purchases/sales를 자체 watch.
+              _PurchaseSalesSummaryRow(isKorean: isKorean),
               const SizedBox(height: 16),
-              IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(
-                      child: MoriBlockShell(
-                        label: isKorean ? '내 구매' : 'My purchases',
-                        icon: Icons.receipt_long_rounded,
-                        accent: C.pkD,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(isKorean ? '최근 구입한 상품을 확인해요.' : 'See your latest purchases.', style: T.caption.copyWith(color: C.tx2)),
-                            const SizedBox(height: 12),
-                            purchasesAsync.when(
-                              data: (items) => items.isEmpty
-                                  ? Column(children: List.generate(3, (_) => Container(height: 50, margin: const EdgeInsets.only(bottom: 10), decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(20), border: Border.all(color: C.bd.withValues(alpha: 0.5))))))
-                                  : Column(children: items.take(4).map((item) => _LedgerRow(title: item.title, subtitle: _formatWon(item.price, isKorean), accent: C.pkD)).toList()),
-                              loading: () => CircularProgressIndicator(color: C.lv),
-                              error: (e, _) => Text('$e', style: T.caption.copyWith(color: C.og)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: MoriBlockShell(
-                        label: isKorean ? '내 마켓' : 'My market',
-                        icon: Icons.storefront_rounded,
-                        accent: C.lmD,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(isKorean ? '등록한 상품을 관리해요.' : 'Manage your listings.', style: T.caption.copyWith(color: C.tx2)),
-                            const SizedBox(height: 12),
-                            marketItemsAsync.when(
-                              data: (items) => items.isEmpty
-                                  ? Column(children: List.generate(3, (_) => Container(height: 50, margin: const EdgeInsets.only(bottom: 10), decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(20), border: Border.all(color: C.bd.withValues(alpha: 0.5))))))
-                                  : Column(
-                                      children: items.take(4).map((item) => _LedgerRow(title: item.title, subtitle: _formatWon(item.price, isKorean), accent: C.lmD)).toList(),
-                                    ),
-                              loading: () => CircularProgressIndicator(color: C.lv),
-                              error: (e, _) => Text('$e', style: T.caption.copyWith(color: C.og)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              // 이슈 #778 — _PurchaseMarketLedgerRow로 추출하여 purchases/marketItems를 자체 watch.
+              _PurchaseMarketLedgerRow(isKorean: isKorean),
               const SizedBox(height: 24),
 
               // ═══════════════════════════════════════════════════
@@ -976,20 +900,41 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                       onTap: () => launchUrl(Uri.parse('https://moriknit.com/privacy'), mode: LaunchMode.externalApplication),
                     ),
                     Divider(height: 1, color: Colors.grey.shade100),
+                    // #783 — 앱 내 네이티브 게시판으로 이동 (launchUrl 제거)
                     ListTile(
                       leading: Icon(Icons.info_outline, color: C.mu),
-                      title: Text(isKorean ? '버전 정보' : 'Version info'),
+                      title: Text(isKorean ? '릴리즈 노트' : 'Release notes'),
                       subtitle: const Text('1.0.0+1'),
-                      trailing: Icon(Icons.open_in_new_rounded, color: C.mu, size: 18),
-                      onTap: () => launchUrl(Uri.parse('https://moriknit.com/release-notes'), mode: LaunchMode.externalApplication),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AppBoardListScreen(boardType: 'release'),
+                        ),
+                      ),
                     ),
                     Divider(height: 1, color: Colors.grey.shade100),
                     ListTile(
                       leading: Icon(Icons.help_outline_rounded, color: C.lv),
-                      title: Text(isKorean ? 'QnA / 자주 묻는 질문' : 'QnA / FAQ'),
+                      title: Text(isKorean ? '자주 묻는 질문 (FAQ)' : 'FAQ'),
                       subtitle: Text(isKorean ? '궁금한 점을 확인해보세요' : 'Find answers to common questions'),
-                      trailing: Icon(Icons.open_in_new_rounded, color: C.mu, size: 18),
-                      onTap: () => launchUrl(Uri.parse('https://moriknit.com/qna'), mode: LaunchMode.externalApplication),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AppBoardListScreen(boardType: 'faq'),
+                        ),
+                      ),
+                    ),
+                    Divider(height: 1, color: Colors.grey.shade100),
+                    ListTile(
+                      leading: Icon(Icons.support_agent_rounded, color: C.lmD),
+                      title: Text(isKorean ? '문의하기 (Q&A)' : 'Contact (Q&A)'),
+                      subtitle: Text(isKorean ? '문의 사항을 남겨주세요' : 'Leave us a message'),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AppBoardListScreen(boardType: 'qa'),
+                        ),
+                      ),
                     ),
                     Divider(height: 1, color: Colors.grey.shade100),
                     ListTile(
@@ -1076,6 +1021,7 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
     );
   }
 
+  // ignore: unused_element
   String _planLabel(AppStrings t, String planId) {
     switch (planId.toLowerCase()) {
       case 'starter':
@@ -1923,6 +1869,65 @@ class _SubscriptionCard extends ConsumerWidget {
   }
 }
 
+/// #770 (재재수정) — 기본정보 블록 우측 헤더 트레일링 뱃지.
+/// 현재 요금제 따라 자동 변경: Business → 👑 Business / Pro → PRO 뱃지 / Free → 없음.
+class _PlanBadgeTrailing extends StatelessWidget {
+  final bool isBusiness;
+  final bool isPro;
+  const _PlanBadgeTrailing({required this.isBusiness, required this.isPro});
+
+  @override
+  Widget build(BuildContext context) {
+    if (isBusiness) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: C.lmD.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: C.lmD.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('👑', style: TextStyle(fontSize: 12)),
+            const SizedBox(width: 4),
+            Text(
+              'Business',
+              style: TextStyle(
+                color: C.lmD,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    if (isPro) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: C.og.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: C.og.withValues(alpha: 0.4)),
+        ),
+        child: Text(
+          'PRO',
+          style: TextStyle(
+            color: C.og,
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.4,
+          ),
+        ),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+}
+
+// ignore: unused_element
 class _ProBookmarkPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -2096,20 +2101,18 @@ class _PlanBadgeRow extends StatelessWidget {
 class _StorageUsageBlock extends ConsumerWidget {
   final UserModel user;
   final bool isKorean;
-  final int swatchCount;
-  final int projectCount;
-  final int counterCount;
 
   const _StorageUsageBlock({
     required this.user,
     required this.isKorean,
-    required this.swatchCount,
-    required this.projectCount,
-    required this.counterCount,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // 이슈 #778 — 카운트는 자체 watch (top-level rebuild 감소).
+    final swatchCount = ref.watch(swatchCountProvider);
+    final projectCount = ref.watch(projectCountProvider);
+    final counterCount = ref.watch(counterCountProvider);
     // 누락 항목 보완: 도안(pattern_charts) + 메모 컬렉션 실시간 길이.
     final patternCount =
         ref.watch(patternListProvider).valueOrNull?.length ?? 0;
@@ -2129,7 +2132,10 @@ class _StorageUsageBlock extends ConsumerWidget {
     const avgDocBytes = 3 * 1024;
     final estDocBytes = docCount * avgDocBytes;
     final uploadedBytes = user.usage.storageBytesUsed;
-    final totalBytes = estDocBytes + uploadedBytes;
+    // #783 — 영구 캐시(다운로드한 도안)의 실제 바이트 합산.
+    final offlineBytes =
+        ref.watch(offlinePatternsTotalBytesProvider).valueOrNull ?? 0;
+    final int totalBytes = (estDocBytes + uploadedBytes + offlineBytes).toInt();
     final storageLimit = SubscriptionConstants.maxFreeStorageBytes;
     final ratio = storageLimit > 0 ? totalBytes / storageLimit : 0.0;
 
@@ -3026,3 +3032,642 @@ class _PhoneVerifyDialogState extends ConsumerState<_PhoneVerifyDialog> {
 
 /// #771 — 마이페이지 핸들 변경 다이얼로그용 상태 enum.
 enum _HandleEditStatus { idle, checking, available, invalidFormat, taken, error }
+
+// ── #783 후속 — 마이페이지 활동 블록 ────────────────────────────────────────
+
+/// 내가 쓴 글 (커뮤니티 posts where uid == currentUid) 미리보기 블록.
+class _MyPostsBlock extends ConsumerWidget {
+  final bool isKorean;
+  const _MyPostsBlock({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final postsAsync = ref.watch(myPostsProvider);
+    return postsAsync.when(
+      loading: () => const _MyActivityLoading(),
+      error: (e, _) => _MyActivityError(message: '$e'),
+      data: (posts) {
+        if (posts.isEmpty) {
+          return _MyActivityEmpty(
+            label: isKorean ? '아직 작성한 글이 없어요.' : 'No posts yet.',
+          );
+        }
+        final preview = posts.take(3).toList();
+        return Column(
+          children: [
+            for (final p in preview)
+              InkWell(
+                onTap: () => context.go(Routes.community),
+                borderRadius: BorderRadius.circular(10),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.article_outlined,
+                          size: 16, color: C.pk),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              p.title.isEmpty
+                                  ? (isKorean ? '(제목 없음)' : '(No title)')
+                                  : p.title,
+                              style: T.bodyBold,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              p.timeAgo,
+                              style: T.caption.copyWith(color: C.mu),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right_rounded,
+                          size: 18, color: C.mu),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// 내가 쓴 댓글 (collectionGroup posts/.../comments where uid == currentUid) 미리보기.
+class _MyCommentsBlock extends ConsumerWidget {
+  final bool isKorean;
+  const _MyCommentsBlock({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final commentsAsync = ref.watch(myCommentsProvider);
+    return commentsAsync.when(
+      loading: () => const _MyActivityLoading(),
+      error: (e, _) => _MyActivityError(message: '$e'),
+      data: (comments) {
+        if (comments.isEmpty) {
+          return _MyActivityEmpty(
+            label: isKorean ? '아직 작성한 댓글이 없어요.' : 'No comments yet.',
+          );
+        }
+        final preview = comments.take(3).toList();
+        return Column(
+          children: [
+            for (final c in preview)
+              InkWell(
+                onTap: () => context.go(Routes.community),
+                borderRadius: BorderRadius.circular(10),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.mode_comment_outlined,
+                          size: 16, color: C.lvD),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              c.content.isEmpty
+                                  ? (isKorean ? '(내용 없음)' : '(No content)')
+                                  : c.content,
+                              style: T.body,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              c.timeAgo,
+                              style: T.caption.copyWith(color: C.mu),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right_rounded,
+                          size: 18, color: C.mu),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// 나의 질문 (landing_boards/qa/posts where authorUid == currentUid) 미리보기.
+class _MyQnaBlock extends ConsumerWidget {
+  final bool isKorean;
+  const _MyQnaBlock({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final qnaAsync = ref.watch(myQnaProvider);
+    return qnaAsync.when(
+      loading: () => const _MyActivityLoading(),
+      error: (e, _) => _MyActivityError(message: '$e'),
+      data: (posts) {
+        if (posts.isEmpty) {
+          return _MyActivityEmpty(
+            label: isKorean
+                ? '아직 등록한 문의가 없어요.'
+                : 'No questions yet.',
+          );
+        }
+        final preview = posts.take(3).toList();
+        return Column(
+          children: [
+            for (final p in preview)
+              InkWell(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AppBoardDetailScreen(
+                      boardType: 'qa',
+                      postId: p.id,
+                    ),
+                  ),
+                ),
+                borderRadius: BorderRadius.circular(10),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.help_outline_rounded,
+                          size: 16, color: C.lmD),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              p.title.isEmpty
+                                  ? (isKorean ? '(제목 없음)' : '(No title)')
+                                  : p.title,
+                              style: T.bodyBold,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Row(
+                              children: [
+                                Text(
+                                  '${p.createdAt.year}.${p.createdAt.month}.${p.createdAt.day}',
+                                  style: T.caption.copyWith(color: C.mu),
+                                ),
+                                if (p.commentCount > 0) ...[
+                                  const SizedBox(width: 8),
+                                  Icon(Icons.chat_bubble_outline,
+                                      size: 12, color: C.mu),
+                                  const SizedBox(width: 3),
+                                  Text('${p.commentCount}',
+                                      style:
+                                          T.caption.copyWith(color: C.mu)),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right_rounded,
+                          size: 18, color: C.mu),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// 활동 블록 공용 — 로딩 상태 플레이스홀더.
+class _MyActivityLoading extends StatelessWidget {
+  const _MyActivityLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: List.generate(
+        3,
+        (_) => Container(
+          height: 44,
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: C.bd.withValues(alpha: 0.5)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 활동 블록 공용 — 빈 상태 안내 + 빈 행 플레이스홀더.
+class _MyActivityEmpty extends StatelessWidget {
+  final String label;
+  const _MyActivityEmpty({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (var i = 0; i < 2; i++)
+          Container(
+            height: 40,
+            margin: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: C.bd.withValues(alpha: 0.5)),
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            label,
+            style: T.caption.copyWith(color: C.mu),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 활동 블록 공용 — 에러 상태.
+class _MyActivityError extends StatelessWidget {
+  final String message;
+  const _MyActivityError({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Text(
+        message,
+        style: T.caption.copyWith(color: C.og),
+      ),
+    );
+  }
+}
+
+// 이슈 #778 — 사용 현황 블록 (스와치/프로젝트/카운터 3종 카운트 자체 watch).
+class _UsageSnapshotBlock extends ConsumerWidget {
+  final String title;
+  final String labelSwatch;
+  final String labelProject;
+  final String labelCounter;
+  final int storedSwatch;
+  final int storedProject;
+  final int storedCounter;
+  const _UsageSnapshotBlock({
+    required this.title,
+    required this.labelSwatch,
+    required this.labelProject,
+    required this.labelCounter,
+    required this.storedSwatch,
+    required this.storedProject,
+    required this.storedCounter,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final swatchCount = ref.watch(swatchCountProvider);
+    final projectCount = ref.watch(projectCountProvider);
+    final counterCount = ref.watch(counterCountProvider);
+    return MoriBlockShell(
+      label: title,
+      icon: Icons.bar_chart_rounded,
+      accent: C.lv,
+      child: Row(
+        children: [
+          Expanded(child: _snapshotItem(context, labelSwatch, swatchCount, storedSwatch, C.lv, () => context.push('/swatch'))),
+          Container(width: 1, height: 72, color: C.bd),
+          Expanded(child: _snapshotItem(context, labelProject, projectCount, storedProject, C.pk, () => context.push('/project'))),
+          Container(width: 1, height: 72, color: C.bd),
+          Expanded(child: _snapshotItem(context, labelCounter, counterCount, storedCounter, C.lmD, () => context.push('/counters'))),
+        ],
+      ),
+    );
+  }
+
+  Widget _snapshotItem(BuildContext context, String label, int count, int stored, Color color, VoidCallback onTap) {
+    final progress = count == 0 ? 0.0 : (stored == 0 ? 0.15 : (count / (stored > count ? stored : count)).clamp(0.0, 1.0));
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(label, style: T.caption.copyWith(color: C.tx2), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 4),
+            Text('$count', style: T.bodyBold.copyWith(color: color, fontSize: 22, letterSpacing: -0.3)),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: LinearProgressIndicator(value: progress, minHeight: 5, backgroundColor: color.withValues(alpha: 0.14), valueColor: AlwaysStoppedAnimation(color)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// 이슈 #778 — 구매/마켓 요약 카드 Row (purchases/sales 자체 watch).
+class _PurchaseSalesSummaryRow extends ConsumerWidget {
+  final bool isKorean;
+  const _PurchaseSalesSummaryRow({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final purchasesAsync = ref.watch(myPurchasesProvider);
+    final salesAsync = ref.watch(myMarketSalesProvider);
+    return Row(
+      children: [
+        Expanded(
+          child: purchasesAsync.when(
+            data: (items) => _SummaryCard(
+              title: isKorean ? '구매 요약' : 'Purchase summary',
+              countLabel: isKorean ? '구매 수' : 'Orders',
+              countValue: '${items.length}',
+              amountLabel: isKorean ? '구매 합계' : 'Spent',
+              amountValue: _formatWonExt(items.fold<int>(0, (sum, item) => sum + item.price), isKorean),
+              accent: C.pkD,
+            ),
+            loading: () => _LoadingSummaryCard(color: C.pkD),
+            error: (e, _) => _ErrorCard(message: '$e'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: salesAsync.when(
+            data: (items) => _SummaryCard(
+              title: isKorean ? '마켓 수익' : 'Market earnings',
+              countLabel: isKorean ? '판매 수' : 'Sales',
+              countValue: '${items.length}',
+              amountLabel: isKorean ? '누적 수익' : 'Revenue',
+              amountValue: _formatWonExt(items.fold<int>(0, (sum, item) => sum + item.price), isKorean),
+              accent: C.lmD,
+            ),
+            loading: () => _LoadingSummaryCard(color: C.lmD),
+            error: (e, _) => _ErrorCard(message: '$e'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// 이슈 #778 — 내 구매/마켓 ledger Row (purchases/marketItems 자체 watch).
+class _PurchaseMarketLedgerRow extends ConsumerWidget {
+  final bool isKorean;
+  const _PurchaseMarketLedgerRow({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final purchasesAsync = ref.watch(myPurchasesProvider);
+    final marketItemsAsync = ref.watch(myMarketItemsProvider);
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: MoriBlockShell(
+              label: isKorean ? '내 구매' : 'My purchases',
+              icon: Icons.receipt_long_rounded,
+              accent: C.pkD,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(isKorean ? '최근 구입한 상품을 확인해요.' : 'See your latest purchases.', style: T.caption.copyWith(color: C.tx2)),
+                  const SizedBox(height: 12),
+                  purchasesAsync.when(
+                    data: (items) => items.isEmpty
+                        ? Column(children: List.generate(3, (_) => Container(height: 50, margin: const EdgeInsets.only(bottom: 10), decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(20), border: Border.all(color: C.bd.withValues(alpha: 0.5))))))
+                        : Column(children: items.take(4).map((item) => _LedgerRow(title: item.title, subtitle: _formatWonExt(item.price, isKorean), accent: C.pkD)).toList()),
+                    loading: () => CircularProgressIndicator(color: C.lv),
+                    error: (e, _) => Text('$e', style: T.caption.copyWith(color: C.og)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: MoriBlockShell(
+              label: isKorean ? '내 마켓' : 'My market',
+              icon: Icons.storefront_rounded,
+              accent: C.lmD,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(isKorean ? '등록한 상품을 관리해요.' : 'Manage your listings.', style: T.caption.copyWith(color: C.tx2)),
+                  const SizedBox(height: 12),
+                  marketItemsAsync.when(
+                    data: (items) => items.isEmpty
+                        ? Column(children: List.generate(3, (_) => Container(height: 50, margin: const EdgeInsets.only(bottom: 10), decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(20), border: Border.all(color: C.bd.withValues(alpha: 0.5))))))
+                        : Column(
+                            children: items.take(4).map((item) => _LedgerRow(title: item.title, subtitle: _formatWonExt(item.price, isKorean), accent: C.lmD)).toList(),
+                          ),
+                    loading: () => CircularProgressIndicator(color: C.lv),
+                    error: (e, _) => Text('$e', style: T.caption.copyWith(color: C.og)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// 이슈 #778 — 추출된 위젯에서 사용하는 통화 포맷 함수 (기존 _formatWon과 동일).
+String _formatWonExt(int amount, bool isKorean) => isKorean ? '$amount원' : '$amount KRW';
+
+/// #792 — 마이페이지 "내가 만든 도안" 블록.
+/// 내가 작성한 도안마다 테스터 수 + 평균 진행률(추정) + 진입점 표시.
+class _MyAuthoredPatternsBlock extends ConsumerWidget {
+  final bool isKorean;
+  const _MyAuthoredPatternsBlock({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authoredAsync = ref.watch(myAuthoredBlueprintsProvider);
+    return authoredAsync.when(
+      loading: () => _MyAuthoredPlaceholder(isKorean: isKorean),
+      error: (_, _) => _MyAuthoredPlaceholder(isKorean: isKorean),
+      data: (list) {
+        if (list.isEmpty) return _MyAuthoredPlaceholder(isKorean: isKorean);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < list.length && i < 5; i++) ...[
+              _MyAuthoredRow(blueprint: list[i], isKorean: isKorean),
+              if (i < list.length - 1 && i < 4)
+                const Divider(height: 12, thickness: 0.5),
+            ],
+            if (list.length > 5)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  isKorean
+                      ? '외 ${list.length - 5}건의 도안'
+                      : 'and ${list.length - 5} more',
+                  style: T.caption.copyWith(color: C.mu),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _MyAuthoredRow extends StatelessWidget {
+  final StepBlueprint blueprint;
+  final bool isKorean;
+
+  const _MyAuthoredRow({required this.blueprint, required this.isKorean});
+
+  @override
+  Widget build(BuildContext context) {
+    final testerCount = blueprint.members.length;
+    final forkCount = blueprint.forkCount;
+    return InkWell(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => TesterGroupScreen(blueprintId: blueprint.id),
+        ),
+      ),
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: C.lvL,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.menu_book_rounded, color: C.lvD, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    blueprint.localizedTitle(isKorean),
+                    style: T.bodyBold,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.people_rounded, size: 12, color: C.lmD),
+                      const SizedBox(width: 3),
+                      Text(
+                        isKorean ? '테스터 $testerCount명' : '$testerCount testers',
+                        style: T.caption.copyWith(color: C.lmD),
+                      ),
+                      const SizedBox(width: 10),
+                      Icon(Icons.call_split_rounded, size: 12, color: C.lvD),
+                      const SizedBox(width: 3),
+                      Text(
+                        isKorean ? '함께뜨기 $forkCount' : '$forkCount fork',
+                        style: T.caption.copyWith(color: C.lvD),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: C.mu, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MyAuthoredPlaceholder extends StatelessWidget {
+  final bool isKorean;
+  const _MyAuthoredPlaceholder({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (int i = 0; i < 2; i++)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: C.bd.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        height: 10,
+                        width: 110,
+                        decoration: BoxDecoration(
+                          color: C.bd,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        height: 7,
+                        width: 70,
+                        decoration: BoxDecoration(
+                          color: C.bd.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 8),
+        Text(
+          isKorean
+              ? '도안에디터에서 첫 도안을 만들고\n테스터를 초대해 보세요.'
+              : 'Create your first pattern and\ninvite testers from the editor.',
+          textAlign: TextAlign.center,
+          style: T.caption.copyWith(color: C.mu, height: 1.4),
+        ),
+      ],
+    );
+  }
+}

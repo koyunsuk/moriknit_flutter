@@ -46,6 +46,13 @@ class AppConfig {
   final bool communityWriteEnabled;
   final bool sellerSubmissionEnabled;
   final bool encyclopediaSuggestionEnabled;
+  // ── 어드민 입력 팝업 (이슈 #812) ──────────────────────────────────────────
+  final bool popupEnabled;
+  final String popupTitle;
+  final String popupMessage;
+  final String popupLinkUrl;
+  /// 팝업 고유 식별자(저장 시각 기반). 변경되면 일회성 노출 상태 초기화.
+  final String popupId;
 
   const AppConfig({
     this.maintenanceNotice = '',
@@ -53,7 +60,16 @@ class AppConfig {
     this.communityWriteEnabled = true,
     this.sellerSubmissionEnabled = true,
     this.encyclopediaSuggestionEnabled = true,
+    this.popupEnabled = false,
+    this.popupTitle = '',
+    this.popupMessage = '',
+    this.popupLinkUrl = '',
+    this.popupId = '',
   });
+
+  /// 새 팝업이 켜져 있는지 (어드민 신규 경로).
+  bool get hasAdminPopup =>
+      popupEnabled && (popupTitle.isNotEmpty || popupMessage.isNotEmpty);
 }
 
 final mockupImagesProvider = StreamProvider<Map<String, String>>((ref) {
@@ -76,6 +92,19 @@ final appConfigProvider = StreamProvider<AppConfig>((ref) {
       .map((snap) {
     if (!snap.exists) return const AppConfig();
     final data = snap.data()!;
+    final popupTitle = data['popupTitle'] as String? ?? '';
+    final popupMessage = data['popupMessage'] as String? ?? '';
+    final popupLinkUrl = data['popupLinkUrl'] as String? ?? '';
+    final popupEnabled = data['popupEnabled'] as bool? ?? false;
+    // popupId: 어드민이 저장할 때 갱신되는 updatedAt 기반. 동일 팝업 재노출 방지용.
+    // updatedAt이 없으면 내용 hash로 대체 (옛 저장 데이터 호환).
+    final updatedAt = data['updatedAt'];
+    String popupId = '';
+    if (updatedAt is Timestamp) {
+      popupId = updatedAt.millisecondsSinceEpoch.toString();
+    } else if (popupEnabled) {
+      popupId = '$popupTitle|$popupMessage|$popupLinkUrl'.hashCode.toString();
+    }
     return AppConfig(
       maintenanceNotice: data['maintenanceNotice'] as String? ?? '',
       noticeType: data['noticeType'] as String? ?? 'banner',
@@ -83,6 +112,11 @@ final appConfigProvider = StreamProvider<AppConfig>((ref) {
       sellerSubmissionEnabled: data['sellerSubmissionEnabled'] as bool? ?? true,
       encyclopediaSuggestionEnabled:
           data['encyclopediaSuggestionEnabled'] as bool? ?? true,
+      popupEnabled: popupEnabled,
+      popupTitle: popupTitle,
+      popupMessage: popupMessage,
+      popupLinkUrl: popupLinkUrl,
+      popupId: popupId,
     );
   });
 });

@@ -395,9 +395,8 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         },
       );
       if (!context.mounted || saved == null) return;
-      // #687 — 저장 직후 라이선스·visibility 즉시 선택 (건너뛰기 가능, 기본값 Reserved+Draft).
-      await _promptLicenseAndVisibility(context, ref, saved!.id, isKorean);
-      if (!context.mounted) return;
+      // #687 → #939 — 라이선스/공개범위는 도안 상세 화면에서 등록 (등록 흐름에서 강제 제거).
+      // 마켓 오픈 전까지 라이선스는 필수가 아니며, 기본값(Reserved+Draft) 으로 저장 후 상세에서 변경.
       Navigator.push(context, MaterialPageRoute(builder: (_) => PatternDetailScreen(chart: saved!)));
     } catch (e) {
       if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
@@ -448,9 +447,8 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         },
       );
       if (!context.mounted || saved == null) return;
-      // #687 — 저장 직후 라이선스·visibility 선택.
-      await _promptLicenseAndVisibility(context, ref, saved!.id, isKorean);
-      if (!context.mounted) return;
+      // #687 → #939 — 라이선스/공개범위는 도안 상세 화면에서 등록 (등록 흐름에서 강제 제거).
+      // 마켓 오픈 전까지 라이선스는 필수가 아니며, 기본값(Reserved+Draft) 으로 저장 후 상세에서 변경.
       Navigator.push(context, MaterialPageRoute(builder: (_) => PatternDetailScreen(chart: saved!)));
     } catch (e) {
       if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
@@ -486,9 +484,8 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         },
       );
       if (!context.mounted || saved == null) return;
-      // #687 — 저장 직후 라이선스·visibility 선택.
-      await _promptLicenseAndVisibility(context, ref, saved!.id, isKorean);
-      if (!context.mounted) return;
+      // #687 → #939 — 라이선스/공개범위는 도안 상세 화면에서 등록 (등록 흐름에서 강제 제거).
+      // 마켓 오픈 전까지 라이선스는 필수가 아니며, 기본값(Reserved+Draft) 으로 저장 후 상세에서 변경.
       Navigator.push(context, MaterialPageRoute(builder: (_) => PatternDetailScreen(chart: saved!)));
     } catch (e) {
       if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
@@ -524,9 +521,8 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         },
       );
       if (!context.mounted || saved == null) return;
-      // #687 — 저장 직후 라이선스·visibility 선택.
-      await _promptLicenseAndVisibility(context, ref, saved!.id, isKorean);
-      if (!context.mounted) return;
+      // #687 → #939 — 라이선스/공개범위는 도안 상세 화면에서 등록 (등록 흐름에서 강제 제거).
+      // 마켓 오픈 전까지 라이선스는 필수가 아니며, 기본값(Reserved+Draft) 으로 저장 후 상세에서 변경.
       Navigator.push(context, MaterialPageRoute(builder: (_) => PatternDetailScreen(chart: saved!)));
     } catch (e) {
       if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
@@ -604,138 +600,9 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
     return result;
   }
 
-  /// 이슈 #687 — 도안 저장 직후 라이선스·visibility 즉시 선택 다이얼로그.
-  /// 기본값(Reserved + Draft) 그대로 두어도 되며, "건너뛰기" 누르면 스킵.
-  /// 선택 시 stepBlueprintRepositoryProvider.update() 로 step_blueprints 갱신.
-  Future<void> _promptLicenseAndVisibility(
-    BuildContext context,
-    WidgetRef ref,
-    String chartId,
-    bool isKorean,
-  ) async {
-    if (chartId.isEmpty) return;
-    var visibility = BlueprintVisibility.draft;
-    var license = LicenseType.reserved;
-    final confirmed = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: C.bg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    margin: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: C.bd2,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                Text(
-                  isKorean ? '라이선스 · 공개 범위' : 'License & Visibility',
-                  style: T.h3,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  isKorean
-                      ? '도안의 권리·공개 범위를 지정해요. 나중에 도안 상세에서 변경할 수 있어요.'
-                      : 'Set your pattern\'s rights and visibility. You can change later.',
-                  style: T.caption.copyWith(color: C.mu),
-                ),
-                const SizedBox(height: 18),
-                Text(isKorean ? '공개 범위' : 'Visibility',
-                    style: T.bodyBold.copyWith(color: C.lvD, fontSize: 13)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: kBlueprintVisibilityOptions.map((v) {
-                    return BlueprintSelectableChip(
-                      label: blueprintVisibilityLabel(v, isKorean),
-                      selected: v == visibility,
-                      onTap: () => setSheet(() => visibility = v),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-                Text(isKorean ? '라이선스' : 'License',
-                    style: T.bodyBold.copyWith(color: C.lvD, fontSize: 13)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: kBlueprintLicenseOptions.map((t) {
-                    return BlueprintSelectableChip(
-                      label: blueprintLicenseLabel(t, isKorean),
-                      selected: t == license,
-                      onTap: () => setSheet(() => license = t),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: Text(isKorean ? '건너뛰기' : 'Skip'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: C.lv,
-                          foregroundColor: Colors.white,
-                        ),
-                        onPressed: () => Navigator.pop(ctx, true),
-                        child: Text(isKorean ? '적용' : 'Apply'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-    if (confirmed != true || !context.mounted) return;
-    final repo = ref.read(stepBlueprintRepositoryProvider);
-    try {
-      await runWithMoriLoadingDialog<void>(
-        context,
-        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
-        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
-        task: () async {
-          await repo.update(chartId, {
-            'visibility': visibility.name,
-            'license': BlueprintLicense(type: license).toMap(),
-          });
-        },
-      );
-      ref.invalidate(blueprintByIdWithLegacyProvider(chartId));
-      if (!context.mounted) return;
-      showSavedSnackBar(
-        ScaffoldMessenger.of(context),
-        message: isKorean ? '저장됐어요.' : 'Saved.',
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
-    }
-  }
+  /// 이슈 #687 → #939 — 도안 저장 직후 라이선스/공개범위 즉시 선택 다이얼로그는 제거됨.
+  /// 등록 흐름에서 라이선스 강제를 빼고, 도안 상세 화면의 라이선스 카드(BlueprintLicenseChip)
+  /// 에서 사용자가 원할 때 설정하도록 변경. 마켓 publish 시점에는 기본값(personal_use) 사용.
 
   /// 이슈 #665 — 사각/원형 도안 형태 선택 모달.
   /// 도구함과 공통 사용 — chart_shape_picker.dart의 showChartShapePicker로 위임.

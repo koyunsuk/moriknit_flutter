@@ -99,6 +99,13 @@ flutter_launcher_icons:
 flutter:
   uses-material-design: true
 
+  fonts:
+    - family: NotoSansKR
+      fonts:
+        - asset: assets/fonts/NotoSansKR-Regular.ttf
+        - asset: assets/fonts/NotoSansKR-Bold.ttf
+          weight: 700
+
   assets:
     - assets/app_icon.png
     - assets/login_logo.png

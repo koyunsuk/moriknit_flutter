@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 
@@ -210,10 +211,53 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
 
   double _parse(TextEditingController c) => double.tryParse(c.text) ?? 0;
 
+  /// 이슈 #799 — 사진 판독은 Pro 요금제 이상에서만 사용 가능.
+  /// 비-Pro 사용자에게 안내 다이얼로그 표시.
+  void _showProRequiredDialog(bool isKorean) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          isKorean ? 'Pro 요금제 전용' : 'Pro Plan Only',
+          style: T.h3,
+        ),
+        content: Text(
+          isKorean
+              ? '⭐ 사진 판독은 Pro 요금제 이상에서 사용할 수 있어요.'
+              : '⭐ Photo reading requires Pro plan or above.',
+          style: T.body.copyWith(color: C.tx2, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              isKorean ? '닫기' : 'Close',
+              style: TextStyle(color: C.mu),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              context.push(Routes.my);
+            },
+            child: Text(
+              isKorean ? '구독하기' : 'Upgrade',
+              style: TextStyle(color: C.lv, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = ref.watch(appStringsProvider);
     final isKorean = ref.watch(appLanguageProvider).isKorean;
+    // 이슈 #799 — Pro 게이트 (사진 판독)
+    final gates = ref.watch(featureGatesProvider);
+    final canUsePhotoReading = gates.isProOrAbove;
 
     return AppShellScaffold(
       title: t.gaugeCalculator,
@@ -232,7 +276,15 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
               _ModeSelector(
                 mode: _mode,
                 isKorean: isKorean,
-                onChanged: (m) => setState(() => _mode = m),
+                canUsePhotoReading: canUsePhotoReading,
+                onChanged: (m) {
+                  // 이슈 #799 — 사진 판독 탭: Pro 게이트
+                  if (m == _GaugeMode.photoReading && !canUsePhotoReading) {
+                    _showProRequiredDialog(isKorean);
+                    return;
+                  }
+                  setState(() => _mode = m);
+                },
               ),
               const SizedBox(height: 16),
 
@@ -590,6 +642,12 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
   }
 
   void _showImageSourceDialog(bool isKorean) {
+    // 이슈 #799 — Pro 게이트 (사진 선택 직전에도 방어적 체크).
+    final gates = ref.read(featureGatesProvider);
+    if (!gates.isProOrAbove) {
+      _showProRequiredDialog(isKorean);
+      return;
+    }
     showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -1790,24 +1848,33 @@ class _GaugeCalculatorScreenState extends ConsumerState<GaugeCalculatorScreen> {
 class _ModeSelector extends StatelessWidget {
   final _GaugeMode mode;
   final bool isKorean;
+  final bool canUsePhotoReading;
   final ValueChanged<_GaugeMode> onChanged;
 
-  const _ModeSelector({required this.mode, required this.isKorean, required this.onChanged});
+  const _ModeSelector({
+    required this.mode,
+    required this.isKorean,
+    required this.onChanged,
+    this.canUsePhotoReading = true,
+  });
 
   @override
   Widget build(BuildContext context) {
     final items = [
-      (_GaugeMode.myGauge, isKorean ? '크기 계산' : 'Size'),
-      (_GaugeMode.patternConvert, isKorean ? '도안 변환' : 'Pattern'),
-      (_GaugeMode.bidirectional, isKorean ? '코↔cm' : 'Sts↔cm'),
-      (_GaugeMode.photoReading, isKorean ? '사진 판독' : 'Photo'),
-      (_GaugeMode.raglanGenerator, isKorean ? '래글런 도안 생성' : 'Raglan Generator'),
+      (_GaugeMode.myGauge, isKorean ? '크기 계산' : 'Size', false),
+      (_GaugeMode.patternConvert, isKorean ? '도안 변환' : 'Pattern', false),
+      (_GaugeMode.bidirectional, isKorean ? '코↔cm' : 'Sts↔cm', false),
+      // 이슈 #799 — 사진 판독은 Pro 요금제 전용 (⭐ 배지 표시).
+      (_GaugeMode.photoReading, isKorean ? '사진 판독' : 'Photo', true),
+      // #786 — 래글런 도안 생성은 AI 패턴 생성기로 단일화. 여기 진입점 제거.
     ];
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
       children: items.map((item) {
         final selected = mode == item.$1;
+        final isProTab = item.$3;
+        final locked = isProTab && !canUsePhotoReading;
         return Padding(
           padding: const EdgeInsets.only(right: 8),
           child: GestureDetector(
@@ -1822,13 +1889,36 @@ class _ModeSelector extends StatelessWidget {
                 ),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Text(
-                item.$2,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  color: selected ? Colors.white : C.lvD,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isProTab) ...[
+                    Text(
+                      '⭐',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: selected ? Colors.white : C.lvD,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  Text(
+                    item.$2,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      color: selected ? Colors.white : C.lvD,
+                    ),
+                  ),
+                  if (locked) ...[
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.lock_outline_rounded,
+                      size: 12,
+                      color: selected ? Colors.white : C.lvD,
+                    ),
+                  ],
+                ],
               ),
             ),
           ),

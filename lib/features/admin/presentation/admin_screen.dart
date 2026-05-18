@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -6,6 +6,7 @@ import 'package:excel/excel.dart' hide Border;
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -30,6 +31,36 @@ import '../domain/admin_import_models.dart';
 import '../../blueprint/data/blueprint_migration.dart';
 import '../../landing/data/landing_board_repository.dart';
 import '../../pattern/data/pattern_repository.dart';
+import 'widgets/admin_list_shell.dart';
+
+/// Firestore 일괄 삭제 헬퍼 — 500건 단위 batch 분할. (이슈 #805)
+Future<void> _bulkDeleteDocs(List<DocumentReference> refs) async {
+  const chunkSize = 450; // 500 한도 여유 두기
+  for (var i = 0; i < refs.length; i += chunkSize) {
+    final end = (i + chunkSize < refs.length) ? i + chunkSize : refs.length;
+    final batch = FirebaseFirestore.instance.batch();
+    for (final r in refs.sublist(i, end)) {
+      batch.delete(r);
+    }
+    await batch.commit();
+  }
+}
+
+/// Firestore 일괄 업데이트 헬퍼 — 500건 단위 batch 분할.
+Future<void> _bulkUpdateDocs(
+  List<DocumentReference> refs,
+  Map<String, dynamic> data,
+) async {
+  const chunkSize = 450;
+  for (var i = 0; i < refs.length; i += chunkSize) {
+    final end = (i + chunkSize < refs.length) ? i + chunkSize : refs.length;
+    final batch = FirebaseFirestore.instance.batch();
+    for (final r in refs.sublist(i, end)) {
+      batch.set(r, data, SetOptions(merge: true));
+    }
+    await batch.commit();
+  }
+}
 
 final _adminUsersProvider = StreamProvider<List<UserModel>>((ref) {
   return FirebaseFirestore.instance
@@ -1385,12 +1416,12 @@ class _CollectionDocRow extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(6),
               child: imageUrl.isNotEmpty
-                  ? Image.network(
-                      imageUrl,
+                  ? CachedNetworkImage(
+                      imageUrl: imageUrl,
                       width: 48,
                       height: 48,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => _MarketThumbPlaceholder(),
+                      errorWidget: (_, _, _) => _MarketThumbPlaceholder(),
                     )
                   : _MarketThumbPlaceholder(),
             ),
@@ -1641,11 +1672,11 @@ class _CollectionDocRow extends StatelessWidget {
                     Center(
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(10),
-                        child: Image.network(
-                          imageUrlCtrl.text,
+                        child: CachedNetworkImage(
+                          imageUrl: imageUrlCtrl.text,
                           height: 120,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => const SizedBox(),
+                          errorWidget: (_, _, _) => const SizedBox(),
                         ),
                       ),
                     ),
@@ -2392,182 +2423,265 @@ class _MembersTab extends ConsumerStatefulWidget {
 }
 
 class _MembersTabState extends ConsumerState<_MembersTab> {
-  final _searchCtrl = TextEditingController();
+  String _search = '';
 
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
+  static const _columns = [
+    AdminColumn(label: '회원명 / 이메일', flex: 3),
+    AdminColumn(label: '가입일', flex: 1),
+    AdminColumn(label: '요금제', flex: 1),
+    AdminColumn(label: '뱃지', flex: 2),
+    AdminColumn(label: '관리', fixedWidth: 92, align: TextAlign.end),
+  ];
 
   @override
   Widget build(BuildContext context) {
     final usersAsync = ref.watch(_adminUsersProvider);
-    final query = _searchCtrl.text.trim().toLowerCase();
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    final bulkActions = <AdminBulkAction<UserModel>>[
+      AdminBulkAction<UserModel>(
+        label: widget.isKorean ? '선택 삭제' : 'Delete selected',
+        icon: Icons.delete_outline_rounded,
+        accent: C.og,
+        requireConfirm: true,
+        confirmMessage: widget.isKorean
+            ? '선택한 회원을 모두 삭제할까요? 되돌릴 수 없습니다.'
+            : 'Delete selected members? This cannot be undone.',
+        loadingMessage:
+            widget.isKorean ? '회원을 삭제하는 중입니다.' : 'Deleting members...',
+        onTap: (selected) async {
+          final refs = selected
+              .where((u) => u.uid != currentUid)
+              .map((u) =>
+                  FirebaseFirestore.instance.collection('users').doc(u.uid))
+              .toList();
+          await _bulkDeleteDocs(refs);
+        },
+      ),
+      AdminBulkAction<UserModel>(
+        label: widget.isKorean ? '게스트 일괄 정리' : 'Cleanup guests',
+        icon: Icons.person_off_outlined,
+        accent: Colors.orange.shade700,
+        requireConfirm: true,
+        confirmMessage: widget.isKorean
+            ? '선택한 회원 중 게스트(익명) 계정을 모두 삭제할까요?'
+            : 'Delete guest (anonymous) accounts among selected?',
+        loadingMessage:
+            widget.isKorean ? '게스트 계정을 정리하는 중입니다.' : 'Cleaning guests...',
+        onTap: (selected) async {
+          final refs = selected
+              .where((u) =>
+                  u.uid != currentUid &&
+                  (u.email.isEmpty ||
+                      u.email.contains('anonymous') ||
+                      u.email.contains('guest')))
+              .map((u) =>
+                  FirebaseFirestore.instance.collection('users').doc(u.uid))
+              .toList();
+          await _bulkDeleteDocs(refs);
+        },
+      ),
+    ];
 
-    return Column(
-      children: [
-        GlassCard(
-          child: TextField(
-            controller: _searchCtrl,
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search_rounded),
-              hintText: widget.isKorean ? '이름이나 이메일로 검색' : 'Search by name or email',
+    return usersAsync.when(
+      loading: () => AdminListShell<UserModel>(
+        title: '회원',
+        icon: Icons.people_alt_rounded,
+        columns: _columns,
+        items: const [],
+        isLoading: true,
+        rowBuilder: (_, _) => const AdminRow(cells: []),
+      ),
+      error: (e, _) => AdminListShell<UserModel>(
+        title: '회원',
+        icon: Icons.people_alt_rounded,
+        columns: _columns,
+        items: const [],
+        errorMessage: '$e',
+        rowBuilder: (_, _) => const AdminRow(cells: []),
+      ),
+      data: (users) {
+        final filtered = _search.isEmpty
+            ? users
+            : users.where((user) {
+                final q = _search;
+                return user.displayName.toLowerCase().contains(q) ||
+                    user.email.toLowerCase().contains(q) ||
+                    user.uid.toLowerCase().contains(q);
+              }).toList();
+        return AdminListShell<UserModel>(
+          title: '회원',
+          icon: Icons.people_alt_rounded,
+          columns: _columns,
+          items: filtered,
+          searchHint: widget.isKorean ? '이름/이메일/UID' : 'Search',
+          onSearchChanged: (v) => setState(() => _search = v.trim().toLowerCase()),
+          emptyMessage: widget.isKorean ? '조건에 맞는 회원이 없습니다.' : 'No matching members found.',
+          selectable: true,
+          itemKey: (u) => u.uid,
+          bulkActions: bulkActions,
+          rowBuilder: (ctx, user) =>
+              _buildMemberRow(ctx, ref, user, widget.isKorean),
+        );
+      },
+    );
+  }
+}
+
+/// AdminListShell 셀 6개를 생성. (회원명/이메일, 가입일, 요금제, 뱃지, 관리)
+AdminRow _buildMemberRow(BuildContext context, WidgetRef ref, UserModel user, bool isKorean) {
+  final currentUid = FirebaseAuth.instance.currentUser?.uid;
+  final isSelf = currentUid == user.uid;
+  final created = user.createdAt == null ? '-' : DateFormat('yyyy-MM-dd').format(user.createdAt!);
+  return AdminRow(
+    onTap: () => showDialog(
+      context: context,
+      builder: (_) => _MemberDetailDialog(user: user, isKorean: isKorean, isSelf: isSelf),
+    ),
+    cells: [
+      // 회원명 / 이메일
+      Row(
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: C.lvL,
+            backgroundImage: user.photoURL.isNotEmpty ? NetworkImage(user.photoURL) : null,
+            child: user.photoURL.isEmpty
+                ? Text(
+                    user.displayName.isNotEmpty
+                        ? user.displayName[0].toUpperCase()
+                        : user.email.isNotEmpty
+                            ? user.email[0].toUpperCase()
+                            : 'U',
+                    style: TextStyle(color: C.lvD, fontWeight: FontWeight.bold, fontSize: 12),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: AdminCellTwoLine(
+              title: user.displayName.isEmpty ? user.email : user.displayName,
+              subtitle: user.email,
             ),
           ),
-        ),
-        const SizedBox(height: 12),
-        Expanded(
-          child: usersAsync.when(
-            data: (users) {
-              final filtered = users.where((user) {
-                if (query.isEmpty) return true;
-                return user.displayName.toLowerCase().contains(query) ||
-                    user.email.toLowerCase().contains(query) ||
-                    user.uid.toLowerCase().contains(query);
-              }).toList();
+        ],
+      ),
+      // 가입일
+      AdminCellText(created, muted: true),
+      // 요금제
+      AdminCellText(user.subscription.planId, muted: true),
+      // 뱃지
+      _MemberBadgesCell(uid: user.uid, isKorean: isKorean),
+      // 관리 (수정/삭제)
+      _MemberActionsCell(user: user, isSelf: isSelf, isKorean: isKorean),
+    ],
+  );
+}
 
-              if (filtered.isEmpty) {
-                return GlassCard(
-                  child: Center(
-                    child: Text(
-                      widget.isKorean ? '조건에 맞는 회원이 없습니다.' : 'No matching members found.',
-                      style: T.body.copyWith(color: C.tx2),
-                    ),
-                  ),
-                );
-              }
+class _MemberBadgesCell extends ConsumerWidget {
+  final String uid;
+  final bool isKorean;
+  const _MemberBadgesCell({required this.uid, required this.isKorean});
 
-              return ListView.separated(
-                itemCount: filtered.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 10),
-                itemBuilder: (context, index) {
-                  final user = filtered[index];
-                  return _MemberRow(user: user, isKorean: widget.isKorean);
-                },
-              );
-            },
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => GlassCard(child: Text(e.toString(), style: T.body.copyWith(color: C.og))),
-          ),
-        ),
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isAdmin = ref.watch(_memberAdminFlagProvider(uid)).valueOrNull == true;
+    final isBlocked = ref.watch(_memberBlockedFlagProvider(uid)).valueOrNull == true;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (isAdmin) ...[
+          MoriChip(label: isKorean ? '관리자' : 'Admin', type: ChipType.lavender),
+          const SizedBox(width: 4),
+        ],
+        if (isBlocked)
+          MoriChip(label: isKorean ? '차단' : 'Blocked', type: ChipType.orange),
+        if (!isAdmin && !isBlocked)
+          Text('-', style: TextStyle(color: C.mu, fontSize: 12)),
       ],
     );
   }
 }
 
-class _MemberRow extends ConsumerWidget {
+class _MemberActionsCell extends StatelessWidget {
   final UserModel user;
+  final bool isSelf;
   final bool isKorean;
-
-  const _MemberRow({required this.user, required this.isKorean});
+  const _MemberActionsCell({required this.user, required this.isSelf, required this.isKorean});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid;
-    final isSelf = currentUid == user.uid;
-    final created = user.createdAt == null ? '-' : DateFormat('yyyy-MM-dd').format(user.createdAt!);
-    final isAdmin = ref.watch(_memberAdminFlagProvider(user.uid)).valueOrNull == true;
-    final isBlocked = ref.watch(_memberBlockedFlagProvider(user.uid)).valueOrNull == true;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.82),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: C.bd),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: C.lvL,
-            backgroundImage: user.photoURL.isNotEmpty ? NetworkImage(user.photoURL) : null,
-            child: user.photoURL.isEmpty
-                ? Text(
-                    user.displayName.isNotEmpty ? user.displayName[0].toUpperCase() : user.email.isNotEmpty ? user.email[0].toUpperCase() : 'U',
-                    style: TextStyle(color: C.lvD, fontWeight: FontWeight.bold, fontSize: 13),
-                  )
-                : null,
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: Icon(Icons.edit_outlined, size: 18, color: C.tx2),
+          tooltip: isKorean ? '세부정보 편집' : 'Edit details',
+          padding: const EdgeInsets.all(4),
+          constraints: const BoxConstraints(),
+          onPressed: () => showDialog(
+            context: context,
+            builder: (_) => _MemberDetailDialog(user: user, isKorean: isKorean, isSelf: isSelf),
           ),
-          const SizedBox(width: 10),
-          // 이름+이메일
-          SizedBox(
-            width: 160,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(user.displayName.isEmpty ? user.email : user.displayName, style: T.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis),
-                Text(user.email, style: T.caption.copyWith(color: C.mu), maxLines: 1, overflow: TextOverflow.ellipsis),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          // 가입일
-          SizedBox(
-            width: 90,
-            child: Text(created, style: T.caption.copyWith(color: C.mu)),
-          ),
-          const SizedBox(width: 10),
-          // 뱃지
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (isAdmin) ...[
-                MoriChip(label: isKorean ? '관리자' : 'Admin', type: ChipType.lavender),
-                const SizedBox(width: 4),
-              ],
-              if (isBlocked)
-                MoriChip(label: isKorean ? '차단' : 'Blocked', type: ChipType.orange),
-            ],
-          ),
-          const Spacer(),
-          // 세부정보 버튼
+        ),
+        if (!isSelf)
           IconButton(
-            icon: Icon(Icons.edit_outlined, size: 18, color: C.tx2),
-            tooltip: isKorean ? '세부정보 편집' : 'Edit details',
-            onPressed: () => showDialog(
-              context: context,
-              builder: (_) => _MemberDetailDialog(user: user, isKorean: isKorean, isSelf: isSelf),
-            ),
-          ),
-          // 삭제 버튼
-          if (!isSelf)
-            IconButton(
-              icon: Icon(Icons.delete_outline_rounded, size: 18, color: C.og),
-              tooltip: isKorean ? '회원 삭제' : 'Delete member',
-              onPressed: () async {
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: Text(isKorean ? '회원 삭제' : 'Delete Member'),
-                    content: Text(
-                      isKorean
-                          ? '${user.displayName.isEmpty ? user.email : user.displayName} 회원을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.'
-                          : 'Delete ${user.displayName.isEmpty ? user.email : user.displayName}?\nThis cannot be undone.',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: Text(isKorean ? '취소' : 'Cancel'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        style: TextButton.styleFrom(foregroundColor: C.og),
-                        child: Text(isKorean ? '삭제' : 'Delete'),
-                      ),
-                    ],
+            icon: Icon(Icons.delete_outline_rounded, size: 18, color: C.og),
+            tooltip: isKorean ? '회원 삭제' : 'Delete member',
+            padding: const EdgeInsets.all(4),
+            constraints: const BoxConstraints(),
+            onPressed: () async {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: Text(isKorean ? '회원 삭제' : 'Delete Member'),
+                  content: Text(
+                    isKorean
+                        ? '${user.displayName.isEmpty ? user.email : user.displayName} 회원을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.'
+                        : 'Delete ${user.displayName.isEmpty ? user.email : user.displayName}?\nThis cannot be undone.',
                   ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: Text(isKorean ? '취소' : 'Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      style: TextButton.styleFrom(foregroundColor: C.og),
+                      child: Text(isKorean ? '삭제' : 'Delete'),
+                    ),
+                  ],
+                ),
+              );
+              if (confirmed != true) return;
+              if (!context.mounted) return;
+              try {
+                await runWithMoriLoadingDialog<void>(
+                  context,
+                  message: isKorean ? '회원을 삭제하는 중입니다.' : 'Deleting member...',
+                  subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+                  task: () => FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(user.uid)
+                      .delete(),
                 );
-                if (confirmed == true) {
-                  await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
+                if (context.mounted) {
+                  showSavedSnackBar(
+                    ScaffoldMessenger.of(context),
+                    message: isKorean ? '회원이 삭제됐어요.' : 'Member deleted.',
+                  );
                 }
-              },
-            ),
-        ],
-      ),
+              } catch (e) {
+                if (context.mounted) {
+                  showSaveErrorSnackBar(
+                    ScaffoldMessenger.of(context),
+                    message: '$e',
+                  );
+                }
+              }
+            },
+          ),
+      ],
     );
   }
 }
@@ -4023,6 +4137,8 @@ class _SupportSettingsTabState extends ConsumerState<_SupportSettingsTab> {
           'popupTitle': _popupTitleCtrl.text.trim(),
           'popupMessage': _popupMessageCtrl.text.trim(),
           'popupLinkUrl': _popupLinkUrlCtrl.text.trim(),
+          // 일회성 표시 트래킹용 — 저장 시각 갱신.
+          'updatedAt': FieldValue.serverTimestamp(),
         },
         SetOptions(merge: true),
       );
@@ -4060,96 +4176,132 @@ class _BugReportsTabState extends ConsumerState<_BugReportsTab> {
     'other': Color(0xFF9E9E9E),
   };
 
+  static const _columns = [
+    AdminColumn(label: '구분', fixedWidth: 56),
+    AdminColumn(label: '제목 / 이메일', flex: 4),
+    AdminColumn(label: '플래그', fixedWidth: 80),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(_bugReportsProvider);
-    return async.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('오류: $e')),
-      data: (docs) {
-        if (docs.isEmpty) {
-          return const Center(child: Text('접수된 버그리포트가 없습니다.', style: TextStyle(color: Colors.grey)));
-        }
-        return Row(
-          children: [
-            // 목록
-            SizedBox(
-              width: 340,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    color: const Color(0xFFF5F5F5),
-                    child: Row(
+    final bulkActions = <AdminBulkAction<QueryDocumentSnapshot<Map<String, dynamic>>>>[
+      AdminBulkAction(
+        label: '선택 해결완료',
+        icon: Icons.check_circle_outline,
+        accent: Colors.green.shade600,
+        requireConfirm: true,
+        confirmMessage: '선택한 버그리포트를 해결완료로 표시할까요?',
+        loadingMessage: '해결완료 처리 중입니다.',
+        onTap: (selected) async {
+          await _bulkUpdateDocs(
+            selected.map((d) => d.reference).toList(),
+            {'isResolved': true},
+          );
+        },
+      ),
+      AdminBulkAction(
+        label: '선택 삭제',
+        icon: Icons.delete_outline_rounded,
+        accent: C.og,
+        requireConfirm: true,
+        confirmMessage: '선택한 버그리포트를 모두 삭제할까요? 되돌릴 수 없습니다.',
+        loadingMessage: '버그리포트를 삭제하는 중입니다.',
+        onTap: (selected) async {
+          await _bulkDeleteDocs(selected.map((d) => d.reference).toList());
+        },
+      ),
+    ];
+    return Row(
+      children: [
+        SizedBox(
+          width: 380,
+          child: async.when(
+            loading: () => AdminListShell<QueryDocumentSnapshot<Map<String, dynamic>>>(
+              title: '버그리포트',
+              icon: Icons.bug_report_rounded,
+              columns: _columns,
+              items: const [],
+              isLoading: true,
+              rowBuilder: (_, _) => const AdminRow(cells: []),
+            ),
+            error: (e, _) => AdminListShell<QueryDocumentSnapshot<Map<String, dynamic>>>(
+              title: '버그리포트',
+              icon: Icons.bug_report_rounded,
+              columns: _columns,
+              items: const [],
+              errorMessage: '$e',
+              rowBuilder: (_, _) => const AdminRow(cells: []),
+            ),
+            data: (docs) => AdminListShell<QueryDocumentSnapshot<Map<String, dynamic>>>(
+              title: '버그리포트',
+              icon: Icons.bug_report_rounded,
+              columns: _columns,
+              items: docs,
+              emptyMessage: '접수된 버그리포트가 없습니다.',
+              selectable: true,
+              itemKey: (d) => d.id,
+              bulkActions: bulkActions,
+              rowBuilder: (ctx, doc) {
+                final data = doc.data();
+                final category = data['category'] as String? ?? 'other';
+                final issueNum = data['githubIssueNumber'] as int?;
+                final wantsReply = data['wantsReply'] as bool? ?? false;
+                final userTier = data['userTier'] as String? ?? 'free';
+                final isSelected = _selectedId == doc.id;
+                final categoryColor = _categoryColors[category] ?? Colors.grey;
+                final email = data['userEmail'] as String? ?? '';
+                return AdminRow(
+                  selected: isSelected,
+                  accent: categoryColor,
+                  onTap: () => setState(() => _selectedId = isSelected ? null : doc.id),
+                  cells: [
+                    AdminBadge(label: category, color: categoryColor),
+                    AdminCellTwoLine(
+                      title: data['title'] as String? ?? '',
+                      subtitle: issueNum != null ? '#$issueNum · $email' : email,
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.bug_report_rounded, size: 18, color: Color(0xFF1A1A2E)),
-                        const SizedBox(width: 8),
-                        Text('버그리포트 (${docs.length})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        if (userTier == 'premium')
+                          const Text('⭐', style: TextStyle(fontSize: 13)),
+                        if (wantsReply)
+                          const Padding(
+                            padding: EdgeInsets.only(left: 4),
+                            child: Icon(Icons.mail_outline_rounded, size: 14, color: Color(0xFF1565C0)),
+                          ),
+                        if (userTier != 'premium' && !wantsReply)
+                          AdminCellText('-', muted: true),
                       ],
                     ),
-                  ),
-                  const Divider(height: 1),
-                  Expanded(
-                    child: ListView.separated(
-                      itemCount: docs.length,
-                      separatorBuilder: (_, _) => const Divider(height: 1),
-                      itemBuilder: (context, i) {
-                        final doc = docs[i];
-                        final data = doc.data();
-                        final category = data['category'] as String? ?? 'other';
-                        final issueNum = data['githubIssueNumber'] as int?;
-                        final wantsReply = data['wantsReply'] as bool? ?? false;
-                        final userTier = data['userTier'] as String? ?? 'free';
-                        final isSelected = _selectedId == doc.id;
-                        return ListTile(
-                          selected: isSelected,
-                          selectedTileColor: const Color(0xFFEEF2FF),
-                          dense: true,
-                          leading: CircleAvatar(
-                            radius: 12,
-                            backgroundColor: _categoryColors[category] ?? Colors.grey,
-                            child: Text(category[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                          ),
-                          title: Row(
-                            children: [
-                              Expanded(child: Text(data['title'] as String? ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                              if (userTier == 'premium') const Text('⭐', style: TextStyle(fontSize: 11)),
-                              if (wantsReply) const Padding(padding: EdgeInsets.only(left: 2), child: Icon(Icons.mail_outline_rounded, size: 13, color: Color(0xFF1565C0))),
-                            ],
-                          ),
-                          subtitle: Text(
-                            issueNum != null ? '#$issueNum · ${data['userEmail'] ?? ''}' : data['userEmail'] as String? ?? '',
-                            style: TextStyle(fontSize: 11, color: issueNum != null ? const Color(0xFF4CAF50) : Colors.grey),
-                          ),
-                          onTap: () => setState(() => _selectedId = isSelected ? null : doc.id),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
+                  ],
+                );
+              },
             ),
-            const VerticalDivider(width: 1),
-            // 상세
-            Expanded(
-              child: () {
-                  if (_selectedId == null) {
-                    return const Center(child: Text('목록에서 항목을 선택하세요.', style: TextStyle(color: Colors.grey)));
-                  }
-                  final selectedDoc = docs.where((d) => d.id == _selectedId!).firstOrNull;
-                  if (selectedDoc == null) {
-                    return const Center(child: Text('목록에서 항목을 선택하세요.', style: TextStyle(color: Colors.grey)));
-                  }
-                  return _BugReportDetail(
-                    doc: selectedDoc,
-                    onDeleted: () => setState(() => _selectedId = null),
-                  );
-                }(),
-            ),
-          ],
-        );
-      },
+          ),
+        ),
+        const VerticalDivider(width: 1),
+        Expanded(
+          child: async.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, _) => const SizedBox.shrink(),
+            data: (docs) {
+              if (_selectedId == null) {
+                return const Center(child: Text('목록에서 항목을 선택하세요.', style: TextStyle(color: Colors.grey)));
+              }
+              final selectedDoc = docs.where((d) => d.id == _selectedId!).firstOrNull;
+              if (selectedDoc == null) {
+                return const Center(child: Text('목록에서 항목을 선택하세요.', style: TextStyle(color: Colors.grey)));
+              }
+              return _BugReportDetail(
+                doc: selectedDoc,
+                onDeleted: () => setState(() => _selectedId = null),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -4361,7 +4513,7 @@ class _BugReportDetailState extends State<_BugReportDetail> {
                 onTap: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.network(url, width: 120, height: 120, fit: BoxFit.cover),
+                  child: CachedNetworkImage(imageUrl: url, width: 120, height: 120, fit: BoxFit.cover),
                 ),
               )).toList(),
             ),
@@ -4453,6 +4605,17 @@ class _DetailSection extends StatelessWidget {
 
 // ─── 어드민 스와치 탭 ──────────────────────────────────────────────────────────
 
+// createdAt 필드를 다양한 타입(Timestamp / ISO String / DateTime / int millis)으로
+// 안전하게 DateTime 으로 변환. 변환 실패 시 null 반환.
+DateTime? _coerceToDateTime(dynamic v) {
+  if (v == null) return null;
+  if (v is Timestamp) return v.toDate();
+  if (v is DateTime) return v;
+  if (v is String) return DateTime.tryParse(v);
+  if (v is int) return DateTime.fromMillisecondsSinceEpoch(v);
+  return null;
+}
+
 final _adminAllSwatchesProvider = StreamProvider<List<QueryDocumentSnapshot<Map<String, dynamic>>>>((ref) {
   return FirebaseFirestore.instance
       .collectionGroup('swatches')
@@ -4461,10 +4624,12 @@ final _adminAllSwatchesProvider = StreamProvider<List<QueryDocumentSnapshot<Map<
       .map((s) {
         final docs = s.docs.toList();
         docs.sort((a, b) {
-          final aTs = a.data()['createdAt'];
-          final bTs = b.data()['createdAt'];
-          if (aTs == null || bTs == null) return 0;
-          return (bTs as Timestamp).compareTo(aTs as Timestamp);
+          final aTs = _coerceToDateTime(a.data()['createdAt']);
+          final bTs = _coerceToDateTime(b.data()['createdAt']);
+          if (aTs == null && bTs == null) return 0;
+          if (aTs == null) return 1;
+          if (bTs == null) return -1;
+          return bTs.compareTo(aTs);
         });
         return docs;
       });
@@ -4478,12 +4643,12 @@ final _adminAllPatternsProvider = StreamProvider<List<QueryDocumentSnapshot<Map<
       .map((s) {
         final docs = s.docs.toList();
         docs.sort((a, b) {
-          final aTs = a.data()['createdAt'];
-          final bTs = b.data()['createdAt'];
+          final aTs = _coerceToDateTime(a.data()['createdAt']);
+          final bTs = _coerceToDateTime(b.data()['createdAt']);
           if (aTs == null && bTs == null) return 0;
           if (aTs == null) return 1;
           if (bTs == null) return -1;
-          return (bTs as Timestamp).compareTo(aTs as Timestamp);
+          return bTs.compareTo(aTs);
         });
         return docs;
       });
@@ -4506,143 +4671,144 @@ class _AdminSwatchesTab extends ConsumerStatefulWidget {
 class _AdminSwatchesTabState extends ConsumerState<_AdminSwatchesTab> {
   String _search = '';
 
+  static const _columns = [
+    AdminColumn(label: '색상', fixedWidth: 60),
+    AdminColumn(label: '브랜드 / 소유자', flex: 3),
+    AdminColumn(label: '컬러코드', flex: 1),
+    AdminColumn(label: '관리', fixedWidth: 60, align: TextAlign.end),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(_adminAllSwatchesProvider);
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Row(
-            children: [
-              const Icon(Icons.palette_rounded, size: 18, color: Color(0xFF1A1A2E)),
-              const SizedBox(width: 8),
-              async.when(
-                data: (d) => Text('스와치 전체 (${d.length})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                loading: () => const Text('스와치 로딩 중...', style: TextStyle(fontSize: 14)),
-                error: (e, _) => Text('오류: $e', style: const TextStyle(color: Colors.red, fontSize: 13)),
-              ),
-              const Spacer(),
-              SizedBox(
-                width: 220,
-                child: TextField(
-                  decoration: const InputDecoration(
-                    hintText: '이름/브랜드 검색',
-                    prefixIcon: Icon(Icons.search, size: 18),
-                    isDense: true,
-                    contentPadding: EdgeInsets.symmetric(vertical: 8),
-                  ),
-                  onChanged: (v) => setState(() => _search = v.toLowerCase()),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: async.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('오류: $e')),
-            data: (docs) {
-              final filtered = _search.isEmpty
-                  ? docs
-                  : docs.where((d) {
-                      final data = d.data();
-                      final name = (data['yarnBrandName'] ?? data['name'] ?? '').toString().toLowerCase();
-                      return name.contains(_search);
-                    }).toList();
-              if (filtered.isEmpty) {
-                return const Center(child: Text('스와치가 없습니다.', style: TextStyle(color: Colors.grey)));
+    return async.when(
+      loading: () => AdminListShell<QueryDocumentSnapshot<Map<String, dynamic>>>(
+        title: '스와치',
+        icon: Icons.palette_rounded,
+        columns: _columns,
+        items: const [],
+        isLoading: true,
+        rowBuilder: (_, _) => const AdminRow(cells: []),
+      ),
+      error: (e, _) => AdminListShell<QueryDocumentSnapshot<Map<String, dynamic>>>(
+        title: '스와치',
+        icon: Icons.palette_rounded,
+        columns: _columns,
+        items: const [],
+        errorMessage: '$e',
+        rowBuilder: (_, _) => const AdminRow(cells: []),
+      ),
+      data: (docs) {
+        final filtered = _search.isEmpty
+            ? docs
+            : docs.where((d) {
+                final data = d.data();
+                final name = (data['yarnBrandName'] ?? data['name'] ?? '').toString().toLowerCase();
+                return name.contains(_search);
+              }).toList();
+        return AdminListShell<QueryDocumentSnapshot<Map<String, dynamic>>>(
+          title: '스와치',
+          icon: Icons.palette_rounded,
+          columns: _columns,
+          items: filtered,
+          searchHint: '이름/브랜드 검색',
+          onSearchChanged: (v) => setState(() => _search = v.toLowerCase()),
+          emptyMessage: '스와치가 없습니다.',
+          selectable: true,
+          itemKey: (d) => d.reference.path,
+          bulkActions: [
+            AdminBulkAction(
+              label: '선택 삭제',
+              icon: Icons.delete_outline_rounded,
+              accent: C.og,
+              requireConfirm: true,
+              confirmMessage: '선택한 스와치를 모두 삭제할까요? 되돌릴 수 없습니다.',
+              loadingMessage: '스와치를 삭제하는 중입니다.',
+              onTap: (selected) async {
+                await _bulkDeleteDocs(
+                    selected.map((d) => d.reference).toList());
+              },
+            ),
+          ],
+          rowBuilder: (ctx, doc) {
+            final data = doc.data();
+            final pathParts = doc.reference.path.split('/');
+            final ownerUid = pathParts.length >= 2 ? pathParts[1] : '';
+            final brandName = data['yarnBrandName'] as String? ?? '';
+            final colorHex = data['colorHex'] as String? ?? '';
+            Color swatchColor = Colors.grey.shade300;
+            try {
+              if (colorHex.isNotEmpty) {
+                swatchColor = Color(int.parse(colorHex.replaceFirst('#', '0xFF')));
               }
-              return ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: filtered.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 6),
-                itemBuilder: (context, i) {
-                  final doc = filtered[i];
-                  final data = doc.data();
-                  final pathParts = doc.reference.path.split('/');
-                  final ownerUid = pathParts.length >= 2 ? pathParts[1] : '';
-                  final brandName = data['yarnBrandName'] as String? ?? '';
-                  final colorHex = data['colorHex'] as String? ?? '';
-                  Color swatchColor = Colors.grey.shade300;
-                  try {
-                    if (colorHex.isNotEmpty) {
-                      swatchColor = Color(int.parse(colorHex.replaceFirst('#', '0xFF')));
-                    }
-                  } catch (_) {}
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: swatchColor,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.grey.shade300),
-                          ),
+            } catch (_) {}
+            return AdminRow(
+              cells: [
+                // 색상
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: swatchColor,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                ),
+                // 브랜드/소유자
+                AdminCellTwoLine(
+                  title: brandName.isNotEmpty ? brandName : '(브랜드 없음)',
+                  subtitle: 'UID: $ownerUid',
+                ),
+                // 컬러코드
+                Text(
+                  colorHex.isNotEmpty ? colorHex : '-',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey.shade600,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+                // 관리
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    icon: Icon(Icons.delete_outline, size: 18, color: Colors.red.shade300),
+                    tooltip: '삭제',
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(),
+                    onPressed: () async {
+                      final confirm = await showDialog<bool>(
+                        context: ctx,
+                        builder: (dctx) => AlertDialog(
+                          title: const Text('스와치 삭제'),
+                          content: const Text('이 스와치를 삭제하시겠습니까?'),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text('취소')),
+                            TextButton(onPressed: () => Navigator.pop(dctx, true), child: Text('삭제', style: TextStyle(color: Colors.red.shade400))),
+                          ],
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(brandName.isNotEmpty ? brandName : '(브랜드 없음)',
-                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                              Text('UID: $ownerUid',
-                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-                            ],
-                          ),
-                        ),
-                        if (colorHex.isNotEmpty)
-                          Text(colorHex,
-                              style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontFamily: 'monospace')),
-                        IconButton(
-                          icon: Icon(Icons.delete_outline, size: 18, color: Colors.red.shade300),
-                          tooltip: '삭제',
-                          onPressed: () async {
-                            final confirm = await showDialog<bool>(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                title: const Text('스와치 삭제'),
-                                content: const Text('이 스와치를 삭제하시겠습니까?'),
-                                actions: [
-                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
-                                  TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('삭제', style: TextStyle(color: Colors.red.shade400))),
-                                ],
-                              ),
-                            );
-                            if (confirm != true) return;
-                            if (!context.mounted) return;
-                            try {
-                              await runWithMoriLoadingDialog<void>(
-                                context,
-                                message: '삭제하는 중입니다.',
-                                subtitle: '잠시만 기다려 주세요.',
-                                task: () => doc.reference.delete(),
-                              );
-                              if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: '삭제됐어요.');
-                            } catch (e) {
-                              if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
+                      );
+                      if (confirm != true) return;
+                      if (!ctx.mounted) return;
+                      try {
+                        await runWithMoriLoadingDialog<void>(
+                          ctx,
+                          message: '삭제하는 중입니다.',
+                          subtitle: '잠시만 기다려 주세요.',
+                          task: () => doc.reference.delete(),
+                        );
+                        if (ctx.mounted) showSavedSnackBar(ScaffoldMessenger.of(ctx), message: '삭제됐어요.');
+                      } catch (e) {
+                        if (ctx.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '$e');
+                      }
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -4699,143 +4865,121 @@ class _AdminProjectsTabState extends ConsumerState<_AdminProjectsTab> {
     'finished': '완료',
   };
 
+  static const _columns = [
+    AdminColumn(label: '상태', fixedWidth: 80),
+    AdminColumn(label: '제목 / 소유자', flex: 3),
+    AdminColumn(label: '시작일', flex: 1),
+    AdminColumn(label: '관리', fixedWidth: 60, align: TextAlign.end),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(_adminAllProjectsProvider);
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Row(
-            children: [
-              const Icon(Icons.folder_copy_rounded, size: 18, color: Color(0xFF1A1A2E)),
-              const SizedBox(width: 8),
-              async.when(
-                data: (d) => Text('프로젝트 전체 (${d.length})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                loading: () => const Text('프로젝트 로딩 중...', style: TextStyle(fontSize: 14)),
-                error: (e, _) => Text('오류: $e', style: const TextStyle(color: Colors.red, fontSize: 13)),
-              ),
-              const Spacer(),
-              SizedBox(
-                width: 220,
-                child: TextField(
-                  decoration: const InputDecoration(
-                    hintText: '제목 검색',
-                    prefixIcon: Icon(Icons.search, size: 18),
-                    isDense: true,
-                    contentPadding: EdgeInsets.symmetric(vertical: 8),
+    return async.when(
+      loading: () => AdminListShell<QueryDocumentSnapshot<Map<String, dynamic>>>(
+        title: '프로젝트',
+        icon: Icons.folder_copy_rounded,
+        columns: _columns,
+        items: const [],
+        isLoading: true,
+        rowBuilder: (_, _) => const AdminRow(cells: []),
+      ),
+      error: (e, _) => AdminListShell<QueryDocumentSnapshot<Map<String, dynamic>>>(
+        title: '프로젝트',
+        icon: Icons.folder_copy_rounded,
+        columns: _columns,
+        items: const [],
+        errorMessage: '$e',
+        rowBuilder: (_, _) => const AdminRow(cells: []),
+      ),
+      data: (docs) {
+        final filtered = _search.isEmpty
+            ? docs
+            : docs.where((d) {
+                final title = (d.data()['title'] ?? '').toString().toLowerCase();
+                return title.contains(_search);
+              }).toList();
+        return AdminListShell<QueryDocumentSnapshot<Map<String, dynamic>>>(
+          title: '프로젝트',
+          icon: Icons.folder_copy_rounded,
+          columns: _columns,
+          items: filtered,
+          searchHint: '제목 검색',
+          onSearchChanged: (v) => setState(() => _search = v.toLowerCase()),
+          emptyMessage: '프로젝트가 없습니다.',
+          selectable: true,
+          itemKey: (d) => d.reference.path,
+          bulkActions: [
+            AdminBulkAction(
+              label: '선택 삭제',
+              icon: Icons.delete_outline_rounded,
+              accent: C.og,
+              requireConfirm: true,
+              confirmMessage: '선택한 프로젝트를 모두 삭제할까요? 되돌릴 수 없습니다.',
+              loadingMessage: '프로젝트를 삭제하는 중입니다.',
+              onTap: (selected) async {
+                await _bulkDeleteDocs(
+                    selected.map((d) => d.reference).toList());
+              },
+            ),
+          ],
+          rowBuilder: (ctx, doc) {
+            final data = doc.data();
+            final pathParts = doc.reference.path.split('/');
+            final ownerUid = pathParts.length >= 2 ? pathParts[1] : '';
+            final title = data['title'] as String? ?? '(제목 없음)';
+            final status = data['status'] as String? ?? 'planning';
+            final statusColor = _statusColors[status] ?? Colors.grey;
+            final statusLabel = _statusLabels[status] ?? status;
+            final createdAt = data['createdAt'];
+            final createdAtDate = _parseAdminDate(createdAt);
+            final dateStr = createdAtDate != null ? DateFormat('yyyy-MM-dd').format(createdAtDate) : '';
+            return AdminRow(
+              accent: statusColor,
+              cells: [
+                AdminBadge(label: statusLabel, color: statusColor),
+                AdminCellTwoLine(title: title, subtitle: 'UID: $ownerUid'),
+                AdminCellText(dateStr.isNotEmpty ? dateStr : '-', muted: true),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    icon: Icon(Icons.delete_outline, size: 18, color: Colors.red.shade300),
+                    tooltip: '삭제',
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(),
+                    onPressed: () async {
+                      final confirm = await showDialog<bool>(
+                        context: ctx,
+                        builder: (dctx) => AlertDialog(
+                          title: const Text('프로젝트 삭제'),
+                          content: Text('[$title] 프로젝트를 삭제하시겠습니까?'),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text('취소')),
+                            TextButton(onPressed: () => Navigator.pop(dctx, true), child: Text('삭제', style: TextStyle(color: Colors.red.shade400))),
+                          ],
+                        ),
+                      );
+                      if (confirm != true) return;
+                      if (!ctx.mounted) return;
+                      try {
+                        await runWithMoriLoadingDialog<void>(
+                          ctx,
+                          message: '삭제하는 중입니다.',
+                          subtitle: '잠시만 기다려 주세요.',
+                          task: () => doc.reference.delete(),
+                        );
+                        if (ctx.mounted) showSavedSnackBar(ScaffoldMessenger.of(ctx), message: '삭제됐어요.');
+                      } catch (e) {
+                        if (ctx.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '$e');
+                      }
+                    },
                   ),
-                  onChanged: (v) => setState(() => _search = v.toLowerCase()),
                 ),
-              ),
-            ],
-          ),
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: async.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('오류: $e')),
-            data: (docs) {
-              final filtered = _search.isEmpty
-                  ? docs
-                  : docs.where((d) {
-                      final title = (d.data()['title'] ?? '').toString().toLowerCase();
-                      return title.contains(_search);
-                    }).toList();
-              if (filtered.isEmpty) {
-                return const Center(child: Text('프로젝트가 없습니다.', style: TextStyle(color: Colors.grey)));
-              }
-              return ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: filtered.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 6),
-                itemBuilder: (context, i) {
-                  final doc = filtered[i];
-                  final data = doc.data();
-                  final pathParts = doc.reference.path.split('/');
-                  final ownerUid = pathParts.length >= 2 ? pathParts[1] : '';
-                  final title = data['title'] as String? ?? '(제목 없음)';
-                  final status = data['status'] as String? ?? 'planning';
-                  final statusColor = _statusColors[status] ?? Colors.grey;
-                  final statusLabel = _statusLabels[status] ?? status;
-                  final createdAt = data['createdAt'];
-                  final createdAtDate = _parseAdminDate(createdAt);
-                  final dateStr = createdAtDate != null ? DateFormat('yyyy-MM-dd').format(createdAtDate) : '';
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: statusColor.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(99),
-                            border: Border.all(color: statusColor.withValues(alpha: 0.35)),
-                          ),
-                          child: Text(statusLabel,
-                              style: TextStyle(fontSize: 11, color: statusColor, fontWeight: FontWeight.w700)),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(title,
-                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis),
-                              Text('UID: $ownerUid',
-                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-                            ],
-                          ),
-                        ),
-                        if (dateStr.isNotEmpty)
-                          Text(dateStr, style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
-                        IconButton(
-                          icon: Icon(Icons.delete_outline, size: 18, color: Colors.red.shade300),
-                          tooltip: '삭제',
-                          onPressed: () async {
-                            final confirm = await showDialog<bool>(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                title: const Text('프로젝트 삭제'),
-                                content: Text('[$title] 프로젝트를 삭제하시겠습니까?'),
-                                actions: [
-                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
-                                  TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('삭제', style: TextStyle(color: Colors.red.shade400))),
-                                ],
-                              ),
-                            );
-                            if (confirm != true) return;
-                            if (!context.mounted) return;
-                            try {
-                              await runWithMoriLoadingDialog<void>(
-                                context,
-                                message: '삭제하는 중입니다.',
-                                subtitle: '잠시만 기다려 주세요.',
-                                task: () => doc.reference.delete(),
-                              );
-                              if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: '삭제됐어요.');
-                            } catch (e) {
-                              if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -5659,113 +5803,146 @@ class _EditorialAdminTabState extends ConsumerState<_EditorialAdminTab> {
           ),
         ),
         const SizedBox(height: 12),
-        // 목록
+        // 목록 (AdminListShell)
         Expanded(
-          child: postsAsync.when(
-            loading: () => Center(child: CircularProgressIndicator(color: C.lv)),
-            error: (e, _) => Center(child: Text('$e', style: TextStyle(color: C.tx))),
-            data: (posts) {
-              final filtered = posts.where((p) => p.type == _selectedType).toList();
-              if (filtered.isEmpty) {
-                return Center(
-                  child: Text(
-                    '게시된 글이 없어요.',
-                    style: TextStyle(color: C.mu, fontSize: 13),
-                  ),
-                );
-              }
-              return ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-                itemCount: filtered.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 8),
-                itemBuilder: (ctx, i) {
-                  final post = filtered[i];
-                  return Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: C.gx,
-                      border: Border.all(color: C.bd2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: (post.isPublished ? Colors.green : Colors.grey).withValues(alpha: 0.18),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    post.isPublished ? '공개' : '비공개',
-                                    style: TextStyle(
-                                      color: post.isPublished ? Colors.green : Colors.grey,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                                if (post.youtubeVideoId.isNotEmpty) ...[
-                                  const SizedBox(width: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(6)),
-                                    child: const Text('YouTube', style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.w600)),
-                                  ),
-                                ],
-                                if (post.imageUrl.isNotEmpty) ...[
-                                  const SizedBox(width: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(6)),
-                                    child: const Text('이미지', style: TextStyle(color: Colors.blue, fontSize: 10, fontWeight: FontWeight.w600)),
-                                  ),
-                                ],
-                                if (post.attachmentUrl.isNotEmpty) ...[
-                                  const SizedBox(width: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(6)),
-                                    child: const Text('첨부', style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.w600)),
-                                  ),
-                                ],
-                              ]),
-                              const SizedBox(height: 6),
-                              Text(post.title, style: TextStyle(color: C.tx, fontSize: 13, fontWeight: FontWeight.w600)),
-                              if (post.content.isNotEmpty) ...[
-                                const SizedBox(height: 4),
-                                Text(
-                                  post.content,
-                                  style: TextStyle(color: C.mu, fontSize: 12),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                              if (post.createdAt != null) ...[
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${post.createdAt!.year}.${post.createdAt!.month.toString().padLeft(2, '0')}.${post.createdAt!.day.toString().padLeft(2, '0')}',
-                                  style: TextStyle(color: C.mu, fontSize: 11),
-                                ),
-                              ],
-                            ],
-                          ),
+          child: Builder(
+            builder: (ctx) {
+              const columns = [
+                AdminColumn(label: '상태', fixedWidth: 64),
+                AdminColumn(label: '제목 / 본문', flex: 4),
+                AdminColumn(label: '첨부', fixedWidth: 96),
+                AdminColumn(label: '게시일', flex: 1),
+                AdminColumn(label: '관리', fixedWidth: 80, align: TextAlign.end),
+              ];
+              return postsAsync.when(
+                loading: () => const AdminListShell<EditorialPost>(
+                  title: '에디토리얼',
+                  icon: Icons.article_rounded,
+                  columns: columns,
+                  items: [],
+                  isLoading: true,
+                  rowBuilder: _emptyRow,
+                ),
+                error: (e, _) => AdminListShell<EditorialPost>(
+                  title: '에디토리얼',
+                  icon: Icons.article_rounded,
+                  columns: columns,
+                  items: const [],
+                  errorMessage: '$e',
+                  rowBuilder: _emptyRow,
+                ),
+                data: (posts) {
+                  final filtered = posts.where((p) => p.type == _selectedType).toList();
+                  final editorialCol = FirebaseFirestore.instance.collection('editorial_posts');
+                  return AdminListShell<EditorialPost>(
+                    title: '에디토리얼',
+                    icon: Icons.article_rounded,
+                    columns: columns,
+                    items: filtered,
+                    emptyMessage: '게시된 글이 없어요.',
+                    selectable: true,
+                    itemKey: (p) => p.id,
+                    bulkActions: [
+                      AdminBulkAction<EditorialPost>(
+                        label: '선택 발행',
+                        icon: Icons.public_rounded,
+                        accent: Colors.green.shade600,
+                        requireConfirm: true,
+                        confirmMessage: '선택한 글을 모두 발행할까요?',
+                        loadingMessage: '발행 처리 중입니다.',
+                        onTap: (selected) async {
+                          await _bulkUpdateDocs(
+                            selected.map((p) => editorialCol.doc(p.id)).toList(),
+                            {'isPublished': true},
+                          );
+                        },
+                      ),
+                      AdminBulkAction<EditorialPost>(
+                        label: '선택 비공개',
+                        icon: Icons.visibility_off_outlined,
+                        accent: Colors.grey.shade600,
+                        requireConfirm: true,
+                        confirmMessage: '선택한 글을 모두 비공개로 전환할까요?',
+                        loadingMessage: '비공개 처리 중입니다.',
+                        onTap: (selected) async {
+                          await _bulkUpdateDocs(
+                            selected.map((p) => editorialCol.doc(p.id)).toList(),
+                            {'isPublished': false},
+                          );
+                        },
+                      ),
+                      AdminBulkAction<EditorialPost>(
+                        label: '선택 삭제',
+                        icon: Icons.delete_outline_rounded,
+                        accent: C.og,
+                        requireConfirm: true,
+                        confirmMessage: '선택한 글을 모두 삭제할까요? 되돌릴 수 없습니다.',
+                        loadingMessage: '삭제 처리 중입니다.',
+                        onTap: (selected) async {
+                          await _bulkDeleteDocs(
+                            selected.map((p) => editorialCol.doc(p.id)).toList(),
+                          );
+                        },
+                      ),
+                    ],
+                    rowBuilder: (rctx, post) => AdminRow(
+                      accent: post.isPublished ? Colors.green : Colors.grey,
+                      onTap: () => _showEditDialog(context, post),
+                      cells: [
+                        // 상태
+                        AdminBadge(
+                          label: post.isPublished ? '공개' : '비공개',
+                          color: post.isPublished ? Colors.green : Colors.grey,
                         ),
-                        Column(
+                        // 제목 (본문 노출 X)
+                        AdminCellText(post.title, bold: true, maxLines: 1),
+                        // 첨부 아이콘
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (post.youtubeVideoId.isNotEmpty)
+                              const Padding(
+                                padding: EdgeInsets.only(right: 4),
+                                child: Icon(Icons.play_circle_outline_rounded, size: 16, color: Colors.red),
+                              ),
+                            if (post.imageUrl.isNotEmpty)
+                              const Padding(
+                                padding: EdgeInsets.only(right: 4),
+                                child: Icon(Icons.image_outlined, size: 16, color: Colors.blue),
+                              ),
+                            if (post.attachmentUrl.isNotEmpty)
+                              const Padding(
+                                padding: EdgeInsets.only(right: 4),
+                                child: Icon(Icons.attach_file_rounded, size: 16, color: Colors.orange),
+                              ),
+                            if (post.youtubeVideoId.isEmpty && post.imageUrl.isEmpty && post.attachmentUrl.isEmpty)
+                              AdminCellText('-', muted: true),
+                          ],
+                        ),
+                        // 게시일
+                        AdminCellText(
+                          post.createdAt != null
+                              ? '${post.createdAt!.year}.${post.createdAt!.month.toString().padLeft(2, '0')}.${post.createdAt!.day.toString().padLeft(2, '0')}'
+                              : '-',
+                          muted: true,
+                        ),
+                        // 관리
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
                               icon: Icon(Icons.edit_rounded, color: C.lv, size: 18),
-                              onPressed: () => _showEditDialog(context, post),
+                              padding: const EdgeInsets.all(4),
+                              constraints: const BoxConstraints(),
+                              onPressed: () => _showEditDialog(rctx, post),
                               tooltip: '수정',
                             ),
                             IconButton(
                               icon: const Icon(Icons.delete_rounded, color: Colors.red, size: 18),
-                              onPressed: () => _confirmDelete(context, post.id),
+                              padding: const EdgeInsets.all(4),
+                              constraints: const BoxConstraints(),
+                              onPressed: () => _confirmDelete(rctx, post.id),
                               tooltip: '삭제',
                             ),
                           ],
@@ -5781,6 +5958,8 @@ class _EditorialAdminTabState extends ConsumerState<_EditorialAdminTab> {
       ],
     );
   }
+
+  static AdminRow _emptyRow(BuildContext _, EditorialPost _) => const AdminRow(cells: []);
 
   Future<String?> _uploadEditorialFile(PlatformFile file) async {
     final ext = file.name.split('.').last;
@@ -6057,8 +6236,8 @@ class _EditorialAdminTabState extends ConsumerState<_EditorialAdminTab> {
                           const SizedBox(height: 6),
                           ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: Image.network(imageUrlCtrl.text.trim(), height: 80, fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) => Container(height: 40, color: C.bd2, child: Center(child: Text('이미지 로드 실패', style: TextStyle(color: C.mu, fontSize: 11))))),
+                            child: CachedNetworkImage(imageUrl: imageUrlCtrl.text.trim(), height: 80, fit: BoxFit.cover,
+                              errorWidget: (_, _, _) => Container(height: 40, color: C.bd2, child: Center(child: Text('이미지 로드 실패', style: TextStyle(color: C.mu, fontSize: 11))))),
                           ),
                         ],
                       ],
@@ -6420,6 +6599,9 @@ class _BuiltinTemplateAdminTab extends ConsumerWidget {
     final colorCtrl = TextEditingController(text: existing?.colorHex ?? '#B47EEB');
     final orderCtrl = TextEditingController(text: '${existing?.order ?? 0}');
     final isAdd = existing == null;
+    // 이슈 #787 — 카테고리(의상/소품/인형/아기용) 드롭다운 상태값.
+    BuiltinTemplateCategory selectedCategory =
+        existing?.category ?? BuiltinTemplateCategory.clothing;
 
     InputDecoration adminDec(String label, {String? hint}) => InputDecoration(
       labelText: label, hintText: hint,
@@ -6433,7 +6615,8 @@ class _BuiltinTemplateAdminTab extends ConsumerWidget {
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocalState) => AlertDialog(
         title: Text(isAdd ? '기본 템플릿 추가' : '기본 템플릿 수정',
             style: const TextStyle(fontWeight: FontWeight.w700)),
         content: SingleChildScrollView(
@@ -6453,6 +6636,29 @@ class _BuiltinTemplateAdminTab extends ConsumerWidget {
               TextField(controller: colorCtrl, style: const TextStyle(color: Colors.white), decoration: adminDec('색상 HEX', hint: '#B47EEB')),
               const SizedBox(height: 8),
               TextField(controller: orderCtrl, keyboardType: TextInputType.number, style: const TextStyle(color: Colors.white), decoration: adminDec('순서 (숫자)')),
+              const SizedBox(height: 8),
+              // 이슈 #787 — 카테고리 선택 드롭다운.
+              DropdownButtonFormField<BuiltinTemplateCategory>(
+                initialValue: selectedCategory,
+                isExpanded: true,
+                dropdownColor: const Color(0xFF1F1F2A),
+                style: const TextStyle(color: Colors.white),
+                decoration: adminDec('카테고리'),
+                items: BuiltinTemplateCategory.values
+                    .map((c) => DropdownMenuItem<BuiltinTemplateCategory>(
+                          value: c,
+                          child: Text(
+                            c.label(isKorean: true),
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        ))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) {
+                    setLocalState(() => selectedCategory = v);
+                  }
+                },
+              ),
             ],
           ),
         ),
@@ -6462,6 +6668,7 @@ class _BuiltinTemplateAdminTab extends ConsumerWidget {
             onPressed: () async {
               final tmpl = BuiltinTemplate(
                 id: existing?.id ?? '',
+                category: selectedCategory,
                 titleKo: titleKoCtrl.text.trim(),
                 titleEn: titleEnCtrl.text.trim(),
                 descKo: descKoCtrl.text.trim(),
@@ -6498,6 +6705,7 @@ class _BuiltinTemplateAdminTab extends ConsumerWidget {
             child: const Text('저장'),
           ),
         ],
+      ),
       ),
     );
   }
@@ -6712,7 +6920,7 @@ class _CommunityAdminTabState extends State<_CommunityAdminTab> {
                                 separatorBuilder: (_, _) => const SizedBox(width: 6),
                                 itemBuilder: (_, i) => ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(imageUrls[i], width: 80, height: 80, fit: BoxFit.cover),
+                                  child: CachedNetworkImage(imageUrl: imageUrls[i], width: 80, height: 80, fit: BoxFit.cover),
                                 ),
                               ),
                             ),
@@ -6930,12 +7138,12 @@ class _NoticesAdminTabState extends State<_NoticesAdminTab> {
                                   const SizedBox(height: 10),
                                   ClipRRect(
                                     borderRadius: BorderRadius.circular(8),
-                                    child: Image.network(
-                                      post.imageUrl,
+                                    child: CachedNetworkImage(
+                                      imageUrl: post.imageUrl,
                                       width: double.infinity,
                                       height: 160,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, _, _) => const SizedBox(),
+                                      errorWidget: (_, _, _) => const SizedBox(),
                                     ),
                                   ),
                                 ],
@@ -7088,7 +7296,7 @@ class _NoticesAdminTabState extends State<_NoticesAdminTab> {
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.network(imageUrl, height: 120, width: double.infinity, fit: BoxFit.cover),
+                          child: CachedNetworkImage(imageUrl: imageUrl, height: 120, width: double.infinity, fit: BoxFit.cover),
                         ),
                         Positioned(
                           top: 4, right: 4,
@@ -7477,7 +7685,7 @@ class _LandingBoardAdminTabState extends State<_LandingBoardAdminTab> {
 }
 
 
-// ?? 1:1 臾몄쓽 愿由????????????????????????????????????????????????????????????
+// ── 1:1 문의 관리
 
 class _InquiriesAdminTab extends ConsumerStatefulWidget {
   const _InquiriesAdminTab();
@@ -7488,90 +7696,120 @@ class _InquiriesAdminTab extends ConsumerStatefulWidget {
 class _InquiriesAdminTabState extends ConsumerState<_InquiriesAdminTab> {
   String? _selectedId;
 
+  static const _inquiryColumns = [
+    AdminColumn(label: '상태', fixedWidth: 56),
+    AdminColumn(label: '제목 / 작성자', flex: 4),
+    AdminColumn(label: '접수일', flex: 1),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(_inquiriesProvider);
-    return async.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('?ㅻ쪟: $e')),
-      data: (docs) {
-        if (docs.isEmpty) {
-          return const Center(child: Text('?묒닔??臾몄쓽媛 ?놁뒿?덈떎.', style: TextStyle(color: Colors.grey)));
-        }
-        return Row(
-          children: [
-            SizedBox(
-              width: 340,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    color: const Color(0xFFF5F5F5),
-                    child: Row(children: [
-                      const Icon(Icons.mail_rounded, size: 18, color: Color(0xFF1A1A2E)),
-                      const SizedBox(width: 8),
-                      Text('1:1 臾몄쓽 (${docs.length})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    ]),
-                  ),
-                  const Divider(height: 1),
-                  Expanded(
-                    child: ListView.separated(
-                      itemCount: docs.length,
-                      separatorBuilder: (_, _) => const Divider(height: 1),
-                      itemBuilder: (context, i) {
-                        final doc = docs[i];
-                        final data = doc.data();
-                        final isResolved = data['isResolved'] as bool? ?? false;
-                        final isSelected = _selectedId == doc.id;
-                        final authorName = data['authorName'] as String? ?? '';
-                        final title = data['title'] as String? ?? '';
-                        final createdAt = data['createdAt'] != null
-                            ? DateTime.tryParse(data['createdAt'] as String? ?? '')
-                            : null;
-                        return ListTile(
-                          selected: isSelected,
-                          selectedTileColor: const Color(0xFFEEF2FF),
-                          dense: true,
-                          leading: CircleAvatar(
-                            radius: 12,
-                            backgroundColor: isResolved ? const Color(0xFF4CAF50) : const Color(0xFF34D399),
-                            child: Icon(isResolved ? Icons.check : Icons.mail_outline_rounded, size: 13, color: Colors.white),
-                          ),
-                          title: Text(title,
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500,
-                                  color: isResolved ? Colors.grey : const Color(0xFF1A1A2E)),
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
-                          subtitle: Text(
-                            [authorName, if (createdAt != null) DateFormat('MM.dd HH:mm').format(createdAt)].join(' 쨌 '),
-                            style: TextStyle(fontSize: 11, color: isResolved ? Colors.grey[400] : Colors.grey),
-                          ),
-                          onTap: () => setState(() => _selectedId = isSelected ? null : doc.id),
-                        );
-                      },
+    return Row(
+      children: [
+        SizedBox(
+          width: 380,
+          child: async.when(
+            loading: () => AdminListShell<QueryDocumentSnapshot<Map<String, dynamic>>>(
+              title: '1:1 문의',
+              icon: Icons.mail_rounded,
+              columns: _inquiryColumns,
+              items: const [],
+              isLoading: true,
+              rowBuilder: (_, _) => const AdminRow(cells: []),
+            ),
+            error: (e, _) => AdminListShell<QueryDocumentSnapshot<Map<String, dynamic>>>(
+              title: '1:1 문의',
+              icon: Icons.mail_rounded,
+              columns: _inquiryColumns,
+              items: const [],
+              errorMessage: '$e',
+              rowBuilder: (_, _) => const AdminRow(cells: []),
+            ),
+            data: (docs) => AdminListShell<QueryDocumentSnapshot<Map<String, dynamic>>>(
+              title: '1:1 문의',
+              icon: Icons.mail_rounded,
+              columns: _inquiryColumns,
+              items: docs,
+              emptyMessage: '접수된 문의가 없습니다.',
+              selectable: true,
+              itemKey: (d) => d.id,
+              bulkActions: [
+                AdminBulkAction(
+                  label: '선택 답변완료',
+                  icon: Icons.check_circle_outline,
+                  accent: Colors.green.shade600,
+                  requireConfirm: true,
+                  confirmMessage: '선택한 문의를 답변완료로 표시할까요?',
+                  loadingMessage: '답변완료 처리 중입니다.',
+                  onTap: (selected) async {
+                    await _bulkUpdateDocs(
+                      selected.map((d) => d.reference).toList(),
+                      {'isResolved': true},
+                    );
+                  },
+                ),
+                AdminBulkAction(
+                  label: '선택 삭제',
+                  icon: Icons.delete_outline_rounded,
+                  accent: C.og,
+                  requireConfirm: true,
+                  confirmMessage: '선택한 문의를 모두 삭제할까요? 되돌릴 수 없습니다.',
+                  loadingMessage: '문의를 삭제하는 중입니다.',
+                  onTap: (selected) async {
+                    await _bulkDeleteDocs(
+                        selected.map((d) => d.reference).toList());
+                  },
+                ),
+              ],
+              rowBuilder: (ctx, doc) {
+                final data = doc.data();
+                final isResolved = data['isResolved'] as bool? ?? false;
+                final isSelected = _selectedId == doc.id;
+                final authorName = data['authorName'] as String? ?? '';
+                final title = data['title'] as String? ?? '';
+                final createdAt = data['createdAt'] != null
+                    ? DateTime.tryParse(data['createdAt'] as String? ?? '')
+                    : null;
+                final accentColor = isResolved ? const Color(0xFF4CAF50) : const Color(0xFF34D399);
+                return AdminRow(
+                  selected: isSelected,
+                  accent: accentColor,
+                  onTap: () => setState(() => _selectedId = isSelected ? null : doc.id),
+                  cells: [
+                    AdminBadge(label: isResolved ? '완료' : '신규', color: accentColor),
+                    AdminCellTwoLine(title: title, subtitle: authorName),
+                    AdminCellText(
+                      createdAt != null ? DateFormat('MM.dd HH:mm').format(createdAt) : '-',
+                      muted: true,
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                );
+              },
             ),
-            const VerticalDivider(width: 1),
-            Expanded(
-              child: () {
-                if (_selectedId == null) {
-                  return const Center(child: Text('紐⑸줉?먯꽌 臾몄쓽瑜??좏깮?섏꽭??', style: TextStyle(color: Colors.grey)));
-                }
-                final selectedDoc = docs.where((d) => d.id == _selectedId!).firstOrNull;
-                if (selectedDoc == null) {
-                  return const Center(child: Text('紐⑸줉?먯꽌 臾몄쓽瑜??좏깮?섏꽭??', style: TextStyle(color: Colors.grey)));
-                }
-                return _InquiryDetail(doc: selectedDoc, onDeleted: () => setState(() => _selectedId = null));
-              }(),
-            ),
-          ],
-        );
-      },
+          ),
+        ),
+        const VerticalDivider(width: 1),
+        Expanded(
+          child: async.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, _) => const SizedBox.shrink(),
+            data: (docs) {
+              if (_selectedId == null) {
+                return const Center(child: Text('목록에서 문의를 선택하세요.', style: TextStyle(color: Colors.grey)));
+              }
+              final selectedDoc = docs.where((d) => d.id == _selectedId!).firstOrNull;
+              if (selectedDoc == null) {
+                return const Center(child: Text('목록에서 문의를 선택하세요.', style: TextStyle(color: Colors.grey)));
+              }
+              return _InquiryDetail(doc: selectedDoc, onDeleted: () => setState(() => _selectedId = null));
+            },
+          ),
+        ),
+      ],
     );
   }
+
 }
 
 class _InquiryDetail extends StatefulWidget {
@@ -7609,7 +7847,7 @@ class _InquiryDetailState extends State<_InquiryDetail> {
           .update({'adminMemo': _memoCtrl.text.trim(), 'isResolved': _isResolved});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('??λ릱?댁슂'), duration: Duration(milliseconds: 1200)));
+        const SnackBar(content: Text('저장됐습니다.'), duration: Duration(milliseconds: 1200)));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -7620,14 +7858,14 @@ class _InquiryDetailState extends State<_InquiryDetail> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('臾몄쓽 ??젣'),
-        content: const Text('??臾몄쓽瑜???젣?좉퉴??'),
+        title: const Text('문의 삭제'),
+        content: const Text('이 문의를 삭제하시겠어요?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('痍⑥냼')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('??젣'),
+            child: const Text('삭제'),
           ),
         ],
       ),
@@ -7662,11 +7900,11 @@ class _InquiryDetailState extends State<_InquiryDetail> {
                 TextButton.icon(
                   onPressed: () async {
                     final uri = Uri(scheme: 'mailto', path: authorEmail,
-                        queryParameters: {'subject': 'Re: $title', 'body': '\n\n---\n?먮낯 臾몄쓽:\n$content'});
+                        queryParameters: {'subject': 'Re: $title', 'body': '\n\n---\n원본 문의:\n$content'});
                     if (await canLaunchUrl(uri)) await launchUrl(uri);
                   },
                   icon: const Icon(Icons.reply_rounded, size: 16),
-                  label: const Text('?대찓???듭옣'),
+                  label: const Text('메일로 답장'),
                   style: TextButton.styleFrom(foregroundColor: const Color(0xFF34D399)),
                 ),
             ],
@@ -7708,15 +7946,15 @@ class _InquiryDetailState extends State<_InquiryDetail> {
           Row(children: [
             Checkbox(value: _isResolved, activeColor: const Color(0xFF4CAF50),
                 onChanged: (v) => setState(() => _isResolved = v ?? false)),
-            const Text('泥섎━ ?꾨즺', style: TextStyle(fontWeight: FontWeight.w600)),
+            const Text('처리 완료', style: TextStyle(fontWeight: FontWeight.w600)),
           ]),
           const SizedBox(height: 12),
-          const Text('愿由ъ옄 硫붾え', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+          const Text('관리자 메모', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
           const SizedBox(height: 8),
           TextField(
             controller: _memoCtrl,
             decoration: const InputDecoration(
-              hintText: '?대? 泥섎━ 硫붾え瑜??낅젰?섏꽭??..',
+              hintText: '이 건 처리 메모를 입력해주세요..',
               border: OutlineInputBorder(),
               filled: true, fillColor: Colors.white,
               contentPadding: EdgeInsets.all(12),
@@ -7730,7 +7968,7 @@ class _InquiryDetailState extends State<_InquiryDetail> {
               TextButton.icon(
                 onPressed: _delete,
                 icon: const Icon(Icons.delete_outline, size: 16),
-                label: const Text('??젣'),
+                label: const Text('삭제'),
                 style: TextButton.styleFrom(foregroundColor: Colors.red),
               ),
               const SizedBox(width: 12),
@@ -7814,46 +8052,79 @@ class _BoardManagementTabState extends State<_BoardManagementTab> {
   }
 }
 
-class _BoardPostList extends StatelessWidget {
+class _BoardPostList extends StatefulWidget {
   final String collection;
   final String title;
 
   const _BoardPostList({required this.collection, required this.title});
 
   @override
+  State<_BoardPostList> createState() => _BoardPostListState();
+}
+
+class _BoardPostListState extends State<_BoardPostList> {
+  String _search = '';
+
+  static const _columns = [
+    AdminColumn(label: '제목', flex: 4),
+    AdminColumn(label: '작성자', flex: 1),
+    AdminColumn(label: '작성일', fixedWidth: 110),
+    AdminColumn(label: '관리', fixedWidth: 60, align: TextAlign.end),
+  ];
+
+  @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
-          .collection(collection)
+          .collection(widget.collection)
           .orderBy('createdAt', descending: true)
           .limit(50)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final docs = snapshot.data?.docs ?? [];
-        if (docs.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.inbox_rounded, size: 48, color: C.mu),
-                  const SizedBox(height: 12),
-                  Text('게시물이 없습니다.', style: TextStyle(color: C.mu, fontSize: 14)),
-                ],
-              ),
-            ),
+          return AdminListShell<QueryDocumentSnapshot<Map<String, dynamic>>>(
+            title: widget.title,
+            icon: Icons.dashboard_rounded,
+            columns: _columns,
+            items: const [],
+            isLoading: true,
+            rowBuilder: (_, _) => const AdminRow(cells: []),
           );
         }
-        return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
-          itemCount: docs.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 6),
-          itemBuilder: (ctx, index) {
-            final doc = docs[index];
+        final allDocs = snapshot.data?.docs ?? [];
+        final docs = _search.isEmpty
+            ? allDocs
+            : allDocs.where((d) {
+                final data = d.data();
+                final title =
+                    ((data['title'] ?? data['name']) ?? '').toString().toLowerCase();
+                return title.contains(_search);
+              }).toList();
+        return AdminListShell<QueryDocumentSnapshot<Map<String, dynamic>>>(
+          title: widget.title,
+          icon: Icons.dashboard_rounded,
+          columns: _columns,
+          items: docs,
+          searchHint: '제목 검색',
+          onSearchChanged: (v) => setState(() => _search = v.toLowerCase()),
+          emptyMessage: '게시물이 없습니다.',
+          selectable: true,
+          itemKey: (d) => d.reference.path,
+          bulkActions: [
+            AdminBulkAction(
+              label: '선택 삭제',
+              icon: Icons.delete_outline_rounded,
+              accent: C.og,
+              requireConfirm: true,
+              confirmMessage: '선택한 게시물을 모두 삭제할까요? 되돌릴 수 없습니다.',
+              loadingMessage: '게시물을 삭제하는 중입니다.',
+              onTap: (selected) async {
+                await _bulkDeleteDocs(
+                    selected.map((d) => d.reference).toList());
+              },
+            ),
+          ],
+          rowBuilder: (ctx, doc) {
             final data = doc.data();
             final docId = doc.id;
             final postTitle = data['title'] as String? ??
@@ -7866,96 +8137,70 @@ class _BoardPostList extends StatelessWidget {
             String timeStr = '';
             if (createdAt is Timestamp) {
               final dt = createdAt.toDate();
-              timeStr =
-                  '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+              timeStr = DateFormat('yyyy-MM-dd').format(dt);
             }
-
-            return Card(
-              margin: EdgeInsets.zero,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: C.bd.withValues(alpha: 0.5)),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            postTitle,
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                          Row(
-                            children: [
-                              Text(author, style: TextStyle(fontSize: 12, color: C.tx2)),
-                              const SizedBox(width: 8),
-                              Text(timeStr, style: TextStyle(fontSize: 11, color: C.mu)),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.delete_outline_rounded, color: C.og, size: 18),
-                      tooltip: '게시물 삭제',
-                      onPressed: () async {
-                        final confirm = await showDialog<bool>(
-                          context: ctx,
-                          builder: (dialogCtx) => AlertDialog(
-                            title: const Text('게시물 삭제'),
-                            content: Text('[$postTitle] 게시물을 삭제하시겠습니까?'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(dialogCtx, false),
-                                child: const Text('취소'),
-                              ),
-                              TextButton(
-                                onPressed: () => Navigator.pop(dialogCtx, true),
-                                child: Text('삭제', style: TextStyle(color: C.og)),
-                              ),
-                            ],
-                          ),
+            return AdminRow(
+              cells: [
+                AdminCellText(postTitle, bold: true),
+                AdminCellText(author, muted: true),
+                AdminCellText(timeStr.isNotEmpty ? timeStr : '-', muted: true),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    icon: Icon(Icons.delete_outline_rounded, color: C.og, size: 18),
+                    tooltip: '게시물 삭제',
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(),
+                    onPressed: () async {
+                      final confirm = await showDialog<bool>(
+                        context: ctx,
+                        builder: (dialogCtx) => AlertDialog(
+                          title: const Text('게시물 삭제'),
+                          content: Text('[$postTitle] 게시물을 삭제하시겠습니까?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(dialogCtx, false),
+                              child: const Text('취소'),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(dialogCtx, true),
+                              child: Text('삭제', style: TextStyle(color: C.og)),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirm != true) return;
+                      if (!ctx.mounted) return;
+                      try {
+                        await runWithMoriLoadingDialog<void>(
+                          ctx,
+                          message: '삭제하는 중입니다.',
+                          subtitle: '잠시만 기다려 주세요.',
+                          task: () async {
+                            await FirebaseFirestore.instance
+                                .collection(widget.collection)
+                                .doc(docId)
+                                .delete();
+                          },
                         );
-                        if (confirm != true) return;
-                        if (!ctx.mounted) return;
-                        try {
-                          await runWithMoriLoadingDialog<void>(
-                            ctx,
-                            message: '삭제하는 중입니다.',
-                            subtitle: '잠시만 기다려 주세요.',
-                            task: () async {
-                              await FirebaseFirestore.instance
-                                  .collection(collection)
-                                  .doc(docId)
-                                  .delete();
-                            },
+                        if (ctx.mounted) {
+                          showSavedSnackBar(
+                            ScaffoldMessenger.of(ctx),
+                            message: '게시물이 삭제됐어요.',
                           );
-                          if (ctx.mounted) {
-                            showSavedSnackBar(
-                              ScaffoldMessenger.of(ctx),
-                              message: '게시물이 삭제됐어요.',
-                            );
-                          }
-                        } catch (e) {
-                          if (ctx.mounted) {
-                            showSaveErrorSnackBar(
-                              ScaffoldMessenger.of(ctx),
-                              message: '$e',
-                            );
-                          }
                         }
-                      },
-                    ),
-                  ],
+                      } catch (e) {
+                        if (ctx.mounted) {
+                          showSaveErrorSnackBar(
+                            ScaffoldMessenger.of(ctx),
+                            message: '$e',
+                          );
+                        }
+                      }
+                    },
+                  ),
                 ),
-              ),
+              ],
             );
           },
         );
@@ -8038,213 +8283,165 @@ class _AdminPatternsTabState extends ConsumerState<_AdminPatternsTab> {
     }
   }
 
+  static const _columns = [
+    AdminColumn(label: '타입', fixedWidth: 64),
+    AdminColumn(label: '제목 / 소유자', flex: 4),
+    AdminColumn(label: '단계', fixedWidth: 80),
+    AdminColumn(label: '생성일', flex: 1),
+    AdminColumn(label: '관리', fixedWidth: 60, align: TextAlign.end),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(_adminAllPatternsProvider);
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Row(
-            children: [
-              const Icon(Icons.auto_fix_high_rounded, size: 18, color: Color(0xFF1A1A2E)),
-              const SizedBox(width: 8),
-              async.when(
-                data: (d) => Text('도안 전체 (${d.length})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                loading: () => const Text('도안 로딩 중...', style: TextStyle(fontSize: 14)),
-                error: (e, _) => Text('오류: $e', style: const TextStyle(color: Colors.red, fontSize: 13)),
-              ),
-              const Spacer(),
-              SizedBox(
-                width: 220,
-                child: TextField(
-                  decoration: const InputDecoration(
-                    hintText: '제목 검색',
-                    prefixIcon: Icon(Icons.search, size: 18),
-                    isDense: true,
-                    contentPadding: EdgeInsets.symmetric(vertical: 8),
+    final trailing = ElevatedButton.icon(
+      onPressed: _migrating ? null : _runCoverMigration,
+      icon: const Icon(Icons.download_for_offline_rounded, size: 16),
+      label: Text(_migrating && _migrateTotal > 0
+          ? '커버 추출 $_migrateCurrent / $_migrateTotal'
+          : (_migrating ? '대상 검색 중...' : 'PDF 커버 일괄 추출')),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFFB47EEB),
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+      ),
+    );
+
+    return async.when(
+      loading: () => AdminListShell<QueryDocumentSnapshot<Map<String, dynamic>>>(
+        title: '도안',
+        icon: Icons.auto_fix_high_rounded,
+        columns: _columns,
+        items: const [],
+        isLoading: true,
+        trailing: trailing,
+        rowBuilder: (_, _) => const AdminRow(cells: []),
+      ),
+      error: (e, _) => AdminListShell<QueryDocumentSnapshot<Map<String, dynamic>>>(
+        title: '도안',
+        icon: Icons.auto_fix_high_rounded,
+        columns: _columns,
+        items: const [],
+        errorMessage: '$e',
+        trailing: trailing,
+        rowBuilder: (_, _) => const AdminRow(cells: []),
+      ),
+      data: (docs) {
+        final filtered = _search.isEmpty
+            ? docs
+            : docs.where((d) {
+                final title = (d.data()['title'] ?? '').toString().toLowerCase();
+                return title.contains(_search);
+              }).toList();
+        return AdminListShell<QueryDocumentSnapshot<Map<String, dynamic>>>(
+          title: '도안',
+          icon: Icons.auto_fix_high_rounded,
+          columns: _columns,
+          items: filtered,
+          searchHint: '제목 검색',
+          onSearchChanged: (v) => setState(() => _search = v.toLowerCase()),
+          trailing: trailing,
+          emptyMessage: '도안이 없습니다.',
+          selectable: true,
+          itemKey: (d) => d.reference.path,
+          bulkActions: [
+            AdminBulkAction(
+              label: '선택 삭제',
+              icon: Icons.delete_outline_rounded,
+              accent: C.og,
+              requireConfirm: true,
+              confirmMessage: '선택한 도안을 모두 삭제할까요? 되돌릴 수 없습니다.',
+              loadingMessage: '도안을 삭제하는 중입니다.',
+              onTap: (selected) async {
+                await _bulkDeleteDocs(
+                    selected.map((d) => d.reference).toList());
+              },
+            ),
+          ],
+          rowBuilder: (ctx, doc) {
+            final data = doc.data();
+            final pathParts = doc.reference.path.split('/');
+            final ownerUid = pathParts.length >= 2 ? pathParts[1] : '';
+            final title = data['title'] as String? ?? '(제목 없음)';
+            final createdAt = data['createdAt'];
+            String dateStr = '';
+            if (createdAt is Timestamp) {
+              dateStr = DateFormat('yyyy-MM-dd').format(createdAt.toDate());
+            }
+            final typeStr = (data['type'] as String?) ?? 'unknown';
+            final typeLabel = switch (typeStr) {
+              'pdf' => 'PDF',
+              'image' => '이미지',
+              'chart' => '차트',
+              _ => typeStr,
+            };
+            final typeColor = switch (typeStr) {
+              'pdf' => const Color(0xFFFF8C42),
+              'image' => const Color(0xFF34C759),
+              'chart' => const Color(0xFFB47EEB),
+              _ => Colors.grey,
+            };
+            final sourceOwnerName = data['sourceOwnerName'] as String?;
+            final aiSections = data['aiSections'] as List?;
+            final hasSteps = aiSections != null && aiSections.isNotEmpty;
+            final subtitleText = sourceOwnerName != null && sourceOwnerName.isNotEmpty
+                ? '생성자: $sourceOwnerName · UID: $ownerUid'
+                : 'UID: $ownerUid';
+            return AdminRow(
+              accent: typeColor,
+              cells: [
+                // 타입
+                AdminBadge(label: typeLabel, color: typeColor),
+                // 제목 / 소유자
+                AdminCellTwoLine(title: title, subtitle: subtitleText),
+                // 단계
+                hasSteps
+                    ? AdminBadge(label: '단계 있음', color: const Color(0xFFEC4899))
+                    : AdminCellText('-', muted: true),
+                // 생성일
+                AdminCellText(dateStr.isNotEmpty ? dateStr : '-', muted: true),
+                // 관리
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    icon: Icon(Icons.delete_outline, size: 18, color: Colors.red.shade300),
+                    tooltip: '삭제',
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(),
+                    onPressed: () async {
+                      final confirm = await showDialog<bool>(
+                        context: ctx,
+                        builder: (dctx) => AlertDialog(
+                          title: const Text('도안 삭제'),
+                          content: Text('[$title] 도안을 삭제하시겠습니까?'),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text('취소')),
+                            TextButton(onPressed: () => Navigator.pop(dctx, true), child: Text('삭제', style: TextStyle(color: Colors.red.shade400))),
+                          ],
+                        ),
+                      );
+                      if (confirm != true) return;
+                      if (!ctx.mounted) return;
+                      try {
+                        await runWithMoriLoadingDialog<void>(
+                          ctx,
+                          message: '삭제하는 중입니다.',
+                          subtitle: '잠시만 기다려 주세요.',
+                          task: () => doc.reference.delete(),
+                        );
+                        if (ctx.mounted) showSavedSnackBar(ScaffoldMessenger.of(ctx), message: '삭제됐어요.');
+                      } catch (e) {
+                        if (ctx.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '$e');
+                      }
+                    },
                   ),
-                  onChanged: (v) => setState(() => _search = v.toLowerCase()),
                 ),
-              ),
-            ],
-          ),
-        ),
-        // 이슈 #651 옵션 A — 어드민 일괄 마이그레이션 버튼
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Row(
-            children: [
-              ElevatedButton.icon(
-                onPressed: _migrating ? null : _runCoverMigration,
-                icon: const Icon(Icons.download_for_offline_rounded, size: 18),
-                label: const Text('기존 PDF 도안 커버 일괄 추출'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFB47EEB),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                ),
-              ),
-              const SizedBox(width: 12),
-              if (_migrating && _migrateTotal > 0)
-                Text(
-                  '진행: $_migrateCurrent / $_migrateTotal',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              if (_migrating && _migrateTotal == 0)
-                const Text(
-                  '대상 검색 중...',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-            ],
-          ),
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: async.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('오류: $e')),
-            data: (docs) {
-              final filtered = _search.isEmpty
-                  ? docs
-                  : docs.where((d) {
-                      final title = (d.data()['title'] ?? '').toString().toLowerCase();
-                      return title.contains(_search);
-                    }).toList();
-              if (filtered.isEmpty) {
-                return const Center(child: Text('도안이 없습니다.', style: TextStyle(color: Colors.grey)));
-              }
-              return ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: filtered.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 6),
-                itemBuilder: (context, i) {
-                  final doc = filtered[i];
-                  final data = doc.data();
-                  final pathParts = doc.reference.path.split('/');
-                  final ownerUid = pathParts.length >= 2 ? pathParts[1] : '';
-                  final title = data['title'] as String? ?? '(제목 없음)';
-                  final createdAt = data['createdAt'];
-                  String dateStr = '';
-                  if (createdAt is Timestamp) {
-                    dateStr = DateFormat('yyyy-MM-dd').format(createdAt.toDate());
-                  }
-                  // 추가 메타 — 도안 종류, 생성자, 단계로그 유무
-                  final typeStr = (data['type'] as String?) ?? 'unknown';
-                  final typeLabel = switch (typeStr) {
-                    'pdf' => 'PDF',
-                    'image' => '이미지',
-                    'chart' => '차트',
-                    _ => typeStr,
-                  };
-                  final typeColor = switch (typeStr) {
-                    'pdf' => const Color(0xFFFF8C42),
-                    'image' => const Color(0xFF34C759),
-                    'chart' => const Color(0xFFB47EEB),
-                    _ => Colors.grey,
-                  };
-                  final sourceOwnerName = data['sourceOwnerName'] as String?;
-                  final aiSections = data['aiSections'] as List?;
-                  final hasSteps = aiSections != null && aiSections.isNotEmpty;
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.grid_on_rounded, size: 28, color: typeColor),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  // 도안종류 배지
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: typeColor.withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(typeLabel, style: TextStyle(fontSize: 10, color: typeColor, fontWeight: FontWeight.w700)),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  // 단계로그 유무 배지
-                                  if (hasSteps)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFEC4899).withValues(alpha: 0.15),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: const Text('🤖 단계로그', style: TextStyle(fontSize: 10, color: Color(0xFFEC4899), fontWeight: FontWeight.w700)),
-                                    ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(title,
-                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                sourceOwnerName != null && sourceOwnerName.isNotEmpty
-                                    ? '생성자: $sourceOwnerName · UID: $ownerUid'
-                                    : 'UID: $ownerUid',
-                                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (dateStr.isNotEmpty)
-                          Text(dateStr, style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
-                        IconButton(
-                          icon: Icon(Icons.delete_outline, size: 18, color: Colors.red.shade300),
-                          tooltip: '삭제',
-                          onPressed: () async {
-                            final confirm = await showDialog<bool>(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                title: const Text('도안 삭제'),
-                                content: Text('[$title] 도안을 삭제하시겠습니까?'),
-                                actions: [
-                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
-                                  TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('삭제', style: TextStyle(color: Colors.red.shade400))),
-                                ],
-                              ),
-                            );
-                            if (confirm != true) return;
-                            if (!context.mounted) return;
-                            try {
-                              await runWithMoriLoadingDialog<void>(
-                                context,
-                                message: '삭제하는 중입니다.',
-                                subtitle: '잠시만 기다려 주세요.',
-                                task: () => doc.reference.delete(),
-                              );
-                              if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: '삭제됐어요.');
-                            } catch (e) {
-                              if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -8260,126 +8457,110 @@ class _AdminTemplatesTab extends ConsumerStatefulWidget {
 class _AdminTemplatesTabState extends ConsumerState<_AdminTemplatesTab> {
   String _search = '';
 
+  static const _columns = [
+    AdminColumn(label: '템플릿명 / 소유자', flex: 4),
+    AdminColumn(label: '관리', fixedWidth: 60, align: TextAlign.end),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(_adminAllTemplatesProvider);
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Row(
-            children: [
-              const Icon(Icons.list_alt_rounded, size: 18, color: Color(0xFF1A1A2E)),
-              const SizedBox(width: 8),
-              async.when(
-                data: (d) => Text('템플릿 전체 (${d.length})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                loading: () => const Text('템플릿 로딩 중...', style: TextStyle(fontSize: 14)),
-                error: (e, _) => Text('오류: $e', style: const TextStyle(color: Colors.red, fontSize: 13)),
-              ),
-              const Spacer(),
-              SizedBox(
-                width: 220,
-                child: TextField(
-                  decoration: const InputDecoration(
-                    hintText: '이름 검색',
-                    prefixIcon: Icon(Icons.search, size: 18),
-                    isDense: true,
-                    contentPadding: EdgeInsets.symmetric(vertical: 8),
+    return async.when(
+      loading: () => AdminListShell<QueryDocumentSnapshot<Map<String, dynamic>>>(
+        title: '템플릿',
+        icon: Icons.list_alt_rounded,
+        columns: _columns,
+        items: const [],
+        isLoading: true,
+        rowBuilder: (_, _) => const AdminRow(cells: []),
+      ),
+      error: (e, _) => AdminListShell<QueryDocumentSnapshot<Map<String, dynamic>>>(
+        title: '템플릿',
+        icon: Icons.list_alt_rounded,
+        columns: _columns,
+        items: const [],
+        errorMessage: '$e',
+        rowBuilder: (_, _) => const AdminRow(cells: []),
+      ),
+      data: (docs) {
+        final filtered = _search.isEmpty
+            ? docs
+            : docs.where((d) {
+                final name = (d.data()['name'] ?? '').toString().toLowerCase();
+                return name.contains(_search);
+              }).toList();
+        return AdminListShell<QueryDocumentSnapshot<Map<String, dynamic>>>(
+          title: '템플릿',
+          icon: Icons.list_alt_rounded,
+          columns: _columns,
+          items: filtered,
+          searchHint: '이름 검색',
+          onSearchChanged: (v) => setState(() => _search = v.toLowerCase()),
+          emptyMessage: '템플릿이 없습니다.',
+          selectable: true,
+          itemKey: (d) => d.reference.path,
+          bulkActions: [
+            AdminBulkAction(
+              label: '선택 삭제',
+              icon: Icons.delete_outline_rounded,
+              accent: C.og,
+              requireConfirm: true,
+              confirmMessage: '선택한 템플릿을 모두 삭제할까요? 되돌릴 수 없습니다.',
+              loadingMessage: '템플릿을 삭제하는 중입니다.',
+              onTap: (selected) async {
+                await _bulkDeleteDocs(
+                    selected.map((d) => d.reference).toList());
+              },
+            ),
+          ],
+          rowBuilder: (ctx, doc) {
+            final data = doc.data();
+            final pathParts = doc.reference.path.split('/');
+            final ownerUid = pathParts.length >= 2 ? pathParts[1] : '';
+            final name = data['name'] as String? ?? '(이름 없음)';
+            return AdminRow(
+              cells: [
+                AdminCellTwoLine(title: name, subtitle: 'UID: $ownerUid'),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    icon: Icon(Icons.delete_outline, size: 18, color: Colors.red.shade300),
+                    tooltip: '삭제',
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(),
+                    onPressed: () async {
+                      final confirm = await showDialog<bool>(
+                        context: ctx,
+                        builder: (dctx) => AlertDialog(
+                          title: const Text('템플릿 삭제'),
+                          content: Text('[$name] 템플릿을 삭제하시겠습니까?'),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text('취소')),
+                            TextButton(onPressed: () => Navigator.pop(dctx, true), child: Text('삭제', style: TextStyle(color: Colors.red.shade400))),
+                          ],
+                        ),
+                      );
+                      if (confirm != true) return;
+                      if (!ctx.mounted) return;
+                      try {
+                        await runWithMoriLoadingDialog<void>(
+                          ctx,
+                          message: '삭제하는 중입니다.',
+                          subtitle: '잠시만 기다려 주세요.',
+                          task: () => doc.reference.delete(),
+                        );
+                        if (ctx.mounted) showSavedSnackBar(ScaffoldMessenger.of(ctx), message: '삭제됐어요.');
+                      } catch (e) {
+                        if (ctx.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '$e');
+                      }
+                    },
                   ),
-                  onChanged: (v) => setState(() => _search = v.toLowerCase()),
                 ),
-              ),
-            ],
-          ),
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: async.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('오류: $e')),
-            data: (docs) {
-              final filtered = _search.isEmpty
-                  ? docs
-                  : docs.where((d) {
-                      final name = (d.data()['name'] ?? '').toString().toLowerCase();
-                      return name.contains(_search);
-                    }).toList();
-              if (filtered.isEmpty) {
-                return const Center(child: Text('템플릿이 없습니다.', style: TextStyle(color: Colors.grey)));
-              }
-              return ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: filtered.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 6),
-                itemBuilder: (context, i) {
-                  final doc = filtered[i];
-                  final data = doc.data();
-                  final pathParts = doc.reference.path.split('/');
-                  final ownerUid = pathParts.length >= 2 ? pathParts[1] : '';
-                  final name = data['name'] as String? ?? '(이름 없음)';
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.list_alt_rounded, size: 28, color: Color(0xFFB47EEB)),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(name,
-                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis),
-                              Text('UID: $ownerUid',
-                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.delete_outline, size: 18, color: Colors.red.shade300),
-                          tooltip: '삭제',
-                          onPressed: () async {
-                            final confirm = await showDialog<bool>(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                title: const Text('템플릿 삭제'),
-                                content: Text('[$name] 템플릿을 삭제하시겠습니까?'),
-                                actions: [
-                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
-                                  TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('삭제', style: TextStyle(color: Colors.red.shade400))),
-                                ],
-                              ),
-                            );
-                            if (confirm != true) return;
-                            if (!context.mounted) return;
-                            try {
-                              await runWithMoriLoadingDialog<void>(
-                                context,
-                                message: '삭제하는 중입니다.',
-                                subtitle: '잠시만 기다려 주세요.',
-                                task: () => doc.reference.delete(),
-                              );
-                              if (context.mounted) showSavedSnackBar(ScaffoldMessenger.of(context), message: '삭제됐어요.');
-                            } catch (e) {
-                              if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -8891,8 +9072,8 @@ class _MockupImageCard extends StatelessWidget {
               height: 140,
               width: double.infinity,
               child: imageUrl.isNotEmpty
-                  ? Image.network(imageUrl, fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => _MockupPlaceholder())
+                  ? CachedNetworkImage(imageUrl: imageUrl, fit: BoxFit.cover,
+                      errorWidget: (_, _, _) => _MockupPlaceholder())
                   : _MockupPlaceholder(),
             ),
           ),

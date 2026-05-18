@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -211,12 +212,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     // App icon logo
                     ClipRRect(
                       borderRadius: BorderRadius.circular(24),
-                      child: Image.network(
-                        '/favicon.png',
+                      child: CachedNetworkImage(
+                        imageUrl: '/favicon.png',
                         width: 88,
                         height: 88,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, err) => Container(
+                        errorWidget: (_, _, err) => Container(
                           width: 88,
                           height: 88,
                           decoration: BoxDecoration(
@@ -800,14 +801,17 @@ class LoginPanel extends ConsumerWidget {
             leading: const _GoogleIcon(),
             onTap: onLoginGoogle,
           ),
-          const SizedBox(height: 8),
-          SocialLoginButton(
-            color: const Color(0xFFFEE500),
-            textColor: const Color(0xFF191919),
-            label: t.continueWithKakao,
-            leading: const _KakaoIcon(),
-            onTap: onLoginKakao,
-          ),
+          // #788 — 카카오 SDK 웹 미지원 → 웹에서는 버튼 숨김 (LateInitializationError 차단)
+          if (!kIsWeb) ...[
+            const SizedBox(height: 8),
+            SocialLoginButton(
+              color: const Color(0xFFFEE500),
+              textColor: const Color(0xFF191919),
+              label: t.continueWithKakao,
+              leading: const _KakaoIcon(),
+              onTap: onLoginKakao,
+            ),
+          ],
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Row(

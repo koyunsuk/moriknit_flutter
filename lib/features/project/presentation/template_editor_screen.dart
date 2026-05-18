@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -267,8 +268,8 @@ class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
                     child: _localPhotoPath != null
                       ? Image.file(File(_localPhotoPath!), width: double.infinity, height: 180, fit: BoxFit.cover)
                       : (_photoUrl != null && _photoUrl!.isNotEmpty)
-                        ? Image.network(_photoUrl!, width: double.infinity, height: 180, fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => _coverPlaceholder(isKorean))
+                        ? CachedNetworkImage(imageUrl: _photoUrl!, width: double.infinity, height: 180, fit: BoxFit.cover,
+                            errorWidget: (_, _, _) => _coverPlaceholder(isKorean))
                         : _coverPlaceholder(isKorean),
                   ),
                 ),

@@ -1,7 +1,8 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -834,7 +835,7 @@ class _CoverImagePicker extends StatelessWidget {
                             borderRadius: BorderRadius.circular(18),
                             child: localPath != null
                                 ? Image.file(File(localPath!), fit: BoxFit.contain, width: double.infinity, height: double.infinity)
-                                : Image.network(photoUrl, fit: BoxFit.contain, width: double.infinity, height: double.infinity),
+                                : CachedNetworkImage(imageUrl: photoUrl, fit: BoxFit.contain, width: double.infinity, height: double.infinity),
                           )
                         : Column(
                             mainAxisAlignment: MainAxisAlignment.center,

@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -346,10 +347,10 @@ class _ProjectGroupCard extends StatelessWidget {
               width: 52,
               height: 52,
               child: hasCover
-                  ? Image.network(
-                      project.coverPhotoUrl,
+                  ? CachedNetworkImage(
+                      imageUrl: project.coverPhotoUrl,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => _fallbackIcon(),
+                      errorWidget: (_, _, _) => _fallbackIcon(),
                     )
                   : _fallbackIcon(),
             ),

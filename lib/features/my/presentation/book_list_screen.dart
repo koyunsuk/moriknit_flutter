@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -145,10 +146,10 @@ class _BookCard extends StatelessWidget {
                 width: 52,
                 height: 72,
                 child: book.coverUrl.isNotEmpty
-                    ? Image.network(
-                        book.coverUrl,
+                    ? CachedNetworkImage(
+                        imageUrl: book.coverUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) =>
+                        errorWidget: (_, _, _) =>
                             _BookCoverPlaceholder(),
                       )
                     : _BookCoverPlaceholder(),

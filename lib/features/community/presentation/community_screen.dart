@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as fq;
@@ -23,6 +24,9 @@ import '../../../providers/dm_provider.dart';
 import '../../../providers/guestbook_provider.dart';
 import '../../../providers/post_provider.dart';
 import '../../../providers/ui_copy_provider.dart';
+import '../../../providers/blueprint_provider.dart';
+import '../../blueprint/domain/step_blueprint.dart';
+import '../../knit_along/presentation/knit_along_group_screen.dart';
 import '../../my/data/mori_service.dart';
 import '../../project/data/public_project_service.dart';
 import '../domain/comment_model.dart';
@@ -500,15 +504,11 @@ class _GuestbookSectionState extends ConsumerState<_GuestbookSection> {
                 scrollDirection: Axis.vertical,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 itemCount: entries.length,
-                // #763 — 방명록 항목 사이 점선 보더 (블록 외곽이 아닌 내부 구분선).
-                separatorBuilder: (_, _) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: CustomPaint(
-                    size: const Size(double.infinity, 1),
-                    painter: _GuestbookDashedDividerPainter(
-                      color: C.bd2.withValues(alpha: 0.7),
-                    ),
-                  ),
+                // #763 (재수정) — 점선 → 일반 보더 (아주 흐리게)
+                separatorBuilder: (_, _) => Container(
+                  height: 1,
+                  margin: const EdgeInsets.symmetric(vertical: 6),
+                  color: C.bd2.withValues(alpha: 0.20),
                 ),
                 itemBuilder: (_, i) => _GuestbookEntryChip(
                   entry: entries[i],
@@ -600,30 +600,6 @@ class _AuthorTierBadge extends StatelessWidget {
       ),
     );
   }
-}
-
-class _GuestbookDashedDividerPainter extends CustomPainter {
-  final Color color;
-  _GuestbookDashedDividerPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const dashWidth = 4.0;
-    const dashSpace = 3.0;
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1
-      ..style = PaintingStyle.stroke;
-    double x = 0;
-    while (x < size.width) {
-      canvas.drawLine(Offset(x, 0), Offset(x + dashWidth, 0), paint);
-      x += dashWidth + dashSpace;
-    }
-  }
-
-  @override
-  bool shouldRepaint(_GuestbookDashedDividerPainter oldDelegate) =>
-      oldDelegate.color != color;
 }
 
 // 이슈 #717 — 세로 스크롤 한 줄 행 (가로 칩에서 전환).
@@ -950,12 +926,12 @@ class _PostRowState extends ConsumerState<_PostRow> {
                           children: [
                             if (hasPhoto) ...[
                               ClipOval(
-                                child: Image.network(
-                                  post.authorPhotoUrl,
+                                child: CachedNetworkImage(
+                                  imageUrl: post.authorPhotoUrl,
                                   width: 20,
                                   height: 20,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) => const SizedBox(width: 20, height: 20),
+                                  errorWidget: (_, _, _) => const SizedBox(width: 20, height: 20),
                                 ),
                               ),
                               const SizedBox(width: 5),
@@ -1049,12 +1025,12 @@ class _PostRowState extends ConsumerState<_PostRow> {
               const SizedBox(width: 12),
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  post.imageUrls.first,
+                child: CachedNetworkImage(
+                  imageUrl: post.imageUrls.first,
                   width: 62,
                   height: 62,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                  errorWidget: (_, _, _) => const SizedBox.shrink(),
                 ),
               ),
             ],
@@ -1174,7 +1150,7 @@ class _PostRowState extends ConsumerState<_PostRow> {
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(10),
-                              child: Image.network(e.value, width: 76, height: 76, fit: BoxFit.cover, cacheWidth: 152, cacheHeight: 152, errorBuilder: (_, _, _) => const SizedBox.shrink()),
+                              child: CachedNetworkImage(imageUrl: e.value, width: 76, height: 76, fit: BoxFit.cover, memCacheWidth: 152, memCacheHeight: 152, errorWidget: (_, _, _) => const SizedBox.shrink()),
                             ),
                             Positioned(
                               top: 0, right: 0,
@@ -1389,7 +1365,7 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(10),
-                              child: Image.network(e.value, width: 76, height: 76, fit: BoxFit.cover, cacheWidth: 152, cacheHeight: 152, errorBuilder: (_, _, _) => const SizedBox.shrink()),
+                              child: CachedNetworkImage(imageUrl: e.value, width: 76, height: 76, fit: BoxFit.cover, memCacheWidth: 152, memCacheHeight: 152, errorWidget: (_, _, _) => const SizedBox.shrink()),
                             ),
                             Positioned(
                               top: 0, right: 0,
@@ -1596,8 +1572,8 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
                             width: 40,
                             height: 40,
                             child: widget.post.authorPhotoUrl.isNotEmpty
-                                ? Image.network(widget.post.authorPhotoUrl, width: 40, height: 40, fit: BoxFit.cover, cacheWidth: 80, cacheHeight: 80,
-                                    errorBuilder: (_, _, _) => Container(color: C.lvL, child: Icon(Icons.person_rounded, color: C.lvD, size: 20)))
+                                ? CachedNetworkImage(imageUrl: widget.post.authorPhotoUrl, width: 40, height: 40, fit: BoxFit.cover, memCacheWidth: 80, memCacheHeight: 80,
+                                    errorWidget: (_, _, _) => Container(color: C.lvL, child: Icon(Icons.person_rounded, color: C.lvD, size: 20)))
                                 : Container(color: C.lvL, child: Icon(Icons.person_rounded, color: C.lvD, size: 20)),
                           ),
                         ),
@@ -1676,7 +1652,7 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
                             onTap: () => _showFullImage(context, url),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(10),
-                              child: Image.network(url, width: 140, height: 140, fit: BoxFit.cover, cacheWidth: 280, cacheHeight: 280),
+                              child: CachedNetworkImage(imageUrl: url, width: 140, height: 140, fit: BoxFit.cover, memCacheWidth: 280, memCacheHeight: 280),
                             ),
                           ),
                         )
@@ -1794,7 +1770,7 @@ class _PostDetailSheetState extends ConsumerState<_PostDetailSheet> {
         child: Stack(
           children: [
             InteractiveViewer(
-              child: Center(child: Image.network(url, fit: BoxFit.contain)),
+              child: Center(child: CachedNetworkImage(imageUrl: url, fit: BoxFit.contain)),
             ),
             Positioned(
               top: 8,
@@ -1948,11 +1924,11 @@ class _PublicProjectsSectionState extends ConsumerState<_PublicProjectsSection> 
                             child: ClipRRect(
                               borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                               child: imgUrl.isNotEmpty
-                                  ? Image.network(
-                                      imgUrl,
+                                  ? CachedNetworkImage(
+                                      imageUrl: imgUrl,
                                       width: double.infinity,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, _, _) => Container(
+                                      errorWidget: (_, _, _) => Container(
                                         color: C.lvL,
                                         child: Icon(Icons.grid_view_rounded, color: C.lv),
                                       ),
@@ -2149,30 +2125,139 @@ class _GalleryEmptyPlaceholder extends StatelessWidget {
   }
 }
 
-// 이슈 #725 — 함께뜨기 블록 (FORK 한국식). #629 게이트 미구현 → 임시 플레이스홀더.
-class _ForkSection extends StatelessWidget {
+// 이슈 #791 — 함께 뜨기(Knit-Along) 활성화. forkCount > 0 인 도안만 노출.
+class _ForkSection extends ConsumerWidget {
   final bool isKorean;
   const _ForkSection({required this.isKorean});
 
   @override
-  Widget build(BuildContext context) {
-    // #764 — 함께뜨기 카운트 (게이트 미구현 → 임시 0).
-    const forkCount = 0;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final groupsAsync = ref.watch(knitAlongGroupsProvider);
+    final groups = groupsAsync.valueOrNull ?? const <StepBlueprint>[];
+    final forkCount = groups.length;
+
     return MoriBlockShell(
-      label: isKorean ? '함께뜨기 $forkCount' : '$forkCount Knit Together',
+      label: isKorean ? '함께 뜨기 $forkCount' : '$forkCount Knit Along',
       icon: Icons.call_split_rounded,
       accent: C.lvD,
-      moreLabel: isKorean ? '전체 보기' : 'See all',
-      onMoreTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(isKorean
-              ? '함께뜨기 전체 보기는 곧 열려요.'
-              : 'Knit-together gallery coming soon.'),
-          duration: const Duration(seconds: 2),
-        ));
-      },
       bodyPadding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-      child: _ForkEmptyPlaceholder(isKorean: isKorean),
+      child: groups.isEmpty
+          ? _ForkEmptyPlaceholder(isKorean: isKorean)
+          : _ForkGroupsList(groups: groups, isKorean: isKorean),
+    );
+  }
+}
+
+/// #791 — 함께 뜨기 그룹 카드 리스트 (가로 스크롤).
+class _ForkGroupsList extends ConsumerWidget {
+  final List<StepBlueprint> groups;
+  final bool isKorean;
+  const _ForkGroupsList({required this.groups, required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 168,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: groups.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            itemBuilder: (_, i) => _KnitAlongGroupCard(
+              blueprint: groups[i],
+              isKorean: isKorean,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          isKorean
+              ? '같은 도안으로 함께 뜨고 있는 니터들을 살펴보세요.'
+              : 'See knitters working on the same pattern together.',
+          textAlign: TextAlign.center,
+          style: T.caption.copyWith(color: C.mu, height: 1.4),
+        ),
+      ],
+    );
+  }
+}
+
+/// #791 — 함께 뜨기 그룹 카드 (도안 썸네일 + 참여자 N명).
+class _KnitAlongGroupCard extends ConsumerWidget {
+  final StepBlueprint blueprint;
+  final bool isKorean;
+  const _KnitAlongGroupCard({required this.blueprint, required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => KnitAlongGroupScreen(originBlueprintId: blueprint.id),
+        ),
+      ),
+      child: Container(
+        width: 130,
+        decoration: BoxDecoration(
+          color: C.gx,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: C.bd),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 130,
+              height: 90,
+              decoration: BoxDecoration(
+                color: C.lvL,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(12)),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.menu_book_rounded,
+                  color: C.lvD.withValues(alpha: 0.7),
+                  size: 30,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    blueprint.localizedTitle(isKorean),
+                    style: T.captionBold,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.people_rounded, size: 12, color: C.lvD),
+                      const SizedBox(width: 3),
+                      Text(
+                        isKorean
+                            ? '${blueprint.forkCount}명'
+                            : '${blueprint.forkCount}',
+                        style: T.caption.copyWith(
+                          color: C.lvD,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -2328,12 +2413,12 @@ class _GalleryCardState extends ConsumerState<_GalleryCard> {
                       width: 110,
                       height: 80,
                       color: C.lvL,
-                      child: Image.network(
-                        widget.entry.coverPhotoUrl,
+                      child: CachedNetworkImage(
+                        imageUrl: widget.entry.coverPhotoUrl,
                         width: 110,
                         height: 80,
                         fit: BoxFit.contain,
-                        errorBuilder: (_, _, _) =>
+                        errorWidget: (_, _, _) =>
                             Icon(Icons.grid_view_rounded, color: C.lv),
                       ),
                     )

@@ -44,6 +44,12 @@ service cloud.firestore {
       return false;
     }
 
+    // ── 스와치 그룹 (이슈 #772) ────────────────────────────────────────────────
+    // users/{uid}/swatch_groups/{gid}
+    match /users/{uid}/swatch_groups/{gid} {
+      allow read, write: if isOwner(uid);
+    }
+
     // ── 핸들 reservation (이슈 #771) ────────────────────────────────────────────
     // handles/{handle} : 문서 ID = 소문자 normalized handle
     //   data: { userId, displayHandle, reservedAt }
@@ -64,108 +70,109 @@ service cloud.firestore {
     }
 
     // ── 사용자 프로필 ───────────────────────────────────────────────────────────
+    // 어드민은 모든 사용자 문서/하위 컬렉션을 삭제할 수 있도록 isAdmin() 분기 추가 (회원 일괄 삭제용).
     match /users/{uid} {
       allow read: if isLoggedIn();
-      allow write: if isOwner(uid);
+      allow write: if isOwner(uid) || isAdmin();
 
       // 프로젝트
       match /projects/{projectId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
         // 프로젝트 단계로그
         match /steps/{stepId} {
-          allow read, write: if isOwner(uid);
+          allow read, write: if isOwner(uid) || isAdmin();
         }
         // 프로젝트 카운터
         match /counters/{counterId} {
-          allow read, write: if isOwner(uid);
+          allow read, write: if isOwner(uid) || isAdmin();
         }
       }
       // 스와치
       match /swatches/{swatchId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       // 카운터
       match /counters/{counterId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       // 템플릿
       match /templates/{templateId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       // 바늘
       match /myNeedles/{needleId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       // 악세서리
       match /myAccessories/{itemId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       // 실
       match /myYarns/{yarnId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       // 도서
       match /books/{bookId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       // 메모
       match /memos/{memoId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       // 도안 차트
       match /pattern_charts/{chartId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       // AI 파싱 결과
       match /parsed_patterns/{docId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       // 개인 백과사전
       match /personal_encyclopedia/{entryId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       // 단계로그
       match /steps/{stepId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       // 마켓 구매/판매 내역
       match /market_purchases/{docId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       match /market_sales/{docId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       // DM 룸
       match /dm_rooms/{roomId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       // 패턴 파일 (Dropbox 임포트)
       match /pattern_files/{fileId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       // AI 도안 변환 작업
       match /ai_jobs/{jobId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       // 도안 뷰어 세션 (자 위치, 스티키노트, 형광펜, 프로젝트/스와치 연결)
       match /pattern_sessions/{sessionId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       // 이슈 #624 — 도구함 자유 타이머 (단일 문서 'doc')
       match /free_timer/{docId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       // 이슈 #630 — 스와치별 작업시간 타이머
       match /swatch_timers/{swatchId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       // 이슈 #654 — Dropbox 즐겨찾기 (path/name/addedAt)
       match /dropbox_favorites/{fileId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       // 이슈 #687 — 청사진 마이그레이션 완료 플래그 (MigrationGuard)
       match /migration_meta/{docId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
     }
 
@@ -271,6 +278,23 @@ service cloud.firestore {
     match /landing_notices/{noticeId} {
       allow read: if true;
       allow write: if isAdmin();
+
+      // 공지사항 댓글 (이슈 #796) — landing_board_repository.addNoticeComment 에서 사용.
+      // collectionGroup('comments') 쿼리가 이 경로도 평가하므로 룰 명시 필요.
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isLoggedIn();
+        allow update, delete: if isLoggedIn()
+          && resource.data.uid == request.auth.uid;
+      }
+    }
+
+    // ── 마이페이지: 내가 쓴 댓글 (이슈 #796) ─────────────────────────────────────
+    // collectionGroup('comments') where uid == request.auth.uid 본인 쿼리 허용.
+    // Firestore rules 의 List 권한은 query.where 절이 정확히 본인 필터일 때만 통과.
+    match /{path=**}/comments/{commentId} {
+      allow read: if isLoggedIn()
+        && resource.data.uid == request.auth.uid;
     }
 
     // ── 어드민 사용자 데이터 CollectionGroup 읽기 ────────────────────────────────
@@ -305,9 +329,12 @@ service cloud.firestore {
     }
 
     // ── 버그 신고 (로그인 후 쓰기) ────────────────────────────────────────────
+    // 이슈 #807/#813 — 어드민만 list/read/update/delete (일반 사용자 조회 UI 없음).
+    // AI 워커는 Firebase Admin SDK로 우회.
     match /bug_reports/{docId} {
       allow create: if isLoggedIn();
-      allow read, update, delete: if false;
+      allow read: if isAdmin();
+      allow update, delete: if isAdmin();
     }
 
     // ── DM 채팅 (참여자만) ────────────────────────────────────────────────────
@@ -407,6 +434,16 @@ service cloud.firestore {
     }
     match /{path=**}/progress/{unitId} {
       allow read: if isAdmin();
+    }
+
+    // ── #806 — 랜딩 사이트 CMS 페이지 (어드민 편집, 모두 읽기) ────────────────
+    match /landing_pages/{pageId} {
+      allow read: if true;
+      allow write: if isAdmin();
+      match /sections/{sectionId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
     }
 
   }

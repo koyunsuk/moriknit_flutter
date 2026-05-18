@@ -98,28 +98,31 @@ class _CommunityPostEditorScreenState
 
   // ----- 사진/파일/유튜브 -----
 
+  /// #780 — '사진 추가' 탭: 갤러리 직접 (카메라는 첨부 슬롯의 별도 아이콘으로 노출).
   Future<void> _addImages(bool isKorean) async {
     if (_images.length >= 4) return;
-    final source = await _showImageSourceDialog(context, isKorean);
-    if (source == null) return;
     final picker = ImagePicker();
-    if (source == ImageSource.camera) {
-      final shot = await picker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 80,
-      );
-      if (shot == null) return;
-      _images.add(await shot.readAsBytes());
-    } else {
-      final picked = await picker.pickMultiImage(
-        imageQuality: 80,
-        limit: 4 - _images.length,
-      );
-      for (final file in picked) {
-        if (_images.length >= 4) break;
-        _images.add(await file.readAsBytes());
-      }
+    final picked = await picker.pickMultiImage(
+      imageQuality: 80,
+      limit: 4 - _images.length,
+    );
+    for (final file in picked) {
+      if (_images.length >= 4) break;
+      _images.add(await file.readAsBytes());
     }
+    if (mounted) setState(() {});
+  }
+
+  /// #780 — 카메라 즉시 촬영 (첨부 슬롯의 카메라 아이콘에서 호출).
+  Future<void> _captureImageFromCamera() async {
+    if (_images.length >= 4) return;
+    final picker = ImagePicker();
+    final shot = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 80,
+    );
+    if (shot == null) return;
+    _images.add(await shot.readAsBytes());
     if (mounted) setState(() {});
   }
 
@@ -192,47 +195,6 @@ class _CommunityPostEditorScreenState
     setState(() {
       _youtubeUrls.add(youtubeWatchUrl(videoId));
     });
-  }
-
-  Future<ImageSource?> _showImageSourceDialog(
-    BuildContext context,
-    bool isKorean,
-  ) async {
-    return showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: C.bg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: Icon(Icons.photo_camera_rounded, color: C.lvD),
-                  title: Text(
-                    isKorean ? '카메라로 촬영' : 'Take photo',
-                    style: T.body,
-                  ),
-                  onTap: () => Navigator.pop(ctx, ImageSource.camera),
-                ),
-                ListTile(
-                  leading: Icon(Icons.photo_library_rounded, color: C.lvD),
-                  title: Text(
-                    isKorean ? '갤러리에서 선택' : 'Pick from gallery',
-                    style: T.body,
-                  ),
-                  onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 
   // ----- 미리보기 -----
@@ -517,52 +479,66 @@ class _CommunityPostEditorScreenState
                   ),
                   const SizedBox(height: 18),
 
-                  // 사진 / 파일 / 유튜브 액션
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                  // #780 — 첨부 액션 1줄 컴팩트 (사진 / 파일 / 유튜브).
+                  Row(
                     children: [
-                      OutlinedButton.icon(
-                        onPressed: _images.length >= 4
-                            ? null
-                            : () => _addImages(isKorean),
-                        icon: const Icon(Icons.add_photo_alternate_rounded),
-                        label: Text(
-                          _images.isEmpty
-                              ? (isKorean ? '사진 추가' : 'Add photo')
+                      Expanded(
+                        child: _CompactAttachButton(
+                          icon: Icons.add_photo_alternate_rounded,
+                          label: _images.isEmpty
+                              ? (isKorean ? '사진' : 'Photo')
                               : '${isKorean ? '사진' : 'Photo'} +${_images.length}',
+                          onTap: _images.length >= 4 ? null : () => _addImages(isKorean),
+                          color: C.lv,
                         ),
                       ),
-                      OutlinedButton.icon(
-                        onPressed: _addFiles,
-                        icon: const Icon(Icons.attach_file_rounded),
-                        label: Text(
-                          _files.isEmpty
-                              ? (isKorean ? '파일 추가' : 'Add file')
-                              : '${isKorean ? '파일' : 'File'} (${_files.length})',
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: _CompactAttachButton(
+                          icon: Icons.attach_file_rounded,
+                          label: _files.isEmpty
+                              ? (isKorean ? '파일' : 'File')
+                              : '${isKorean ? '파일' : 'File'} ${_files.length}',
+                          onTap: _addFiles,
+                          color: C.lvD,
                         ),
                       ),
-                      OutlinedButton.icon(
-                        onPressed: () => _addYoutubeLink(isKorean),
-                        icon: Icon(
-                          Icons.smart_display_rounded,
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: _CompactAttachButton(
+                          icon: Icons.smart_display_rounded,
+                          label: isKorean ? '유튜브' : 'YouTube',
+                          onTap: () => _addYoutubeLink(isKorean),
                           color: C.pkD,
-                        ),
-                        label: Text(
-                          isKorean ? '유튜브 링크 추가' : 'Add YouTube link',
                         ),
                       ),
                     ],
                   ),
 
-                  // 첨부 사진 그리드
-                  if (_images.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: List.generate(_images.length, (index) {
-                        return Stack(
+                  // #780 — 첨부 사진 그리드. 첫 슬롯은 카메라 즉시 촬영 버튼.
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      // #780 (재수정) — 카메라 즉시 촬영 슬롯: 아이콘만 (텍스트 제거)
+                      if (_images.length < 4)
+                        GestureDetector(
+                          onTap: _captureImageFromCamera,
+                          child: Container(
+                            width: 88,
+                            height: 88,
+                            decoration: BoxDecoration(
+                              color: C.lvL,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: C.lv.withValues(alpha: 0.35)),
+                            ),
+                            child: Icon(Icons.photo_camera_rounded, color: C.lvD, size: 36),
+                          ),
+                        ),
+                      // 첨부된 사진들
+                      for (int index = 0; index < _images.length; index++)
+                        Stack(
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(10),
@@ -596,10 +572,9 @@ class _CommunityPostEditorScreenState
                               ),
                             ),
                           ],
-                        );
-                      }),
-                    ),
-                  ],
+                        ),
+                    ],
+                  ),
 
                   // 첨부 파일 칩
                   if (_files.isNotEmpty) ...[
@@ -746,6 +721,61 @@ class _QuillToolbar extends StatelessWidget {
           showFontSize: false,
           showDividers: true,
           showClearFormat: false,
+        ),
+      ),
+    );
+  }
+}
+
+/// #780 — 컴팩트 첨부 버튼 (사진/파일/유튜브 1줄 가로 배치용).
+class _CompactAttachButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final Color color;
+
+  const _CompactAttachButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = onTap == null;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: disabled ? C.bd.withValues(alpha: 0.15) : color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: disabled ? C.bd : color.withValues(alpha: 0.35),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 16, color: disabled ? C.mu : color),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: T.caption.copyWith(
+                    color: disabled ? C.mu : color,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

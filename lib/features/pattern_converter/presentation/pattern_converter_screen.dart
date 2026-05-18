@@ -86,6 +86,8 @@ class _PatternConverterScreenState
     final isKorean = ref.read(appLanguageProvider).isKorean;
     // 이슈 #628 (B-7) — AI 자동 분석 토글 (closure로 시트 세션 내 유지)
     bool aiAnalysis = true;
+    // 이슈 #800 — 외부 클라우드 4종(Dropbox/Drive/iCloud/OneDrive)을 1개 항목으로 묶고 펼침.
+    bool cloudExpanded = false;
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: C.bg,
@@ -201,60 +203,108 @@ class _PatternConverterScreenState
                 _pickFromPhone();
               },
             ),
-            // ② 외부 클라우드 — Dropbox (활성, DropboxTheme 토큰)
-            ListTile(
-              leading: Container(
-                width: 44, height: 44,
-                decoration: BoxDecoration(
-                  color: DropboxTheme.of(context).brandColor.withValues(alpha: DropboxTheme.of(context).iconBoxBgAlpha),
-                  borderRadius: BorderRadius.circular(DropboxTheme.of(context).iconBoxRadius),
+            // ② 외부 클라우드 — 4종 그룹화 (이슈 #800)
+            // Dropbox(활성) + Google Drive/iCloud/OneDrive(준비 중)을 ExpansionTile로 묶음.
+            // 펼침 시 기존 4개 옵션 동일 UI 유지.
+            Theme(
+              data: Theme.of(context).copyWith(
+                dividerColor: Colors.transparent,
+                splashColor: Colors.transparent,
+                highlightColor: Colors.transparent,
+              ),
+              child: ExpansionTile(
+                initiallyExpanded: cloudExpanded,
+                onExpansionChanged: (v) => setSheetState(() => cloudExpanded = v),
+                tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+                childrenPadding: EdgeInsets.zero,
+                leading: Container(
+                  width: 44, height: 44,
+                  decoration: BoxDecoration(
+                    color: C.lvL,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.cloud_rounded, color: C.lvD, size: 22),
                 ),
-                child: Icon(DropboxTheme.of(context).icon, color: DropboxTheme.of(context).brandColor, size: 22),
-              ),
-              title: Text('Dropbox', style: T.bodyBold),
-              subtitle: Text(
-                isKorean ? '드롭박스에서 파일 선택' : 'Pick from Dropbox',
-                style: T.caption.copyWith(color: C.mu),
-              ),
-              trailing: Icon(Icons.chevron_right_rounded, color: C.mu),
-              onTap: () async {
-                if (!aiAnalysis) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(isKorean
-                          ? 'AI 분석 없이 단순 저장은 곧 지원돼요. 지금은 AI 분석을 켜주세요.'
-                          : 'Save without AI analysis is coming soon. Please enable AI analysis for now.'),
-                      behavior: SnackBarBehavior.floating,
+                title: Text(
+                  isKorean ? '외부 클라우드' : 'External Cloud',
+                  style: T.bodyBold,
+                ),
+                subtitle: Text(
+                  isKorean ? '4개 서비스 · 탭하여 펼치기' : '4 services · tap to expand',
+                  style: T.caption.copyWith(color: C.mu),
+                ),
+                children: [
+                  // ②-1 Dropbox (활성)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: ListTile(
+                      leading: Container(
+                        width: 44, height: 44,
+                        decoration: BoxDecoration(
+                          color: DropboxTheme.of(context).brandColor.withValues(alpha: DropboxTheme.of(context).iconBoxBgAlpha),
+                          borderRadius: BorderRadius.circular(DropboxTheme.of(context).iconBoxRadius),
+                        ),
+                        child: Icon(DropboxTheme.of(context).icon, color: DropboxTheme.of(context).brandColor, size: 22),
+                      ),
+                      title: Text('Dropbox', style: T.bodyBold),
+                      subtitle: Text(
+                        isKorean ? '드롭박스에서 파일 선택' : 'Pick from Dropbox',
+                        style: T.caption.copyWith(color: C.mu),
+                      ),
+                      trailing: Icon(Icons.chevron_right_rounded, color: C.mu),
+                      onTap: () async {
+                        if (!aiAnalysis) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(isKorean
+                                  ? 'AI 분석 없이 단순 저장은 곧 지원돼요. 지금은 AI 분석을 켜주세요.'
+                                  : 'Save without AI analysis is coming soon. Please enable AI analysis for now.'),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                          return;
+                        }
+                        Navigator.pop(context);
+                        await Future.microtask(() {});
+                        _pickFromDropbox();
+                      },
                     ),
-                  );
-                  return;
-                }
-                Navigator.pop(context);
-                await Future.microtask(() {});
-                _pickFromDropbox();
-              },
-            ),
-            // 이슈 #631 — 외부 클라우드 확장 (준비 중 — 향후 구현)
-            _buildComingSoonCloud(
-              context,
-              isKorean: isKorean,
-              label: 'Google Drive',
-              icon: Icons.cloud_rounded,
-              color: const Color(0xFF1A73E8),
-            ),
-            _buildComingSoonCloud(
-              context,
-              isKorean: isKorean,
-              label: 'iCloud',
-              icon: Icons.cloud_rounded,
-              color: const Color(0xFF007AFF),
-            ),
-            _buildComingSoonCloud(
-              context,
-              isKorean: isKorean,
-              label: 'OneDrive',
-              icon: Icons.cloud_rounded,
-              color: const Color(0xFF0078D4),
+                  ),
+                  // ②-2 Google Drive (준비 중)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: _buildComingSoonCloud(
+                      context,
+                      isKorean: isKorean,
+                      label: 'Google Drive',
+                      icon: Icons.cloud_rounded,
+                      color: C.lv,
+                    ),
+                  ),
+                  // ②-3 iCloud (준비 중)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: _buildComingSoonCloud(
+                      context,
+                      isKorean: isKorean,
+                      label: 'iCloud',
+                      icon: Icons.cloud_rounded,
+                      color: C.lv,
+                    ),
+                  ),
+                  // ②-4 OneDrive (준비 중)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: _buildComingSoonCloud(
+                      context,
+                      isKorean: isKorean,
+                      label: 'OneDrive',
+                      icon: Icons.cloud_rounded,
+                      color: C.lv,
+                    ),
+                  ),
+                ],
+              ),
             ),
             // ③ 도안에디터 (신규 — 이슈 #628)
             ListTile(

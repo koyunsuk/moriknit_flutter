@@ -34,7 +34,9 @@ import 'dart:ui';
 /// - [trim]: 끝 앵커 클릭 시 삭제
 /// - [ruler]: 두 점 거리 측정 (#679)
 /// - [protractor]: 세 점 각도 측정 (#679)
-enum PathTool { grid, arc, square, pen, line, cut, trim, ruler, protractor }
+/// - [brush]: #689 — 심볼 패턴 브러쉬. 드래그한 경로 위에 선택된 심볼이 일정 간격으로 자동 배치.
+///            (펜처럼 path를 그리되, pattern 시퀀스가 자동으로 [selectedSymbolId] 단일 심볼로 채워짐)
+enum PathTool { grid, arc, square, pen, line, cut, trim, ruler, protractor, brush }
 
 /// path 변(edge) 타입.
 ///

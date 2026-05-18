@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -30,6 +31,7 @@ import '../../../providers/yarn_provider.dart';
 import '../../../providers/needle_provider.dart';
 import '../../../providers/accessory_provider.dart';
 import '../../../providers/book_provider.dart';
+import '../../my/data/recent_works_provider.dart';
 
 String _youtubeThumbnail(String videoUrl) {
   final uri = Uri.tryParse(videoUrl);
@@ -106,7 +108,8 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
                         children: [
                           _MoriRavelryCapsuleCard(isKorean: isKorean),
                           const SizedBox(height: 12),
-                          _AssetSummaryCard(isKorean: isKorean),
+                          // #769 후속 — Asset 자리에 '최근 작업' 블록 (프로젝트/스와치/도안 랜덤).
+                          _RecentWorksBlock(isKorean: isKorean),
                           const SizedBox(height: 8),
                         ],
                       ),
@@ -418,8 +421,7 @@ class _AssetTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // #769 — "나의 Asset 관리" 블록 삭제. 상단 요약카드(_AssetSummaryCard)가
-    // 프로젝트/스와치/실/바늘/악세사리/도서 모두 포함하므로 중복 제거.
+    // #769 (재복구) — 나의 Asset 라이브러리 4종(실/바늘/악세사리/도서) 복구.
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
@@ -427,17 +429,44 @@ class _AssetTab extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           MoriBlockShell(
-            label: isKorean ? '안내' : 'Info',
-            icon: Icons.info_outline,
-            accent: C.lvD,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                isKorean
-                    ? '바늘 · 실 · 악세사리 · 도서는 상단 요약카드에서 관리됩니다.'
-                    : 'Needles, yarn, accessories, and books are managed from the summary card above.',
-                style: T.body.copyWith(color: C.tx2, height: 1.5),
-              ),
+            label: isKorean ? '나의 Asset 관리' : 'My Asset Management',
+            icon: Icons.inventory_2_rounded,
+            accent: C.pk,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _ToolCard(
+                  icon: Icons.circle_outlined,
+                  color: C.lv,
+                  title: isKorean ? '나의 바늘 라이브러리' : 'My Needle Library',
+                  description: t.needleToolDescription,
+                  onTap: () => context.push(Routes.needles),
+                ),
+                const SizedBox(height: 10),
+                _ToolCard(
+                  icon: Icons.texture,
+                  color: C.pk,
+                  title: isKorean ? '나의 실 라이브러리' : 'My Yarn Library',
+                  description: isKorean ? '실 보유 현황과 실 정보를 관리해요' : 'Manage your yarn stash and info',
+                  onTap: () => context.push('/yarn-list'),
+                ),
+                const SizedBox(height: 10),
+                _ToolCard(
+                  icon: Icons.build_rounded,
+                  color: C.pkD,
+                  title: isKorean ? '나의 악세사리 라이브러리' : 'My Accessory Library',
+                  description: isKorean ? '니팅 도구 및 악세사리를 관리해요' : 'Manage your knitting tools & accessories',
+                  onTap: () => context.push(Routes.accessories),
+                ),
+                const SizedBox(height: 10),
+                _ToolCard(
+                  icon: Icons.menu_book_rounded,
+                  color: C.lmD,
+                  title: isKorean ? '나의 도서 라이브러리' : 'My Book Library',
+                  description: isKorean ? '참고 도서 목록을 관리해요' : 'Manage your reference books',
+                  onTap: () => context.push(Routes.books),
+                ),
+              ],
             ),
           ),
         ],
@@ -703,7 +732,7 @@ class _ProjectCard extends ConsumerWidget {
                 height: 44,
                 decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(12)),
                 child: project.coverPhotoUrl.isNotEmpty
-                    ? ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(project.coverPhotoUrl, fit: BoxFit.cover))
+                    ? ClipRRect(borderRadius: BorderRadius.circular(12), child: CachedNetworkImage(imageUrl: project.coverPhotoUrl, fit: BoxFit.cover))
                     : Icon(Icons.folder_special_rounded, color: C.lv, size: 22),
               ),
               const SizedBox(width: 12),
@@ -806,7 +835,7 @@ class _CourseCard extends StatelessWidget {
               height: 180,
               width: double.infinity,
               child: thumbUrl.isNotEmpty
-                  ? Image.network(thumbUrl, fit: BoxFit.cover, errorBuilder: (_, e, s) => Container(color: C.lvL, child: Icon(Icons.school_rounded, color: C.lvD, size: 36)))
+                  ? CachedNetworkImage(imageUrl: thumbUrl, fit: BoxFit.cover, errorWidget: (_, e, s) => Container(color: C.lvL, child: Icon(Icons.school_rounded, color: C.lvD, size: 36)))
                   : Container(color: C.lvL, child: Icon(Icons.school_rounded, color: C.lvD, size: 36)),
             ),
           ),
@@ -984,22 +1013,110 @@ class _RavelryCard extends ConsumerWidget {
   }
 }
 
-class _AssetSummaryCard extends ConsumerWidget {
+/// #769 후속 — 내 작업실 상단 "최근 작업" 블록.
+class _RecentWorksBlock extends ConsumerWidget {
+  final bool isKorean;
+  const _RecentWorksBlock({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final items = ref.watch(recentWorksProvider);
+    return MoriBlockShell(
+      label: isKorean ? '최근 작업' : 'Recent Works',
+      icon: Icons.history_rounded,
+      accent: C.pk,
+      moreLabel: isKorean ? '새로고침' : 'Shuffle',
+      onMoreTap: () => ref.invalidate(recentWorksProvider),
+      child: SizedBox(
+        height: 120,
+        child: items.isEmpty
+            ? Center(
+                child: Text(
+                  isKorean
+                      ? '아직 저장된 이미지가 없어요. 프로젝트나 스와치를 추가해 보세요.'
+                      : 'No images yet. Add a project or swatch first.',
+                  style: T.caption.copyWith(color: C.mu),
+                  textAlign: TextAlign.center,
+                ),
+              )
+            : ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: items.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                itemBuilder: (ctx, i) {
+                  final item = items[i];
+                  return GestureDetector(
+                    onTap: () => context.push(item.routePath),
+                    child: SizedBox(
+                      width: 100,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  CachedNetworkImage(
+                                    imageUrl: item.imageUrl,
+                                    fit: BoxFit.cover,
+                                    placeholder: (_, _) => Container(color: C.bd.withValues(alpha: 0.15)),
+                                    errorWidget: (_, _, _) => Container(
+                                      color: C.bd.withValues(alpha: 0.15),
+                                      child: Icon(Icons.broken_image_rounded, color: C.mu, size: 20),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    left: 4,
+                                    top: 4,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(alpha: 0.5),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        item.typeLabel(isKorean),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w700,
+                                          height: 1,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: T.caption.copyWith(color: C.tx2, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+      ),
+    );
+  }
+}
+
+// ignore: unused_element
+class _AssetSummaryCard extends StatelessWidget {
   final bool isKorean;
   const _AssetSummaryCard({required this.isKorean});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final projectCount = ref.watch(projectCountProvider);
-    final swatchCount = ref.watch(swatchCountProvider);
-    final yarnCount = ref.watch(yarnCountProvider);
-    final needleAsync = ref.watch(needleListProvider);
-    final needleCount = needleAsync.maybeWhen(data: (n) => n.length, orElse: () => 0);
-    final accessoryAsync = ref.watch(accessoryListProvider);
-    final accessoryCount = accessoryAsync.maybeWhen(data: (a) => a.length, orElse: () => 0);
-    final bookAsync = ref.watch(bookListProvider);
-    final bookCount = bookAsync.maybeWhen(data: (b) => b.length, orElse: () => 0);
-
+  Widget build(BuildContext context) {
+    // 이슈 #776 — 카운트별 ConsumerWidget으로 분리. 셀별로 자기 provider만 watch.
     // 이슈 #723 — 블록 외형 표준 MoriBlockShell 사용.
     return MoriBlockShell(
       label: isKorean ? '나의 Asset' : 'My Assets',
@@ -1010,65 +1127,128 @@ class _AssetSummaryCard extends ConsumerWidget {
         children: [
           Row(
             children: [
-              Expanded(child: _AssetCell(
-                icon: Icons.folder_special_rounded,
-                color: C.lv,
-                label: isKorean ? '프로젝트' : 'Projects',
-                value: '$projectCount',
-                onTap: () => context.push(Routes.projectList),
-              )),
+              Expanded(child: _ProjectCountCell(isKorean: isKorean)),
               const SizedBox(width: 10),
-              Expanded(child: _AssetCell(
-                icon: Icons.grid_view_rounded,
-                color: C.lmD,
-                label: isKorean ? '스와치' : 'Swatches',
-                value: '$swatchCount',
-                onTap: () => context.push(Routes.swatchList),
-              )),
+              Expanded(child: _SwatchCountCell(isKorean: isKorean)),
             ],
           ),
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _AssetCell(
-                icon: Icons.texture,
-                color: C.pk,
-                label: isKorean ? '실' : 'Yarn',
-                value: '$yarnCount',
-                onTap: () => context.push('/yarn-list'),
-              )),
+              Expanded(child: _YarnCountCell(isKorean: isKorean)),
               const SizedBox(width: 10),
-              Expanded(child: _AssetCell(
-                icon: Icons.circle_outlined,
-                color: C.lvD,
-                label: isKorean ? '바늘' : 'Needles',
-                value: '$needleCount',
-                onTap: () => context.push(Routes.needles),
-              )),
+              Expanded(child: _NeedleCountCell(isKorean: isKorean)),
             ],
           ),
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _AssetCell(
-                icon: Icons.build_rounded,
-                color: C.pkD,
-                label: isKorean ? '악세사리' : 'Accessories',
-                value: '$accessoryCount',
-                onTap: () => context.push(Routes.accessories),
-              )),
+              Expanded(child: _AccessoryCountCell(isKorean: isKorean)),
               const SizedBox(width: 10),
-              Expanded(child: _AssetCell(
-                icon: Icons.menu_book_rounded,
-                color: C.lmD,
-                label: isKorean ? '도서' : 'Books',
-                value: '$bookCount',
-                onTap: () => context.push(Routes.books),
-              )),
+              Expanded(child: _BookCountCell(isKorean: isKorean)),
             ],
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ProjectCountCell extends ConsumerWidget {
+  final bool isKorean;
+  const _ProjectCountCell({required this.isKorean});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final projectCount = ref.watch(projectCountProvider);
+    return _AssetCell(
+      icon: Icons.folder_special_rounded,
+      color: C.lv,
+      label: isKorean ? '프로젝트' : 'Projects',
+      value: '$projectCount',
+      onTap: () => context.push(Routes.projectList),
+    );
+  }
+}
+
+class _SwatchCountCell extends ConsumerWidget {
+  final bool isKorean;
+  const _SwatchCountCell({required this.isKorean});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final swatchCount = ref.watch(swatchCountProvider);
+    return _AssetCell(
+      icon: Icons.grid_view_rounded,
+      color: C.lmD,
+      label: isKorean ? '스와치' : 'Swatches',
+      value: '$swatchCount',
+      onTap: () => context.push(Routes.swatchList),
+    );
+  }
+}
+
+class _YarnCountCell extends ConsumerWidget {
+  final bool isKorean;
+  const _YarnCountCell({required this.isKorean});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final yarnCount = ref.watch(yarnCountProvider);
+    return _AssetCell(
+      icon: Icons.texture,
+      color: C.pk,
+      label: isKorean ? '실' : 'Yarn',
+      value: '$yarnCount',
+      onTap: () => context.push('/yarn-list'),
+    );
+  }
+}
+
+class _NeedleCountCell extends ConsumerWidget {
+  final bool isKorean;
+  const _NeedleCountCell({required this.isKorean});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final needleAsync = ref.watch(needleListProvider);
+    final needleCount = needleAsync.maybeWhen(data: (n) => n.length, orElse: () => 0);
+    return _AssetCell(
+      icon: Icons.circle_outlined,
+      color: C.lvD,
+      label: isKorean ? '바늘' : 'Needles',
+      value: '$needleCount',
+      onTap: () => context.push(Routes.needles),
+    );
+  }
+}
+
+class _AccessoryCountCell extends ConsumerWidget {
+  final bool isKorean;
+  const _AccessoryCountCell({required this.isKorean});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accessoryAsync = ref.watch(accessoryListProvider);
+    final accessoryCount = accessoryAsync.maybeWhen(data: (a) => a.length, orElse: () => 0);
+    return _AssetCell(
+      icon: Icons.build_rounded,
+      color: C.pkD,
+      label: isKorean ? '악세사리' : 'Accessories',
+      value: '$accessoryCount',
+      onTap: () => context.push(Routes.accessories),
+    );
+  }
+}
+
+class _BookCountCell extends ConsumerWidget {
+  final bool isKorean;
+  const _BookCountCell({required this.isKorean});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bookAsync = ref.watch(bookListProvider);
+    final bookCount = bookAsync.maybeWhen(data: (b) => b.length, orElse: () => 0);
+    return _AssetCell(
+      icon: Icons.menu_book_rounded,
+      color: C.lmD,
+      label: isKorean ? '도서' : 'Books',
+      value: '$bookCount',
+      onTap: () => context.push(Routes.books),
     );
   }
 }

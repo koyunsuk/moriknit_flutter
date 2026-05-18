@@ -73,8 +73,9 @@ final _landingRouter = GoRouter(
     GoRoute(path: '/notices', builder: (_, _) => const LandingNoticeListScreen()),
     GoRoute(path: '/notices/:id', builder: (_, s) => LandingNoticeDetailScreen(noticeId: s.pathParameters['id']!)),
     GoRoute(path: '/reviews', builder: (_, _) => const LandingBoardListScreen(boardType: 'review')),
-    GoRoute(path: '/releases', builder: (_, _) => const LandingBoardListScreen(boardType: 'release')),
-    GoRoute(path: '/qa', builder: (_, _) => const LandingBoardListScreen(boardType: 'qa')),
+    // #758 (재수정) — 페이지명 직접 변경. redirect 제거.
+    GoRoute(path: '/release', builder: (_, _) => const LandingBoardListScreen(boardType: 'release')),
+    GoRoute(path: '/qna', builder: (_, _) => const LandingBoardListScreen(boardType: 'qa')),
     GoRoute(
       path: '/board/:type',
       builder: (_, s) => LandingBoardListScreen(boardType: s.pathParameters['type']!),

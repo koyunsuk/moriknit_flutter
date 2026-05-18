@@ -18,6 +18,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/cached_pattern_image.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../blueprint/presentation/step_log_screen.dart';
+import '../../market/presentation/pdf_viewer_screen.dart';
 import '../data/pattern_export_service.dart';
 import '../data/pattern_repository.dart';
 import '../domain/guide_path_chart.dart';
@@ -300,6 +301,19 @@ class _PatternEditorScreenState extends ConsumerState<PatternEditorScreen> {
     final repo = ref.read(patternRepositoryProvider);
     final loaded = await repo.get(id);
     if (loaded != null && mounted) {
+      // #795 후속 — PDF 도안은 차트 에디터가 아닌 PDF 뷰어로 분기.
+      // (rows=0, cols=0 이고 pdfUrl 또는 imageUrl 있는 외부 자료 도안)
+      if (widget.readOnly && loaded.pdfUrl.isNotEmpty) {
+        await Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(
+            builder: (_) => PdfViewerScreen(
+              url: loaded.pdfUrl,
+              title: loaded.title,
+            ),
+          ),
+        );
+        return;
+      }
       setState(() => _chart = loaded);
       _narrativeController.text = loaded.narrativeText;
       _titleController.text = loaded.title;
@@ -1822,7 +1836,9 @@ class _TrackingOverlay extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final counter = ref.watch(counterByChartIdProvider(chartId)).valueOrNull;
-    final currentRow = counter != null ? counter.rowCount.clamp(1, chart.rows) : localRow;
+    // #795 — PDF/이미지 타입 도안은 rows=0 으로 저장될 수 있음. clamp(1, 0) 방지.
+    final safeMaxRow = chart.rows < 1 ? 1 : chart.rows;
+    final currentRow = counter != null ? counter.rowCount.clamp(1, safeMaxRow) : localRow;
     return ChartTrackingOverlay(
       chart: chart,
       currentRow: currentRow,
@@ -1873,7 +1889,9 @@ class _TrackingControlBlock extends ConsumerWidget {
     if (counterId != null && counterId.isNotEmpty) {
       await ref.read(counterRepositoryProvider).incrementRow(counterId, delta);
     } else {
-      onLocalRowChange((localRow + delta).clamp(1, chart.rows));
+      // #795 — chart.rows == 0 (PDF/이미지 타입) 안전 처리.
+      final safeMaxRow = chart.rows < 1 ? 1 : chart.rows;
+      onLocalRowChange((localRow + delta).clamp(1, safeMaxRow));
     }
   }
 
@@ -1898,7 +1916,10 @@ class _TrackingControlBlock extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final counterAsync = ref.watch(counterByChartIdProvider(chartId));
     final counter = counterAsync.valueOrNull;
-    final currentRow = counter != null ? counter.rowCount.clamp(1, chart.rows) : localRow;
+    // #795 — PDF/이미지 타입(rows=0, cols=0) 안전 가드.
+    final safeMaxRow = chart.rows < 1 ? 1 : chart.rows;
+    final safeMaxCol = chart.cols < 1 ? 1 : chart.cols;
+    final currentRow = counter != null ? counter.rowCount.clamp(1, safeMaxRow) : localRow;
     final counterId = counter?.id;
 
     if (counterAsync is AsyncData && counter == null && chartId.isNotEmpty) {
@@ -1925,13 +1946,13 @@ class _TrackingControlBlock extends ConsumerWidget {
           onModeChange: onModeChange,
           onDirectionChange: onDirectionChange,
           onColToggle: onColToggle,
-          onColMinus: () => onLocalColChange(((currentCol ?? 1) - 1).clamp(1, chart.cols)),
-          onColPlus: () => onLocalColChange(((currentCol ?? 1) + 1).clamp(1, chart.cols)),
-          onColLongPressMinus: () => onLocalColChange(((currentCol ?? 1) - 5).clamp(1, chart.cols)),
-          onColLongPressPlus: () => onLocalColChange(((currentCol ?? 1) + 5).clamp(1, chart.cols)),
+          onColMinus: () => onLocalColChange(((currentCol ?? 1) - 1).clamp(1, safeMaxCol)),
+          onColPlus: () => onLocalColChange(((currentCol ?? 1) + 1).clamp(1, safeMaxCol)),
+          onColLongPressMinus: () => onLocalColChange(((currentCol ?? 1) - 5).clamp(1, safeMaxCol)),
+          onColLongPressPlus: () => onLocalColChange(((currentCol ?? 1) + 5).clamp(1, safeMaxCol)),
           onMarkerWidthChange: onMarkerWidthChange,
           onClose: onClose,
-          onJumpToLastRow: () => _increment(context, ref, counterId, chart.rows - currentRow),
+          onJumpToLastRow: () => _increment(context, ref, counterId, safeMaxRow - currentRow),
           onJumpToFirstRow: () => _increment(context, ref, counterId, 1 - currentRow),
         ),
       ),

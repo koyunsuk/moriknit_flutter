@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -588,7 +589,7 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
                         final yarn = yarns[i];
                         return ListTile(
                           leading: yarn.photoUrl.isNotEmpty
-                              ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(yarn.photoUrl, width: 44, height: 44, fit: BoxFit.cover, errorBuilder: (_, _, _) => Container(width: 44, height: 44, decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)), child: Icon(Icons.color_lens_outlined, color: C.lvD, size: 20))))
+                              ? ClipRRect(borderRadius: BorderRadius.circular(8), child: CachedNetworkImage(imageUrl: yarn.photoUrl, width: 44, height: 44, fit: BoxFit.cover, errorWidget: (_, _, _) => Container(width: 44, height: 44, decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)), child: Icon(Icons.color_lens_outlined, color: C.lvD, size: 20))))
                               : Container(width: 44, height: 44, decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)), child: Icon(Icons.color_lens_outlined, color: C.lvD, size: 20)),
                           title: Text(yarn.name.isNotEmpty ? yarn.name : yarn.brandName, style: T.bodyBold),
                           subtitle: Text('${yarn.brandName.isNotEmpty ? yarn.brandName : (isKorean ? "브랜드 없음" : "No brand")}${yarn.color.isNotEmpty ? " · ${yarn.color}" : ""}', style: T.caption.copyWith(color: C.mu)),
@@ -635,7 +636,7 @@ class _SwatchInputScreenState extends ConsumerState<SwatchInputScreen> {
                         final acc = accessories[i];
                         return ListTile(
                           leading: acc.photoUrl.isNotEmpty
-                              ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(acc.photoUrl, width: 44, height: 44, fit: BoxFit.cover, errorBuilder: (_, _, _) => Container(width: 44, height: 44, decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)), child: Icon(Icons.diamond_outlined, color: C.lvD, size: 20))))
+                              ? ClipRRect(borderRadius: BorderRadius.circular(8), child: CachedNetworkImage(imageUrl: acc.photoUrl, width: 44, height: 44, fit: BoxFit.cover, errorWidget: (_, _, _) => Container(width: 44, height: 44, decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)), child: Icon(Icons.diamond_outlined, color: C.lvD, size: 20))))
                               : Container(width: 44, height: 44, decoration: BoxDecoration(color: C.lv.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)), child: Icon(Icons.diamond_outlined, color: C.lvD, size: 20)),
                           title: Text(acc.name.isNotEmpty ? acc.name : acc.localizedTypeLabel(isKorean), style: T.bodyBold),
                           subtitle: Text(acc.localizedTypeLabel(isKorean), style: T.caption.copyWith(color: C.mu)),
@@ -1060,7 +1061,7 @@ class _PhotoPanel extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                         child: localPath != null
                             ? Image.file(File(localPath!), fit: BoxFit.cover, width: double.infinity, height: double.infinity)
-                            : Image.network(photoUrl, fit: BoxFit.cover, width: double.infinity, height: double.infinity),
+                            : CachedNetworkImage(imageUrl: photoUrl, fit: BoxFit.cover, width: double.infinity, height: double.infinity),
                       )
                     : Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -1203,7 +1204,7 @@ class _PhotoSectionState extends State<_PhotoSection> {
                           borderRadius: BorderRadius.circular(14),
                           child: _localPath != null
                               ? Image.file(File(_localPath!), fit: BoxFit.contain, width: double.infinity)
-                              : Image.network(widget.photoUrl, fit: BoxFit.contain, width: double.infinity),
+                              : CachedNetworkImage(imageUrl: widget.photoUrl, fit: BoxFit.contain, width: double.infinity),
                         )
                       : Column(
                           mainAxisAlignment: MainAxisAlignment.center,

@@ -72,9 +72,11 @@ void main() async {
     cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
   );
 
-  if (!kIsWeb) {
-    kakao.KakaoSdk.init(nativeAppKey: 'de107e8c3aa2ecdb5271c1a48a7da0d7');
-  }
+  // #784 — 카카오 SDK init: 모바일은 nativeAppKey, 웹은 javaScriptAppKey 사용.
+  kakao.KakaoSdk.init(
+    nativeAppKey: 'de107e8c3aa2ecdb5271c1a48a7da0d7',
+    javaScriptAppKey: 'b69570c25792e78f96988f7425a256ec',
+  );
 
   runApp(
     const ProviderScope(

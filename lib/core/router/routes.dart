@@ -26,6 +26,8 @@ class Routes {
   static const market = '/market';
   // 이슈 #713 — 내 마켓 대시보드 (Shell 내부 경로로 하단 탭바 유지)
   static const marketDashboard = '/market/dashboard';
+  // 이슈 #629 — 도안 마켓 등록 (0원 무료 도안 우선 지원)
+  static const marketPublish = '/market/publish';
   static const my = '/my';
   static const needles = '/my/needles';
   static const accessories = '/my/accessories';
@@ -67,4 +69,16 @@ class Routes {
   static const conflictInbox = '/sync/conflicts';
   // 이슈 #687 — 단계 청사진(StepBlueprint) 편집 화면
   static const stepBlueprintEditor = '/blueprints/:id/edit';
+  // 이슈 #792 — 테스터 그룹 권한 관리 화면
+  static const testerGroup = '/blueprints/:id/testers';
+  // 이슈 #794 — 테스터 피드백 전용 채널
+  static const testerFeedback = '/blueprints/:id/feedback';
+  // 이슈 #795 후속 — 유니버설 도안 뷰어 (타입 자동 분기)
+  static const patternView = '/pattern-view/:id';
+  // GlobalKey 중복 fix — 홈에서 Navigator.push 대신 context.push 사용을 위한 라우트
+  static const galleryDetail = '/community/gallery-detail';
+  static const boardList = '/board/:type';
+  static const boardWrite = '/board/:type/write';
+  static const boardDetail = '/board/:type/:postId';
+  static const knitAlongGroup = '/knit-along/:originId';
 }

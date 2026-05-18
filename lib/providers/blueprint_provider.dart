@@ -108,3 +108,38 @@ final blueprintMyRoleProvider =
   if (bp.ownerUid == user.uid) return null; // owner — 별도 처리
   return bp.members[user.uid];
 });
+
+// ── #791 함께 뜨기(Knit-Along) providers ─────────────────────────────────
+
+/// 함께 뜨기 그룹 — forkCount > 0 인 원본 도안 목록 (커뮤니티 _ForkSection 노출).
+final knitAlongGroupsProvider = StreamProvider<List<StepBlueprint>>((ref) {
+  return ref.watch(stepBlueprintRepositoryProvider).watchKnitAlongGroups();
+});
+
+/// 내가 참여 중인 함께 뜨기(= fork 한 청사진) — 홈 "내 함께뜨기" 블록.
+final myKnitAlongsProvider = StreamProvider<List<StepBlueprint>>((ref) {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return Stream.value(const <StepBlueprint>[]);
+  return ref
+      .watch(stepBlueprintRepositoryProvider)
+      .watchMyKnitAlongs(user.uid);
+});
+
+/// 특정 원본 도안에 대해 함께 뜨고 있는 사용자들의 청사진(참여자 목록).
+final knitAlongParticipantsProvider =
+    StreamProvider.family<List<StepBlueprint>, String>((ref, originId) {
+  return ref
+      .watch(stepBlueprintRepositoryProvider)
+      .watchKnitAlongParticipants(originId);
+});
+
+// ── #792 테스터 그룹 권한 providers ──────────────────────────────────────
+
+/// 내가 작성한 도안 — 테스터 대시보드용.
+final myAuthoredBlueprintsProvider = StreamProvider<List<StepBlueprint>>((ref) {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return Stream.value(const <StepBlueprint>[]);
+  return ref
+      .watch(stepBlueprintRepositoryProvider)
+      .watchMyAuthoredBlueprints(user.uid);
+});

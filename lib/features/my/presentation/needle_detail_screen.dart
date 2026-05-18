@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -170,7 +171,7 @@ class _NeedleDetailScreenState extends ConsumerState<NeedleDetailScreen> {
                           final alreadyLinked = project.needleIds.contains(needleId);
                           return ListTile(
                             leading: project.coverPhotoUrl.isNotEmpty
-                                ? ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.network(project.coverPhotoUrl, width: 40, height: 40, fit: BoxFit.cover))
+                                ? ClipRRect(borderRadius: BorderRadius.circular(6), child: CachedNetworkImage(imageUrl: project.coverPhotoUrl, width: 40, height: 40, fit: BoxFit.cover))
                                 : Container(width: 40, height: 40, decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(6)), child: const Icon(Icons.folder_outlined, size: 20)),
                             title: Text(project.title, style: Theme.of(ctx).textTheme.bodyMedium),
                             trailing: alreadyLinked ? Icon(Icons.check_circle_rounded, color: Colors.green.shade400, size: 18) : null,
@@ -410,12 +411,12 @@ class _NeedleDetailScreenState extends ConsumerState<NeedleDetailScreen> {
                       if (needle.photoUrl.isNotEmpty)
                         ClipRRect(
                           borderRadius: BorderRadius.circular(12),
-                          child: Image.network(
-                            needle.photoUrl,
+                          child: CachedNetworkImage(
+                            imageUrl: needle.photoUrl,
                             width: 80,
                             height: 80,
                             fit: BoxFit.cover,
-                            errorBuilder: (ctx, e, st) => const SizedBox.shrink(),
+                            errorWidget: (ctx, e, st) => const SizedBox.shrink(),
                           ),
                         ),
                     ],
@@ -988,8 +989,8 @@ class _NeedlePhotoSection extends StatelessWidget {
     } else if (existingPhotoUrl != null) {
       child = ClipRRect(
         borderRadius: BorderRadius.circular(14),
-        child: Image.network(existingPhotoUrl!, fit: BoxFit.cover, width: double.infinity,
-            errorBuilder: (ctx, err, stack) => const SizedBox()),
+        child: CachedNetworkImage(imageUrl: existingPhotoUrl!, fit: BoxFit.cover, width: double.infinity,
+            errorWidget: (ctx, err, stack) => const SizedBox()),
       );
     } else {
       child = Column(

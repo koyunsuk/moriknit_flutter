@@ -11,6 +11,13 @@ class BugReport {
   final String osVersion;
   final String appVersion;
   final String platform; // 'android' | 'ios' | 'web' | 'other'
+  // 확장 메타데이터 (#778)
+  final String screenSize; // "412x915"
+  final String currentRoute; // "/swatch/abc123"
+  final String currentScreenName; // "swatch"
+  final String localeName; // "ko_KR" / "en_US"
+  final String isOnline; // "true" | "false" | "" (unknown)
+  final String viewportInsets; // "top:24 bottom:0"
   // 사용자 정보
   final String uid;
   final String userEmail;
@@ -36,6 +43,12 @@ class BugReport {
     this.osVersion = '',
     required this.appVersion,
     this.platform = '',
+    this.screenSize = '',
+    this.currentRoute = '',
+    this.currentScreenName = '',
+    this.localeName = '',
+    this.isOnline = '',
+    this.viewportInsets = '',
     required this.uid,
     required this.userEmail,
     this.userName = '',
@@ -56,6 +69,12 @@ class BugReport {
         'osVersion': osVersion,
         'appVersion': appVersion,
         'platform': platform,
+        'screenSize': screenSize,
+        'currentRoute': currentRoute,
+        'currentScreenName': currentScreenName,
+        'localeName': localeName,
+        'isOnline': isOnline,
+        'viewportInsets': viewportInsets,
         'uid': uid,
         'userEmail': userEmail,
         'userName': userName,
@@ -78,6 +97,12 @@ class BugReport {
       osVersion: json['osVersion'] as String? ?? '',
       appVersion: json['appVersion'] as String? ?? '',
       platform: json['platform'] as String? ?? '',
+      screenSize: json['screenSize'] as String? ?? '',
+      currentRoute: json['currentRoute'] as String? ?? '',
+      currentScreenName: json['currentScreenName'] as String? ?? '',
+      localeName: json['localeName'] as String? ?? '',
+      isOnline: json['isOnline'] as String? ?? '',
+      viewportInsets: json['viewportInsets'] as String? ?? '',
       uid: json['uid'] as String? ?? '',
       userEmail: json['userEmail'] as String? ?? '',
       userName: json['userName'] as String? ?? '',

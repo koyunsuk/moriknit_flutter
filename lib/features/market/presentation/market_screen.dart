@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -163,6 +164,9 @@ class _MarketScreenState extends ConsumerState<MarketScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
+                      // ── 이슈 #629 : 무료 도안 섹션 (price == 0) ───────
+                      _FreePatternSection(isKorean: isKorean),
+                      const SizedBox(height: 16),
                       itemsAsync.when(
                     data: (allItems) {
                       final items = _applyFilters(allItems);
@@ -667,7 +671,15 @@ class _MarketCardState extends ConsumerState<_MarketCard> {
         }
         return;
       }
-      if (mounted) showSavedSnackBar(messenger, message: isKorean ? '구매 완료!' : 'Purchase complete!');
+      // 이슈 #791 — "함께 뜨기" 라벨 통일 (Ravelry 인지).
+      if (mounted) {
+        showSavedSnackBar(
+          messenger,
+          message: widget.item.price == 0
+              ? (isKorean ? '내 도안에 추가됐어요.' : 'Added to your library.')
+              : (isKorean ? '구매 완료!' : 'Purchase complete!'),
+        );
+      }
     } catch (_) {
       if (mounted) showSaveErrorSnackBar(messenger, message: isKorean ? '구매에 실패했습니다.' : 'Purchase failed.');
     } finally {
@@ -744,11 +756,11 @@ class _MarketCardState extends ConsumerState<_MarketCard> {
                 fit: StackFit.expand,
                 children: [
                   if (widget.item.imageUrl.isNotEmpty)
-                    Image.network(
-                      widget.item.imageUrl,
+                    CachedNetworkImage(
+                      imageUrl: widget.item.imageUrl,
                       fit: BoxFit.cover,
-                      cacheWidth: 320,
-                      errorBuilder: (_, _, _) => Center(child: Icon(_icon(widget.item.imageType), color: accent, size: 42)),
+                      memCacheWidth: 320,
+                      errorWidget: (_, _, _) => Center(child: Icon(_icon(widget.item.imageType), color: accent, size: 42)),
                     )
                   else
                     Center(child: Icon(_icon(widget.item.imageType), color: accent, size: 42)),
@@ -790,7 +802,10 @@ class _MarketCardState extends ConsumerState<_MarketCard> {
               style: ElevatedButton.styleFrom(backgroundColor: accent, foregroundColor: Colors.white),
               child: _buyLoading
                   ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white)))
-                  : Text(isKorean ? '구입하기' : 'Buy now'),
+                  // 이슈 #791 — '함께 뜨기' 라벨 통일 (Ravelry 인지).
+                  : Text(widget.item.price == 0
+                      ? (isKorean ? '나도 이 도안으로 뜨기' : 'Knit along')
+                      : (isKorean ? '구입하기' : 'Buy now')),
             ),
           ),
           const SizedBox(height: 6),
@@ -801,7 +816,7 @@ class _MarketCardState extends ConsumerState<_MarketCard> {
               icon: _projectLoading
                   ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(accent)))
                   : Icon(Icons.fork_right_rounded, size: 16),
-              label: Text(isKorean ? '이걸로 프로젝트 시작' : 'Start project from this'),
+              label: Text(isKorean ? '함께 뜨기로 프로젝트 시작' : 'Start knit-along project'),
               style: OutlinedButton.styleFrom(foregroundColor: accent, side: BorderSide(color: accent.withValues(alpha: 0.4))),
             ),
           ),
@@ -1101,10 +1116,10 @@ class _ItemDetailSheetState extends ConsumerState<_ItemDetailSheet> {
                 width: double.infinity,
                 decoration: BoxDecoration(color: accent.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(20)),
                 child: item.imageUrl.isNotEmpty
-                    ? Image.network(
-                        item.imageUrl,
+                    ? CachedNetworkImage(
+                        imageUrl: item.imageUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Center(child: Icon(_icon(item.imageType), color: accent, size: 64)),
+                        errorWidget: (_, _, _) => Center(child: Icon(_icon(item.imageType), color: accent, size: 64)),
                       )
                     : Center(child: Icon(_icon(item.imageType), color: accent, size: 64)),
               ),
@@ -1181,7 +1196,7 @@ class _ItemDetailSheetState extends ConsumerState<_ItemDetailSheet> {
                 icon: _projectLoading
                     ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(accent)))
                     : const Icon(Icons.fork_right_rounded, size: 16),
-                label: Text(isKorean ? '이걸로 프로젝트 시작' : 'Start project from this'),
+                label: Text(isKorean ? '함께 뜨기로 프로젝트 시작' : 'Start knit-along project'),
                 style: OutlinedButton.styleFrom(foregroundColor: accent, side: BorderSide(color: accent.withValues(alpha: 0.4)), padding: const EdgeInsets.symmetric(vertical: 14)),
               ),
             ),
@@ -1706,8 +1721,8 @@ class _PatternPickerScreen extends ConsumerWidget {
                       chart.imageUrl.isNotEmpty
                           ? ClipRRect(
                               borderRadius: BorderRadius.circular(8),
-                              child: Image.network(chart.imageUrl, width: 48, height: 48, fit: BoxFit.cover, cacheWidth: 96, cacheHeight: 96,
-                                  errorBuilder: (_, _, _) => Container(width: 48, height: 48, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(8)), child: Icon(Icons.grid_on_rounded, color: C.lv))),
+                              child: CachedNetworkImage(imageUrl: chart.imageUrl, width: 48, height: 48, fit: BoxFit.cover, memCacheWidth: 96, memCacheHeight: 96,
+                                  errorWidget: (_, _, _) => Container(width: 48, height: 48, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(8)), child: Icon(Icons.grid_on_rounded, color: C.lv))),
                             )
                           : Container(width: 48, height: 48, decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(8)), child: Icon(Icons.grid_on_rounded, color: C.lv)),
                       const SizedBox(width: 12),
@@ -1820,6 +1835,216 @@ class _TemplatePickerScreen extends ConsumerWidget {
           isKorean: isKorean,
           onRetry: () => ref.invalidate(userTemplateListProvider),
         ),
+      ),
+    );
+  }
+}
+
+// ── 이슈 #629 : 무료 도안 섹션 ─────────────────────────────────────────────
+//
+// 마켓 상단에 무료 도안(price == 0)만 모은 가로 스크롤 섹션.
+// freePatternItemsProvider 사용. 비어 있을 때는 플레이스홀더 표시 (CLAUDE.md 원칙).
+class _FreePatternSection extends ConsumerWidget {
+  final bool isKorean;
+  const _FreePatternSection({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final freeAsync = ref.watch(freePatternItemsProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.card_giftcard_rounded, color: C.lv, size: 18),
+            const SizedBox(width: 6),
+            Text(
+              isKorean ? '무료 도안' : 'Free Patterns',
+              style: T.bodyBold,
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: C.lvL,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: C.lv.withValues(alpha: 0.30)),
+              ),
+              child: Text(
+                isKorean ? '0원' : 'Free',
+                style: T.caption.copyWith(
+                  color: C.lvD,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 168,
+          child: freeAsync.when(
+            data: (items) {
+              if (items.isEmpty) {
+                return _FreePatternPlaceholder(isKorean: isKorean);
+              }
+              return ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: items.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 10),
+                itemBuilder: (_, i) => SizedBox(
+                  width: 150,
+                  child: _FreePatternMiniCard(item: items[i]),
+                ),
+              );
+            },
+            loading: () => const SizedBox.shrink(),
+            error: (_, _) => _FreePatternPlaceholder(isKorean: isKorean),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FreePatternPlaceholder extends StatelessWidget {
+  final bool isKorean;
+  const _FreePatternPlaceholder({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: C.lvL,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: C.lv.withValues(alpha: 0.20)),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < 3; i++) ...[
+            Expanded(
+              child: Container(
+                height: 130,
+                decoration: BoxDecoration(
+                  color: C.gx,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: C.lv.withValues(alpha: 0.12)),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.auto_stories_rounded,
+                  color: C.lv.withValues(alpha: 0.32),
+                  size: 28,
+                ),
+              ),
+            ),
+            if (i < 2) const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _FreePatternMiniCard extends ConsumerWidget {
+  final MarketItem item;
+  const _FreePatternMiniCard({required this.item});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accentPalette = [C.pk, C.lv, C.lm, C.lvD, C.pkD, C.lmD, C.og];
+    final accent = accentPalette[item.id.hashCode.abs() % accentPalette.length];
+    return GlassCard(
+      padding: const EdgeInsets.all(8),
+      onTap: () {
+        final user = ref.read(authStateProvider).valueOrNull;
+        final isKorean = ref.read(appLanguageProvider).isKorean;
+        if (kIsWeb && user == null) {
+          showLoginRequiredDialog(
+            context,
+            isKorean: isKorean,
+            title: isKorean ? '상품 상세는 로그인 후 볼 수 있어요' : 'Item details require login',
+            fromRoute: Routes.market,
+          );
+          return;
+        }
+        final isAdmin =
+            ref.read(isAdminProvider).valueOrNull == true;
+        showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: C.bg,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          builder: (ctx) => _ItemDetailSheet(
+            item: item,
+            isKorean: isKorean,
+            user: user,
+            accent: accent,
+            isAdmin: isAdmin || user?.uid == item.sellerUid,
+          ),
+        );
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              height: 78,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: item.imageUrl.isNotEmpty
+                  ? CachedNetworkImage(
+                      imageUrl: item.imageUrl,
+                      fit: BoxFit.cover,
+                      memCacheWidth: 240,
+                      errorWidget: (_, _, _) => Center(
+                        child: Icon(
+                          Icons.auto_stories_rounded,
+                          color: accent,
+                          size: 28,
+                        ),
+                      ),
+                    )
+                  : Center(
+                      child: Icon(
+                        Icons.auto_stories_rounded,
+                        color: accent,
+                        size: 28,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            item.title,
+            style: T.captionBold,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            item.sellerName,
+            style: T.caption.copyWith(color: C.mu, fontSize: 10),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Free',
+            style: T.caption
+                .copyWith(color: accent, fontWeight: FontWeight.w700),
+          ),
+        ],
       ),
     );
   }

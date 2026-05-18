@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -84,7 +85,7 @@ const List<FeatureInfo> featureList = [
       '에디터 도안 PDF 다운로드',
       '도안 미리보기 & 평점',
       '크레딧 기반 결제 시스템',
-      '"나도 하기" Fork 기능',
+      '"함께 뜨기" 기능 (Knit-Along)',
     ],
     steps: [
       (Icons.search_rounded, '도안 검색', '카테고리·난이도·실 종류로 원하는 도안을 찾아요.'),
@@ -104,7 +105,7 @@ const List<FeatureInfo> featureList = [
       '작품 사진 갤러리 공유',
       '댓글 & 반응',
       '프로젝트 공개 갤러리',
-      '"나도 하기" 도안 연결',
+      '"함께 뜨기" 도안 연결',
     ],
     steps: [
       (Icons.camera_alt_rounded, '작품 촬영', '완성된 뜨개 작품 사진을 찍어요.'),
@@ -529,7 +530,7 @@ class _PhoneMockup extends ConsumerWidget {
 
     final Widget inner = live ??
         (imageUrl.isNotEmpty
-            ? Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, _, _) => _PhoneMockupContent(feature: feature))
+            ? CachedNetworkImage(imageUrl: imageUrl, fit: BoxFit.cover, errorWidget: (_, _, _) => _PhoneMockupContent(feature: feature))
             : _PhoneMockupContent(feature: feature));
 
     return Center(

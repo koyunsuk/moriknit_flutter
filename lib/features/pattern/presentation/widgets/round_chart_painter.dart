@@ -152,8 +152,13 @@ class RoundChartPainter extends CustomPainter {
     if (rel < 0) rel += 2 * math.pi;
     final segIdx = (rel / (2 * math.pi) * segCount).round() % segCount;
 
-    // 거리 임계치 검사 (스냅 반경).
-    final cellRadius = ch * thresholdMultiplier;
+    // #689 — 거리 임계치를 실제 셀 폭에 맞춰 동적 계산.
+    //   안쪽(좁은) 라운드는 임계치도 좁게, 바깥(넓은) 라운드는 임계치도 넓게.
+    //   ch×thresholdMultiplier 와 arcWidth 중 더 큰 값 사용 (라운드별 너비 차이 보상).
+    final midR = inner + (round - 0.5) * ch;
+    final cellArc = 2 * math.pi / segCount;
+    final arcW = midR * cellArc;
+    final cellRadius = math.max(ch, arcW) * thresholdMultiplier;
     final target = positionFor(chart, round, segIdx, canvasSize);
     final ddx = target.dx - point.dx;
     final ddy = target.dy - point.dy;
@@ -293,7 +298,10 @@ class RoundChartPainter extends CustomPainter {
   }
 
   /// 셀 (배경 + 심볼) 그리기. span 처리 포함.
-  /// #680 — 심볼을 셀 사각 영역에 contain (BoxFit.contain). 사각 그리드와 동일.
+  /// #689 — 심볼 타겟팅 정확화:
+  ///   - 셀 폭(arc width at midRadius) vs 라디알 폭(ch) 중 작은 값에 맞춰 심볼 크기 결정
+  ///   - autoRotate 시 회전축 = midAngle + π/2 (위가 외곽 방향)
+  ///   - 안쪽 라운드(R1)의 좁은 arc에서도 심볼이 셀 밖으로 튀어나가지 않음
   void _drawCells(
     Canvas canvas,
     Size size,
@@ -316,18 +324,20 @@ class RoundChartPainter extends CustomPainter {
       final centerAngle = angle + (span - 1) / 2 * cellArc;
 
       final cellMidRadius = inner + (key.round - 0.5) * ch;
-      // 셀의 라운드 폭(px) = ch.
+      // 셀의 라운드(반경) 폭(px).
       final cellRadialPx = ch;
+      // #689 — 실제 호 길이(midRadius × angleSpan). 안쪽 라운드는 좁고 바깥은 넓다.
+      //   예: R1 segCount=6, ch=20, midR=10 → arcWidth = 10 * (2π/6) ≈ 10.47px
+      //       R3 segCount=18, ch=20, midR=50 → arcWidth = 50 * (2π/18) ≈ 17.45px
+      final arcWidthPx = cellMidRadius * cellArc * span.toDouble();
 
       final pos = center +
           Offset(cellMidRadius * math.cos(centerAngle),
               cellMidRadius * math.sin(centerAngle));
 
-      // #680/일관성 — 셀 영역을 정사각(ch×ch)으로 강제.
-      //   라운드별 호 너비 차이로 인한 크기 변동 제거.
-      //   안쪽 라운드는 옆 셀 살짝 겹칠 수 있지만 일관성 우선.
-      //   span 적용 시 호 방향 폭만 확장.
-      final cellAreaW = cellRadialPx * span.toDouble();
+      // #689 — 셀 영역 = 실제 호 폭 × 라디알 폭 (각 라운드에 정확히 fit).
+      //   기존 ch×ch 정사각 강제는 R1 같은 안쪽 라운드에서 옆 셀 침범 → 정확도 저해.
+      final cellAreaW = arcWidthPx;
       final cellAreaH = cellRadialPx;
 
       canvas.save();
@@ -358,17 +368,26 @@ class RoundChartPainter extends CustomPainter {
         if (picture != null) {
           if (cell.align == CellAlign.cellArea) {
             // (1) 셀 사각 영역에 contain (사각 그리드와 동일 — 기본).
-            //     SVG 24x24 viewBox를 셀 영역의 짧은 변에 맞춤 (비율 유지).
-            final shortSide = math.min(cellAreaW, cellAreaH) * 0.92;
+            //     #689 — SVG 24x24 viewBox를 셀의 짧은 변 0.92에 맞춤 (정확한 타겟팅).
+            //     안쪽 라운드도 옆 셀과 안 겹침. 너무 작아지지 않도록 최소 8px 보장.
+            final shortSide = math.max(
+                math.min(cellAreaW, cellAreaH) * 0.92, 8.0);
+            // #801 — 회전 후 (0,0)은 셀 중앙. _drawPictureContain은 (0,0)~(w,h)
+            //   영역에 그리므로 셀 우하 사분면으로 어긋남.
+            //   심볼이 셀 중앙에 오도록 (-shortSide/2, -shortSide/2)로 이동 후 그림.
+            canvas.save();
+            canvas.translate(-shortSide / 2, -shortSide / 2);
             _drawPictureContain(canvas, picture, shortSide, shortSide,
                 cell.symbolColor);
+            canvas.restore();
           } else {
             // (2) #680 onLine: 안쪽 호(이전 라운드 외곽 = 현 라운드 안쪽)에 baseline.
             //     심볼 밑면이 호 위에 닿고, 외곽(+y) 방향으로 솟음.
-            //     회전된 좌표계에서 안쪽 호 위치 = y = -cellRadialPx/2 (셀 중앙에서 -h/2).
-            //     심볼은 라인보다 외곽 방향으로 그려져야 하므로 (-w/2, baseline) 시작.
-            final symbolH = cellRadialPx * 0.92; // 심볼 높이 = 셀 라디알 폭
-            final symbolW = math.min(cellAreaW * 0.92, symbolH);
+            //     #689 — 심볼 폭 = arcWidth 0.92, 높이 = radial 0.92.
+            //     단 폭이 너무 작으면(<6px) 최소 보장. 라디알 방향(높이)으로 그려짐.
+            final symbolH = math.max(cellRadialPx * 0.92, 8.0);
+            final symbolW = math.max(
+                math.min(arcWidthPx * 0.92, symbolH * 1.2), 6.0);
             final innerLineY = -cellRadialPx / 2; // 안쪽 호 좌표 (회전 후)
             canvas.save();
             // 심볼 밑면이 innerLineY에 닿게: y축 시작점 = innerLineY,
@@ -453,6 +472,7 @@ class RoundChartPainter extends CustomPainter {
   }
 
   /// 셀 외곽 하이라이트 링.
+  /// #689 — 실제 셀 폭(arcWidth, radial) 중 작은 값의 절반에 맞춰 표시. 사용자가 셀 경계 파악 용이.
   void _drawHighlight(
     Canvas canvas,
     Size size,
@@ -465,7 +485,11 @@ class RoundChartPainter extends CustomPainter {
     if (segCount <= 0 || key.segment < 0 || key.segment >= segCount) return;
     final pos = positionFor(chart, key.round, key.segment, size);
     final ch = cellHeight(size, chart.rounds);
-    final radius = ch * 0.5;
+    final inner = size.shortestSide * _kInnerRadiusRatio;
+    final midR = inner + (key.round - 0.5) * ch;
+    final cellArc = 2 * math.pi / segCount;
+    final arcW = midR * cellArc;
+    final radius = math.min(ch, arcW) * 0.55;
     final paint = Paint()
       ..color = color
       ..strokeWidth = strokeWidth

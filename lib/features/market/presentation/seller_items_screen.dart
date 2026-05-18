@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -106,10 +107,10 @@ class _SellerItemCard extends StatelessWidget {
               child: AspectRatio(
                 aspectRatio: 1.1,
                 child: item.imageUrl.isNotEmpty
-                    ? Image.network(
-                        item.imageUrl,
+                    ? CachedNetworkImage(
+                        imageUrl: item.imageUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => _ThumbnailPlaceholder(item: item),
+                        errorWidget: (_, _, _) => _ThumbnailPlaceholder(item: item),
                       )
                     : _ThumbnailPlaceholder(item: item),
               ),

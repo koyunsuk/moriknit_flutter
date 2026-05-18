@@ -308,6 +308,11 @@ class _MainShellState extends ConsumerState<MainShell> with TickerProviderStateM
                   fabOpen: _fabOpen,
                   onBack: () { if (context.canPop()) context.pop(); },
                   onToggleFab: () => setState(() => _fabOpen = !_fabOpen),
+                  // #781 — 별표: 홈 즐겨찾기 탭으로 직결.
+                  onTapFavorites: () {
+                    ref.read(homeInitialTabProvider.notifier).state = 1;
+                    context.go(Routes.home);
+                  },
                   items: speedItems,
                   backAlpha: backAlpha,
                   speedAlpha: speedAlpha,
@@ -357,6 +362,7 @@ class _QuickSidebar extends StatelessWidget {
     required this.fabOpen,
     required this.onBack,
     required this.onToggleFab,
+    required this.onTapFavorites,
     required this.items,
     required this.backAlpha,
     required this.speedAlpha,
@@ -365,6 +371,8 @@ class _QuickSidebar extends StatelessWidget {
   final bool fabOpen;
   final VoidCallback onBack;
   final VoidCallback onToggleFab;
+  /// #781 — 별표 아이콘 탭 시 호출.
+  final VoidCallback onTapFavorites;
   final List<_SpeedItem> items;
   final double backAlpha;
   final double speedAlpha;
@@ -452,6 +460,21 @@ class _QuickSidebar extends StatelessWidget {
                           size: 26,
                           color: Colors.white.withValues(alpha: speedAlpha),
                         ),
+                      ),
+                    ),
+                  ),
+                ),
+                Container(height: 1, color: Colors.white.withValues(alpha: 0.25)),
+                // #781 — 별표 버튼 (홈 즐겨찾기 탭 직결)
+                GestureDetector(
+                  onTap: onTapFavorites,
+                  child: SizedBox(
+                    height: _btnH,
+                    child: const Center(
+                      child: Icon(
+                        Icons.star_rounded,
+                        size: 24,
+                        color: Colors.white,
                       ),
                     ),
                   ),

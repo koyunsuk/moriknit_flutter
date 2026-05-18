@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -155,12 +156,12 @@ class _NoticeCard extends StatelessWidget {
             if (notice.imageUrl.isNotEmpty)
               ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-                child: Image.network(
-                  notice.imageUrl,
+                child: CachedNetworkImage(
+                  imageUrl: notice.imageUrl,
                   width: double.infinity,
                   height: 180,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => Container(
+                  errorWidget: (_, _, _) => Container(
                     height: 60,
                     color: const Color(0xFFF5F0FF),
                     child: const Center(
@@ -650,12 +651,11 @@ class _NoticeImages extends StatelessWidget {
           padding: const EdgeInsets.only(top: 24),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: Image.network(
-              url,
+            child: CachedNetworkImage(
+              imageUrl: url,
               width: double.infinity,
               fit: BoxFit.cover,
-              loadingBuilder: (context, child, progress) {
-                if (progress == null) return child;
+              progressIndicatorBuilder: (context, url, progress) {
                 return Container(
                   width: double.infinity,
                   height: 200,
@@ -671,7 +671,7 @@ class _NoticeImages extends StatelessWidget {
                   ),
                 );
               },
-              errorBuilder: (context, error, stack) => Container(
+              errorWidget: (context, error, stack) => Container(
                 width: double.infinity,
                 height: 120,
                 decoration: BoxDecoration(

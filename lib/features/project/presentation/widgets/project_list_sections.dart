@@ -1,4 +1,5 @@
-﻿import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -59,8 +60,8 @@ class ProjectCard extends ConsumerWidget {
             if (project.coverPhotoUrl.isNotEmpty)
               ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-                child: Image.network(
-                  project.coverPhotoUrl,
+                child: CachedNetworkImage(
+                  imageUrl: project.coverPhotoUrl,
                   height: compact ? 112 : 140,
                   width: double.infinity,
                   fit: BoxFit.cover,

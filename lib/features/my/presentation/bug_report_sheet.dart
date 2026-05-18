@@ -1,11 +1,9 @@
 import 'dart:io';
 
-import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
@@ -13,6 +11,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/bug_report_provider.dart';
 import '../../auth/domain/user_model.dart';
+import '../data/bug_metadata_collector.dart';
 import '../domain/bug_report.dart';
 
 Future<void> showBugReportSheet(
@@ -67,69 +66,12 @@ class _BugReportSheetState extends ConsumerState<_BugReportSheet> {
     setState(() => _images.addAll(pairs));
   }
 
-  Future<({String deviceInfo, String osVersion, String platform})> _getSystemInfo() async {
-    try {
-      final plugin = DeviceInfoPlugin();
-      if (kIsWeb) {
-        final info = await plugin.webBrowserInfo;
-        final ua = info.userAgent ?? '';
-        // OS 추출: userAgent에서 플랫폼 정보 파싱
-        String osVersion = info.platform ?? '';
-        if (ua.contains('Windows')) {
-          osVersion = 'Windows';
-        } else if (ua.contains('Mac OS X')) {
-          osVersion = 'macOS';
-        } else if (ua.contains('Android')) {
-          osVersion = 'Android (웹)';
-        } else if (ua.contains('iPhone') || ua.contains('iPad')) {
-          osVersion = 'iOS (웹)';
-        } else if (ua.contains('Linux')) {
-          osVersion = 'Linux';
-        }
-        final browser = ua.contains('Chrome') ? 'Chrome'
-            : ua.contains('Firefox') ? 'Firefox'
-            : ua.contains('Safari') ? 'Safari'
-            : 'Browser';
-        return (deviceInfo: browser, osVersion: osVersion, platform: 'web');
-      }
-      if (Platform.isAndroid) {
-        final info = await plugin.androidInfo;
-        return (
-          deviceInfo: '${info.manufacturer} ${info.model}',
-          osVersion: 'Android ${info.version.release} (SDK ${info.version.sdkInt})',
-          platform: 'android',
-        );
-      }
-      if (Platform.isIOS) {
-        final info = await plugin.iosInfo;
-        return (
-          deviceInfo: '${info.name} (${info.model})',
-          osVersion: '${info.systemName} ${info.systemVersion}',
-          platform: 'ios',
-        );
-      }
-      return (deviceInfo: 'Unknown', osVersion: '', platform: 'other');
-    } catch (e) {
-      debugPrint('[BugReport] 시스템 정보 수집 실패: $e');
-      return (deviceInfo: 'Unknown', osVersion: '', platform: 'other');
-    }
-  }
-
-  Future<String> _getAppVersion() async {
-    try {
-      final info = await PackageInfo.fromPlatform();
-      return '${info.version}+${info.buildNumber}';
-    } catch (_) {
-      return '1.0.0';
-    }
-  }
-
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     final isKorean = ref.read(appLanguageProvider).isKorean;
 
-    final sysInfo = await _getSystemInfo();
-    final appVersion = await _getAppVersion();
+    // 메타데이터 수집 (#778) — 시트가 살아있는 시점에 context 사용
+    final meta = await collectBugMetadata(context, ref);
 
     if (!mounted) return;
 
@@ -151,10 +93,16 @@ class _BugReportSheetState extends ConsumerState<_BugReportSheet> {
             description: _descCtrl.text.trim(),
             category: _category,
             steps: _stepsCtrl.text.trim(),
-            deviceInfo: sysInfo.deviceInfo,
-            osVersion: sysInfo.osVersion,
-            appVersion: appVersion,
-            platform: sysInfo.platform,
+            deviceInfo: meta.deviceInfo,
+            osVersion: meta.osVersion,
+            appVersion: meta.appVersion,
+            platform: meta.platform,
+            screenSize: meta.screenSize,
+            currentRoute: meta.currentRoute,
+            currentScreenName: meta.currentScreenName,
+            localeName: meta.localeName,
+            isOnline: meta.isOnline,
+            viewportInsets: meta.viewportInsets,
             uid: widget.user.uid,
             userEmail: widget.user.email,
             userName: widget.user.displayName,

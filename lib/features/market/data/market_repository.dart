@@ -49,6 +49,23 @@ class MarketRepository {
     });
   }
 
+  /// 이슈 #629 — 무료 도안만 (price == 0). 최신순, 최대 20개.
+  /// category 필터를 클라이언트 사이드에서 적용 (기존 문서에 category 필드가 없어도 표시)
+  Stream<List<MarketItem>> watchFreePatterns() {
+    return _items.snapshots().map((s) {
+      final items = s.docs
+          .map(MarketItem.fromFirestore)
+          .where(_isVisible)
+          .where((item) =>
+              item.price == 0 &&
+              (item.category == 'pattern' || item.category.isEmpty))
+          .toList();
+      items.sort((a, b) => (b.createdAt ?? DateTime(0))
+          .compareTo(a.createdAt ?? DateTime(0)));
+      return items.take(20).toList();
+    });
+  }
+
   /// 도안 조회수 1 증가
   Future<void> incrementViewCount(String id) async {
     await _items.doc(id).update({'viewCount': FieldValue.increment(1)});

@@ -320,21 +320,26 @@ class _RoundEditorViewState extends ConsumerState<RoundEditorView> {
               ]),
               const SizedBox(height: 8),
               const Text('정렬', style: TextStyle(fontWeight: FontWeight.w700)),
-              RadioListTile<CellAlign>(
-                value: CellAlign.onLine,
+              RadioGroup<CellAlign>(
                 groupValue: align,
                 onChanged: (v) => setLocal(() => align = v!),
-                title: const Text('라인 위 (baseline)'),
-                subtitle: const Text('심볼 밑면이 라인에 닿고 외곽으로 솟음'),
-                dense: true,
-              ),
-              RadioListTile<CellAlign>(
-                value: CellAlign.cellArea,
-                groupValue: align,
-                onChanged: (v) => setLocal(() => align = v!),
-                title: const Text('셀 안 (contain)'),
-                subtitle: const Text('사각 그리드처럼 셀 사각 영역에 맞춤'),
-                dense: true,
+                child: const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    RadioListTile<CellAlign>(
+                      value: CellAlign.onLine,
+                      title: Text('라인 위 (baseline)'),
+                      subtitle: Text('심볼 밑면이 라인에 닿고 외곽으로 솟음'),
+                      dense: true,
+                    ),
+                    RadioListTile<CellAlign>(
+                      value: CellAlign.cellArea,
+                      title: Text('셀 안 (contain)'),
+                      subtitle: Text('사각 그리드처럼 셀 사각 영역에 맞춤'),
+                      dense: true,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

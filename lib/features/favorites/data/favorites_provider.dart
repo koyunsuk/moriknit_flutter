@@ -27,3 +27,7 @@ final favoriteScreenIdsProvider = Provider<Set<String>>((ref) {
 /// AppShellScaffold가 빌드될 때 화면별 favoriteScreenId/title/icon/path/accent를 등록.
 /// 메인셸 퀵바의 ⭐ 토글 버튼이 이 값을 읽어 활성화 여부 판단.
 final currentScreenFavoriteProvider = StateProvider<FavoriteScreen?>((ref) => null);
+
+/// #781 — 홈 초기 탭 인덱스 (0: 홈, 1: 즐겨찾기).
+/// 퀵사이드바의 별표 아이콘 탭 시 1로 설정 + 홈으로 이동.
+final homeInitialTabProvider = StateProvider<int>((ref) => 0);

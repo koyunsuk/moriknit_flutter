@@ -84,8 +84,8 @@ const _featureCategories = <_FeatureCategory>[
 const _boardItems = [
   ('/notices', '공지사항', Icons.campaign_rounded),
   ('/reviews', '리뷰 게시판', Icons.star_rounded),
-  ('/releases', '릴리즈 노트', Icons.new_releases_rounded),
-  ('/qa', '문의하기 Q&A', Icons.help_outline_rounded),
+  ('/release', '릴리즈 노트', Icons.new_releases_rounded),
+  ('/qna', '문의하기 Q&A', Icons.help_outline_rounded),
 ];
 
 // ?? 踰꾪듉 ?ㅽ??????????????????????????????????????????????????????????????????
@@ -282,6 +282,7 @@ class _DropdownCategoryHeader extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _DropdownDivider extends StatelessWidget {
   const _DropdownDivider();
 
@@ -290,6 +291,77 @@ class _DropdownDivider extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Divider(height: 1, color: C.bd.withValues(alpha: 0.6)),
+    );
+  }
+}
+
+/// #785 — 카테고리 헤더 hover 시 서브 아이템 펼침.
+class _HoverableCategoryRow extends StatefulWidget {
+  const _HoverableCategoryRow({required this.category, required this.onItemTap});
+  final _FeatureCategory category;
+  final void Function(String path) onItemTap;
+
+  @override
+  State<_HoverableCategoryRow> createState() => _HoverableCategoryRowState();
+}
+
+class _HoverableCategoryRowState extends State<_HoverableCategoryRow> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+            decoration: BoxDecoration(
+              color: _hovered ? C.lv.withValues(alpha: 0.07) : Colors.transparent,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.category.title,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: _hovered ? C.lv : C.tx,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ),
+                AnimatedRotation(
+                  turns: _hovered ? 0.0 : -0.25,
+                  duration: const Duration(milliseconds: 180),
+                  child: Icon(Icons.keyboard_arrow_down_rounded,
+                      size: 18, color: _hovered ? C.lv : C.mu),
+                ),
+              ],
+            ),
+          ),
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: widget.category.items
+                  .map((item) => _DropdownItem(
+                        label: item.label,
+                        indent: true,
+                        onTap: () => widget.onItemTap(item.path),
+                      ))
+                  .toList(),
+            ),
+            crossFadeState:
+                _hovered ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 180),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -779,23 +851,15 @@ class _LandingTopBarState extends ConsumerState<LandingTopBar> with TickerProvid
   }
 
   Widget _featureDropdown(BuildContext context) {
+    // #785 — 큰 카테고리 제목만 보이고 hover 시 서브 메뉴 펼침.
     final children = <Widget>[];
+    children.add(const SizedBox(height: 8));
     for (var i = 0; i < _featureCategories.length; i++) {
       final cat = _featureCategories[i];
-      if (i > 0) {
-        children.add(const _DropdownDivider());
-      }
-      children.add(_DropdownCategoryHeader(
-        title: cat.title,
-        topPadding: i == 0 ? 12 : 10,
+      children.add(_HoverableCategoryRow(
+        category: cat,
+        onItemTap: (path) => context.go(path),
       ));
-      for (final item in cat.items) {
-        children.add(_DropdownItem(
-          label: item.label,
-          indent: true,
-          onTap: () => context.go(item.path),
-        ));
-      }
     }
     children.add(const SizedBox(height: 8));
     return _DropdownOverlay(

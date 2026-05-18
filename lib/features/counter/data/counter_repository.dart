@@ -15,6 +15,19 @@ class CounterRepository {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  // 이슈 #802 — Hive 즉시 반영 후 watch* stream을 다시 emit 하기 위한
+  //   브로드캐스트 채널. _bumpHive/_markDirtyHive 후 시그널 발화 → 각 stream이
+  //   Hive를 재조회하여 controller.add 한다.
+  //   id 단위가 아니라 '카운터 데이터 변경됨' 단일 신호. 각 stream이 필터링.
+  static final StreamController<void> _localChangeController =
+      StreamController<void>.broadcast();
+  static Stream<void> get _localChange => _localChangeController.stream;
+  static void _emitLocalChange() {
+    if (!_localChangeController.isClosed) {
+      _localChangeController.add(null);
+    }
+  }
+
   String get _uid => _auth.currentUser?.uid ?? '';
 
   CollectionReference get _countersRef =>
@@ -101,8 +114,14 @@ class CounterRepository {
       },
     );
 
+    // 이슈 #802 — Hive 즉시 갱신(_bumpHive) 후 stream 재emit.
+    final localSub = _localChange.listen((_) {
+      if (!controller.isClosed) controller.add(_readListFromHive());
+    });
+
     controller.onCancel = () async {
       await sub.cancel();
+      await localSub.cancel();
       await controller.close();
     };
 
@@ -136,8 +155,16 @@ class CounterRepository {
       },
     );
 
+    // 이슈 #802 — Hive 즉시 갱신(_bumpHive) 후 stream 재emit.
+    final localSub = _localChange.listen((_) {
+      if (!controller.isClosed) {
+        controller.add(_readListFromHive(projectId: projectId));
+      }
+    });
+
     controller.onCancel = () async {
       await sub.cancel();
+      await localSub.cancel();
       await controller.close();
     };
 
@@ -175,8 +202,17 @@ class CounterRepository {
       },
     );
 
+    // 이슈 #802 — Hive 즉시 갱신(_bumpHive) 후 stream 재emit.
+    final localSub = _localChange.listen((_) {
+      if (!controller.isClosed) {
+        final list = _readListFromHive(chartId: chartId);
+        controller.add(list.isEmpty ? null : list.first);
+      }
+    });
+
     controller.onCancel = () async {
       await sub.cancel();
+      await localSub.cancel();
       await controller.close();
     };
 
@@ -211,8 +247,14 @@ class CounterRepository {
       },
     );
 
+    // 이슈 #802 — Hive 즉시 갱신(_bumpHive) 후 stream 재emit.
+    final localSub = _localChange.listen((_) {
+      if (!controller.isClosed) controller.add(_readFromHive(id));
+    });
+
     controller.onCancel = () async {
       await sub.cancel();
+      await localSub.cancel();
       await controller.close();
     };
 
@@ -388,6 +430,7 @@ class CounterRepository {
 
   // 이슈 #704 Phase B — Hive 즉시 increment.
   // stitchDelta/rowDelta 만 받아 in-place 가산. Firestore가 따라잡으면 write-through로 덮어씀.
+  // 이슈 #802 — box.put 후 _emitLocalChange()로 watch* stream 갱신.
   void _bumpHive(String id, {int stitchDelta = 0, int rowDelta = 0}) {
     if (kIsWeb || id.isEmpty) return;
     try {
@@ -402,6 +445,7 @@ class CounterRepository {
         updatedAt: DateTime.now(),
       );
       box.put(id, updated.toJson());
+      _emitLocalChange();
     } catch (_) {}
   }
 
@@ -414,6 +458,7 @@ class CounterRepository {
       final json = normalizeFirestoreMap(Map<String, dynamic>.from(data));
       final current = CounterModel.fromJson(json);
       box.put(id, current.copyWith(isDirty: true).toJson());
+      _emitLocalChange();
     } catch (_) {}
   }
 

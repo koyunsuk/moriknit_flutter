@@ -266,7 +266,7 @@ class _PatternGeneratorScreenState extends ConsumerState<PatternGeneratorScreen>
   Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
     return AppShellScaffold(
-      title: isKorean ? '패턴 생성기 (래글런)' : 'Pattern Generator (Raglan)',
+      title: isKorean ? 'AI 패턴 생성기' : 'AI Pattern Generator',
       subtitle: isKorean ? '치수와 게이지로 도안 자동 생성' : 'Auto-generate from measurements',
       showBackButton: true,
       body: SingleChildScrollView(
@@ -274,6 +274,9 @@ class _PatternGeneratorScreenState extends ConsumerState<PatternGeneratorScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // #786 — 의류 타입 프리셋 (현재 래글런만 활성, 나머지 준비 중)
+            _buildGarmentTypePresets(isKorean),
+            const SizedBox(height: 12),
             _buildSizePresetCard(isKorean),
             const SizedBox(height: 12),
             _buildGaugeCard(isKorean),
@@ -300,6 +303,96 @@ class _PatternGeneratorScreenState extends ConsumerState<PatternGeneratorScreen>
   // ─────────────────────────────────────────────────────────────────────────
   // 입력 카드
   // ─────────────────────────────────────────────────────────────────────────
+
+  /// #786 — 의류 타입 프리셋. 현재 '래글런'만 활성. 나머지는 준비 중 회색 처리.
+  Widget _buildGarmentTypePresets(bool isKorean) {
+    final types = <({String key, String labelKo, String labelEn, IconData icon, bool active})>[
+      (key: 'raglan', labelKo: '래글런', labelEn: 'Raglan', icon: Icons.checkroom_rounded, active: true),
+      (key: 'topdown', labelKo: '톱다운', labelEn: 'Top-down', icon: Icons.arrow_downward_rounded, active: false),
+      (key: 'cardigan', labelKo: '카디건', labelEn: 'Cardigan', icon: Icons.dry_cleaning_rounded, active: false),
+      (key: 'vest', labelKo: '베스트', labelEn: 'Vest', icon: Icons.workspaces_outlined, active: false),
+      (key: 'hat', labelKo: '모자', labelEn: 'Hat', icon: Icons.face_retouching_natural_rounded, active: false),
+      (key: 'socks', labelKo: '양말', labelEn: 'Socks', icon: Icons.airline_seat_legroom_normal_rounded, active: false),
+    ];
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(Icons.auto_awesome_rounded, color: C.lvD, size: 18),
+            const SizedBox(width: 6),
+            Text(isKorean ? '의류 타입 프리셋' : 'Garment Type Preset', style: T.bodyBold),
+          ]),
+          const SizedBox(height: 4),
+          Text(
+            isKorean ? '생성하실 의류 타입을 선택해 주세요' : 'Pick a garment type to generate',
+            style: T.caption.copyWith(color: C.mu),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: types.map((t) {
+              final selected = t.active; // 현재 래글런만 활성
+              return GestureDetector(
+                onTap: t.active
+                    ? null
+                    : () => ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              isKorean ? '${t.labelKo}은(는) 준비 중입니다.' : '${t.labelEn} is coming soon.',
+                            ),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: selected ? C.lv : (t.active ? C.lvL : C.bd.withValues(alpha: 0.18)),
+                    border: Border.all(
+                      color: selected
+                          ? C.lv
+                          : (t.active ? C.lv.withValues(alpha: 0.2) : C.bd),
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(t.icon, size: 14, color: selected ? Colors.white : (t.active ? C.lvD : C.mu)),
+                      const SizedBox(width: 4),
+                      Text(
+                        isKorean ? t.labelKo : t.labelEn,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                          color: selected ? Colors.white : (t.active ? C.lvD : C.mu),
+                        ),
+                      ),
+                      if (!t.active) ...[
+                        const SizedBox(width: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: C.mu.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            isKorean ? '준비중' : 'Soon',
+                            style: TextStyle(fontSize: 9, color: C.mu, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildSizePresetCard(bool isKorean) {
     return GlassCard(

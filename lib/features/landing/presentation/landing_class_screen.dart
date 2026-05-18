@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -200,12 +201,12 @@ class _ClassCard extends StatelessWidget {
             ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
               child: imageUrl != null
-                  ? Image.network(
-                      imageUrl,
+                  ? CachedNetworkImage(
+                      imageUrl: imageUrl,
                       height: 180,
                       width: double.infinity,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, e, s) => _ClassImagePlaceholder(),
+                      errorWidget: (_, e, s) => _ClassImagePlaceholder(),
                     )
                   : _ClassImagePlaceholder(),
             ),
@@ -368,12 +369,12 @@ class _ClassDetailBody extends StatelessWidget {
         if (post.imageUrls.isNotEmpty) ...[
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
-            child: Image.network(
-              post.imageUrls.first,
+            child: CachedNetworkImage(
+              imageUrl: post.imageUrls.first,
               width: double.infinity,
               height: 360,
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              errorWidget: (_, _, _) => const SizedBox.shrink(),
             ),
           ),
           const SizedBox(height: 24),
@@ -446,11 +447,11 @@ class _ClassDetailBody extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 12),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    url,
+                  child: CachedNetworkImage(
+                    imageUrl: url,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    errorWidget: (_, _, _) => const SizedBox.shrink(),
                   ),
                 ),
               )),
