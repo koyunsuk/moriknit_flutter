@@ -50,7 +50,13 @@ class AppConfig {
   final bool popupEnabled;
   final String popupTitle;
   final String popupMessage;
+  /// 이슈 #817 — 팝업 본문 리치 텍스트 (flutter_quill Delta JSON).
+  /// 비어 있으면 popupMessage(plain text) fallback 렌더링.
+  final String popupBodyDelta;
   final String popupLinkUrl;
+  /// 이슈 #835 — 팝업/배너 배경 이미지 URL (선택).
+  /// 비어 있으면 기본 그라데이션 헤더 유지.
+  final String backgroundImageUrl;
   /// 팝업 고유 식별자(저장 시각 기반). 변경되면 일회성 노출 상태 초기화.
   final String popupId;
 
@@ -63,13 +69,15 @@ class AppConfig {
     this.popupEnabled = false,
     this.popupTitle = '',
     this.popupMessage = '',
+    this.popupBodyDelta = '',
     this.popupLinkUrl = '',
+    this.backgroundImageUrl = '',
     this.popupId = '',
   });
 
   /// 새 팝업이 켜져 있는지 (어드민 신규 경로).
   bool get hasAdminPopup =>
-      popupEnabled && (popupTitle.isNotEmpty || popupMessage.isNotEmpty);
+      popupEnabled && (popupTitle.isNotEmpty || popupMessage.isNotEmpty || popupBodyDelta.isNotEmpty);
 }
 
 final mockupImagesProvider = StreamProvider<Map<String, String>>((ref) {
@@ -94,6 +102,7 @@ final appConfigProvider = StreamProvider<AppConfig>((ref) {
     final data = snap.data()!;
     final popupTitle = data['popupTitle'] as String? ?? '';
     final popupMessage = data['popupMessage'] as String? ?? '';
+    final popupBodyDelta = data['popupBodyDelta'] as String? ?? '';
     final popupLinkUrl = data['popupLinkUrl'] as String? ?? '';
     final popupEnabled = data['popupEnabled'] as bool? ?? false;
     // popupId: 어드민이 저장할 때 갱신되는 updatedAt 기반. 동일 팝업 재노출 방지용.
@@ -115,7 +124,9 @@ final appConfigProvider = StreamProvider<AppConfig>((ref) {
       popupEnabled: popupEnabled,
       popupTitle: popupTitle,
       popupMessage: popupMessage,
+      popupBodyDelta: popupBodyDelta,
       popupLinkUrl: popupLinkUrl,
+      backgroundImageUrl: data['backgroundImageUrl'] as String? ?? '',
       popupId: popupId,
     );
   });

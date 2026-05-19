@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -17,6 +18,10 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/cached_pattern_image.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../data/pattern_offline_repository.dart';
+import '../../blueprint/presentation/step_blueprint_editor_screen.dart';
+import '../../blueprint/presentation/tester_group_screen.dart';
+import '../../pattern_converter/presentation/pattern_reader_screen.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/blueprint_provider.dart';
 import 'pattern_viewer_screen.dart';
@@ -689,10 +694,12 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                     Icon(Icons.info_outline_rounded, size: 16, color: C.og),
                     const SizedBox(width: 6),
                     Expanded(
+                      // 이슈 #863 — 자동 sync 안내 강화. Cloud Function 트리거로
+                      //   sourcePatternId 매칭된 프로젝트의 단계로그가 자동 채워짐.
                       child: Text(
                         isKorean
-                            ? '도안에 섹션이 없어 단계로그는 비어 있어요. 도안 완성 후 자동 연결됩니다.'
-                            : 'No sections yet — step log will be empty. Sync after the pattern is complete.',
+                            ? '도안에 단계가 없어 단계로그는 비어 있어요. 이 도안이 AI 처리되면 단계로그가 자동으로 업데이트됩니다.'
+                            : "This pattern has no steps yet, so the step log starts empty. It will auto-update once AI processing completes.",
                         style: T.caption.copyWith(color: C.og),
                       ),
                     ),
@@ -747,10 +754,34 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
         message: isKorean ? '저장하는 중입니다.' : 'Saving...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
         task: () async {
+          // #854 재수정 — 도안 커버 자동 등록 (오프라인 캐시 케이스 추가).
+          //   1. chart.imageUrl 우선 사용 (네트워크 URL).
+          //   2. 비어있으면 OfflinePatternEntry.thumbnailPath (로컬) 를 Storage 업로드 후 URL 반환.
+          //   3. 그래도 없으면 빈 값 (사용자가 직접 등록).
+          String resolvedCoverUrl = widget.chart.imageUrl;
+          if (resolvedCoverUrl.isEmpty) {
+            try {
+              final entry = await ref
+                  .read(patternOfflineRepositoryProvider)
+                  .get(widget.chart.id);
+              if (entry != null && entry.thumbnailPath.isNotEmpty) {
+                final file = File(entry.thumbnailPath);
+                if (await file.exists()) {
+                  final ref0 = FirebaseStorage.instance
+                      .ref('projects/${user.uid}/${widget.chart.id}_cover.jpg');
+                  await ref0.putFile(file);
+                  resolvedCoverUrl = await ref0.getDownloadURL();
+                }
+              }
+            } catch (_) {
+              // 업로드 실패 시 빈 값 fallback (프로젝트 생성 자체는 성공시킴).
+            }
+          }
           final draft = ProjectModel.empty(uid: user.uid).copyWith(
             title: title,
             memo: memo,
             sourcePatternId: widget.chart.id,
+            coverPhotoUrl: resolvedCoverUrl,
           );
           created = await ref.read(projectRepositoryProvider).createProject(draft);
           // 도안이 complete 상태이면 단계로그 자동 미러링.
@@ -1252,8 +1283,10 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
   Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
     debugPrint('[PatternDetailScreen] BUILD id=${widget.chart.id} type=${widget.chart.type.name} title="${widget.chart.title}" isEditing=$_isEditing');
+    // #824/#825 — universal_pattern_viewer가 직접 반환할 때 배경 까만색 방지.
+    //   transparent → Theme scaffoldBackgroundColor (라이트 톤). 기존 push 케이스에도 정상.
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [
@@ -1273,6 +1306,8 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                         ),
                       ]
                     : [
+                        // #704/#782 → 후속: 오프라인 다운로드는 도안 라이브러리 카드에서 진입.
+                        //   (헤더 OfflineDownloadButton 제거됨 — 라이브러리 카드에 뱃지/버튼 표시.)
                         if (!_isOtherUser && widget.chart.id.isNotEmpty)
                           PopupMenuButton<String>(
                             icon: Icon(Icons.more_vert_rounded, color: C.tx),
@@ -1282,12 +1317,20 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                               if (v == 'copy') _duplicatePattern(isKorean);
                               if (v == 'link_project') _linkToProject(context, isKorean);
                               if (v == 'edit_steps') {
-                                // 이슈 #687 — 단계 편집 화면으로 진입.
-                                context.push('/blueprints/${widget.chart.id}/edit');
+                                // #687/#824 — 단계 편집. rootNavigator로 GlobalKey 충돌 회피.
+                                Navigator.of(context, rootNavigator: true).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => StepBlueprintEditorScreen(blueprintId: widget.chart.id),
+                                  ),
+                                );
                               }
                               if (v == 'tester_group') {
-                                // 이슈 #792 — 테스터 그룹 권한 관리 화면.
-                                context.push('/blueprints/${widget.chart.id}/testers');
+                                // #792/#824 — 테스터 그룹 권한. rootNavigator로 GlobalKey 충돌 회피.
+                                Navigator.of(context, rootNavigator: true).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => TesterGroupScreen(blueprintId: widget.chart.id),
+                                  ),
+                                );
                               }
                               if (v == 'publish_market') _publishToMarket(isKorean);
                               if (v == 'export_pdf') _sharePdfMagazine(context, isKorean);
@@ -1619,8 +1662,17 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                     width: double.infinity,
                     height: 48,
                     child: OutlinedButton.icon(
-                      onPressed: () => context.push(
-                          '${Routes.toolsMyParsedPatterns}/${widget.chart.id}'),
+                      // #824/#825 (재수정) — unique settings name 으로 page key 충돌 방지.
+                      //   rootNavigator + MaterialPageRoute로도 keyReservation.contains 충돌 발생 →
+                      //   라우트 settings name을 timestamp 포함 unique 값으로 강제.
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          settings: RouteSettings(
+                            name: 'pattern-reader-${widget.chart.id}-${DateTime.now().microsecondsSinceEpoch}',
+                          ),
+                          builder: (_) => PatternReaderScreen(patternId: widget.chart.id),
+                        ),
+                      ),
                       icon: const Icon(Icons.checklist_rounded),
                       label: Text(isKorean ? '단계별 따라하기' : 'Step-by-step view'),
                       style: OutlinedButton.styleFrom(

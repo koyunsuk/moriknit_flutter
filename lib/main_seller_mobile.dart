@@ -47,8 +47,8 @@ class MoriKnitSellerMobileApp extends ConsumerWidget {
     final themeMode = ref.watch(appThemeProvider);
     C.apply(themeMode);
 
+    // #818/#822 — ValueKey 제거 (GlobalKey 'root' 충돌 + ANR 원인)
     return MaterialApp.router(
-      key: ValueKey(themeMode),
       title: 'MoriKnit Seller',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,

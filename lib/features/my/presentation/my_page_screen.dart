@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -18,9 +20,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../../core/widgets/account_upgrade_dialog.dart';
+import '../../../core/widgets/async_data_view.dart';
 import '../../../core/widgets/common_widgets.dart';
-import 'widgets/admin_alert_card.dart';
-import 'widgets/seller_summary_card.dart';
 import '../../../providers/app_config_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/counter_provider.dart';
@@ -34,6 +35,7 @@ import '../../../providers/theme_provider.dart';
 import '../../../providers/blueprint_provider.dart';
 import '../../auth/data/handle_validator.dart';
 import '../../auth/domain/user_model.dart';
+import '../../dropbox/data/dropbox_auth_provider.dart';
 import '../../blueprint/domain/step_blueprint.dart';
 import '../../blueprint/presentation/tester_group_screen.dart';
 import '../../board/presentation/app_board_detail_screen.dart';
@@ -41,7 +43,10 @@ import '../../board/presentation/app_board_list_screen.dart';
 import '../../home/presentation/home_screen.dart' show MyKnitAlongMyPageBlock;
 import '../../pattern/data/pattern_offline_repository.dart';
 import '../../pattern/data/pattern_repository.dart';
+import '../../seller/presentation/screens/seller_sales_dashboard_screen.dart';
 import '../data/my_activity_providers.dart';
+import '../data/my_bug_reports_provider.dart';
+import '../domain/bug_report.dart';
 import 'bug_report_sheet.dart';
 
 class MyPageScreen extends ConsumerWidget {
@@ -75,8 +80,6 @@ class _MyPageBody extends ConsumerStatefulWidget {
 }
 
 class _MyPageBodyState extends ConsumerState<_MyPageBody> {
-  bool _uploadingPhoto = false;
-
   UserModel get user => widget.user;
 
   @override
@@ -95,6 +98,62 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
       );
     });
   }
+
+  @override
+  Widget build(BuildContext context) {
+    // 이슈 #778 — _MyPageBodyState는 4그룹 ConsumerWidget으로 분리하여 top-level rebuild를 차단.
+    // 각 그룹 위젯이 자기 provider만 watch → 카드 데이터 변경 시 해당 그룹만 rebuild.
+    final t = ref.watch(appStringsProvider);
+    return Stack(
+      children: [
+        const BgOrbs(),
+        SafeArea(
+          child: Column(
+            children: [
+              MoriPageHeaderShell(
+                maxWidth: 920,
+                padding: EdgeInsets.zero,
+                child: MoriBrandHeader(subtitle: t.yourKnittingIdentity),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 120),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 4),
+                      // 이슈 #830 — AdminAlertCard / SellerSummaryCard 마이페이지에서 제거.
+                      //   · 어드민 정보: 어드민 전용 화면(어드민 앱/대시보드)으로 분리.
+                      //   · 셀러 요약: 아래 "내 마켓" 카드에서 매출 정보 + 셀러 대시보드 진입으로 통합.
+                      // ── 4그룹 ConsumerWidget (#778) ────────────────────
+                      _BasicInfoSection(user: user),
+                      _UsageInfoSection(user: user),
+                      const _PersonalSettingsSection(),
+                      _MoriKnitSection(user: user),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BasicInfoSection extends ConsumerStatefulWidget {
+  final UserModel user;
+  const _BasicInfoSection({required this.user});
+
+  @override
+  ConsumerState<_BasicInfoSection> createState() => _BasicInfoSectionState();
+}
+
+class _BasicInfoSectionState extends ConsumerState<_BasicInfoSection> {
+  bool _uploadingPhoto = false;
+
+  UserModel get user => widget.user;
 
   Future<void> _pickAndUploadPhoto() async {
     final picker = ImagePicker();
@@ -353,69 +412,21 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
     }
   }
 
-  Widget _buildSnapshotItem(String label, int count, int stored, Color color, VoidCallback onTap) {
-    final progress = count == 0 ? 0.0 : (stored == 0 ? 0.15 : (count / (stored > count ? stored : count)).clamp(0.0, 1.0));
-    return GestureDetector(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text(label, style: T.caption.copyWith(color: C.tx2), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 4),
-            Text('$count', style: T.bodyBold.copyWith(color: color, fontSize: 22, letterSpacing: -0.3)),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(99),
-              child: LinearProgressIndicator(value: progress, minHeight: 5, backgroundColor: color.withValues(alpha: 0.14), valueColor: AlwaysStoppedAnimation(color)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    // 이슈 #778 — 그룹1(기본정보) 전용. ref.watch는 이 그룹이 필요로 하는 provider만.
     final t = ref.watch(appStringsProvider);
     final language = ref.watch(appLanguageProvider);
     final isKorean = language.isKorean;
     final isAnonymous = ref.watch(isAnonymousUserProvider);
-    final social = ref.watch(socialIntegrationsProvider).valueOrNull;
-    final youtubeUrl = social?.youtubeUrl ?? 'https://www.youtube.com/@moriknit';
-    final instagramUrl = social?.instagramUrl ?? 'https://instagram.com/moriknit_official';
-    final currentTheme = ref.watch(appThemeProvider);
-    // 이슈 #778 — swatchCount/projectCount/counterCount/purchasesAsync/marketItemsAsync/salesAsync는
-    // 추출된 ConsumerWidget(_UsageSnapshotBlock/_PurchaseSalesSummaryRow/_PurchaseMarketLedgerRow)이 자체 watch.
+    final isBusiness = ref.watch(featureGatesProvider).isBusiness;
+    final isPro = ref.watch(isProProvider);
     final name = user.displayName.isNotEmpty ? user.displayName : (user.email.isNotEmpty ? user.email.split('@').first : 'Maker');
     final photo = user.photoURL;
 
-    return Stack(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const BgOrbs(),
-        SafeArea(
-          child: Column(
-            children: [
-              MoriPageHeaderShell(
-                maxWidth: 920,
-                padding: EdgeInsets.zero,
-                child: MoriBrandHeader(subtitle: t.yourKnittingIdentity),
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 120),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 4),
-
-                      // 이슈 #815 — 어드민 알림 카드 (isAdmin 가드 — 일반 사용자에게는 보이지 않음)
-                      const AdminAlertCard(),
-
-                      // 이슈 #816 Phase 2 — 셀러 요약 카드 (isSeller 가드 — Pro/Business 만 노출)
-                      const SellerSummaryCard(),
-
                       // ═══════════════════════════════════════════════════
                       // 📌 1. 기본정보 (정체성) — 프로필 / 구독 / 추가정보 / 휴대폰
                       // ═══════════════════════════════════════════════════
@@ -441,8 +452,8 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                             icon: Icons.person_rounded,
                             accent: C.lv,
                             trailing: _PlanBadgeTrailing(
-                              isBusiness: ref.watch(featureGatesProvider).isBusiness,
-                              isPro: ref.watch(isProProvider),
+                              isBusiness: isBusiness,
+                              isPro: isPro,
                             ),
                             child: IntrinsicHeight(
                               child: Row(
@@ -681,58 +692,116 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                         ),
                         child: _MyQnaBlock(isKorean: isKorean),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
 
-                      // ═══════════════════════════════════════════════════
-                      // 📊 2. 사용정보 (수치/통계) — 저장공간/AI/사용현황/구매/마켓
-                      // ═══════════════════════════════════════════════════
-                      _MyPageSectionHeader(
-                        title: isKorean ? '사용정보' : 'Usage Info',
-                        subtitle: isKorean
-                            ? '저장공간, AI, 사용 현황 및 구매·마켓'
-                            : 'Storage, AI, activity and market',
-                      ),
-
-                      // #783 — '오프라인 저장' 명칭 변경 (이전: 저장 공간 사용량)
+                      // ── 1-h. 내 인입 이메일 (#831 Phase 3) ───────────
+                      //   - 외부에서 이 주소로 도안을 보내면 라이브러리에 자동 등록.
+                      //   - 핸들 미설정 시 안내만 표시, 발급 후 복사 + 재발급 가능.
                       MoriBlockShell(
-                        label: isKorean ? '오프라인 저장' : 'Offline Storage',
-                        icon: Icons.cloud_download_rounded,
+                        label: isKorean ? '내 인입 이메일' : 'My Inbound Email',
+                        icon: Icons.alternate_email_rounded,
+                        accent: C.og,
+                        child: _InboundEmailBlock(user: user, isKorean: isKorean),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // ── 1-i. 인입 이메일 → Dropbox 백업 폴더 (#870) ─────
+                      //   - 사용자가 본인 Dropbox 의 백업 폴더 경로를 직접 지정.
+                      //   - 폴더 미지정 또는 Dropbox 미연결 시 Cloud Function 은
+                      //     Firebase Storage 만 저장하고 Dropbox 업로드는 건너뜀.
+                      MoriBlockShell(
+                        label: isKorean
+                            ? '인입 이메일 → Dropbox 백업 폴더'
+                            : 'Inbound Email → Dropbox Backup Folder',
+                        icon: Icons.folder_special_rounded,
                         accent: C.lvD,
-                        child: _StorageUsageBlock(
-                          user: user,
-                          isKorean: isKorean,
-                        ),
+                        child: _InboundDropboxFolderBlock(isKorean: isKorean),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 24),
+      ],
+    );
+  }
+}
 
-                      // ── 2-b. AI 사용량 (#739) ──────────────────────
-                      MoriBlockShell(
-                        label: isKorean ? 'AI 사용량' : 'AI Usage',
-                        icon: Icons.auto_awesome_rounded,
-                        accent: C.pkD,
-                        child: _AiUsageBlock(user: user, isKorean: isKorean),
-                      ),
-                      const SizedBox(height: 16),
+/// 이슈 #778 — 그룹2 (사용정보). 자체 ref.watch로 분리.
+class _UsageInfoSection extends ConsumerWidget {
+  final UserModel user;
+  const _UsageInfoSection({required this.user});
 
-                      // ── 2-c. 사용 현황 (스와치/프로젝트/카운터) ───────
-                      // 이슈 #778 — _UsageSnapshotBlock으로 추출하여 카운트 provider 3종을 자체 watch.
-                      _UsageSnapshotBlock(
-                        title: t.usageSnapshot,
-                        labelSwatch: t.swatchLibrary,
-                        labelProject: t.projectBoard,
-                        labelCounter: isKorean ? '카운터' : 'Counters',
-                        storedSwatch: user.usage.swatchCount,
-                        storedProject: user.usage.projectCount,
-                        storedCounter: user.usage.counterCount,
-                      ),
-                      const SizedBox(height: 16),
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(appStringsProvider);
+    final isKorean = ref.watch(appLanguageProvider).isKorean;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+              // ═══════════════════════════════════════════════════
+              // 📊 2. 사용정보 (수치/통계) — 저장공간/AI/사용현황/구매/마켓
+              // ═══════════════════════════════════════════════════
+              _MyPageSectionHeader(
+                title: isKorean ? '사용정보' : 'Usage Info',
+                subtitle: isKorean
+                    ? '저장공간, AI, 사용 현황 및 구매·마켓'
+                    : 'Storage, AI, activity and market',
+              ),
+
+              // #783 — '오프라인 저장' 명칭 변경 (이전: 저장 공간 사용량)
+              MoriBlockShell(
+                label: isKorean ? '오프라인 저장' : 'Offline Storage',
+                icon: Icons.cloud_download_rounded,
+                accent: C.lvD,
+                child: _StorageUsageBlock(
+                  user: user,
+                  isKorean: isKorean,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // ── 2-b. AI 사용량 (#739) ──────────────────────
+              MoriBlockShell(
+                label: isKorean ? 'AI 사용량' : 'AI Usage',
+                icon: Icons.auto_awesome_rounded,
+                accent: C.pkD,
+                child: _AiUsageBlock(user: user, isKorean: isKorean),
+              ),
+              const SizedBox(height: 16),
+
+              // ── 2-c. 사용 현황 (스와치/프로젝트/카운터) ───────
+              // 이슈 #778 — _UsageSnapshotBlock으로 추출하여 카운트 provider 3종을 자체 watch.
+              _UsageSnapshotBlock(
+                title: t.usageSnapshot,
+                labelSwatch: t.swatchLibrary,
+                labelProject: t.projectBoard,
+                labelCounter: isKorean ? '카운터' : 'Counters',
+                storedSwatch: user.usage.swatchCount,
+                storedProject: user.usage.projectCount,
+                storedCounter: user.usage.counterCount,
+              ),
+              const SizedBox(height: 16),
               // 이슈 #778 — _PurchaseSalesSummaryRow로 추출하여 purchases/sales를 자체 watch.
               _PurchaseSalesSummaryRow(isKorean: isKorean),
               const SizedBox(height: 16),
               // 이슈 #778 — _PurchaseMarketLedgerRow로 추출하여 purchases/marketItems를 자체 watch.
               _PurchaseMarketLedgerRow(isKorean: isKorean),
               const SizedBox(height: 24),
+      ],
+    );
+  }
+}
 
+/// 이슈 #778 — 그룹3 (개인설정). 자체 ref.watch로 분리.
+class _PersonalSettingsSection extends ConsumerWidget {
+  const _PersonalSettingsSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(appStringsProvider);
+    final language = ref.watch(appLanguageProvider);
+    final isKorean = language.isKorean;
+    final currentTheme = ref.watch(appThemeProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
               // ═══════════════════════════════════════════════════
               // ⚙️ 3. 개인설정 (커스터마이즈) — 언어 / 테마 / 폰트 / 퀵버튼 / 스노우
               // ═══════════════════════════════════════════════════
@@ -860,7 +929,27 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
               const SizedBox(height: 20),
 
               const SizedBox(height: 4),
+      ],
+    );
+  }
+}
 
+/// 이슈 #778 — 그룹4 (모리니트). 자체 ref.watch로 분리.
+class _MoriKnitSection extends ConsumerWidget {
+  final UserModel user;
+  const _MoriKnitSection({required this.user});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(appStringsProvider);
+    final isKorean = ref.watch(appLanguageProvider).isKorean;
+    final isAnonymous = ref.watch(isAnonymousUserProvider);
+    final social = ref.watch(socialIntegrationsProvider).valueOrNull;
+    final youtubeUrl = social?.youtubeUrl ?? 'https://www.youtube.com/@moriknit';
+    final instagramUrl = social?.instagramUrl ?? 'https://instagram.com/moriknit_official';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
               // ═══════════════════════════════════════════════════
               // 🏢 4. 모리니트 (회사/계정) — 회사정보 / 약관 / 버전 / QnA / 로그아웃
               // ═══════════════════════════════════════════════════
@@ -954,6 +1043,9 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                   ],
                 ),
               ),
+              const SizedBox(height: 12),
+              // ── 모리니트 1-b. 나의 버그/의견 제출 (#855) ──────
+              _MyBugReportsBlock(isKorean: isKorean),
               const SizedBox(height: 20),
               // ── 모리니트 2. 계정 관리 (로그아웃 · 회원탈퇴) ─────
               SectionTitle(title: isKorean ? '계정 관리' : 'Account'),
@@ -1018,32 +1110,9 @@ class _MyPageBodyState extends ConsumerState<_MyPageBody> {
                   ),
                 ]),
               ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       ],
     );
   }
-
-  // ignore: unused_element
-  String _planLabel(AppStrings t, String planId) {
-    switch (planId.toLowerCase()) {
-      case 'starter':
-        return t.starterPlan;
-      case 'pro':
-        return t.proPlan;
-      case 'business':
-        return t.businessPlan;
-      default:
-        return t.freePlan;
-    }
-  }
-
-  String _formatWon(int amount, bool isKorean) => isKorean ? '$amount원' : '$amount KRW';
 }
 
 class _SummaryCard extends StatelessWidget {
@@ -3261,6 +3330,706 @@ class _MyQnaBlock extends ConsumerWidget {
   }
 }
 
+/// 이슈 #831 — 인입 이메일 카드.
+/// - 핸들 미설정: 안내 + "핸들 설정하기" 진입 안내
+/// - 키 미발급: "이메일 발급하기" 버튼 (regenerateInboundEmailKey 호출)
+/// - 발급 완료: 주소 표시 + 복사 + 재발급
+class _InboundEmailBlock extends ConsumerStatefulWidget {
+  final UserModel user;
+  final bool isKorean;
+  const _InboundEmailBlock({required this.user, required this.isKorean});
+
+  @override
+  ConsumerState<_InboundEmailBlock> createState() => _InboundEmailBlockState();
+}
+
+class _InboundEmailBlockState extends ConsumerState<_InboundEmailBlock> {
+  // #831 — 인입 이메일 도메인. 후이즈 MX 레코드 `in.moriknit.com` → SendGrid 라우팅.
+  static const String _domain = 'in.moriknit.com';
+  bool _busy = false;
+
+  // 이슈 #872 — 별명(customKey) 변경 UI.
+  bool _aliasExpanded = false;
+  final TextEditingController _aliasController = TextEditingController();
+  String? _aliasError; // 실시간 형식 검증 메시지
+  static final RegExp _aliasPattern = RegExp(r'^[a-z0-9]{3,12}$');
+
+  @override
+  void dispose() {
+    _aliasController.dispose();
+    super.dispose();
+  }
+
+  String? _composedAddress() {
+    final handle = widget.user.handle;
+    final key = widget.user.inboundEmailKey;
+    if (handle.isEmpty || key.isEmpty) return null;
+    return '${handle}_$key@$_domain';
+  }
+
+  String? _validateAlias(String value, {required bool isKorean}) {
+    final v = value.trim().toLowerCase();
+    if (v.isEmpty) {
+      return isKorean ? '별명을 입력해 주세요.' : 'Please enter an alias.';
+    }
+    if (!_aliasPattern.hasMatch(v)) {
+      return isKorean
+          ? '3~12자의 영문 소문자/숫자만 사용할 수 있어요.'
+          : 'Use 3-12 lowercase letters or digits only.';
+    }
+    if (v == widget.user.inboundEmailKey.toLowerCase()) {
+      return isKorean ? '현재 별명과 동일해요.' : 'Same as the current alias.';
+    }
+    return null;
+  }
+
+  Future<void> _generateKey({String? customKey}) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final isKorean = widget.isKorean;
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () async {
+          final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+              .httpsCallable('regenerateInboundEmailKey');
+          await callable.call(
+            customKey != null && customKey.isNotEmpty
+                ? {'customKey': customKey}
+                : <String, dynamic>{},
+          );
+        },
+      );
+      if (!mounted) return;
+      if (customKey != null && customKey.isNotEmpty) {
+        final handle = widget.user.handle;
+        final newAddr = '${handle}_$customKey@$_domain';
+        showSavedSnackBar(
+          messenger,
+          message: isKorean
+              ? '별명이 변경됐어요. 새 주소: $newAddr'
+              : 'Alias changed. New address: $newAddr',
+        );
+        setState(() {
+          _aliasExpanded = false;
+          _aliasController.clear();
+          _aliasError = null;
+        });
+      } else {
+        showSavedSnackBar(messenger,
+            message: isKorean ? '이메일이 발급됐어요.' : 'Email issued.');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(messenger, message: '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _submitAlias() async {
+    final isKorean = widget.isKorean;
+    final value = _aliasController.text.trim().toLowerCase();
+    final err = _validateAlias(value, isKorean: isKorean);
+    if (err != null) {
+      setState(() => _aliasError = err);
+      return;
+    }
+    await _generateKey(customKey: value);
+  }
+
+  Future<void> _copyAddress(String addr) async {
+    await Clipboard.setData(ClipboardData(text: addr));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(widget.isKorean ? '주소를 복사했어요.' : 'Address copied.'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isKorean = widget.isKorean;
+    final handle = widget.user.handle;
+    final address = _composedAddress();
+
+    // 1) 핸들 미설정 — 안내만.
+    if (handle.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.info_outline_rounded, size: 16, color: C.mu),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                isKorean
+                    ? '@핸들을 먼저 설정하면 인입 이메일이 발급돼요.'
+                    : 'Set your @handle first to enable inbound email.',
+                style: T.caption.copyWith(color: C.mu),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 2) 키 미발급 — 발급 버튼.
+    if (address == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            isKorean
+                ? '나만의 도안 인입 주소를 발급하고, 다른 곳에서 받은 PDF/이미지를 이 주소로 보내 보관하세요.'
+                : 'Issue your private inbound address and forward PDFs or images from anywhere.',
+            style: T.caption.copyWith(color: C.tx2),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _busy ? null : _generateKey,
+              icon: const Icon(Icons.alternate_email_rounded, size: 18),
+              label: Text(isKorean ? '이메일 발급하기' : 'Issue email'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: C.og,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // 3) 발급 완료 — 주소 표시 + 복사/재발급.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: C.gx,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: C.bd),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: SelectableText(
+                  address,
+                  style: T.bodyBold.copyWith(color: C.tx),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: isKorean ? '복사' : 'Copy',
+                onPressed: () => _copyAddress(address),
+                icon: Icon(Icons.copy_rounded, size: 18, color: C.lvD),
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          isKorean
+              ? '이 주소로 PDF/이미지를 보내면 라이브러리에 자동으로 들어와요. 발신자 검증 단계는 다음 업데이트로 추가됩니다.'
+              : 'Send PDFs or images here and they will appear in your library. Sender approvals coming in a later update.',
+          style: T.caption.copyWith(color: C.mu),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            // 이슈 #872 — 별명(customKey) 변경 토글.
+            TextButton.icon(
+              onPressed: _busy
+                  ? null
+                  : () {
+                      setState(() {
+                        _aliasExpanded = !_aliasExpanded;
+                        if (!_aliasExpanded) {
+                          _aliasController.clear();
+                          _aliasError = null;
+                        }
+                      });
+                    },
+              icon: Icon(
+                _aliasExpanded
+                    ? Icons.expand_less_rounded
+                    : Icons.edit_rounded,
+                size: 16,
+                color: C.lvD,
+              ),
+              label: Text(
+                isKorean ? '별명 변경' : 'Change alias',
+                style: T.caption.copyWith(
+                  color: C.lvD,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+            const SizedBox(width: 4),
+            TextButton.icon(
+              onPressed: _busy ? null : () => _generateKey(),
+              icon: Icon(Icons.refresh_rounded, size: 16, color: C.og),
+              label: Text(
+                isKorean ? '주소 재발급' : 'Regenerate',
+                style: T.caption.copyWith(
+                  color: C.og,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+        ),
+        if (_aliasExpanded) ...[
+          const SizedBox(height: 10),
+          TextField(
+            controller: _aliasController,
+            enabled: !_busy,
+            autocorrect: false,
+            enableSuggestions: false,
+            textInputAction: TextInputAction.done,
+            decoration: InputDecoration(
+              labelText: isKorean
+                  ? '별명 (3~12자 영숫자, 외우기 쉬운 단어)'
+                  : 'Alias (3-12 alphanumerics, easy to remember)',
+              hintText: isKorean
+                  ? '예: book, 2024, patterns'
+                  : 'e.g. book, 2024, patterns',
+              helperText: _aliasError ??
+                  (isKorean
+                      ? '영문 소문자/숫자만, 3~12자.'
+                      : 'Lowercase letters or digits only, 3-12 chars.'),
+              helperStyle: T.caption.copyWith(
+                color: _aliasError != null ? C.og : C.mu,
+              ),
+              filled: true,
+              fillColor: C.gx,
+            ),
+            onChanged: (v) {
+              final err = _validateAlias(v, isKorean: isKorean);
+              if (err != _aliasError) {
+                setState(() => _aliasError = err);
+              }
+            },
+            onSubmitted: (_) => _submitAlias(),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            isKorean
+                ? '옛 주소(현재 주소)로 들어온 메일은 이후 받지 못합니다. 노출됐을 때 변경하세요.'
+                : 'Mail sent to the old (current) address will no longer be received. Change it if the address has been exposed.',
+            style: T.caption.copyWith(color: C.mu),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _busy ? null : _submitAlias,
+              icon: const Icon(Icons.check_rounded, size: 18),
+              label: Text(isKorean ? '별명 저장' : 'Save alias'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: C.lv,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        ],
+        // 이슈 #873 — 자동 AI 분석 토글 (Pro 전용).
+        const SizedBox(height: 14),
+        Divider(height: 1, color: C.bd.withValues(alpha: 0.5)),
+        const SizedBox(height: 10),
+        _AutoAiAnalysisToggleRow(isKorean: isKorean),
+      ],
+    );
+  }
+}
+
+/// 이슈 #873 — 인입 메일 자동 AI 분석 토글 (Pro 전용).
+///   - Pro 사용자: 활성, ON 시 인입 PDF/이미지가 도착 즉시 자동 AI 분석 → 라이브러리 완전 등록
+///   - 무료 사용자: 비활성 + "Pro 업그레이드" 안내
+///   값 저장: users/{uid}/private/dropbox.autoAiAnalysisEnabled
+class _AutoAiAnalysisToggleRow extends ConsumerStatefulWidget {
+  final bool isKorean;
+  const _AutoAiAnalysisToggleRow({required this.isKorean});
+
+  @override
+  ConsumerState<_AutoAiAnalysisToggleRow> createState() =>
+      _AutoAiAnalysisToggleRowState();
+}
+
+class _AutoAiAnalysisToggleRowState
+    extends ConsumerState<_AutoAiAnalysisToggleRow> {
+  bool _loaded = false;
+  bool _busy = false;
+  bool _enabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final v = await ref
+        .read(dropboxAuthProvider.notifier)
+        .readAutoAiAnalysisEnabled();
+    if (!mounted) return;
+    setState(() {
+      _enabled = v;
+      _loaded = true;
+    });
+  }
+
+  Future<void> _onChanged(bool next) async {
+    if (_busy) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final isKorean = widget.isKorean;
+    setState(() {
+      _busy = true;
+      _enabled = next;
+    });
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () async {
+          await ref
+              .read(dropboxAuthProvider.notifier)
+              .writeAutoAiAnalysisEnabled(next);
+        },
+      );
+      if (!mounted) return;
+      showSavedSnackBar(messenger,
+          message: isKorean ? '저장됐어요.' : 'Saved.');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _enabled = !next);
+      showSaveErrorSnackBar(messenger, message: '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isKorean = widget.isKorean;
+    final isPro = ref.watch(isProProvider);
+    final fg = isPro ? C.tx : C.mu;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    isKorean
+                        ? '자동 AI 분석 (Pro 전용)'
+                        : 'Auto AI analysis (Pro)',
+                    style: T.bodyBold.copyWith(color: fg),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                isKorean
+                    ? '켜면 인입 메일 PDF/이미지가 도착 즉시 자동으로 AI 분석되어 도안 라이브러리에 등록됩니다.'
+                    : 'When on, inbound PDFs/images are auto-analyzed by AI and added to your library.',
+                style: T.caption.copyWith(color: C.mu),
+              ),
+              if (!isPro) ...[
+                const SizedBox(height: 4),
+                Text(
+                  isKorean
+                      ? 'Pro 플랜에서만 사용할 수 있어요.'
+                      : 'Available on the Pro plan only.',
+                  style: T.caption.copyWith(color: C.og),
+                ),
+              ],
+            ],
+          ),
+        ),
+        Switch.adaptive(
+          value: isPro && _loaded && _enabled,
+          onChanged: (isPro && _loaded && !_busy) ? _onChanged : null,
+          activeThumbColor: C.lvD,
+        ),
+      ],
+    );
+  }
+}
+
+/// 이슈 #870 — 인입 이메일 첨부의 Dropbox 백업 폴더 입력 블록.
+/// - Dropbox 미연결: 연결 안내 (안내만, 강제 차단 아님)
+/// - 폴더 미지정: TextField + 저장 버튼 (예시 placeholder)
+/// - 저장 시 users/{uid}/private/dropbox.uploadFolder 에 보관
+/// - Cloud Function 이 이 값을 사용해 사용자 Dropbox 폴더로 추가 백업
+class _InboundDropboxFolderBlock extends ConsumerStatefulWidget {
+  final bool isKorean;
+  const _InboundDropboxFolderBlock({required this.isKorean});
+
+  @override
+  ConsumerState<_InboundDropboxFolderBlock> createState() =>
+      _InboundDropboxFolderBlockState();
+}
+
+class _InboundDropboxFolderBlockState
+    extends ConsumerState<_InboundDropboxFolderBlock> {
+  final TextEditingController _controller = TextEditingController();
+  bool _loaded = false;
+  bool _busy = false;
+  // 이슈 #871 — 본인 Dropbox 폴더에 직접 추가한 도안 앱 진입 시 자동 등록 여부.
+  bool _autoImport = false;
+  bool _autoBusy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrent();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadCurrent() async {
+    final folder =
+        await ref.read(dropboxAuthProvider.notifier).readUploadFolder();
+    final auto =
+        await ref.read(dropboxAuthProvider.notifier).readAutoImportEnabled();
+    if (!mounted) return;
+    setState(() {
+      _controller.text = folder ?? '';
+      _autoImport = auto;
+      _loaded = true;
+    });
+  }
+
+  Future<void> _toggleAutoImport(bool next) async {
+    if (_autoBusy) return;
+    setState(() {
+      _autoBusy = true;
+      _autoImport = next;
+    });
+    try {
+      await ref
+          .read(dropboxAuthProvider.notifier)
+          .writeAutoImportEnabled(next);
+    } catch (_) {
+      if (mounted) setState(() => _autoImport = !next);
+    } finally {
+      if (mounted) setState(() => _autoBusy = false);
+    }
+  }
+
+  Future<void> _save() async {
+    if (_busy) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final isKorean = widget.isKorean;
+    setState(() => _busy = true);
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '저장하는 중입니다.' : 'Saving...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () async {
+          await ref
+              .read(dropboxAuthProvider.notifier)
+              .writeUploadFolder(_controller.text);
+        },
+      );
+      if (!mounted) return;
+      showSavedSnackBar(messenger,
+          message: isKorean ? '저장됐어요.' : 'Saved.');
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(messenger, message: '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isKorean = widget.isKorean;
+    final dropboxState = ref.watch(dropboxAuthProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 연결 상태 안내 (연결 안 됐어도 폴더 입력은 가능 — 추후 연결 시 사용).
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              dropboxState.isLoggedIn
+                  ? Icons.check_circle_rounded
+                  : Icons.info_outline_rounded,
+              size: 16,
+              color: dropboxState.isLoggedIn ? C.lmD : C.mu,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                dropboxState.isLoggedIn
+                    ? (isKorean
+                        ? 'Dropbox 연결됨 — 본인 Dropbox 백업 폴더 경로를 입력해 주세요.'
+                        : 'Dropbox connected — enter your backup folder path.')
+                    : (isKorean
+                        ? 'Dropbox 미연결 — 마이페이지 Dropbox 연결 후 적용돼요.'
+                        : 'Dropbox not connected — link Dropbox to enable backup.'),
+                style: T.caption.copyWith(color: C.mu),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _controller,
+          enabled: _loaded && !_busy,
+          decoration: InputDecoration(
+            labelText: isKorean ? 'Dropbox 폴더 경로' : 'Dropbox folder path',
+            hintText: '/모리니트/도안/',
+            helperText: isKorean
+                ? '예: /모리니트/도안/ — 본인 Dropbox 에 미리 만들어둔 폴더 경로'
+                : 'e.g. /MoriKnit/Patterns/ — pre-created folder in your Dropbox',
+            helperMaxLines: 2,
+            filled: true,
+            fillColor: C.gx,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          isKorean
+              ? '폴더 미지정 시 Dropbox 업로드는 건너뜁니다 (모리니트 라이브러리에는 항상 저장됩니다).'
+              : 'If left blank, Dropbox upload is skipped (always saved to your MoriKnit library).',
+          style: T.caption.copyWith(color: C.mu),
+        ),
+        const SizedBox(height: 10),
+        Align(
+          alignment: Alignment.centerRight,
+          child: ElevatedButton.icon(
+            onPressed: (_loaded && !_busy) ? _save : null,
+            icon: const Icon(Icons.save_rounded, size: 18),
+            label: Text(isKorean ? '폴더 저장' : 'Save folder'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: C.lvD,
+              foregroundColor: Colors.white,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+          ),
+        ),
+        // 이슈 #871 — 본인 Dropbox 폴더에 직접 추가한 도안 자동 등록 토글.
+        //   - ON  : 앱 진입 시 새 도안 즉시 자동 등록 + Snackbar
+        //   - OFF : 앱 진입 시 다이얼로그로 등록 여부 확인
+        //   폴더 미지정 또는 Dropbox 미연결 시 비활성화 (회색).
+        const SizedBox(height: 14),
+        Divider(height: 1, color: C.bd.withValues(alpha: 0.5)),
+        const SizedBox(height: 10),
+        _AutoImportToggleRow(
+          isKorean: isKorean,
+          enabled: _loaded &&
+              !_autoBusy &&
+              dropboxState.isLoggedIn &&
+              _controller.text.trim().isNotEmpty,
+          value: _autoImport,
+          onChanged: _toggleAutoImport,
+        ),
+      ],
+    );
+  }
+}
+
+/// 이슈 #871 — Dropbox 새 도안 자동 등록 스위치 행.
+/// SegmentedButton/RadioListTile/Switch 금지 규칙 적용 대상이 아닌 정식 토글(설정 항목).
+/// 칩이 아니라 설정값이므로 Switch + 라벨 + 설명문 한 묶음 패턴 사용.
+class _AutoImportToggleRow extends StatelessWidget {
+  final bool isKorean;
+  final bool enabled;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _AutoImportToggleRow({
+    required this.isKorean,
+    required this.enabled,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = enabled ? C.tx : C.mu;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isKorean
+                    ? 'Dropbox 새 도안 자동 등록'
+                    : 'Auto-import new Dropbox patterns',
+                style: T.bodyBold.copyWith(color: fg),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                isKorean
+                    ? '켜면 폴더에 새 도안이 추가됐을 때 앱 진입 시 즉시 라이브러리에 등록, 끄면 등록 여부를 묻습니다.'
+                    : 'When on, new files in your folder are imported on app start; when off, you are asked first.',
+                style: T.caption.copyWith(color: C.mu),
+              ),
+              if (!enabled) ...[
+                const SizedBox(height: 4),
+                Text(
+                  isKorean
+                      ? 'Dropbox 연결 + 폴더 지정 후 사용할 수 있어요.'
+                      : 'Available after linking Dropbox and setting a folder.',
+                  style: T.caption.copyWith(color: C.mu),
+                ),
+              ],
+            ],
+          ),
+        ),
+        Switch.adaptive(
+          value: value,
+          onChanged: enabled ? onChanged : null,
+          activeThumbColor: C.lvD,
+        ),
+      ],
+    );
+  }
+}
+
 /// 활동 블록 공용 — 로딩 상태 플레이스홀더.
 class _MyActivityLoading extends StatelessWidget {
   const _MyActivityLoading();
@@ -3450,6 +4219,8 @@ class _PurchaseMarketLedgerRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final purchasesAsync = ref.watch(myPurchasesProvider);
     final marketItemsAsync = ref.watch(myMarketItemsProvider);
+    // 이슈 #830 — '내 마켓' 카드에 셀러 실매출(market_sales) 연결.
+    final salesAsync = ref.watch(myMarketSalesProvider);
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3477,25 +4248,91 @@ class _PurchaseMarketLedgerRow extends ConsumerWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: MoriBlockShell(
-              label: isKorean ? '내 마켓' : 'My market',
-              icon: Icons.storefront_rounded,
-              accent: C.lmD,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(isKorean ? '등록한 상품을 관리해요.' : 'Manage your listings.', style: T.caption.copyWith(color: C.tx2)),
-                  const SizedBox(height: 12),
-                  marketItemsAsync.when(
-                    data: (items) => items.isEmpty
-                        ? Column(children: List.generate(3, (_) => Container(height: 50, margin: const EdgeInsets.only(bottom: 10), decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(20), border: Border.all(color: C.bd.withValues(alpha: 0.5))))))
-                        : Column(
-                            children: items.take(4).map((item) => _LedgerRow(title: item.title, subtitle: _formatWonExt(item.price, isKorean), accent: C.lmD)).toList(),
-                          ),
-                    loading: () => CircularProgressIndicator(color: C.lv),
-                    error: (e, _) => Text('$e', style: T.caption.copyWith(color: C.og)),
+            // 이슈 #830 — '내 마켓' 카드 탭 → SellerSalesDashboardScreen 으로 이동.
+            //   rootNavigator 사용해서 MainShell 바깥 풀스크린으로 push.
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () {
+                Navigator.of(context, rootNavigator: true).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const SellerSalesDashboardScreen(),
                   ),
-                ],
+                );
+              },
+              child: MoriBlockShell(
+                label: isKorean ? '내 마켓' : 'My market',
+                icon: Icons.storefront_rounded,
+                accent: C.lmD,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            isKorean ? '등록한 상품과 매출을 확인해요.' : 'See your listings and sales.',
+                            style: T.caption.copyWith(color: C.tx2),
+                          ),
+                        ),
+                        Icon(Icons.chevron_right_rounded, color: C.mu, size: 18),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    // 이슈 #830 — 매출 요약(누적 판매 건수/매출액) — myMarketSalesProvider 연결.
+                    salesAsync.when(
+                      data: (sales) {
+                        final totalSales = sales.fold<int>(0, (a, b) => a + b.price);
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: C.lm.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                                color: C.lmD.withValues(alpha: 0.25)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.payments_rounded,
+                                  size: 14, color: C.lmD),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  isKorean
+                                      ? '누적 판매 ${sales.length}건 · ${_formatWonExt(totalSales, isKorean)}'
+                                      : '${sales.length} sales · ${_formatWonExt(totalSales, isKorean)}',
+                                  style: T.caption.copyWith(
+                                      color: C.lmD,
+                                      fontWeight: FontWeight.w700),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                      loading: () => Container(
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: C.bd.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      error: (_, _) => const SizedBox.shrink(),
+                    ),
+                    const SizedBox(height: 10),
+                    marketItemsAsync.when(
+                      data: (items) => items.isEmpty
+                          ? Column(children: List.generate(3, (_) => Container(height: 50, margin: const EdgeInsets.only(bottom: 10), decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(20), border: Border.all(color: C.bd.withValues(alpha: 0.5))))))
+                          : Column(
+                              children: items.take(4).map((item) => _LedgerRow(title: item.title, subtitle: _formatWonExt(item.price, isKorean), accent: C.lmD)).toList(),
+                            ),
+                      loading: () => CircularProgressIndicator(color: C.lv),
+                      error: (e, _) => Text('$e', style: T.caption.copyWith(color: C.og)),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -3676,6 +4513,196 @@ class _MyAuthoredPlaceholder extends StatelessWidget {
           style: T.caption.copyWith(color: C.mu, height: 1.4),
         ),
       ],
+    );
+  }
+}
+
+/// 이슈 #855 — 나의 버그/의견 제출 이력 블록.
+/// - `bug_reports.where(uid).orderBy(createdAt desc).limit(20)` 스트림 노출
+/// - 항목: 제목, 카테고리, 상태(GitHub 연결됨/대기), 제출 시각
+/// - GitHub 이슈 URL 있는 항목은 외부 브라우저로 열기
+/// - 비어있을 땐 EmptyBlockPlaceholder (#722 표준)
+class _MyBugReportsBlock extends ConsumerWidget {
+  final bool isKorean;
+  const _MyBugReportsBlock({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final reportsAsync = ref.watch(myBugReportsProvider);
+    return MoriBlockShell(
+      label: isKorean ? '나의 버그/의견 제출' : 'My Reports',
+      icon: Icons.assignment_outlined,
+      accent: C.og,
+      child: AsyncDataView<List<BugReport>>(
+        async: reportsAsync,
+        isEmpty: (data) => data.isEmpty,
+        placeholderRows: 2,
+        rowHeight: 56,
+        emptyBuilder: () => EmptyBlockPlaceholder(
+          message: isKorean
+              ? '아직 제출한 버그/의견이 없어요.'
+              : 'No reports submitted yet.',
+          rows: 2,
+          rowHeight: 56,
+        ),
+        builder: (reports) {
+          final preview = reports.take(5).toList();
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < preview.length; i++) ...[
+                _MyBugReportRow(report: preview[i], isKorean: isKorean),
+                if (i < preview.length - 1)
+                  Divider(height: 1, color: C.bd.withValues(alpha: 0.4)),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// 단일 버그리포트 행. GitHub 이슈 연결 시 외부 브라우저로 진입.
+class _MyBugReportRow extends StatelessWidget {
+  final BugReport report;
+  final bool isKorean;
+  const _MyBugReportRow({required this.report, required this.isKorean});
+
+  String get _categoryLabel {
+    switch (report.category) {
+      case 'ui':
+        return isKorean ? 'UI 버그' : 'UI Bug';
+      case 'crash':
+        return isKorean ? '크래시' : 'Crash';
+      case 'feature':
+        return isKorean ? '기능 요청' : 'Feature';
+      case 'other':
+        return isKorean ? '기타' : 'Other';
+      default:
+        return report.category;
+    }
+  }
+
+  String get _timeAgo {
+    final diff = DateTime.now().difference(report.createdAt);
+    if (diff.inMinutes < 1) return isKorean ? '방금 전' : 'just now';
+    if (diff.inHours < 1) {
+      return isKorean ? '${diff.inMinutes}분 전' : '${diff.inMinutes}m ago';
+    }
+    if (diff.inDays < 1) {
+      return isKorean ? '${diff.inHours}시간 전' : '${diff.inHours}h ago';
+    }
+    if (diff.inDays < 7) {
+      return isKorean ? '${diff.inDays}일 전' : '${diff.inDays}d ago';
+    }
+    return '${report.createdAt.month}/${report.createdAt.day}';
+  }
+
+  Future<void> _open(BuildContext context) async {
+    final url = report.githubIssueUrl;
+    if (url == null || url.isEmpty) return;
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final url = report.githubIssueUrl;
+    final hasIssue = url != null && url.isNotEmpty;
+    final issueNumber = report.githubIssueNumber;
+    final statusLabel = hasIssue
+        ? (issueNumber != null
+            ? (isKorean ? '이슈 #$issueNumber' : 'Issue #$issueNumber')
+            : (isKorean ? '연결됨' : 'Linked'))
+        : (isKorean ? '대기 중' : 'Pending');
+    final statusColor = hasIssue ? C.lvD : C.mu;
+    final statusBg = hasIssue
+        ? C.lv.withValues(alpha: 0.14)
+        : C.bd.withValues(alpha: 0.30);
+
+    return InkWell(
+      onTap: hasIssue ? () => _open(context) : null,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              hasIssue ? Icons.bug_report_rounded : Icons.bug_report_outlined,
+              size: 16,
+              color: hasIssue ? C.og : C.mu,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    report.title.isEmpty
+                        ? (isKorean ? '(제목 없음)' : '(No title)')
+                        : report.title,
+                    style: T.bodyBold,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: C.bd.withValues(alpha: 0.25),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          _categoryLabel,
+                          style: T.caption.copyWith(color: C.tx2),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusBg,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          statusLabel,
+                          style: T.caption.copyWith(
+                            color: statusColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          _timeAgo,
+                          style: T.caption.copyWith(color: C.mu),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            if (hasIssue) ...[
+              const SizedBox(width: 4),
+              Icon(Icons.open_in_new_rounded, size: 16, color: C.mu),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

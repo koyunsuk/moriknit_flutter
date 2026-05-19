@@ -29,10 +29,16 @@ import '../../ravelry/data/ravelry_repository.dart';
 import '../../ravelry/domain/ravelry_models.dart';
 import '../../ravelry/presentation/ravelry_pattern_detail_screen.dart';
 import '../data/pattern_export_service.dart';
+import '../data/pattern_offline_repository.dart';
 import '../data/pattern_repository.dart';
 import '../domain/pattern_chart.dart';
 import 'pattern_detail_screen.dart';
-import 'pattern_editor_screen.dart';
+import 'universal_pattern_viewer_screen.dart';
+// 이슈 #871 — 앱 진입 시 본인 Dropbox 폴더 신규 도안 자동 발견.
+import '../../dropbox/data/dropbox_auth_provider.dart';
+import '../../dropbox/data/dropbox_folder_sync.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class PatternListScreen extends ConsumerStatefulWidget {
   const PatternListScreen({super.key});
@@ -42,6 +48,172 @@ class PatternListScreen extends ConsumerStatefulWidget {
 }
 
 class _PatternListScreenState extends ConsumerState<PatternListScreen> {
+  // 이슈 #871 — 화면 진입 시 1회만 동기화 실행 (라우트 push/pop 마다 매번 X).
+  bool _dropboxSyncStarted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // 빌드 사이클 이후로 미뤄 ScaffoldMessenger / context 사용 안전.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _dropboxSyncStarted) return;
+      _dropboxSyncStarted = true;
+      // best-effort. 사용자 흐름을 막지 않도록 await 하지 않음.
+      _runDropboxFolderSync();
+    });
+  }
+
+  /// 이슈 #871 — Dropbox uploadFolder 의 신규 도안 자동 발견 + 등록.
+  /// 정책:
+  ///   - autoImportEnabled = true  → 즉시 등록 + Snackbar
+  ///   - autoImportEnabled = false → 다이얼로그로 등록 여부 묻기
+  /// 첫 동기화(lastSyncedAt 미존재)에는 기존 파일을 신규로 잘못 등록하지 않도록
+  /// 등록 없이 baseline 만 기록 (이후 추가분만 신규로 인식).
+  Future<void> _runDropboxFolderSync() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final uid = user.uid;
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+
+    try {
+      final docRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('private')
+          .doc('dropbox');
+      final snap = await docRef.get();
+      if (!snap.exists) return;
+      final data = snap.data() ?? const <String, dynamic>{};
+      final folder = (data['uploadFolder'] as String?)?.trim() ?? '';
+      if (folder.isEmpty) return;
+
+      // 토큰 자체는 dropboxAuthProvider 가 secure_storage 에서 복원해 사용.
+      final dropboxAuth = ref.read(dropboxAuthProvider);
+      if (!dropboxAuth.isLoggedIn) return;
+
+      final lastSyncedAtTs = data['lastSyncedAt'] as Timestamp?;
+      final lastSyncedAt = lastSyncedAtTs?.toDate();
+
+      final sync = ref.read(dropboxFolderSyncProvider);
+
+      // 첫 동기화 — 등록 없이 baseline 만 기록.
+      if (lastSyncedAt == null) {
+        await sync.updateLastSyncedAt(uid: uid);
+        return;
+      }
+
+      final newFiles = await sync.findNewFiles(
+        folder: folder,
+        lastSyncedAt: lastSyncedAt,
+      );
+      if (newFiles.isEmpty) {
+        // baseline 갱신만 (다음 호출 비용 절감).
+        await sync.updateLastSyncedAt(uid: uid);
+        return;
+      }
+
+      if (!mounted) return;
+      final autoEnabled = data['autoImportEnabled'] as bool? ?? false;
+
+      if (autoEnabled) {
+        await _importDropboxFiles(newFiles, isKorean: isKorean);
+      } else {
+        final ok = await _confirmDropboxImport(
+          count: newFiles.length,
+          isKorean: isKorean,
+        );
+        if (ok == true) {
+          if (!mounted) return;
+          await _importDropboxFiles(newFiles, isKorean: isKorean);
+        }
+      }
+
+      // 자동/수동 모두 lastSyncedAt 갱신 (사용자가 다이얼로그에서 취소해도 다음에 다시 묻지 않음).
+      await sync.updateLastSyncedAt(uid: uid);
+    } catch (_) {
+      // best-effort. 동기화 실패는 사용자에게 노출 안 함.
+    }
+  }
+
+  Future<bool?> _confirmDropboxImport({
+    required int count,
+    required bool isKorean,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text(
+            isKorean ? 'Dropbox 새 도안 발견' : 'New Dropbox patterns',
+            style: T.h3,
+          ),
+          content: Text(
+            isKorean
+                ? '본인 Dropbox 폴더에서 새 도안 $count개가 발견됐어요. 라이브러리에 등록할까요?'
+                : 'Found $count new pattern(s) in your Dropbox folder. Import them to your library?',
+            style: T.body,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(isKorean ? '나중에' : 'Later'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: C.lvD,
+                foregroundColor: Colors.white,
+              ),
+              child: Text(isKorean ? '등록' : 'Import'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _importDropboxFiles(
+    List<DropboxNewFile> files, {
+    required bool isKorean,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final sync = ref.read(dropboxFolderSyncProvider);
+    var success = 0;
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean
+            ? 'Dropbox 도안을 가져오는 중입니다.'
+            : 'Importing Dropbox patterns...',
+        subtitle: isKorean
+            ? '잠시만 기다려 주세요.'
+            : 'Please wait a moment.',
+        task: () async {
+          for (final f in files) {
+            try {
+              await sync.downloadAndImport(f);
+              success += 1;
+            } catch (_) {
+              // 개별 파일 실패는 건너뜀.
+            }
+          }
+        },
+      );
+      if (!mounted) return;
+      if (success > 0) {
+        showSavedSnackBar(
+          messenger,
+          message: isKorean
+              ? 'Dropbox에서 $success개 도안을 자동 등록했어요.'
+              : 'Imported $success pattern(s) from Dropbox.',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(messenger, message: '$e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isKorean = ref.watch(appLanguageProvider).isKorean;
@@ -206,6 +378,9 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  // #853 모리니트 공식 섹션 — 어드민이 시스템 자산으로 전환한 도안
+                  _MoriknitOfficialSection(isKorean: isKorean),
+                  const SizedBox(height: 16),
                   // Ravelry 도안 라이브러리 섹션
                   _RavelryLibrarySection(isKorean: isKorean),
                 ],
@@ -248,25 +423,15 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
   //       서술형 보기는 뷰어 내 AppBar "subject" 아이콘으로 전환 (#612)
   void _openPattern(BuildContext context, PatternChart chart, AsyncValue<List<PatternFile>> filesAsync) {
     debugPrint('[OpenPattern] id=${chart.id} type=${chart.type.name} imageUrl="${chart.imageUrl}" pdfUrl="${chart.pdfUrl}"');
-    if (chart.type == PatternType.chart) {
-      debugPrint('[OpenPattern] → PatternEditorScreen (chart type)');
-      Navigator.push(context, MaterialPageRoute(
-        builder: (_) => PatternEditorScreen(
-          patternId: chart.id,
-          readOnly: true,
-          returnRoute: Routes.toolsPatterns,
-        ),
-      ));
-    } else {
-      debugPrint('[OpenPattern] → PatternDetailScreen (image/pdf type)');
-      // 이슈 #696 — settings.name 유일화로 restoration key 충돌 방지
-      Navigator.push(context, MaterialPageRoute(
-        settings: RouteSettings(
-          name: 'pattern-detail/${chart.id}-${DateTime.now().millisecondsSinceEpoch}',
-        ),
-        builder: (_) => PatternDetailScreen(chart: chart),
-      ));
-    }
+    // #851 — 모든 도안 진입은 반드시 UniversalPatternViewerScreen 경유.
+    //   PdfViewerScreen/PatternDetailScreen/PatternEditorScreen 직접 라우팅 금지 (회귀 방지).
+    //   유니버설 뷰어가 sourceType/PDF/이미지/차트별로 적절한 화면으로 dispatch.
+    Navigator.push(context, MaterialPageRoute(
+      settings: RouteSettings(
+        name: 'pattern-universal/${chart.id}-${DateTime.now().millisecondsSinceEpoch}',
+      ),
+      builder: (_) => UniversalPatternViewerScreen(patternId: chart.id),
+    ));
   }
 
   /// #659 — pattern_files도 도안 라이브러리에서 다른 도안과 동일 동작.
@@ -298,17 +463,23 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
       sourceType: PatternSourceType.external,
       createdAt: f.createdAt,
     );
-    debugPrint('[OpenFile] → PatternDetailScreen via PatternChart bridge');
-    // 이슈 #696 — settings.name 유일화로 restoration key 충돌 방지
+    debugPrint('[OpenFile] → UniversalPatternViewer via PatternChart bridge');
+    // #851 — PatternFile 진입도 동일하게 UniversalPatternViewer 경유.
     Navigator.push(context, MaterialPageRoute(
       settings: RouteSettings(
-        name: 'pattern-detail/${chart.id}-${DateTime.now().millisecondsSinceEpoch}',
+        name: 'pattern-universal/${chart.id}-${DateTime.now().millisecondsSinceEpoch}',
       ),
-      builder: (_) => PatternDetailScreen(chart: chart),
+      builder: (_) => UniversalPatternViewerScreen(patternId: chart.id),
     ));
   }
 
-  Future<void> _showImageSourceDialog(BuildContext context, WidgetRef ref, bool isKorean, {bool aiAnalysis = true}) async {
+  Future<void> _showImageSourceDialog(
+    BuildContext context,
+    WidgetRef ref,
+    bool isKorean, {
+    bool aiAnalysis = true,
+    bool offlineSave = false,
+  }) async {
     if (kIsWeb) {
       // 웹: 파일 선택 직접 실행 (카메라 미지원)
       final result = await FilePicker.platform.pickFiles(
@@ -319,7 +490,16 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         final bytes = result.files.first.bytes!;
         final ext = result.files.first.extension?.toLowerCase() ?? 'jpg';
         final tmpFile = await _bytesToTempFile(bytes, 'picked.$ext');
-        if (context.mounted) await _saveImageFile(context, ref, tmpFile, isKorean, aiAnalysis: aiAnalysis);
+        if (context.mounted) {
+          await _saveImageFile(
+            context,
+            ref,
+            tmpFile,
+            isKorean,
+            aiAnalysis: aiAnalysis,
+            offlineSave: offlineSave,
+          );
+        }
       }
       return;
     }
@@ -348,7 +528,14 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                   await Future.microtask(() {});
                   final picked = await ImagePicker().pickImage(source: ImageSource.camera, maxWidth: 1200, imageQuality: 85);
                   if (picked != null && context.mounted) {
-                    await _saveImageFile(context, ref, File(picked.path), isKorean, aiAnalysis: aiAnalysis);
+                    await _saveImageFile(
+                      context,
+                      ref,
+                      File(picked.path),
+                      isKorean,
+                      aiAnalysis: aiAnalysis,
+                      offlineSave: offlineSave,
+                    );
                   }
                 },
               ),
@@ -360,7 +547,14 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                   await Future.microtask(() {});
                   final picked = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1200, imageQuality: 85);
                   if (picked != null && context.mounted) {
-                    await _saveImageFile(context, ref, File(picked.path), isKorean, aiAnalysis: aiAnalysis);
+                    await _saveImageFile(
+                      context,
+                      ref,
+                      File(picked.path),
+                      isKorean,
+                      aiAnalysis: aiAnalysis,
+                      offlineSave: offlineSave,
+                    );
                   }
                 },
               ),
@@ -378,7 +572,14 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
     return file;
   }
 
-  Future<void> _saveImageFile(BuildContext context, WidgetRef ref, File file, bool isKorean, {bool aiAnalysis = true}) async {
+  Future<void> _saveImageFile(
+    BuildContext context,
+    WidgetRef ref,
+    File file,
+    bool isKorean, {
+    bool aiAnalysis = true,
+    bool offlineSave = false,
+  }) async {
     // #687 — PatternRepository.saveImagePattern이 내부에서 step_blueprints 동시 미러.
     final repo = ref.read(patternRepositoryProvider);
     final title = await _askPatternTitle(context, isKorean);
@@ -395,6 +596,11 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         },
       );
       if (!context.mounted || saved == null) return;
+      // #704/#782 후속 — 사용자가 "오프라인 저장" 선택 시 저장 직후 자동 다운로드.
+      if (offlineSave) {
+        await _triggerOfflineDownload(context, ref, saved!, isKorean);
+        if (!context.mounted) return;
+      }
       // #687 → #939 — 라이선스/공개범위는 도안 상세 화면에서 등록 (등록 흐름에서 강제 제거).
       // 마켓 오픈 전까지 라이선스는 필수가 아니며, 기본값(Reserved+Draft) 으로 저장 후 상세에서 변경.
       Navigator.push(context, MaterialPageRoute(builder: (_) => PatternDetailScreen(chart: saved!)));
@@ -430,7 +636,14 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
     }
   }
 
-  Future<void> _savePdfFile(BuildContext context, WidgetRef ref, File file, bool isKorean, {bool aiAnalysis = true}) async {
+  Future<void> _savePdfFile(
+    BuildContext context,
+    WidgetRef ref,
+    File file,
+    bool isKorean, {
+    bool aiAnalysis = true,
+    bool offlineSave = false,
+  }) async {
     // #687 — PatternRepository.savePdfPattern이 내부에서 step_blueprints 미러 + 커버 백그라운드 추출.
     final repo = ref.read(patternRepositoryProvider);
     final title = await _askPatternTitle(context, isKorean);
@@ -447,6 +660,10 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         },
       );
       if (!context.mounted || saved == null) return;
+      if (offlineSave) {
+        await _triggerOfflineDownload(context, ref, saved!, isKorean);
+        if (!context.mounted) return;
+      }
       // #687 → #939 — 라이선스/공개범위는 도안 상세 화면에서 등록 (등록 흐름에서 강제 제거).
       // 마켓 오픈 전까지 라이선스는 필수가 아니며, 기본값(Reserved+Draft) 으로 저장 후 상세에서 변경.
       Navigator.push(context, MaterialPageRoute(builder: (_) => PatternDetailScreen(chart: saved!)));
@@ -464,6 +681,7 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
     String fileName,
     bool isKorean, {
     bool aiAnalysis = true,
+    bool offlineSave = false,
   }) async {
     final repo = ref.read(patternRepositoryProvider);
     final title = await _askPatternTitle(context, isKorean);
@@ -484,6 +702,10 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         },
       );
       if (!context.mounted || saved == null) return;
+      if (offlineSave) {
+        await _triggerOfflineDownload(context, ref, saved!, isKorean);
+        if (!context.mounted) return;
+      }
       // #687 → #939 — 라이선스/공개범위는 도안 상세 화면에서 등록 (등록 흐름에서 강제 제거).
       // 마켓 오픈 전까지 라이선스는 필수가 아니며, 기본값(Reserved+Draft) 으로 저장 후 상세에서 변경.
       Navigator.push(context, MaterialPageRoute(builder: (_) => PatternDetailScreen(chart: saved!)));
@@ -501,6 +723,7 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
     String fileName,
     bool isKorean, {
     bool aiAnalysis = true,
+    bool offlineSave = false,
   }) async {
     final repo = ref.read(patternRepositoryProvider);
     final title = await _askPatternTitle(context, isKorean);
@@ -521,11 +744,66 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
         },
       );
       if (!context.mounted || saved == null) return;
+      if (offlineSave) {
+        await _triggerOfflineDownload(context, ref, saved!, isKorean);
+        if (!context.mounted) return;
+      }
       // #687 → #939 — 라이선스/공개범위는 도안 상세 화면에서 등록 (등록 흐름에서 강제 제거).
       // 마켓 오픈 전까지 라이선스는 필수가 아니며, 기본값(Reserved+Draft) 으로 저장 후 상세에서 변경.
       Navigator.push(context, MaterialPageRoute(builder: (_) => PatternDetailScreen(chart: saved!)));
     } catch (e) {
       if (context.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+
+  /// #704/#782 후속 — 저장 직후 자동 오프라인 다운로드 트리거 (실패해도 본 흐름 차단 안 함).
+  /// PDF → pdfUrl, image → imageUrl 우선 사용. URL 없으면 조용히 스킵.
+  Future<void> _triggerOfflineDownload(
+    BuildContext context,
+    WidgetRef ref,
+    PatternChart chart,
+    bool isKorean,
+  ) async {
+    if (kIsWeb) return; // 웹은 오프라인 캐시 미지원.
+    final hasPdf = chart.pdfUrl.isNotEmpty;
+    final hasImage = chart.imageUrl.isNotEmpty;
+    if (chart.id.isEmpty || (!hasPdf && !hasImage)) return;
+    final url = hasPdf ? chart.pdfUrl : chart.imageUrl;
+    final kind = hasPdf ? 'pdf' : 'image';
+    // #832 fix — 같은 도안을 재저장하는 경우 이미 오프라인 캐시가 있으면 재다운로드 스킵.
+    final existing =
+        await ref.read(patternOfflineRepositoryProvider).get(chart.id);
+    if (existing != null) {
+      if (context.mounted) {
+        ref.invalidate(patternOfflineEntryProvider(chart.id));
+      }
+      return;
+    }
+    if (!context.mounted) return;
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '오프라인 보관 중입니다.' : 'Saving for offline...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
+        task: () async {
+          await ref.read(patternOfflineRepositoryProvider).download(
+                patternId: chart.id,
+                url: url,
+                kind: kind,
+                // #838 — 썸네일(=imageUrl) 함께 영구 캐시.
+                thumbnailUrl: hasImage ? chart.imageUrl : null,
+              );
+        },
+      );
+      if (!context.mounted) return;
+      ref.invalidate(patternOfflineEntryProvider(chart.id));
+    } catch (e) {
+      if (!context.mounted) return;
+      // 오프라인 다운로드 실패해도 저장 자체는 성공. 사용자에게 토스트만 안내.
+      showSaveErrorSnackBar(
+        ScaffoldMessenger.of(context),
+        message: isKorean ? '오프라인 보관 실패: $e' : 'Offline save failed: $e',
+      );
     }
   }
 
@@ -615,6 +893,7 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
     WidgetRef ref,
     bool isKorean, {
     required bool aiAnalysis,
+    bool offlineSave = false,
   }) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -648,7 +927,13 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                   Navigator.pop(ctx);
                   await Future.microtask(() {});
                   if (context.mounted) {
-                    _showImageSourceDialog(context, ref, isKorean, aiAnalysis: aiAnalysis);
+                    _showImageSourceDialog(
+                      context,
+                      ref,
+                      isKorean,
+                      aiAnalysis: aiAnalysis,
+                      offlineSave: offlineSave,
+                    );
                   }
                 },
                 child: Row(children: [
@@ -693,7 +978,15 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                     if (result == null || result.files.isEmpty) return;
                     final f = result.files.first;
                     if (f.bytes == null || !context.mounted) return;
-                    await _savePdfBytes(context, ref, f.bytes!, f.name, isKorean, aiAnalysis: aiAnalysis);
+                    await _savePdfBytes(
+                      context,
+                      ref,
+                      f.bytes!,
+                      f.name,
+                      isKorean,
+                      aiAnalysis: aiAnalysis,
+                      offlineSave: offlineSave,
+                    );
                     return;
                   }
                   final result = await FilePicker.platform.pickFiles(
@@ -701,7 +994,14 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                     allowedExtensions: ['pdf'],
                   );
                   if (result != null && result.files.first.path != null && context.mounted) {
-                    await _savePdfFile(context, ref, File(result.files.first.path!), isKorean, aiAnalysis: aiAnalysis);
+                    await _savePdfFile(
+                      context,
+                      ref,
+                      File(result.files.first.path!),
+                      isKorean,
+                      aiAnalysis: aiAnalysis,
+                      offlineSave: offlineSave,
+                    );
                   }
                 },
                 child: Row(children: [
@@ -748,9 +1048,25 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                     if (f.bytes == null || !context.mounted) return;
                     final ext = f.name.split('.').last.toLowerCase();
                     if (ext == 'pdf') {
-                      await _savePdfBytes(context, ref, f.bytes!, f.name, isKorean, aiAnalysis: aiAnalysis);
+                      await _savePdfBytes(
+                        context,
+                        ref,
+                        f.bytes!,
+                        f.name,
+                        isKorean,
+                        aiAnalysis: aiAnalysis,
+                        offlineSave: offlineSave,
+                      );
                     } else {
-                      await _saveImageBytes(context, ref, f.bytes!, f.name, isKorean, aiAnalysis: aiAnalysis);
+                      await _saveImageBytes(
+                        context,
+                        ref,
+                        f.bytes!,
+                        f.name,
+                        isKorean,
+                        aiAnalysis: aiAnalysis,
+                        offlineSave: offlineSave,
+                      );
                     }
                     return;
                   }
@@ -764,9 +1080,23 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                   final ext = path.split('.').last.toLowerCase();
                   final file = File(path);
                   if (ext == 'pdf') {
-                    await _savePdfFile(context, ref, file, isKorean, aiAnalysis: aiAnalysis);
+                    await _savePdfFile(
+                      context,
+                      ref,
+                      file,
+                      isKorean,
+                      aiAnalysis: aiAnalysis,
+                      offlineSave: offlineSave,
+                    );
                   } else {
-                    await _saveImageFile(context, ref, file, isKorean, aiAnalysis: aiAnalysis);
+                    await _saveImageFile(
+                      context,
+                      ref,
+                      file,
+                      isKorean,
+                      aiAnalysis: aiAnalysis,
+                      offlineSave: offlineSave,
+                    );
                   }
                 },
                 child: Row(children: [
@@ -813,6 +1143,8 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
     // #628 — AI 자동 분석 토글 (closure로 시트 세션 내 유지, 기본 ON)
     // 정책: AI는 유료 기능. 무료 사용자는 OFF 가능. 현재 테스트 기간 모두 사용 가능.
     bool aiAnalysis = true;
+    // #704/#782 후속 — 오프라인 저장 토글 (기본 OFF). 체크 시 도안 저장 직후 자동 다운로드.
+    bool offlineSave = false;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -877,6 +1209,55 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                   ),
                 ]),
               ),
+              const SizedBox(height: 8),
+              // #704/#782 후속 — 오프라인 저장 토글 (기본 OFF). 저장 직후 자동 다운로드.
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: offlineSave ? C.lm.withValues(alpha: 0.18) : C.gx,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: offlineSave ? C.lm.withValues(alpha: 0.5) : C.bd,
+                  ),
+                ),
+                child: Row(children: [
+                  Icon(
+                    Icons.cloud_download_rounded,
+                    color: offlineSave ? C.lmD : C.mu,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isKorean ? '오프라인 저장' : 'Save offline',
+                          style: T.caption.copyWith(
+                            color: offlineSave ? C.lmD : C.tx,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          offlineSave
+                              ? (isKorean
+                                  ? '인터넷 없이도 열람 가능하게 보관해요'
+                                  : 'Keep available without internet')
+                              : (isKorean
+                                  ? '나중에 도안 라이브러리에서도 받을 수 있어요'
+                                  : 'You can download later from the library'),
+                          style: T.caption.copyWith(color: C.mu, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: offlineSave,
+                    onChanged: (v) => setSheetState(() => offlineSave = v),
+                    activeThumbColor: C.lm,
+                  ),
+                ]),
+              ),
               const SizedBox(height: 12),
               // 이슈 #716 — 정렬 1: 내 핸드폰 (사진 / PDF / 내 폰 파일 통합 하위 시트).
               GlassCard(
@@ -884,7 +1265,13 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                   Navigator.pop(ctx);
                   await Future.microtask(() {});
                   if (!context.mounted) return;
-                  await _showMyDeviceSubSheet(context, ref, isKorean, aiAnalysis: aiAnalysis);
+                  await _showMyDeviceSubSheet(
+                    context,
+                    ref,
+                    isKorean,
+                    aiAnalysis: aiAnalysis,
+                    offlineSave: offlineSave,
+                  );
                 },
                 child: Row(children: [
                   Container(
@@ -1215,6 +1602,8 @@ class _PatternRow extends ConsumerWidget {
       // 이슈 #648 — 모든 도안 타입에서 imageUrl을 커버로 표시
       // (image=원본, pdf=첫페이지 추출, chart=사용자 설정/캡처)
       thumbnailUrl: chart.imageUrl.isNotEmpty ? chart.imageUrl : null,
+      // #838 — patternId 전달로 오프라인 영구 캐시 우선 표시.
+      patternId: chart.id.isNotEmpty ? chart.id : null,
       fallbackIcon: _typeIcon,
       fallbackIconBg: _iconBgColor.withValues(alpha: 0.12),
       fallbackIconColor: _iconBgColor,
@@ -1301,9 +1690,235 @@ class _PatternRow extends ConsumerWidget {
                 ),
               ),
             ),
+          // #704/#782 후속 — 오프라인 다운로드 뱃지/버튼 (PDF/이미지 도안만 노출).
+          //   라이브러리 카드에서 직접 다운로드/상태 확인 → PatternDetailScreen 헤더 진입 의존 제거.
+          if (chart.id.isNotEmpty &&
+              (chart.pdfUrl.isNotEmpty || chart.imageUrl.isNotEmpty))
+            _PatternCardOfflineBadge(
+              patternId: chart.id,
+              sourceUrl: chart.pdfUrl.isNotEmpty ? chart.pdfUrl : chart.imageUrl,
+              kind: chart.pdfUrl.isNotEmpty ? 'pdf' : 'image',
+              // #838 — 썸네일 함께 영구 캐시. 오프라인에서 라이브러리 카드 표시용.
+              thumbnailUrl: chart.imageUrl.isNotEmpty ? chart.imageUrl : null,
+              isKorean: isKorean,
+            ),
           Icon(Icons.chevron_right_rounded, color: C.mu),
         ],
       ),
+    );
+  }
+}
+
+/// #704/#782 후속 — 도안 라이브러리 카드 안의 작은 오프라인 다운로드 뱃지/버튼.
+///
+/// 상태 표시:
+/// - 다운로드됨: `cloud_done_rounded` + "오프라인" 라벨 (라임 톤). 길게 누르면 해제 다이얼로그.
+/// - 다운로드 안 됨: `cloud_download_outlined` 작은 아이콘 버튼 (라벤더 톤).
+/// - 다운로드 중: 작은 원형 progress 인디케이터.
+///
+/// 다운로드 후 `patternOfflineEntryProvider(patternId)` invalidate 로 자동 "오프라인" 뱃지로 전환.
+class _PatternCardOfflineBadge extends ConsumerStatefulWidget {
+  final String patternId;
+  final String sourceUrl;
+  final String kind; // 'pdf' | 'image'
+  // #838 — 함께 영구 캐시할 썸네일(=커버) URL. null 이면 썸네일 캐시 생략.
+  final String? thumbnailUrl;
+  final bool isKorean;
+
+  const _PatternCardOfflineBadge({
+    required this.patternId,
+    required this.sourceUrl,
+    required this.kind,
+    required this.isKorean,
+    this.thumbnailUrl,
+  });
+
+  @override
+  ConsumerState<_PatternCardOfflineBadge> createState() =>
+      _PatternCardOfflineBadgeState();
+}
+
+class _PatternCardOfflineBadgeState
+    extends ConsumerState<_PatternCardOfflineBadge> {
+  bool _downloading = false;
+  double _progress = -1.0;
+
+  Future<void> _download() async {
+    if (_downloading) return;
+    // #832 fix — 이미 다운로드된 상태에서 빠른 더블탭으로 진입한 경우 재다운로드 차단.
+    // (data 분기에서는 _confirmRemove 로 흐름이 가지만, race 로 인한 안전망)
+    final existing = await ref
+        .read(patternOfflineRepositoryProvider)
+        .get(widget.patternId);
+    if (existing != null) {
+      if (mounted) {
+        ref.invalidate(patternOfflineEntryProvider(widget.patternId));
+      }
+      return;
+    }
+    if (!mounted) return;
+    // 카드 onTap 가로채기 방지: GestureDetector 로 감싸 PointerEvents 격리됨.
+    setState(() {
+      _downloading = true;
+      _progress = -1.0;
+    });
+    final messenger = ScaffoldMessenger.of(context);
+    final isKorean = widget.isKorean;
+    try {
+      await ref.read(patternOfflineRepositoryProvider).download(
+            patternId: widget.patternId,
+            url: widget.sourceUrl,
+            kind: widget.kind,
+            // #838 — 썸네일 함께 영구 캐시.
+            thumbnailUrl: widget.thumbnailUrl,
+            onProgress: (p) {
+              if (mounted) setState(() => _progress = p);
+            },
+          );
+      if (!mounted) return;
+      ref.invalidate(patternOfflineEntryProvider(widget.patternId));
+      showSavedSnackBar(
+        messenger,
+        message: isKorean ? '오프라인에 보관됐어요.' : 'Saved for offline.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(
+        messenger,
+        message: isKorean ? '다운로드 실패: $e' : 'Download failed: $e',
+      );
+    } finally {
+      if (mounted) setState(() => _downloading = false);
+    }
+  }
+
+  Future<void> _confirmRemove() async {
+    final isKorean = widget.isKorean;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isKorean ? '오프라인 보관 해제' : 'Remove offline'),
+        content: Text(
+          isKorean
+              ? '이 도안을 오프라인 보관에서 해제할까요? 인터넷 연결 없이 열 수 없게 됩니다.'
+              : 'Remove from offline? You will need internet to open.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(isKorean ? '취소' : 'Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: C.og,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(isKorean ? '해제' : 'Remove'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await ref.read(patternOfflineRepositoryProvider).remove(widget.patternId);
+    if (!mounted) return;
+    ref.invalidate(patternOfflineEntryProvider(widget.patternId));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+        widget.isKorean ? '오프라인 보관에서 해제됐어요.' : 'Removed.',
+      ),
+      duration: const Duration(seconds: 2),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isKorean = widget.isKorean;
+    if (_downloading) {
+      return Container(
+        margin: const EdgeInsets.only(right: 6),
+        width: 22,
+        height: 22,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          value: _progress >= 0 ? _progress : null,
+          color: C.lv,
+        ),
+      );
+    }
+    final entryAsync = ref.watch(patternOfflineEntryProvider(widget.patternId));
+    return entryAsync.when(
+      loading: () => Container(
+        margin: const EdgeInsets.only(right: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        child: Icon(Icons.cloud_outlined, size: 16, color: C.mu),
+      ),
+      error: (_, _) => GestureDetector(
+        onTap: _download,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          margin: const EdgeInsets.only(right: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          child: Tooltip(
+            message: isKorean ? '오프라인 보관' : 'Save offline',
+            child: Icon(
+              Icons.cloud_download_outlined,
+              size: 18,
+              color: C.lvD,
+            ),
+          ),
+        ),
+      ),
+      data: (entry) {
+        final downloaded = entry != null;
+        if (downloaded) {
+          return GestureDetector(
+            onTap: _confirmRemove,
+            onLongPress: _confirmRemove,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              margin: const EdgeInsets.only(right: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: C.lm.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.cloud_done_rounded, size: 14, color: C.lmD),
+                  const SizedBox(width: 3),
+                  Text(
+                    isKorean ? '오프라인' : 'OFFLINE',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: C.lmD,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        return GestureDetector(
+          onTap: _download,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            margin: const EdgeInsets.only(right: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            child: Tooltip(
+              message: isKorean ? '오프라인 보관' : 'Save offline',
+              child: Icon(
+                Icons.cloud_download_outlined,
+                size: 18,
+                color: C.lvD,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1823,5 +2438,140 @@ class _RavelryPatternCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// ─── #853 모리니트 공식 섹션 ────────────────────────────────────────────────
+//
+// 어드민 콘솔에서 "시스템 자산으로 전환"한 도안/템플릿을 누구나 볼 수 있는
+// 모리니트 공식 라이브러리로 노출. ownerUid == 'moriknit_system' 청사진을 구독.
+// 다운로드 버튼은 본인 ownerUid 사본 생성(duplicateAsUserCopy).
+
+class _MoriknitOfficialSection extends ConsumerWidget {
+  final bool isKorean;
+  const _MoriknitOfficialSection({required this.isKorean});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(moriknitOfficialBlueprintsProvider);
+    return MoriBlockShell(
+      label: isKorean ? '모리니트 공식 템플릿' : 'MoriKnit Official Templates',
+      icon: Icons.verified_rounded,
+      accent: C.lv,
+      child: async.when(
+        loading: () => AsyncLoadingFriendly(
+          isKorean: isKorean,
+          onRetry: () => ref.invalidate(moriknitOfficialBlueprintsProvider),
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          compact: true,
+        ),
+        error: (e, _) => AsyncDelayedFriendly(
+          isKorean: isKorean,
+          onRetry: () => ref.invalidate(moriknitOfficialBlueprintsProvider),
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          compact: true,
+        ),
+        data: (items) {
+          if (items.isEmpty) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Text(
+                isKorean
+                    ? '아직 공개된 모리니트 공식 자산이 없어요.'
+                    : 'No official MoriKnit assets yet.',
+                style: T.body.copyWith(color: C.mu),
+              ),
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isKorean ? '공식 자산 ${items.length}개' : '${items.length} items',
+                style: T.bodyBold,
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 360,
+                child: Scrollbar(
+                  thumbVisibility: true,
+                  child: ListView.builder(
+                    itemCount: items.length,
+                    itemBuilder: (_, i) => _OfficialBlueprintCard(
+                      blueprint: items[i],
+                      isKorean: isKorean,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _OfficialBlueprintCard extends ConsumerWidget {
+  final StepBlueprint blueprint;
+  final bool isKorean;
+  const _OfficialBlueprintCard({
+    required this.blueprint,
+    required this.isKorean,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final imageUrls = blueprint.attachedImageUrls ?? const <String>[];
+    return MoriLibraryCard(
+      title: blueprint.title,
+      subtitle1: isKorean ? '모리니트 공식' : 'MoriKnit Official',
+      subtitle2: blueprint.description,
+      thumbnailUrl: imageUrls.isNotEmpty ? imageUrls.first : null,
+      fallbackIcon: Icons.verified_rounded,
+      fallbackIconBg: C.lvL,
+      fallbackIconColor: C.lvD,
+      onTap: () => _open(context),
+      trailing: IconButton(
+        icon: Icon(Icons.download_rounded, color: C.lvD, size: 20),
+        tooltip: isKorean ? '내 라이브러리로 복사' : 'Copy to my library',
+        onPressed: () => _download(context, ref),
+      ),
+    );
+  }
+
+  void _open(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        settings: RouteSettings(
+          name: 'pattern-universal/${blueprint.id}-${DateTime.now().millisecondsSinceEpoch}',
+        ),
+        builder: (_) => UniversalPatternViewerScreen(patternId: blueprint.id),
+      ),
+    );
+  }
+
+  Future<void> _download(BuildContext context, WidgetRef ref) async {
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '내 라이브러리로 복사하고 있어요.' : 'Copying to your library...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () async {
+          await ref
+              .read(stepBlueprintRepositoryProvider)
+              .duplicateAsUserCopy(blueprint.id);
+        },
+      );
+      if (!context.mounted) return;
+      showSavedSnackBar(
+        ScaffoldMessenger.of(context),
+        message: isKorean ? '내 라이브러리에 추가됐어요.' : 'Added to your library.',
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
   }
 }

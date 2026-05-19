@@ -2,12 +2,15 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:excel/excel.dart' hide Border;
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_quill/flutter_quill.dart' as fq;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,12 +18,15 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/constants/system_users.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/file_download.dart';
+import '../../../core/widgets/async_data_view.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/blueprint_provider.dart';
 import '../../../providers/editorial_provider.dart';
 import '../../../providers/template_provider.dart';
 import '../../auth/domain/user_model.dart';
@@ -30,10 +36,15 @@ import '../data/admin_bulk_import_service.dart';
 import '../domain/admin_import_models.dart';
 import '../../blueprint/data/blueprint_migration.dart';
 import '../../landing/data/landing_board_repository.dart';
+import '../../landing_cms/presentation/cms_pages_list_screen.dart';
+import 'screens/admin_inbox_screen.dart';
 import '../../pattern/data/pattern_repository.dart';
 import 'widgets/admin_list_shell.dart';
 import 'widgets/admin_ai_fix_panel.dart';
 import 'widgets/admin_mobile_sidebar.dart';
+// #817 — AdminPushPanel은 팝업 설정 화면 내부로 통합됨. 위젯 파일 자체는 재사용 보존.
+// ignore: unused_import
+import 'widgets/admin_push_panel.dart';
 import 'widgets/dashboard/usage_metrics_section.dart';
 import 'widgets/dashboard/traffic_metrics_section.dart';
 import 'widgets/dashboard/ops_metrics_section.dart';
@@ -41,6 +52,7 @@ import 'widgets/dashboard/market_metrics_section.dart';
 import 'widgets/dashboard/ai_metrics_section.dart';
 import '../../my/data/bug_report_repository.dart';
 import '../../my/domain/bug_report.dart';
+import '../../../core/widgets/popup_image_embed.dart';
 
 /// Firestore 일괄 삭제 헬퍼 — 500건 단위 batch 분할. (이슈 #805)
 Future<void> _bulkDeleteDocs(List<DocumentReference> refs) async {
@@ -113,6 +125,18 @@ final _supportConfigProvider = StreamProvider<Map<String, dynamic>>((ref) {
       .doc('admin_support')
       .snapshots()
       .map((doc) => doc.data() ?? <String, dynamic>{});
+});
+
+/// 이슈 #836 — 어드민 팝업/배너/푸시 발송 이력 (최근 20건).
+/// `admin_broadcasts` 컬렉션의 `sentAt` 내림차순.
+final _adminBroadcastsProvider =
+    StreamProvider<List<QueryDocumentSnapshot<Map<String, dynamic>>>>((ref) {
+  return FirebaseFirestore.instance
+      .collection('admin_broadcasts')
+      .orderBy('sentAt', descending: true)
+      .limit(20)
+      .snapshots()
+      .map((snap) => snap.docs);
 });
 
 final _memberAdminFlagProvider = StreamProvider.family<bool, String>((ref, uid) {
@@ -263,7 +287,7 @@ class AdminScreen extends ConsumerWidget {
     final isKorean = language.isKorean;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A1020),
+      backgroundColor: const Color(0xFFF3F4F6),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1280),
@@ -271,7 +295,7 @@ class AdminScreen extends ConsumerWidget {
             width: double.infinity,
             height: double.infinity,
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: Colors.white,
               boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 16)],
             ),
             child: SafeArea(
@@ -341,14 +365,19 @@ class _AdminConsoleState extends State<_AdminConsole> {
     _AdminNavItem.tab(index: 18, icon: Icons.help_outline_rounded, label: '문의하기 Q&A', color: Color(0xFFF472B6)),
 
     _AdminNavItem.group(label: '운영 지원', color: Color(0xFF94A3B8), groupIcon: Icons.support_agent_rounded),
+    // 이슈 #837 — @moriknit 인박스 (양방향 1:1 고객 지원). 오렌지 액센트.
+    _AdminNavItem.tab(index: 28, icon: Icons.inbox_rounded, label: '@moriknit 인박스', color: Color(0xFFFF8A00)),
     _AdminNavItem.tab(index: 10, icon: Icons.text_fields_rounded, label: '문구관리', color: Color(0xFF94A3B8)),
     _AdminNavItem.tab(index: 11, icon: Icons.bug_report_rounded, label: '버그리포트', color: Color(0xFFFB7185)),
     _AdminNavItem.tab(index: 19, icon: Icons.mail_rounded, label: '1:1 문의', color: Color(0xFF34D399)),
     _AdminNavItem.tab(index: 12, icon: Icons.newspaper_rounded, label: '에디토리얼', color: Color(0xFF38BDF8)),
+    // 이슈 #817 — 푸시 발송은 팝업 설정 화면 내부 드롭다운(배너/팝업/푸시)로 통합됨.
     _AdminNavItem.tab(index: 23, icon: Icons.campaign_outlined, label: '팝업 설정', color: Color(0xFF94A3B8)),
 
     _AdminNavItem.group(label: '랜딩 사이트', color: Color(0xFF6EE7B7), groupIcon: Icons.web_rounded),
     _AdminNavItem.tab(index: 24, icon: Icons.smartphone_rounded, label: '목업 이미지', color: Color(0xFF6EE7B7)),
+    // #806 — 랜딩 CMS (페이지/섹션 자유 편집) 진입점.
+    _AdminNavItem.tab(index: 26, icon: Icons.dashboard_customize_rounded, label: '랜딩 CMS', color: Color(0xFF6EE7B7)),
 
     _AdminNavItem.group(label: '설정', color: Color(0xFF64748B), groupIcon: Icons.tune_rounded),
     _AdminNavItem.tab(index: 14, icon: Icons.settings_rounded, label: '설정', color: Color(0xFF64748B)),
@@ -392,7 +421,7 @@ class _AdminConsoleState extends State<_AdminConsole> {
 
   Widget _buildMobileLayout(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFFF3F4F6),
       drawer: AdminMobileSidebar(
         navItems: _mobileNavItems,
         selectedIndex: _selectedIndex,
@@ -401,15 +430,24 @@ class _AdminConsoleState extends State<_AdminConsole> {
           Navigator.of(context).pop(); // Drawer 닫기
         },
       ),
+      // 라이트 톤 통일 (모바일유저/모바일어드민과 같은 톤앤매너).
+      // 어드민 정체성은 사이드바 액센트(오렌지)로 표현.
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF1E293B),
         elevation: 0,
         title: Text(
           _currentPageLabel,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC)),
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF1E293B),
+          ),
         ),
-        iconTheme: const IconThemeData(color: Color(0xFFF8FAFC)),
+        iconTheme: const IconThemeData(color: Color(0xFFFF8A00)),
+        shape: const Border(
+          bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1),
+        ),
       ),
       body: _buildContent(),
     );
@@ -430,18 +468,27 @@ class _AdminConsoleState extends State<_AdminConsole> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 콘텐츠 상단 헤더
+              // 콘텐츠 상단 헤더 (라이트 톤 — 모바일어드민과 통일)
               Container(
                 height: 52,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 decoration: const BoxDecoration(
-                  color: Color(0xFF1E293B),
-                  border: Border(bottom: BorderSide(color: Color(0xFF334155), width: 1)),
+                  color: Colors.white,
+                  border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1)),
                 ),
                 child: Row(
                   children: [
+                    Container(
+                      width: 4,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF8A00),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
                     Text(_currentPageLabel,
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC))),
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
                     const Spacer(),
                     Text(DateFormat('yyyy.MM.dd').format(DateTime.now()),
                         style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
@@ -521,6 +568,9 @@ class _AdminConsoleState extends State<_AdminConsole> {
       case 23: return _SupportSettingsTab(isKorean: widget.isKorean);
       case 24: return const _MockupImagesAdminTab();
       case 25: return _BlueprintMigrationTab(isKorean: widget.isKorean, adminUid: widget.user.uid);
+      case 26: return const CmsPagesListScreen();  // #806 랜딩 CMS
+      // #817 — case 27 (푸시 발송) 제거됨. AdminPushPanel 위젯은 보존 (재사용 가능).
+      case 28: return AdminInboxScreen(isKorean: widget.isKorean);  // #837 @moriknit 인박스
       default: return _DashboardTab(isKorean: widget.isKorean, onTabChange: (i) => setState(() => _selectedIndex = i));
     }
   }
@@ -545,9 +595,12 @@ class _AdminSidebar extends StatefulWidget {
 }
 
 class _AdminSidebarState extends State<_AdminSidebar> {
-  static const _bg = Color(0xFF1E293B);
-  static const _divider = Color(0x33FFFFFF);
-  static const _textDim = Color(0xFFCBD5E1);
+  // 라이트 톤 통일 (모바일어드민과 같은 톤앤매너).
+  static const _bg = Color(0xFFFAFBFC);
+  static const _divider = Color(0xFFE5E7EB);
+  static const _textDim = Color(0xFF475569);
+  static const _textPrimary = Color(0xFF1E293B);
+  static const _accent = Color(0xFFFF8A00);
 
   late final Set<String> _expandedGroups;
 
@@ -622,9 +675,9 @@ class _AdminSidebarState extends State<_AdminSidebar> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: const [
                     Text('MoriKnit',
-                        style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.3)),
+                        style: TextStyle(color: _textPrimary, fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.3)),
                     Text('Admin Console',
-                        style: TextStyle(color: Color(0xFF84CC16), fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.8)),
+                        style: TextStyle(color: _accent, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.8)),
                   ],
                 ),
               ],
@@ -652,17 +705,17 @@ class _AdminSidebarState extends State<_AdminSidebar> {
                   children: [
                     CircleAvatar(
                       radius: 14,
-                      backgroundColor: const Color(0xFF334155),
+                      backgroundColor: _accent.withValues(alpha: 0.15),
                       backgroundImage: widget.user.photoURL != null ? NetworkImage(widget.user.photoURL!) : null,
                       child: widget.user.photoURL == null
-                          ? const Icon(Icons.person_rounded, size: 14, color: Colors.white)
+                          ? const Icon(Icons.person_rounded, size: 14, color: _accent)
                           : null,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         widget.user.displayName ?? widget.user.email ?? '관리자',
-                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                        style: const TextStyle(color: _textPrimary, fontSize: 11, fontWeight: FontWeight.w600),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -748,25 +801,25 @@ class _AdminSidebarState extends State<_AdminSidebar> {
                 margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
                 decoration: BoxDecoration(
-                  color: isSelected ? accent.withValues(alpha: 0.15) : Colors.transparent,
+                  color: isSelected ? _accent.withValues(alpha: 0.10) : Colors.transparent,
                   borderRadius: BorderRadius.circular(8),
                   border: Border(
                     left: BorderSide(
-                      color: isSelected ? accent : Colors.transparent,
+                      color: isSelected ? _accent : Colors.transparent,
                       width: 3,
                     ),
                   ),
                 ),
                 child: Row(
                   children: [
-                    Icon(item.icon, size: 15, color: isSelected ? accent : _textDim),
+                    Icon(item.icon, size: 15, color: isSelected ? _accent : accent),
                     const SizedBox(width: 9),
                     Text(
                       item.label,
                       style: TextStyle(
                         fontSize: 13,
-                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
-                        color: isSelected ? Colors.white : _textDim,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        color: isSelected ? _accent : _textPrimary,
                       ),
                     ),
                   ],
@@ -789,20 +842,22 @@ class _SidebarUtilBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const textColor = _AdminSidebarState._textDim;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xFF0F172A),
+          color: const Color(0xFFF3F4F6),
           borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 12, color: const Color(0xFF94A3B8)),
+            Icon(icon, size: 12, color: textColor),
             const SizedBox(width: 4),
-            Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
+            Text(label, style: const TextStyle(fontSize: 10, color: textColor, fontWeight: FontWeight.w600)),
           ],
         ),
       ),
@@ -849,7 +904,7 @@ class _AdminMessageState extends StatelessWidget {
             children: [
               Icon(Icons.admin_panel_settings_rounded, color: C.lvD, size: 42),
               const SizedBox(height: 14),
-              Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3), textAlign: TextAlign.center),
+              Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1E293B), height: 1.3), textAlign: TextAlign.center),
               const SizedBox(height: 8),
               Text(body, style: T.body.copyWith(color: C.tx2), textAlign: TextAlign.center),
             ],
@@ -2189,7 +2244,7 @@ class _DashboardTab extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(isKorean ? '운영 메모' : 'Ops note', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
+              Text(isKorean ? '운영 메모' : 'Ops note', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1E293B), height: 1.3)),
               const SizedBox(height: 10),
               Text(
                 isKorean
@@ -2222,7 +2277,7 @@ class _DashboardTab extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(isKorean ? '빠른 이동' : 'Quick access', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
+              Text(isKorean ? '빠른 이동' : 'Quick access', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1E293B), height: 1.3)),
               const SizedBox(height: 12),
               Wrap(
                 spacing: 10,
@@ -2275,7 +2330,7 @@ class _OperationalSupportSection extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(isKorean ? '운영 지원 기능' : 'Operator support', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
+              Text(isKorean ? '운영 지원 기능' : 'Operator support', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1E293B), height: 1.3)),
               const SizedBox(height: 10),
               Text(
                 isKorean
@@ -2306,7 +2361,7 @@ class _OperationalSupportSection extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(isKorean ? '검토 대기열' : 'Review queue', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
+                    Text(isKorean ? '검토 대기열' : 'Review queue', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1E293B), height: 1.3)),
                     const SizedBox(height: 10),
                     marketPending.when(
                       data: (docs) => _PendingSummaryLine(
@@ -2335,7 +2390,7 @@ class _OperationalSupportSection extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(isKorean ? '데이터 건강상태' : 'Data health', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
+                    Text(isKorean ? '데이터 건강상태' : 'Data health', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1E293B), height: 1.3)),
                     const SizedBox(height: 10),
                     health.when(
                       data: (data) => Column(
@@ -3343,7 +3398,7 @@ class _BulkImportTabState extends ConsumerState<_BulkImportTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(widget.isKorean ? '대량등록 항목' : 'Import target', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
+              Text(widget.isKorean ? '대량등록 항목' : 'Import target', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1E293B), height: 1.3)),
               const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
@@ -3561,7 +3616,7 @@ class _PreviewCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(isKorean ? '미리보기' : 'Preview', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
+          Text(isKorean ? '미리보기' : 'Preview', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1E293B), height: 1.3)),
           const SizedBox(height: 8),
           Text(
             '${isKorean ? '정상' : 'Valid'} ${preview.validCount} / ${isKorean ? '오류' : 'Errors'} ${preview.invalidCount}',
@@ -3614,7 +3669,7 @@ class _RecentImportLogs extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(isKorean ? '최근 반영 기록' : 'Recent import logs', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
+          Text(isKorean ? '최근 반영 기록' : 'Recent import logs', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1E293B), height: 1.3)),
           const SizedBox(height: 10),
           logsAsync.when(
             data: (logs) {
@@ -4048,7 +4103,7 @@ class _SocialSettingsTabState extends ConsumerState<_SocialSettingsTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(widget.isKorean ? '소셜 계정 및 API 메모' : 'Social accounts and API notes', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
+                  Text(widget.isKorean ? '소셜 계정 및 API 메모' : 'Social accounts and API notes', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1E293B), height: 1.3)),
                   const SizedBox(height: 12),
                   TextField(controller: _instagramCtrl, decoration: const InputDecoration(labelText: 'Instagram')),
                   const SizedBox(height: 10),
@@ -4111,20 +4166,138 @@ class _SupportSettingsTab extends ConsumerStatefulWidget {
 class _SupportSettingsTabState extends ConsumerState<_SupportSettingsTab> {
   final _noticeCtrl = TextEditingController();
   final _popupTitleCtrl = TextEditingController();
-  final _popupMessageCtrl = TextEditingController();
   final _popupLinkUrlCtrl = TextEditingController();
+  // 이슈 #817 — 팝업 본문은 리치 텍스트 (flutter_quill) 로 입력.
+  // 저장 시 Delta JSON(popupBodyDelta) + plain text(popupMessage) 둘 다 저장 →
+  // 사용자 측에서 Delta 있으면 리치 렌더링, 없으면 plain text fallback.
+  final fq.QuillController _quillCtrl = fq.QuillController.basic();
+  final FocusNode _editorFocus = FocusNode();
+  final ScrollController _editorScroll = ScrollController();
+
   bool _popupEnabled = false;
   String _noticeType = 'banner';
   bool _loaded = false;
   bool _saving = false;
+  // 이슈 #835 — 팝업/배너 배경 이미지 (선택).
+  String _backgroundImageUrl = '';
+  bool _uploadingBg = false;
+  // 이슈 #835 — 본문 안에 삽입할 인라인 이미지 업로드 진행 중 여부.
+  bool _uploadingBodyImg = false;
 
   @override
   void dispose() {
     _noticeCtrl.dispose();
     _popupTitleCtrl.dispose();
-    _popupMessageCtrl.dispose();
     _popupLinkUrlCtrl.dispose();
+    _quillCtrl.dispose();
+    _editorFocus.dispose();
+    _editorScroll.dispose();
     super.dispose();
+  }
+
+  /// 이슈 #835 — 이미지 소스(갤러리/카메라) 선택 시트.
+  /// project_input_screen 의 _showImageSourceDialog 표준 패턴.
+  Future<ImageSource?> _showImageSourceDialog() async {
+    if (kIsWeb) return ImageSource.gallery;
+    final isKorean = widget.isKorean;
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: C.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.photo_library_outlined, color: C.lv),
+              title: Text(isKorean ? '갤러리에서 선택' : 'Choose from gallery', style: T.body),
+              onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: Icon(Icons.camera_alt_outlined, color: C.lv),
+              title: Text(isKorean ? '사진 촬영' : 'Take a photo', style: T.body),
+              onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 배경 이미지 업로드 (Firebase Storage `app_config_popup_bg/<ts>.jpg`).
+  Future<void> _pickBackgroundImage() async {
+    final source = await _showImageSourceDialog();
+    if (source == null) return;
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: source, maxWidth: 1600, imageQuality: 85);
+    if (picked == null) return;
+    setState(() => _uploadingBg = true);
+    try {
+      final bytes = await picked.readAsBytes();
+      final ts = DateTime.now().millisecondsSinceEpoch;
+      final ext = picked.name.split('.').last.toLowerCase();
+      final refStorage = FirebaseStorage.instance.ref('app_config_popup_bg/$ts.$ext');
+      await refStorage.putData(bytes, SettableMetadata(contentType: 'image/$ext'));
+      final url = await refStorage.getDownloadURL();
+      if (!mounted) return;
+      setState(() {
+        _backgroundImageUrl = url;
+        _uploadingBg = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _uploadingBg = false);
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '업로드 실패: $e');
+    }
+  }
+
+  /// 본문 인라인 이미지 삽입 — Quill Delta 에 `BlockEmbed.image(url)` 삽입.
+  Future<void> _insertBodyImage() async {
+    final source = await _showImageSourceDialog();
+    if (source == null) return;
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: source, maxWidth: 1600, imageQuality: 85);
+    if (picked == null) return;
+    setState(() => _uploadingBodyImg = true);
+    try {
+      final bytes = await picked.readAsBytes();
+      final ts = DateTime.now().millisecondsSinceEpoch;
+      final ext = picked.name.split('.').last.toLowerCase();
+      final refStorage = FirebaseStorage.instance.ref('app_config_popup_body/$ts.$ext');
+      await refStorage.putData(bytes, SettableMetadata(contentType: 'image/$ext'));
+      final url = await refStorage.getDownloadURL();
+      if (!mounted) return;
+      final index = _quillCtrl.selection.baseOffset;
+      _quillCtrl.document.insert(index, fq.BlockEmbed.image(url));
+      _quillCtrl.updateSelection(
+        TextSelection.collapsed(offset: index + 1),
+        fq.ChangeSource.local,
+      );
+      setState(() => _uploadingBodyImg = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _uploadingBodyImg = false);
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '이미지 업로드 실패: $e');
+    }
+  }
+
+  /// 저장된 Delta JSON 또는 plain text 로부터 QuillController 초기화.
+  void _loadBodyIntoQuill(String? deltaJson, String plainText) {
+    try {
+      if (deltaJson != null && deltaJson.isNotEmpty) {
+        final decoded = jsonDecode(deltaJson);
+        if (decoded is List) {
+          final doc = fq.Document.fromJson(decoded);
+          _quillCtrl.document = doc;
+          return;
+        }
+      }
+    } catch (_) {
+      // 잘못된 JSON → plain text fallback
+    }
+    if (plainText.isNotEmpty) {
+      _quillCtrl.document = fq.Document()..insert(0, plainText);
+    }
   }
 
   @override
@@ -4137,42 +4310,56 @@ class _SupportSettingsTabState extends ConsumerState<_SupportSettingsTab> {
           _noticeType = data['noticeType']?.toString() ?? 'banner';
           _popupEnabled = data['popupEnabled'] == true;
           _popupTitleCtrl.text = data['popupTitle']?.toString() ?? '';
-          _popupMessageCtrl.text = data['popupMessage']?.toString() ?? '';
           _popupLinkUrlCtrl.text = data['popupLinkUrl']?.toString() ?? '';
+          _backgroundImageUrl = data['backgroundImageUrl']?.toString() ?? '';
+          _loadBodyIntoQuill(
+            data['popupBodyDelta']?.toString(),
+            data['popupMessage']?.toString() ?? '',
+          );
           _loaded = true;
         }
 
+        final isKorean = widget.isKorean;
+        // 공지 유형별 저장 버튼 라벨/색상
+        final isPush = _noticeType == 'push';
+        final saveLabel = isPush
+            ? (isKorean ? '저장 + 푸시 발송' : 'Save + Send push')
+            : (isKorean ? '저장' : 'Save');
+
         return ListView(
           children: [
-            // ── 랜딩 팝업 관리 ──────────────────────────────────────────────
+            // ── 공지/팝업/푸시 통합 관리 ─────────────────────────────────────
             GlassCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      Text(widget.isKorean ? '랜딩 팝업 관리' : 'Landing Popup', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
+                      Text(
+                        isKorean ? '공지 · 팝업 · 푸시 관리' : 'Notice · Popup · Push',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1E293B), height: 1.3),
+                      ),
                       const Spacer(),
                       Switch(
                         value: _popupEnabled,
                         onChanged: (v) => setState(() => _popupEnabled = v),
                         activeThumbColor: C.lv,
                       ),
-                      Text(_popupEnabled ? (widget.isKorean ? '활성' : 'ON') : (widget.isKorean ? '비활성' : 'OFF'),
+                      Text(_popupEnabled ? (isKorean ? '활성' : 'ON') : (isKorean ? '비활성' : 'OFF'),
                           style: T.caption.copyWith(color: _popupEnabled ? C.lv : C.tx2)),
                     ],
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    widget.isKorean
-                        ? '팝업 유형을 선택하고 제목·내용·링크를 입력하면 랜딩 페이지 방문 시 팝업이 표시됩니다.'
-                        : 'When enabled, visitors see this popup on the landing page.',
+                    isKorean
+                        ? '공지 유형(배너/팝업/푸시)을 선택하고 제목·내용·링크를 입력한 뒤 저장하세요. 푸시 선택 시 저장과 동시에 모든 디바이스로 FCM 알림이 발송됩니다.'
+                        : 'Select notice type (banner/popup/push) and save. Push type sends FCM to all devices on save.',
                     style: T.caption.copyWith(color: C.tx2, height: 1.5),
                   ),
                   const SizedBox(height: 14),
                   Row(
                     children: [
-                      Text(widget.isKorean ? '공지 유형' : 'Notice type',
+                      Text(isKorean ? '공지 유형' : 'Notice type',
                           style: T.caption.copyWith(color: C.tx2)),
                       const SizedBox(width: 12),
                       DropdownButton<String>(
@@ -4182,38 +4369,91 @@ class _SupportSettingsTabState extends ConsumerState<_SupportSettingsTab> {
                         dropdownColor: Colors.white,
                         style: const TextStyle(fontSize: 13, color: Colors.black87),
                         items: [
-                          DropdownMenuItem(value: 'banner', child: Text(widget.isKorean ? '배너' : 'Banner', style: const TextStyle(fontSize: 13, color: Colors.black87))),
-                          DropdownMenuItem(value: 'popup', child: Text(widget.isKorean ? '팝업' : 'Popup', style: const TextStyle(fontSize: 13, color: Colors.black87))),
-                          DropdownMenuItem(value: 'push', child: Text(widget.isKorean ? '푸시알림' : 'Push', style: const TextStyle(fontSize: 13, color: Colors.black87))),
+                          DropdownMenuItem(value: 'banner', child: Text(isKorean ? '배너' : 'Banner', style: const TextStyle(fontSize: 13, color: Colors.black87))),
+                          DropdownMenuItem(value: 'popup', child: Text(isKorean ? '팝업' : 'Popup', style: const TextStyle(fontSize: 13, color: Colors.black87))),
+                          DropdownMenuItem(value: 'push', child: Text(isKorean ? '푸시알림' : 'Push', style: const TextStyle(fontSize: 13, color: Colors.black87))),
                         ],
                         onChanged: (v) => setState(() => _noticeType = v ?? _noticeType),
                       ),
+                      const SizedBox(width: 10),
+                      if (isPush)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: C.og.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            isKorean ? '저장 시 FCM 즉시 발송' : 'Sends FCM on save',
+                            style: T.caption.copyWith(color: C.og, fontWeight: FontWeight.w700),
+                          ),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _popupTitleCtrl,
                     decoration: InputDecoration(
-                      labelText: widget.isKorean ? '팝업 제목' : 'Popup title',
-                      hintText: widget.isKorean ? 'ex) 신기능 출시!' : 'ex) New feature launched!',
+                      labelText: isKorean ? '팝업 제목' : 'Popup title',
+                      hintText: isKorean ? 'ex) 신기능 출시!' : 'ex) New feature launched!',
                     ),
                   ),
                   const SizedBox(height: 10),
-                  TextField(
-                    controller: _popupMessageCtrl,
-                    maxLines: 3,
-                    decoration: InputDecoration(
-                      labelText: widget.isKorean ? '팝업 내용' : 'Popup message',
-                      hintText: widget.isKorean ? '팝업에 표시될 내용을 입력하세요.' : 'Enter popup body text.',
+                  // 팝업 내용 — 리치 텍스트 에디터 (flutter_quill)
+                  Text(
+                    isKorean ? '팝업 내용 (리치 텍스트)' : 'Popup message (rich text)',
+                    style: T.caption.copyWith(color: C.tx2),
+                  ),
+                  const SizedBox(height: 6),
+                  _PopupQuillToolbar(
+                    controller: _quillCtrl,
+                    onInsertImage: _uploadingBodyImg ? null : _insertBodyImage,
+                    uploadingImage: _uploadingBodyImg,
+                    isKorean: isKorean,
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    constraints: const BoxConstraints(minHeight: 160),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFD1D5DB)),
                     ),
+                    padding: const EdgeInsets.all(10),
+                    child: fq.QuillEditor(
+                      controller: _quillCtrl,
+                      focusNode: _editorFocus,
+                      scrollController: _editorScroll,
+                      config: fq.QuillEditorConfig(
+                        placeholder: isKorean
+                            ? '팝업에 표시될 내용을 입력하세요.'
+                            : 'Enter popup body text.',
+                        scrollable: true,
+                        autoFocus: false,
+                        expands: false,
+                        padding: EdgeInsets.zero,
+                        embedBuilders: popupQuillEmbedBuilders,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // ── 배경 이미지 (이슈 #835) ────────────────────────────────
+                  _BackgroundImagePickerRow(
+                    isKorean: isKorean,
+                    uploading: _uploadingBg,
+                    imageUrl: _backgroundImageUrl,
+                    onPick: _uploadingBg ? null : _pickBackgroundImage,
+                    onClear: _backgroundImageUrl.isEmpty
+                        ? null
+                        : () => setState(() => _backgroundImageUrl = ''),
                   ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: _popupLinkUrlCtrl,
                     decoration: InputDecoration(
-                      labelText: widget.isKorean ? '바로가기 링크 URL (선택)' : 'Link URL (optional)',
+                      labelText: isKorean ? '바로가기 링크 URL (선택)' : 'Link URL (optional)',
                       hintText: 'https://...',
-                      helperText: widget.isKorean ? '입력 시 팝업에 "바로 가기" 버튼이 표시됩니다.' : 'A "Go to" button appears when filled.',
+                      helperText: isKorean ? '입력 시 팝업에 "바로 가기" 버튼이 표시됩니다.' : 'A "Go to" button appears when filled.',
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -4221,19 +4461,33 @@ class _SupportSettingsTabState extends ConsumerState<_SupportSettingsTab> {
                     controller: _noticeCtrl,
                     maxLines: 2,
                     decoration: InputDecoration(
-                      labelText: widget.isKorean ? '배너 공지 문구 (배너 유형 시)' : 'Banner notice text',
+                      labelText: isKorean ? '배너 공지 문구 (배너 유형 시)' : 'Banner notice text',
                     ),
                   ),
                   const SizedBox(height: 14),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: ElevatedButton(
+                    child: ElevatedButton.icon(
                       onPressed: _saving ? null : _save,
-                      child: Text(widget.isKorean ? '저장' : 'Save'),
+                      icon: Icon(
+                        isPush ? Icons.campaign_rounded : Icons.save_rounded,
+                        size: 18,
+                      ),
+                      label: Text(saveLabel),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isPush ? C.og : null,
+                        foregroundColor: isPush ? Colors.white : null,
+                      ),
                     ),
                   ),
                 ],
               ),
+            ),
+            // ── 발송 이력 + 재사용 (이슈 #836) ────────────────────────────
+            const SizedBox(height: 16),
+            _BroadcastHistorySection(
+              isKorean: isKorean,
+              onReuse: _applyReuse,
             ),
           ],
         );
@@ -4243,25 +4497,551 @@ class _SupportSettingsTabState extends ConsumerState<_SupportSettingsTab> {
     );
   }
 
+  /// 이슈 #836 — 발송 이력 카드 "재사용" 클릭 시 폼을 자동 채움.
+  /// type / title / bodyDelta / bodyText / backgroundImageUrl / linkUrl 복원.
+  void _applyReuse(Map<String, dynamic> data) {
+    final type = (data['type'] ?? 'banner').toString();
+    final title = (data['title'] ?? '').toString();
+    final bodyDelta = (data['bodyDelta'] ?? '').toString();
+    final bodyText = (data['bodyText'] ?? '').toString();
+    final bg = (data['backgroundImageUrl'] ?? '').toString();
+    final link = (data['linkUrl'] ?? '').toString();
+
+    setState(() {
+      _noticeType = (type == 'popup' || type == 'banner' || type == 'push')
+          ? type
+          : 'banner';
+      _popupTitleCtrl.text = title;
+      _popupLinkUrlCtrl.text = link;
+      _backgroundImageUrl = bg;
+    });
+    // Quill controller는 setState 외부에서 갱신 (document 교체).
+    _loadBodyIntoQuill(bodyDelta.isEmpty ? null : bodyDelta, bodyText);
+
+    final isKorean = widget.isKorean;
+    showSavedSnackBar(
+      ScaffoldMessenger.of(context),
+      message: isKorean ? '이력을 폼에 불러왔어요. 수정 후 저장하세요.' : 'Loaded into form. Edit and save.',
+    );
+  }
+
   Future<void> _save() async {
-    setState(() => _saving = true);
-    try {
-      await FirebaseFirestore.instance.collection('app_config').doc('admin_support').set(
-        {
-          'maintenanceNotice': _noticeCtrl.text.trim(),
-          'noticeType': _noticeType,
-          'popupEnabled': _popupEnabled,
-          'popupTitle': _popupTitleCtrl.text.trim(),
-          'popupMessage': _popupMessageCtrl.text.trim(),
-          'popupLinkUrl': _popupLinkUrlCtrl.text.trim(),
-          // 일회성 표시 트래킹용 — 저장 시각 갱신.
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
+    final isKorean = widget.isKorean;
+    final isPush = _noticeType == 'push';
+
+    // Quill 본문 → Delta JSON + plain text 추출
+    final delta = _quillCtrl.document.toDelta();
+    final deltaJson = jsonEncode(delta.toJson());
+    final plainBody = _quillCtrl.document.toPlainText().trim();
+    final title = _popupTitleCtrl.text.trim();
+    final linkUrl = _popupLinkUrlCtrl.text.trim();
+
+    // 푸시 발송 시 사전 확인
+    if (isPush) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(isKorean ? '푸시 발송 확인' : 'Confirm push'),
+          content: Text(
+            isKorean
+                ? '저장과 동시에 모든 디바이스로 푸시 알림이 즉시 발송됩니다. 계속할까요?'
+                : 'Saving will immediately send a push notification to every device. Continue?',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(isKorean ? '취소' : 'Cancel')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: C.og, foregroundColor: Colors.white),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(isKorean ? '저장 + 발송' : 'Save + Send'),
+            ),
+          ],
+        ),
       );
+      if (confirmed != true) return;
+      if (!mounted) return;
+    }
+
+    setState(() => _saving = true);
+    Map<String, dynamic>? pushResult;
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isPush
+            ? (isKorean ? '저장 및 푸시 발송 중입니다.' : 'Saving & sending push...')
+            : (isKorean ? '저장하는 중입니다.' : 'Saving...'),
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () async {
+          await FirebaseFirestore.instance
+              .collection('app_config')
+              .doc('admin_support')
+              .set(
+            {
+              'maintenanceNotice': _noticeCtrl.text.trim(),
+              'noticeType': _noticeType,
+              'popupEnabled': _popupEnabled,
+              'popupTitle': title,
+              'popupMessage': plainBody, // plain text fallback
+              'popupBodyDelta': deltaJson, // 리치 텍스트 (Quill Delta JSON)
+              'popupLinkUrl': linkUrl,
+              'backgroundImageUrl': _backgroundImageUrl, // 이슈 #835
+              'updatedAt': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true),
+          );
+
+          // 푸시 발송: noticeType == 'push' 일 때만 Cloud Function 호출
+          if (isPush) {
+            final callable = FirebaseFunctions.instance.httpsCallable(
+              'sendBroadcastPush',
+              options: HttpsCallableOptions(timeout: const Duration(seconds: 540)),
+            );
+            final res = await callable.call(<String, dynamic>{
+              'title': title.isEmpty ? (isKorean ? '모리니트 공지' : 'MoriKnit Notice') : title,
+              'body': plainBody,
+              if (linkUrl.isNotEmpty) 'deepLink': linkUrl,
+              'audience': 'all',
+              // 이슈 #848 — @moriknit DM 풍부한 카드 메시지용 필드
+              if (_backgroundImageUrl.isNotEmpty)
+                'imageUrl': _backgroundImageUrl,
+              if (deltaJson.isNotEmpty) 'bodyDelta': deltaJson,
+              if (linkUrl.isNotEmpty) 'linkUrl': linkUrl,
+            });
+            final data = res.data;
+            if (data is Map) {
+              pushResult = Map<String, dynamic>.from(data);
+            }
+          }
+
+          // 이슈 #836 — 발송 이력 저장 (팝업/배너/푸시 모두 기록).
+          // 재사용 시 type/title/bodyDelta/bodyText/backgroundImageUrl/linkUrl 복원.
+          final senderUid = FirebaseAuth.instance.currentUser?.uid;
+          final recipientCount = (pushResult?['recipientCount'] ?? 0) as int;
+          await FirebaseFirestore.instance.collection('admin_broadcasts').add({
+            'type': _noticeType, // 'banner' | 'popup' | 'push'
+            'title': title,
+            'bodyDelta': deltaJson,
+            'bodyText': plainBody,
+            'backgroundImageUrl':
+                _backgroundImageUrl.isEmpty ? null : _backgroundImageUrl,
+            'linkUrl': linkUrl.isEmpty ? null : linkUrl,
+            'targetUid': null, // 향후 개별 발송 시 사용
+            'sentAt': FieldValue.serverTimestamp(),
+            'sentByUid': senderUid,
+            'recipientCount': recipientCount,
+            'readCount': 0,
+          });
+        },
+      );
+
+      if (!mounted) return;
+      if (isPush) {
+        final r = pushResult ?? const <String, dynamic>{};
+        final total = (r['totalTokens'] ?? 0) as int;
+        final success = (r['successCount'] ?? 0) as int;
+        final failure = (r['failureCount'] ?? 0) as int;
+        showSavedSnackBar(
+          ScaffoldMessenger.of(context),
+          message: isKorean
+              ? '팝업 저장 + FCM 발송 완료 · 전체 $total · 성공 $success · 실패 $failure'
+              : 'Saved + FCM sent · total $total · ok $success · fail $failure',
+        );
+      } else {
+        showSavedSnackBar(
+          ScaffoldMessenger.of(context),
+          message: isKorean ? '저장됐어요.' : 'Saved.',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+}
+
+/// 팝업 본문용 Quill 툴바 (community_post_editor 와 동일 스타일).
+/// 이슈 #835 — 본문 인라인 이미지 삽입 버튼 추가 (`onInsertImage`).
+class _PopupQuillToolbar extends StatelessWidget {
+  final fq.QuillController controller;
+  final VoidCallback? onInsertImage;
+  final bool uploadingImage;
+  final bool isKorean;
+  const _PopupQuillToolbar({
+    required this.controller,
+    this.onInsertImage,
+    this.uploadingImage = false,
+    this.isKorean = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFD1D5DB)),
+      ),
+      child: fq.QuillSimpleToolbar(
+        controller: controller,
+        config: fq.QuillSimpleToolbarConfig(
+          multiRowsDisplay: false,
+          showAlignmentButtons: false,
+          showBackgroundColorButton: true,
+          showColorButton: true,
+          showBoldButton: true,
+          showItalicButton: true,
+          showUnderLineButton: true,
+          showStrikeThrough: false,
+          showSmallButton: false,
+          showHeaderStyle: false,
+          showListBullets: true,
+          showListNumbers: true,
+          showListCheck: false,
+          showCodeBlock: false,
+          showQuote: false,
+          showIndent: false,
+          showLink: true,
+          showUndo: true,
+          showRedo: true,
+          showClearFormat: false,
+          showSearchButton: false,
+          showSubscript: false,
+          showSuperscript: false,
+          customButtons: [
+            fq.QuillToolbarCustomButtonOptions(
+              icon: uploadingImage
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(Icons.image_outlined, size: 20, color: C.lv),
+              tooltip: isKorean ? '이미지 삽입' : 'Insert image',
+              onPressed: onInsertImage,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 이슈 #835 — 팝업/배너 배경 이미지 업로드 행. 갤러리 + 카메라 모두 지원.
+class _BackgroundImagePickerRow extends StatelessWidget {
+  final bool isKorean;
+  final bool uploading;
+  final String imageUrl;
+  final VoidCallback? onPick;
+  final VoidCallback? onClear;
+  const _BackgroundImagePickerRow({
+    required this.isKorean,
+    required this.uploading,
+    required this.imageUrl,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              isKorean ? '배경 이미지 (선택)' : 'Background image (optional)',
+              style: T.caption.copyWith(color: C.tx2),
+            ),
+            const Spacer(),
+            if (uploading)
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              TextButton.icon(
+                onPressed: onPick,
+                icon: Icon(Icons.image_outlined, size: 18, color: C.lv),
+                label: Text(
+                  isKorean ? '배경 이미지 선택' : 'Pick background',
+                  style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w700),
+                ),
+              ),
+          ],
+        ),
+        if (imageUrl.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  height: 120,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              Positioned(
+                top: 6,
+                right: 6,
+                child: GestureDetector(
+                  onTap: onClear,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.black54,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close, size: 14, color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// ─── 이슈 #836 — 발송 이력 + 재사용 섹션 ──────────────────────────────────────
+
+/// 발송 이력 섹션. 최근 20건 카드 리스트 + 재사용 버튼.
+/// [onReuse] 콜백으로 폼 자동 채움 (부모 `_SupportSettingsTabState` 가 처리).
+class _BroadcastHistorySection extends ConsumerWidget {
+  final bool isKorean;
+  final void Function(Map<String, dynamic>) onReuse;
+  const _BroadcastHistorySection({
+    required this.isKorean,
+    required this.onReuse,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(_adminBroadcastsProvider);
+    return MoriBlockShell(
+      label: isKorean ? '발송 이력' : 'Broadcast history',
+      icon: Icons.history_rounded,
+      accent: C.lv,
+      child: AsyncDataView<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
+        async: async,
+        isEmpty: (list) => list.isEmpty,
+        emptyBuilder: () => EmptyBlockPlaceholder(
+          message: isKorean
+              ? '아직 발송 이력이 없어요. 위에서 저장하면 자동으로 기록됩니다.'
+              : 'No history yet. Saving above will record automatically.',
+        ),
+        builder: (docs) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final doc in docs)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _BroadcastHistoryCard(
+                    isKorean: isKorean,
+                    docId: doc.id,
+                    data: doc.data(),
+                    onReuse: () => onReuse(doc.data()),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _BroadcastHistoryCard extends StatelessWidget {
+  final bool isKorean;
+  final String docId;
+  final Map<String, dynamic> data;
+  final VoidCallback onReuse;
+  const _BroadcastHistoryCard({
+    required this.isKorean,
+    required this.docId,
+    required this.data,
+    required this.onReuse,
+  });
+
+  /// #836 — 발송 이력 삭제. 확인 다이얼로그 후 admin_broadcasts/{docId} 삭제.
+  Future<void> _confirmDelete(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(isKorean ? '발송 이력을 삭제할까요?' : 'Delete this history?', style: T.h3),
+        content: Text(
+          isKorean
+              ? '삭제된 이력은 복구할 수 없습니다.'
+              : 'This action cannot be undone.',
+          style: T.body,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(isKorean ? '취소' : 'Cancel', style: TextStyle(color: C.mu)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: C.og,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text(isKorean ? '삭제' : 'Delete',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '삭제하는 중입니다.' : 'Deleting...',
+        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
+        task: () =>
+            FirebaseFirestore.instance.collection('admin_broadcasts').doc(docId).delete(),
+      );
+      if (!context.mounted) return;
+      showSavedSnackBar(ScaffoldMessenger.of(context),
+          message: isKorean ? '발송 이력이 삭제됐어요.' : 'History deleted.');
+    } catch (e) {
+      if (!context.mounted) return;
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
+
+  ChipType _chipTypeFor(String type) {
+    switch (type) {
+      case 'popup':
+        return ChipType.pink;
+      case 'push':
+        return ChipType.orange;
+      case 'banner':
+      default:
+        return ChipType.lavender;
+    }
+  }
+
+  String _labelFor(String type) {
+    if (isKorean) {
+      switch (type) {
+        case 'popup':
+          return '팝업';
+        case 'push':
+          return '푸시';
+        case 'banner':
+        default:
+          return '배너';
+      }
+    } else {
+      switch (type) {
+        case 'popup':
+          return 'Popup';
+        case 'push':
+          return 'Push';
+        case 'banner':
+        default:
+          return 'Banner';
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final type = (data['type'] ?? 'banner').toString();
+    final title = (data['title'] ?? '').toString();
+    final bodyText = (data['bodyText'] ?? '').toString();
+    final recipientCount = (data['recipientCount'] ?? 0) as int;
+    final readCount = (data['readCount'] ?? 0) as int;
+    final sentAt = data['sentAt'];
+    String sentAtLabel = '';
+    if (sentAt is Timestamp) {
+      sentAtLabel = DateFormat('yyyy.MM.dd HH:mm').format(sentAt.toDate());
+    }
+
+    final preview = title.isNotEmpty
+        ? title
+        : (bodyText.isEmpty
+            ? (isKorean ? '(제목·본문 없음)' : '(no title/body)')
+            : bodyText);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: C.bd),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // type 칩 + 내용
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    MoriChip(label: _labelFor(type), type: _chipTypeFor(type)),
+                    const SizedBox(width: 8),
+                    if (sentAtLabel.isNotEmpty)
+                      Text(sentAtLabel, style: T.caption.copyWith(color: C.tx2)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  preview,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: T.body,
+                ),
+                if (type == 'push' && recipientCount > 0) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    isKorean
+                        ? '수신자 $recipientCount · 읽음 $readCount'
+                        : 'Recipients $recipientCount · Read $readCount',
+                    style: T.caption.copyWith(color: C.tx2),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          // 재사용 버튼
+          TextButton.icon(
+            onPressed: onReuse,
+            icon: Icon(Icons.refresh_rounded, size: 16, color: C.lv),
+            label: Text(
+              isKorean ? '재사용' : 'Reuse',
+              style: T.caption.copyWith(color: C.lv, fontWeight: FontWeight.w700),
+            ),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              minimumSize: const Size(0, 32),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+          // #836 — 삭제 버튼
+          IconButton(
+            tooltip: isKorean ? '삭제' : 'Delete',
+            onPressed: () => _confirmDelete(context),
+            icon: Icon(Icons.delete_outline_rounded, size: 18, color: C.og),
+            padding: const EdgeInsets.all(6),
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -4557,10 +5337,84 @@ class _BugReportDetailState extends State<_BugReportDetail> {
                     padding: const EdgeInsets.all(8),
                     child: AdminAIFixPanel(
                       report: report,
-                      onAnalysisStart: () => repo.updateAiFixStatus(report.id, 'analyzing', log: '본인 트리거: AI 분석 시작'),
-                      onApprove: () => repo.updateAiFixStatus(report.id, 'approved', log: '본인 승인: 수정 진행'),
-                      onReleaseApprove: () => repo.updateAiFixStatus(report.id, 'done', log: '본인 승인: 릴리즈'),
-                      onReject: () => repo.updateAiFixStatus(report.id, 'rejected', log: '본인 거부'),
+                      onAnalysisStart: () async {
+                        // 재분석 케이스: pending이 아니면 fixPlan 등 reset 후 analyzing
+                        if (report.aiFixStatus != 'pending') {
+                          await FirebaseFirestore.instance
+                              .collection('bug_reports')
+                              .doc(report.id)
+                              .update({
+                            'aiFixStatus': 'pending',
+                            'aiFixSteps': [],
+                            'fixPlan': '',
+                            'fixDiffPreview': '',
+                            'fixCommitSha': '',
+                            'fixedFiles': const [],
+                            'aiFixErrorMessage': '',
+                          });
+                        }
+                        await repo.updateAiFixStatus(report.id, 'analyzing', log: '본인 트리거: AI 분석 시작');
+                      },
+                      // #813 fix — silent fail 방지: 로딩 다이얼로그 + try-catch + 에러 SnackBar.
+                      //   기존 fire-and-forget 호출 시 Firestore permission-denied 발생해도
+                      //   어드민 화면에 어떤 피드백도 없어 "분석 완료에서 진전 안 됨"으로 인지됨.
+                      onApprove: () async {
+                        try {
+                          await runWithMoriLoadingDialog<void>(
+                            context,
+                            message: '수정 승인 중입니다.',
+                            subtitle: '잠시만 기다려 주세요.',
+                            task: () => repo.updateAiFixStatus(
+                                report.id, 'approved', log: '본인 승인: 수정 진행'),
+                          );
+                          if (context.mounted) {
+                            showSavedSnackBar(ScaffoldMessenger.of(context),
+                                message: '수정 승인됨. 119가 자동 진행합니다.');
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+                          }
+                        }
+                      },
+                      onReleaseApprove: () async {
+                        try {
+                          await runWithMoriLoadingDialog<void>(
+                            context,
+                            message: '릴리즈 승인 중입니다.',
+                            subtitle: '잠시만 기다려 주세요.',
+                            task: () => repo.updateAiFixStatus(
+                                report.id, 'done', log: '본인 승인: 릴리즈'),
+                          );
+                          if (context.mounted) {
+                            showSavedSnackBar(ScaffoldMessenger.of(context),
+                                message: '릴리즈 승인 완료.');
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+                          }
+                        }
+                      },
+                      onReject: () async {
+                        try {
+                          await runWithMoriLoadingDialog<void>(
+                            context,
+                            message: '거부 처리 중입니다.',
+                            subtitle: '잠시만 기다려 주세요.',
+                            task: () => repo.updateAiFixStatus(
+                                report.id, 'rejected', log: '본인 거부'),
+                          );
+                          if (context.mounted) {
+                            showSavedSnackBar(ScaffoldMessenger.of(context),
+                                message: '거부 처리됨.');
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+                          }
+                        }
+                      },
                     ),
                   ),
                 ),
@@ -4857,8 +5711,9 @@ class _AdminSwatchesTabState extends ConsumerState<_AdminSwatchesTab> {
 
   static const _columns = [
     AdminColumn(label: '색상', fixedWidth: 60),
-    AdminColumn(label: '브랜드 / 소유자', flex: 3),
+    AdminColumn(label: '브랜드 / 소유자', flex: 2),
     AdminColumn(label: '컬러코드', flex: 1),
+    AdminColumn(label: '디버그 정보 (#852)', flex: 5),
     AdminColumn(label: '관리', fixedWidth: 60, align: TextAlign.end),
   ];
 
@@ -4918,15 +5773,48 @@ class _AdminSwatchesTabState extends ConsumerState<_AdminSwatchesTab> {
             final data = doc.data();
             final pathParts = doc.reference.path.split('/');
             final ownerUid = pathParts.length >= 2 ? pathParts[1] : '';
+            final docId = doc.id;
+            final docPath = doc.reference.path;
             final brandName = data['yarnBrandName'] as String? ?? '';
+            final swatchName = data['swatchName'] as String? ?? '';
             final colorHex = data['colorHex'] as String? ?? '';
+            // 스와치 모델은 단일 imageUrl 대신 beforePhotoUrl/afterPhotoUrl 등 다중 사진 사용.
+            final beforePhoto = (data['beforePhotoUrl'] as String?) ?? '';
+            final afterPhoto = (data['afterPhotoUrl'] as String?) ?? '';
+            final yarnPhoto = (data['myYarnPhotoUrl'] as String?) ?? '';
+            final needlePhoto = (data['myNeedlePhotoUrl'] as String?) ?? '';
+            final firstPhoto = [beforePhoto, afterPhoto, yarnPhoto, needlePhoto]
+                .firstWhere((s) => s.isNotEmpty, orElse: () => '');
+            final updatedAt = data['updatedAt'];
+            String updatedStr = '';
+            if (updatedAt is Timestamp) {
+              updatedStr = DateFormat('yyyy-MM-dd HH:mm').format(updatedAt.toDate());
+            } else if (updatedAt is String && updatedAt.isNotEmpty) {
+              final d = DateTime.tryParse(updatedAt);
+              if (d != null) updatedStr = DateFormat('yyyy-MM-dd HH:mm').format(d);
+            }
+            final createdAt = data['createdAt'];
+            String createdStr = '';
+            if (createdAt is Timestamp) {
+              createdStr = DateFormat('yyyy-MM-dd').format(createdAt.toDate());
+            } else if (createdAt is String && createdAt.isNotEmpty) {
+              final d = DateTime.tryParse(createdAt);
+              if (d != null) createdStr = DateFormat('yyyy-MM-dd').format(d);
+            }
             Color swatchColor = Colors.grey.shade300;
             try {
               if (colorHex.isNotEmpty) {
                 swatchColor = Color(int.parse(colorHex.replaceFirst('#', '0xFF')));
               }
             } catch (_) {}
+            final titleText = swatchName.isNotEmpty
+                ? swatchName
+                : (brandName.isNotEmpty ? brandName : '(이름 없음)');
+            final subtitleText = swatchName.isNotEmpty && brandName.isNotEmpty
+                ? brandName
+                : '';
             return AdminRow(
+              heightOverride: 116, // #852 디버그 셀 6줄 수용
               cells: [
                 // 색상
                 Container(
@@ -4938,11 +5826,8 @@ class _AdminSwatchesTabState extends ConsumerState<_AdminSwatchesTab> {
                     border: Border.all(color: Colors.grey.shade300),
                   ),
                 ),
-                // 브랜드/소유자
-                AdminCellTwoLine(
-                  title: brandName.isNotEmpty ? brandName : '(브랜드 없음)',
-                  subtitle: 'UID: $ownerUid',
-                ),
+                // 브랜드/소유자 (UID는 디버그 셀로 이동)
+                AdminCellTwoLine(title: titleText, subtitle: subtitleText),
                 // 컬러코드
                 Text(
                   colorHex.isNotEmpty ? colorHex : '-',
@@ -4951,6 +5836,19 @@ class _AdminSwatchesTabState extends ConsumerState<_AdminSwatchesTab> {
                     color: Colors.grey.shade600,
                     fontFamily: 'monospace',
                   ),
+                ),
+                // 디버그 정보 (#852)
+                AdminDebugMetaCell(
+                  entries: [
+                    AdminDebugMetaEntry(label: 'UID', value: ownerUid, copyKind: '사용자 UID'),
+                    AdminDebugMetaEntry(label: 'ID', value: docId, copyKind: '스와치 ID'),
+                    AdminDebugMetaEntry(label: 'Path', value: docPath, copyKind: 'Firestore 경로'),
+                    AdminDebugMetaEntry(label: '사진', value: firstPhoto, copyKind: '사진 URL'),
+                    if (createdStr.isNotEmpty)
+                      AdminDebugMetaEntry(label: '생성', value: createdStr, copyKind: '생성 시각'),
+                    if (updatedStr.isNotEmpty)
+                      AdminDebugMetaEntry(label: '수정', value: updatedStr, copyKind: '수정 시각'),
+                  ],
                 ),
                 // 관리
                 Align(
@@ -5051,7 +5949,8 @@ class _AdminProjectsTabState extends ConsumerState<_AdminProjectsTab> {
 
   static const _columns = [
     AdminColumn(label: '상태', fixedWidth: 80),
-    AdminColumn(label: '제목 / 소유자', flex: 3),
+    AdminColumn(label: '제목 / 소유자', flex: 2),
+    AdminColumn(label: '디버그 정보 (#852)', flex: 5),
     AdminColumn(label: '시작일', flex: 1),
     AdminColumn(label: '관리', fixedWidth: 60, align: TextAlign.end),
   ];
@@ -5111,6 +6010,8 @@ class _AdminProjectsTabState extends ConsumerState<_AdminProjectsTab> {
             final data = doc.data();
             final pathParts = doc.reference.path.split('/');
             final ownerUid = pathParts.length >= 2 ? pathParts[1] : '';
+            final docId = doc.id;
+            final docPath = doc.reference.path;
             final title = data['title'] as String? ?? '(제목 없음)';
             final status = data['status'] as String? ?? 'planning';
             final statusColor = _statusColors[status] ?? Colors.grey;
@@ -5118,11 +6019,32 @@ class _AdminProjectsTabState extends ConsumerState<_AdminProjectsTab> {
             final createdAt = data['createdAt'];
             final createdAtDate = _parseAdminDate(createdAt);
             final dateStr = createdAtDate != null ? DateFormat('yyyy-MM-dd').format(createdAtDate) : '';
+            final updatedAtDate = _parseAdminDate(data['updatedAt']);
+            final updatedStr = updatedAtDate != null
+                ? DateFormat('yyyy-MM-dd HH:mm').format(updatedAtDate)
+                : '';
+            final coverPhotoUrl = (data['coverPhotoUrl'] as String?) ?? '';
+            final patternId = (data['patternChartId'] as String?) ??
+                (data['patternId'] as String?) ?? '';
             return AdminRow(
               accent: statusColor,
+              heightOverride: 116, // #852 디버그 셀 6줄 수용
               cells: [
                 AdminBadge(label: statusLabel, color: statusColor),
-                AdminCellTwoLine(title: title, subtitle: 'UID: $ownerUid'),
+                AdminCellTwoLine(title: title, subtitle: ''),
+                // 디버그 정보 (#852)
+                AdminDebugMetaCell(
+                  entries: [
+                    AdminDebugMetaEntry(label: 'UID', value: ownerUid, copyKind: '사용자 UID'),
+                    AdminDebugMetaEntry(label: 'ID', value: docId, copyKind: '프로젝트 ID'),
+                    AdminDebugMetaEntry(label: 'Path', value: docPath, copyKind: 'Firestore 경로'),
+                    AdminDebugMetaEntry(label: 'Cover', value: coverPhotoUrl, copyKind: '커버 URL'),
+                    if (patternId.isNotEmpty)
+                      AdminDebugMetaEntry(label: '연결도안', value: patternId, copyKind: '연결 도안 ID'),
+                    if (updatedStr.isNotEmpty)
+                      AdminDebugMetaEntry(label: '수정', value: updatedStr, copyKind: '수정 시각'),
+                  ],
+                ),
                 AdminCellText(dateStr.isNotEmpty ? dateStr : '-', muted: true),
                 Align(
                   alignment: Alignment.centerRight,
@@ -5578,37 +6500,56 @@ class _EncyclopediaItemsTabState extends State<_EncyclopediaItemsTab> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: '약어 또는 한글 용어 검색',
-                    prefixIcon: const Icon(Icons.search, size: 18),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  onChanged: (v) => setState(() => _searchQuery = v),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isMobile = constraints.maxWidth < 600;
+              final searchField = TextField(
+                decoration: InputDecoration(
+                  hintText: '약어 또는 한글 용어 검색',
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-              ),
-              const SizedBox(width: 8),
-              // 일괄등록 토글 버튼
-              TextButton.icon(
+                onChanged: (v) => setState(() => _searchQuery = v),
+              );
+              final bulkBtn = TextButton.icon(
                 style: TextButton.styleFrom(
                   foregroundColor: _showBulkImport ? const Color(0xFF4ADE80) : null,
                 ),
                 onPressed: () => setState(() => _showBulkImport = !_showBulkImport),
                 icon: Icon(_showBulkImport ? Icons.expand_less : Icons.upload_file_rounded, size: 16),
                 label: Text(_showBulkImport ? '일괄등록 닫기' : '일괄등록'),
-              ),
-              const SizedBox(width: 4),
-              TextButton.icon(
+              );
+              final addBtn = TextButton.icon(
                 onPressed: () => _showEditDialog(context),
                 icon: const Icon(Icons.add, size: 16),
                 label: const Text('+ 새 항목'),
-              ),
-            ],
+              );
+              if (isMobile) {
+                // 모바일: 검색창은 한 줄 전체, 버튼은 다음 줄
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    searchField,
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [bulkBtn, const SizedBox(width: 4), addBtn],
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: searchField),
+                  const SizedBox(width: 8),
+                  bulkBtn,
+                  const SizedBox(width: 4),
+                  addBtn,
+                ],
+              );
+            },
           ),
         ),
         // ── 일괄등록 패널 (토글) ───────────────────────────────────
@@ -5723,6 +6664,99 @@ class _EncyclopediaDocRow extends StatelessWidget {
     final descKo   = data['description'] as String? ?? '';
     final descEn   = data['descriptionEn'] as String? ?? '';
 
+    // ── 셀 위젯들 (모바일/데스크탑 공용) ───────────────────────────────────────
+    final orderCell = order != null
+        ? SizedBox(
+            width: 32,
+            child: Text('$order', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+          )
+        : const SizedBox.shrink();
+
+    final symbolCell = Container(
+      width: 36,
+      height: 36,
+      margin: const EdgeInsets.only(right: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3E8FF),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFF6B21A8).withValues(alpha: 0.15)),
+      ),
+      child: refUrl.isNotEmpty
+          ? Padding(
+              padding: const EdgeInsets.all(5),
+              child: SvgPicture.network(
+                refUrl,
+                placeholderBuilder: (_) => const SizedBox.shrink(),
+              ),
+            )
+          : Icon(Icons.texture_rounded, size: 18, color: Colors.grey.shade400),
+    );
+
+    Widget abbrBadge() => abbr.isEmpty
+        ? const SizedBox.shrink()
+        : Container(
+            margin: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              color: const Color(0xFF4ADE80).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: const Color(0xFF4ADE80).withValues(alpha: 0.4)),
+            ),
+            child: Text(abbr, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF16A34A))),
+          );
+
+    Widget categoryChip() => category.isEmpty
+        ? const SizedBox.shrink()
+        : Container(
+            margin: const EdgeInsets.only(right: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Text(category, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+          );
+
+    final termTitle = Row(children: [
+      Flexible(
+        child: Text(term, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13), overflow: TextOverflow.ellipsis),
+      ),
+      if (termEn.isNotEmpty) ...[
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(termEn, style: TextStyle(fontSize: 11, color: Colors.grey.shade500), overflow: TextOverflow.ellipsis),
+        ),
+      ],
+    ]);
+
+    final descColumn = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (descKo.isNotEmpty)
+          Text(descKo, style: TextStyle(fontSize: 11, color: Colors.grey.shade600), maxLines: 2, overflow: TextOverflow.ellipsis),
+        if (descEn.isNotEmpty)
+          Text(descEn, style: TextStyle(fontSize: 10, color: Colors.grey.shade400), maxLines: 2, overflow: TextOverflow.ellipsis),
+      ],
+    );
+
+    final editBtn = IconButton(
+      icon: Icon(Icons.edit_rounded, size: 16, color: Colors.blue.shade600),
+      onPressed: onEdit,
+      tooltip: '수정',
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+    );
+    final deleteBtn = IconButton(
+      icon: Icon(Icons.delete_rounded, size: 16, color: Colors.red.shade400),
+      onPressed: onDelete,
+      tooltip: '삭제',
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+    );
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -5730,82 +6764,61 @@ class _EncyclopediaDocRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.grey.shade200),
       ),
-      child: Row(
-        children: [
-          if (order != null)
-            SizedBox(
-              width: 32,
-              child: Text('$order', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-            ),
-          // SVG 심볼
-          Container(
-            width: 36,
-            height: 36,
-            margin: const EdgeInsets.only(right: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3E8FF),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: const Color(0xFF6B21A8).withValues(alpha: 0.15)),
-            ),
-            child: refUrl.isNotEmpty
-                ? Padding(
-                    padding: const EdgeInsets.all(5),
-                    child: SvgPicture.network(
-                      refUrl,
-                      placeholderBuilder: (_) => const SizedBox.shrink(),
-                    ),
-                  )
-                : Icon(Icons.texture_rounded, size: 18, color: Colors.grey.shade400),
-          ),
-          // 약어 뱃지
-          if (abbr.isNotEmpty)
-            Container(
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(
-                color: const Color(0xFF4ADE80).withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: const Color(0xFF4ADE80).withValues(alpha: 0.4)),
-              ),
-              child: Text(abbr, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF16A34A))),
-            ),
-          // 용어 + 설명
-          Expanded(
-            child: Column(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isMobile = constraints.maxWidth < 600;
+          if (isMobile) {
+            // 모바일: 2단 레이아웃 (#864 가로 오버플로우 방지)
+            // 상단: 번호 + SVG + 약어 + 용어 + 카테고리
+            // 하단: 설명 + 수정/삭제 아이콘
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(children: [
-                  Text(term, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                  if (termEn.isNotEmpty) ...[
-                    const SizedBox(width: 6),
-                    Text(termEn, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                Row(
+                  children: [
+                    orderCell,
+                    symbolCell,
+                    abbrBadge(),
+                    Expanded(child: termTitle),
+                    categoryChip(),
                   ],
-                ]),
-                if (descKo.isNotEmpty)
-                  Text(descKo, style: TextStyle(fontSize: 11, color: Colors.grey.shade600), maxLines: 1, overflow: TextOverflow.ellipsis),
-                if (descEn.isNotEmpty)
-                  Text(descEn, style: TextStyle(fontSize: 10, color: Colors.grey.shade400), maxLines: 1, overflow: TextOverflow.ellipsis),
+                ),
+                if (descKo.isNotEmpty || descEn.isNotEmpty) const SizedBox(height: 4),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: descColumn),
+                    editBtn,
+                    deleteBtn,
+                  ],
+                ),
               ],
-            ),
-          ),
-          if (category.isNotEmpty)
-            Container(
-              margin: const EdgeInsets.only(right: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: Colors.grey.shade300),
+            );
+          }
+          // 데스크탑/태블릿: 기존 1행 레이아웃 유지
+          return Row(
+            children: [
+              orderCell,
+              symbolCell,
+              abbrBadge(),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    termTitle,
+                    if (descKo.isNotEmpty)
+                      Text(descKo, style: TextStyle(fontSize: 11, color: Colors.grey.shade600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    if (descEn.isNotEmpty)
+                      Text(descEn, style: TextStyle(fontSize: 10, color: Colors.grey.shade400), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
               ),
-              child: Text(category, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-            ),
-          IconButton(icon: Icon(Icons.edit_rounded, size: 16, color: Colors.blue.shade600), onPressed: onEdit, tooltip: '수정'),
-          IconButton(
-            icon: Icon(Icons.delete_rounded, size: 16, color: Colors.red.shade400),
-            onPressed: onDelete,
-            tooltip: '삭제',
-          ),
-        ],
+              categoryChip(),
+              editBtn,
+              deleteBtn,
+            ],
+          );
+        },
       ),
     );
   }
@@ -6145,9 +7158,14 @@ class _EditorialAdminTabState extends ConsumerState<_EditorialAdminTab> {
 
   static AdminRow _emptyRow(BuildContext _, EditorialPost _) => const AdminRow(cells: []);
 
+  // 이슈 #849 — storage.rules `match /editorial/{allPaths=**}` 와 일치하는 경로 사용.
+  // 이전 경로 `editorial_attachments/`, `editorial_images/` 는 룰 외 영역이라 권한 거부로 silent fail 발생.
   Future<String?> _uploadEditorialFile(PlatformFile file) async {
+    if (file.bytes == null) {
+      throw Exception('파일 데이터를 읽지 못했습니다. (bytes == null)');
+    }
     final ext = file.name.split('.').last;
-    final path = 'editorial_attachments/${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+    final path = 'editorial/attachments/${DateTime.now().millisecondsSinceEpoch}_${file.name}';
     final ref = FirebaseStorage.instance.ref(path);
     await ref.putData(
       file.bytes!,
@@ -6157,7 +7175,10 @@ class _EditorialAdminTabState extends ConsumerState<_EditorialAdminTab> {
   }
 
   Future<String?> _uploadEditorialImage(PlatformFile file) async {
-    final path = 'editorial_images/${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+    if (file.bytes == null) {
+      throw Exception('이미지 데이터를 읽지 못했습니다. (bytes == null)');
+    }
+    final path = 'editorial/images/${DateTime.now().millisecondsSinceEpoch}_${file.name}';
     final ref = FirebaseStorage.instance.ref(path);
     await ref.putData(file.bytes!, SettableMetadata(contentType: 'image/${file.extension ?? 'jpeg'}'));
     return await ref.getDownloadURL();
@@ -6393,7 +7414,16 @@ class _EditorialAdminTabState extends ConsumerState<_EditorialAdminTab> {
                                   final url = await _uploadEditorialImage(result.files.first);
                                   if (url != null) {
                                     imageUrlCtrl.text = url;
+                                    setS(() {}); // 이슈 #849 — outer dialog rebuild로 미리보기 즉시 표시
                                     setImg(() {});
+                                  }
+                                } catch (e) {
+                                  // 이슈 #849 — silent fail 방지: 업로드 에러를 사용자에게 표시
+                                  if (ctx.mounted) {
+                                    showSaveErrorSnackBar(
+                                      ScaffoldMessenger.of(ctx),
+                                      message: '이미지 업로드 실패: $e',
+                                    );
                                   }
                                 } finally {
                                   setUpImg(() => isUploadingImg = false);
@@ -6463,7 +7493,16 @@ class _EditorialAdminTabState extends ConsumerState<_EditorialAdminTab> {
                                     if (attachNameCtrl.text.isEmpty) {
                                       attachNameCtrl.text = file.name;
                                     }
+                                    setS(() {}); // 이슈 #849 — outer dialog rebuild로 첨부 표시 즉시 갱신
                                     setAtt(() {});
+                                  }
+                                } catch (e) {
+                                  // 이슈 #849 — silent fail 방지: 업로드 에러를 사용자에게 표시
+                                  if (ctx.mounted) {
+                                    showSaveErrorSnackBar(
+                                      ScaffoldMessenger.of(ctx),
+                                      message: '파일 업로드 실패: $e',
+                                    );
                                   }
                                 } finally {
                                   setUpAtt(() => isUploadingAttach = false);
@@ -6519,6 +7558,7 @@ class _EditorialAdminTabState extends ConsumerState<_EditorialAdminTab> {
             TextButton(onPressed: () => Navigator.pop(ctx), child: Text('취소', style: TextStyle(color: C.mu))),
             TextButton(
               onPressed: () async {
+                // 이슈 #849 — silent fail 방지: 저장 에러를 사용자에게 표시
                 final repo = ref.read(editorialRepositoryProvider);
                 final data = {
                   'type': editType,
@@ -6530,22 +7570,34 @@ class _EditorialAdminTabState extends ConsumerState<_EditorialAdminTab> {
                   'attachmentName': attachNameCtrl.text.trim(),
                   'isPublished': isPublished,
                 };
-                if (existing == null) {
-                  await repo.createPost(EditorialPost(
-                    id: '',
-                    type: editType,
-                    title: titleCtrl.text.trim(),
-                    content: contentCtrl.text.trim(),
-                    youtubeVideoId: ytCtrl.text.trim(),
-                    imageUrl: imageUrlCtrl.text.trim(),
-                    attachmentUrl: attachUrlCtrl.text.trim(),
-                    attachmentName: attachNameCtrl.text.trim(),
-                    isPublished: isPublished,
-                  ));
-                } else {
-                  await repo.updatePost(existing.id, data);
+                try {
+                  if (existing == null) {
+                    await repo.createPost(EditorialPost(
+                      id: '',
+                      type: editType,
+                      title: titleCtrl.text.trim(),
+                      content: contentCtrl.text.trim(),
+                      youtubeVideoId: ytCtrl.text.trim(),
+                      imageUrl: imageUrlCtrl.text.trim(),
+                      attachmentUrl: attachUrlCtrl.text.trim(),
+                      attachmentName: attachNameCtrl.text.trim(),
+                      isPublished: isPublished,
+                    ));
+                  } else {
+                    await repo.updatePost(existing.id, data);
+                  }
+                  if (ctx.mounted) {
+                    Navigator.pop(ctx);
+                    showSavedSnackBar(ScaffoldMessenger.of(context), message: '저장됐어요.');
+                  }
+                } catch (e) {
+                  if (ctx.mounted) {
+                    showSaveErrorSnackBar(
+                      ScaffoldMessenger.of(ctx),
+                      message: '저장 실패: $e',
+                    );
+                  }
                 }
-                if (ctx.mounted) Navigator.pop(ctx);
               },
               child: Text('저장', style: TextStyle(color: const Color(0xFF38BDF8), fontWeight: FontWeight.w700)),
             ),
@@ -6787,15 +7839,18 @@ class _BuiltinTemplateAdminTab extends ConsumerWidget {
     BuiltinTemplateCategory selectedCategory =
         existing?.category ?? BuiltinTemplateCategory.clothing;
 
+    // 라이트 톤 통일 — 라이트 카드 위 일반 입력 폼 스타일.
     InputDecoration adminDec(String label, {String? hint}) => InputDecoration(
       labelText: label, hintText: hint,
-      labelStyle: const TextStyle(color: Colors.white70),
-      hintStyle: const TextStyle(color: Colors.white38),
-      fillColor: Colors.white.withValues(alpha: 0.10), filled: true,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white60)),
+      labelStyle: const TextStyle(color: Color(0xFF6B7280)),
+      hintStyle: const TextStyle(color: Color(0xFF9CA3AF)),
+      fillColor: const Color(0xFFF9FAFB), filled: true,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD1D5DB))),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD1D5DB))),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFFF8A00), width: 1.5)),
     );
+
+    const inputTextStyle = TextStyle(color: Color(0xFF1F2937));
 
     showDialog(
       context: context,
@@ -6807,33 +7862,33 @@ class _BuiltinTemplateAdminTab extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: titleKoCtrl, style: const TextStyle(color: Colors.white), decoration: adminDec('제목 (한국어)')),
+              TextField(controller: titleKoCtrl, style: inputTextStyle, decoration: adminDec('제목 (한국어)')),
               const SizedBox(height: 8),
-              TextField(controller: titleEnCtrl, style: const TextStyle(color: Colors.white), decoration: adminDec('제목 (English)')),
+              TextField(controller: titleEnCtrl, style: inputTextStyle, decoration: adminDec('제목 (English)')),
               const SizedBox(height: 8),
-              TextField(controller: descKoCtrl, style: const TextStyle(color: Colors.white), decoration: adminDec('설명 (한국어)')),
+              TextField(controller: descKoCtrl, style: inputTextStyle, decoration: adminDec('설명 (한국어)')),
               const SizedBox(height: 8),
-              TextField(controller: descEnCtrl, style: const TextStyle(color: Colors.white), decoration: adminDec('설명 (English)')),
+              TextField(controller: descEnCtrl, style: inputTextStyle, decoration: adminDec('설명 (English)')),
               const SizedBox(height: 8),
-              TextField(controller: iconCtrl, style: const TextStyle(color: Colors.white), decoration: adminDec('아이콘 이름', hint: 'checkroom_rounded / loop_rounded / face_rounded ...')),
+              TextField(controller: iconCtrl, style: inputTextStyle, decoration: adminDec('아이콘 이름', hint: 'checkroom_rounded / loop_rounded / face_rounded ...')),
               const SizedBox(height: 8),
-              TextField(controller: colorCtrl, style: const TextStyle(color: Colors.white), decoration: adminDec('색상 HEX', hint: '#B47EEB')),
+              TextField(controller: colorCtrl, style: inputTextStyle, decoration: adminDec('색상 HEX', hint: '#B47EEB')),
               const SizedBox(height: 8),
-              TextField(controller: orderCtrl, keyboardType: TextInputType.number, style: const TextStyle(color: Colors.white), decoration: adminDec('순서 (숫자)')),
+              TextField(controller: orderCtrl, keyboardType: TextInputType.number, style: inputTextStyle, decoration: adminDec('순서 (숫자)')),
               const SizedBox(height: 8),
               // 이슈 #787 — 카테고리 선택 드롭다운.
               DropdownButtonFormField<BuiltinTemplateCategory>(
                 initialValue: selectedCategory,
                 isExpanded: true,
-                dropdownColor: const Color(0xFF1F1F2A),
-                style: const TextStyle(color: Colors.white),
+                dropdownColor: Colors.white,
+                style: inputTextStyle,
                 decoration: adminDec('카테고리'),
                 items: BuiltinTemplateCategory.values
                     .map((c) => DropdownMenuItem<BuiltinTemplateCategory>(
                           value: c,
                           child: Text(
                             c.label(isKorean: true),
-                            style: const TextStyle(color: Colors.white),
+                            style: inputTextStyle,
                           ),
                         ))
                     .toList(),
@@ -7408,14 +8463,17 @@ class _NoticesAdminTabState extends State<_NoticesAdminTab> {
     bool uploading = false;
     bool fileUploading = false;
 
+    // 라이트 톤 통일.
     InputDecoration adminDec(String label) => InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: Colors.white70),
-      fillColor: Colors.white.withValues(alpha: 0.10), filled: true,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white60)),
+      labelStyle: const TextStyle(color: Color(0xFF6B7280)),
+      fillColor: const Color(0xFFF9FAFB), filled: true,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD1D5DB))),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD1D5DB))),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFFF8A00), width: 1.5)),
     );
+
+    const inputTextStyle = TextStyle(color: Color(0xFF1F2937));
 
     showDialog(
       context: context,
@@ -7431,24 +8489,24 @@ class _NoticesAdminTabState extends State<_NoticesAdminTab> {
                 children: [
                   TextField(
                     controller: titleCtrl,
-                    style: const TextStyle(color: Colors.white),
+                    style: inputTextStyle,
                     decoration: adminDec('제목'),
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: contentCtrl,
                     maxLines: 6,
-                    style: const TextStyle(color: Colors.white),
+                    style: inputTextStyle,
                     decoration: adminDec('내용'),
                   ),
                   const SizedBox(height: 12),
                   // ── 사진 첨부 ────────────────────────────────────────────
                   Row(
                     children: [
-                      const Text('사진 첨부', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                      const Text('사진 첨부', style: TextStyle(color: Color(0xFF6B7280), fontSize: 13)),
                       const Spacer(),
                       if (uploading)
-                        const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF8A00)))
                       else
                         TextButton.icon(
                           onPressed: () async {
@@ -7469,8 +8527,8 @@ class _NoticesAdminTabState extends State<_NoticesAdminTab> {
                               if (ctx.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '업로드 실패: $e');
                             }
                           },
-                          icon: const Icon(Icons.upload_rounded, size: 16, color: Colors.white70),
-                          label: const Text('갤러리에서 선택', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                          icon: const Icon(Icons.upload_rounded, size: 16, color: Color(0xFFFF8A00)),
+                          label: const Text('갤러리에서 선택', style: TextStyle(color: Color(0xFFFF8A00), fontSize: 13, fontWeight: FontWeight.w600)),
                         ),
                     ],
                   ),
@@ -7500,10 +8558,10 @@ class _NoticesAdminTabState extends State<_NoticesAdminTab> {
                   // ── 파일 첨부 ────────────────────────────────────────────
                   Row(
                     children: [
-                      const Text('파일 첨부', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                      const Text('파일 첨부', style: TextStyle(color: Color(0xFF6B7280), fontSize: 13)),
                       const Spacer(),
                       if (fileUploading)
-                        const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF8A00)))
                       else
                         TextButton.icon(
                           onPressed: () async {
@@ -7524,8 +8582,8 @@ class _NoticesAdminTabState extends State<_NoticesAdminTab> {
                               if (ctx.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '파일 업로드 실패: $e');
                             }
                           },
-                          icon: const Icon(Icons.attach_file_rounded, size: 16, color: Colors.white70),
-                          label: const Text('파일 선택', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                          icon: const Icon(Icons.attach_file_rounded, size: 16, color: Color(0xFFFF8A00)),
+                          label: const Text('파일 선택', style: TextStyle(color: Color(0xFFFF8A00), fontSize: 13, fontWeight: FontWeight.w600)),
                         ),
                     ],
                   ),
@@ -7534,18 +8592,18 @@ class _NoticesAdminTabState extends State<_NoticesAdminTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: const Color(0xFFF3F4F6),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.white24),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.insert_drive_file_rounded, size: 16, color: Colors.white60),
+                          const Icon(Icons.insert_drive_file_rounded, size: 16, color: Color(0xFF6B7280)),
                           const SizedBox(width: 8),
-                          Expanded(child: Text(fileName, style: const TextStyle(color: Colors.white70, fontSize: 13), overflow: TextOverflow.ellipsis)),
+                          Expanded(child: Text(fileName, style: const TextStyle(color: Color(0xFF1F2937), fontSize: 13), overflow: TextOverflow.ellipsis)),
                           GestureDetector(
                             onTap: () => setDialogState(() { fileUrl = ''; fileName = ''; }),
-                            child: const Icon(Icons.close, size: 16, color: Colors.white60),
+                            child: const Icon(Icons.close, size: 16, color: Color(0xFF6B7280)),
                           ),
                         ],
                       ),
@@ -7804,15 +8862,15 @@ class _LandingBoardAdminTabState extends State<_LandingBoardAdminTab> {
             children: [
               TextField(
                 controller: titleCtrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(labelText: '제목', labelStyle: const TextStyle(color: Colors.white70), fillColor: Colors.white.withValues(alpha: 0.10), filled: true, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24))),
+                style: const TextStyle(color: Color(0xFF1F2937)),
+                decoration: InputDecoration(labelText: '제목', labelStyle: const TextStyle(color: Color(0xFF6B7280)), fillColor: const Color(0xFFF9FAFB), filled: true, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD1D5DB))), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD1D5DB)))),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: contentCtrl,
                 maxLines: 8,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(labelText: '내용', labelStyle: const TextStyle(color: Colors.white70), fillColor: Colors.white.withValues(alpha: 0.10), filled: true, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24))),
+                style: const TextStyle(color: Color(0xFF1F2937)),
+                decoration: InputDecoration(labelText: '내용', labelStyle: const TextStyle(color: Color(0xFF6B7280)), fillColor: const Color(0xFFF9FAFB), filled: true, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD1D5DB))), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD1D5DB)))),
               ),
             ],
           ),
@@ -8193,35 +9251,38 @@ class _BoardManagementTabState extends State<_BoardManagementTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 탭 선택
-        Container(
+        // 탭 선택 (모바일 가로 오버플로우 방지 — 가로 스크롤, #856)
+        SizedBox(
           height: 44,
-          margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: Row(
-            children: List.generate(_boardTabs.length, (i) {
-              final selected = i == _boardIndex;
-              return GestureDetector(
-                onTap: () => setState(() => _boardIndex = i),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: selected ? C.lv : C.lvL,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: selected ? C.lv : C.lv.withValues(alpha: 0.2)),
-                  ),
-                  child: Text(
-                    _boardTabs[i],
-                    style: TextStyle(
-                      color: selected ? Colors.white : C.lvD,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                      fontSize: 13,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+            child: Row(
+              children: List.generate(_boardTabs.length, (i) {
+                final selected = i == _boardIndex;
+                return GestureDetector(
+                  onTap: () => setState(() => _boardIndex = i),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: selected ? C.lv : C.lvL,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: selected ? C.lv : C.lv.withValues(alpha: 0.2)),
+                    ),
+                    child: Text(
+                      _boardTabs[i],
+                      style: TextStyle(
+                        color: selected ? Colors.white : C.lvD,
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
-                ),
-              );
-            }),
+                );
+              }),
+            ),
           ),
         ),
         const SizedBox(height: 8),
@@ -8469,8 +9530,9 @@ class _AdminPatternsTabState extends ConsumerState<_AdminPatternsTab> {
 
   static const _columns = [
     AdminColumn(label: '타입', fixedWidth: 64),
-    AdminColumn(label: '제목 / 소유자', flex: 4),
+    AdminColumn(label: '제목 / 소유자', flex: 3),
     AdminColumn(label: '단계', fixedWidth: 80),
+    AdminColumn(label: '디버그 정보 (#852)', flex: 5),
     AdminColumn(label: '생성일', flex: 1),
     AdminColumn(label: '관리', fixedWidth: 60, align: TextAlign.end),
   ];
@@ -8547,11 +9609,18 @@ class _AdminPatternsTabState extends ConsumerState<_AdminPatternsTab> {
             final data = doc.data();
             final pathParts = doc.reference.path.split('/');
             final ownerUid = pathParts.length >= 2 ? pathParts[1] : '';
+            final docId = doc.id;
+            final docPath = doc.reference.path;
             final title = data['title'] as String? ?? '(제목 없음)';
             final createdAt = data['createdAt'];
             String dateStr = '';
             if (createdAt is Timestamp) {
               dateStr = DateFormat('yyyy-MM-dd').format(createdAt.toDate());
+            }
+            final updatedAt = data['updatedAt'];
+            String updatedStr = '';
+            if (updatedAt is Timestamp) {
+              updatedStr = DateFormat('yyyy-MM-dd HH:mm').format(updatedAt.toDate());
             }
             final typeStr = (data['type'] as String?) ?? 'unknown';
             final typeLabel = switch (typeStr) {
@@ -8569,55 +9638,113 @@ class _AdminPatternsTabState extends ConsumerState<_AdminPatternsTab> {
             final sourceOwnerName = data['sourceOwnerName'] as String?;
             final aiSections = data['aiSections'] as List?;
             final hasSteps = aiSections != null && aiSections.isNotEmpty;
+            final imageUrl = (data['imageUrl'] as String?) ?? '';
+            final pdfUrl = (data['pdfUrl'] as String?) ?? '';
+            // 도안 id == step_blueprint id (chart.id 가 blueprint id 로 1:1 매핑)
+            final stepBlueprintId = hasSteps ? docId : '';
             final subtitleText = sourceOwnerName != null && sourceOwnerName.isNotEmpty
-                ? '생성자: $sourceOwnerName · UID: $ownerUid'
-                : 'UID: $ownerUid';
+                ? '생성자: $sourceOwnerName'
+                : '';
             return AdminRow(
               accent: typeColor,
+              heightOverride: 132, // #852 디버그 셀 7줄 수용
               cells: [
                 // 타입
                 AdminBadge(label: typeLabel, color: typeColor),
-                // 제목 / 소유자
+                // 제목 / 소유자 (UID는 디버그 셀로 이동)
                 AdminCellTwoLine(title: title, subtitle: subtitleText),
                 // 단계
                 hasSteps
                     ? AdminBadge(label: '단계 있음', color: const Color(0xFFEC4899))
                     : AdminCellText('-', muted: true),
+                // 디버그 정보 (#852)
+                AdminDebugMetaCell(
+                  entries: [
+                    AdminDebugMetaEntry(label: 'UID', value: ownerUid, copyKind: '사용자 UID'),
+                    AdminDebugMetaEntry(label: 'ID', value: docId, copyKind: '도안 ID'),
+                    AdminDebugMetaEntry(label: 'Path', value: docPath, copyKind: 'Firestore 경로'),
+                    AdminDebugMetaEntry(label: 'Cover', value: imageUrl, copyKind: '커버 URL'),
+                    if (pdfUrl.isNotEmpty)
+                      AdminDebugMetaEntry(label: 'PDF', value: pdfUrl, copyKind: 'PDF URL'),
+                    AdminDebugMetaEntry(label: '단계로그ID', value: stepBlueprintId, copyKind: 'step_blueprint ID'),
+                    if (updatedStr.isNotEmpty)
+                      AdminDebugMetaEntry(label: '수정', value: updatedStr, copyKind: '수정 시각'),
+                  ],
+                ),
                 // 생성일
                 AdminCellText(dateStr.isNotEmpty ? dateStr : '-', muted: true),
-                // 관리
+                // 관리 — #853 시스템 자산 전환 + 삭제 통합 메뉴
                 Align(
                   alignment: Alignment.centerRight,
-                  child: IconButton(
-                    icon: Icon(Icons.delete_outline, size: 18, color: Colors.red.shade300),
-                    tooltip: '삭제',
+                  child: PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert, size: 18, color: C.tx),
+                    tooltip: '관리',
                     padding: const EdgeInsets.all(4),
-                    constraints: const BoxConstraints(),
-                    onPressed: () async {
-                      final confirm = await showDialog<bool>(
-                        context: ctx,
-                        builder: (dctx) => AlertDialog(
-                          title: const Text('도안 삭제'),
-                          content: Text('[$title] 도안을 삭제하시겠습니까?'),
-                          actions: [
-                            TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text('취소')),
-                            TextButton(onPressed: () => Navigator.pop(dctx, true), child: Text('삭제', style: TextStyle(color: Colors.red.shade400))),
-                          ],
-                        ),
-                      );
-                      if (confirm != true) return;
-                      if (!ctx.mounted) return;
-                      try {
-                        await runWithMoriLoadingDialog<void>(
-                          ctx,
-                          message: '삭제하는 중입니다.',
-                          subtitle: '잠시만 기다려 주세요.',
-                          task: () => doc.reference.delete(),
+                    onSelected: (value) async {
+                      if (value == 'transfer_system') {
+                        await _transferPatternToSystem(
+                          ctx: ctx,
+                          doc: doc,
+                          title: title,
+                          ownerUid: ownerUid,
+                          hasSteps: hasSteps,
+                          stepBlueprintId: stepBlueprintId,
                         );
-                        if (ctx.mounted) showSavedSnackBar(ScaffoldMessenger.of(ctx), message: '삭제됐어요.');
-                      } catch (e) {
-                        if (ctx.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '$e');
+                      } else if (value == 'delete') {
+                        final confirm = await showDialog<bool>(
+                          context: ctx,
+                          builder: (dctx) => AlertDialog(
+                            title: const Text('도안 삭제'),
+                            content: Text('[$title] 도안을 삭제하시겠습니까?'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text('취소')),
+                              TextButton(onPressed: () => Navigator.pop(dctx, true), child: Text('삭제', style: TextStyle(color: C.og))),
+                            ],
+                          ),
+                        );
+                        if (confirm != true) return;
+                        if (!ctx.mounted) return;
+                        try {
+                          await runWithMoriLoadingDialog<void>(
+                            ctx,
+                            message: '삭제하는 중입니다.',
+                            subtitle: '잠시만 기다려 주세요.',
+                            task: () => doc.reference.delete(),
+                          );
+                          if (ctx.mounted) showSavedSnackBar(ScaffoldMessenger.of(ctx), message: '삭제됐어요.');
+                        } catch (e) {
+                          if (ctx.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '$e');
+                        }
                       }
+                    },
+                    itemBuilder: (_) {
+                      final isAlreadySystem = ownerUid == SystemUsers.moriknitUid;
+                      return [
+                        PopupMenuItem<String>(
+                          value: 'transfer_system',
+                          enabled: !isAlreadySystem,
+                          child: Row(
+                            children: [
+                              Icon(Icons.public_rounded, size: 16, color: isAlreadySystem ? C.mu : C.lvD),
+                              const SizedBox(width: 8),
+                              Text(
+                                isAlreadySystem ? '이미 시스템 자산' : '시스템 자산으로 전환',
+                                style: T.body,
+                              ),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem<String>(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_outline, size: 16, color: C.og),
+                              const SizedBox(width: 8),
+                              Text('삭제', style: T.body.copyWith(color: C.og)),
+                            ],
+                          ),
+                        ),
+                      ];
                     },
                   ),
                 ),
@@ -8627,6 +9754,94 @@ class _AdminPatternsTabState extends ConsumerState<_AdminPatternsTab> {
         );
       },
     );
+  }
+
+  /// #853 — 도안(pattern_chart)을 시스템 자산으로 전환.
+  ///
+  /// 흐름:
+  ///   1) 확인 다이얼로그
+  ///   2) pattern_charts 도큐먼트를 `users/moriknit_system/pattern_charts/{id}`로 이동
+  ///      (copy + delete — 기존 path 가 ownerUid 결정 → 사용자 라이브러리에서 자동 제거)
+  ///   3) 같은 ID 의 step_blueprints 도큐먼트가 있으면 ownerUid 도 시스템으로 갱신
+  ///      (transferToSystemOwner — provider/verified 함께 갱신)
+  Future<void> _transferPatternToSystem({
+    required BuildContext ctx,
+    required QueryDocumentSnapshot<Map<String, dynamic>> doc,
+    required String title,
+    required String ownerUid,
+    required bool hasSteps,
+    required String stepBlueprintId,
+  }) async {
+    if (ownerUid == SystemUsers.moriknitUid) return;
+    final confirm = await showDialog<bool>(
+      context: ctx,
+      builder: (dctx) => AlertDialog(
+        title: const Text('시스템 자산으로 전환'),
+        content: Text(
+          '[$title] 도안을 모리니트 공식(시스템) 자산으로 전환할까요?\n\n'
+          '- 원 소유자(UID: ${ownerUid.isEmpty ? "-" : ownerUid}) 라이브러리에서 사라집니다.\n'
+          '- 사용자 측 "모리니트 공식" 섹션에서 누구나 볼 수 있게 됩니다.\n'
+          '- 되돌리려면 시스템 라이브러리에서 다시 소유권을 옮겨야 합니다.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text('취소')),
+          TextButton(
+            onPressed: () => Navigator.pop(dctx, true),
+            child: Text('전환', style: T.bodyBold.copyWith(color: C.lvD)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    if (!ctx.mounted) return;
+
+    try {
+      await runWithMoriLoadingDialog<void>(
+        ctx,
+        message: '시스템 자산으로 전환하는 중입니다.',
+        subtitle: '잠시만 기다려 주세요.',
+        task: () async {
+          final db = FirebaseFirestore.instance;
+          // 1) pattern_charts 도큐먼트 이동: copy → delete.
+          final srcData = doc.data();
+          final newRef = db
+              .collection('users')
+              .doc(SystemUsers.moriknitUid)
+              .collection('pattern_charts')
+              .doc(doc.id);
+          final batch = db.batch();
+          batch.set(newRef, {
+            ...srcData,
+            'ownerUid': SystemUsers.moriknitUid,
+            'sourceOwnerUid': ownerUid,
+            'transferredAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: false));
+          batch.delete(doc.reference);
+          await batch.commit();
+
+          // 2) step_blueprints 동일 ID 도큐먼트가 있으면 ownerUid 갱신.
+          if (hasSteps && stepBlueprintId.isNotEmpty) {
+            try {
+              await ref
+                  .read(stepBlueprintRepositoryProvider)
+                  .transferToSystemOwner(stepBlueprintId);
+            } catch (_) {
+              // step_blueprint 가 아직 마이그레이션 안 됐을 수 있음 — 조용히 skip.
+            }
+          }
+        },
+      );
+      if (ctx.mounted) {
+        showSavedSnackBar(
+          ScaffoldMessenger.of(ctx),
+          message: '시스템 자산으로 전환됐어요.',
+        );
+      }
+    } catch (e) {
+      if (ctx.mounted) {
+        showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '$e');
+      }
+    }
   }
 }
 
@@ -8642,7 +9857,8 @@ class _AdminTemplatesTabState extends ConsumerState<_AdminTemplatesTab> {
   String _search = '';
 
   static const _columns = [
-    AdminColumn(label: '템플릿명 / 소유자', flex: 4),
+    AdminColumn(label: '템플릿명 / 소유자', flex: 3),
+    AdminColumn(label: '디버그 정보 (#852)', flex: 5),
     AdminColumn(label: '관리', fixedWidth: 60, align: TextAlign.end),
   ];
 
@@ -8701,42 +9917,105 @@ class _AdminTemplatesTabState extends ConsumerState<_AdminTemplatesTab> {
             final data = doc.data();
             final pathParts = doc.reference.path.split('/');
             final ownerUid = pathParts.length >= 2 ? pathParts[1] : '';
+            final docId = doc.id;
+            final docPath = doc.reference.path;
             final name = data['name'] as String? ?? '(이름 없음)';
+            final createdAt = data['createdAt'];
+            String createdStr = '';
+            if (createdAt is Timestamp) {
+              createdStr = DateFormat('yyyy-MM-dd').format(createdAt.toDate());
+            }
+            final updatedAt = data['updatedAt'];
+            String updatedStr = '';
+            if (updatedAt is Timestamp) {
+              updatedStr = DateFormat('yyyy-MM-dd HH:mm').format(updatedAt.toDate());
+            }
             return AdminRow(
+              heightOverride: 104, // #852 디버그 셀 5줄 수용
               cells: [
-                AdminCellTwoLine(title: name, subtitle: 'UID: $ownerUid'),
+                AdminCellTwoLine(title: name, subtitle: ''),
+                // 디버그 정보 (#852)
+                AdminDebugMetaCell(
+                  entries: [
+                    AdminDebugMetaEntry(label: 'UID', value: ownerUid, copyKind: '사용자 UID'),
+                    AdminDebugMetaEntry(label: 'ID', value: docId, copyKind: '템플릿 ID'),
+                    AdminDebugMetaEntry(label: 'Path', value: docPath, copyKind: 'Firestore 경로'),
+                    if (createdStr.isNotEmpty)
+                      AdminDebugMetaEntry(label: '생성', value: createdStr, copyKind: '생성 시각'),
+                    if (updatedStr.isNotEmpty)
+                      AdminDebugMetaEntry(label: '수정', value: updatedStr, copyKind: '수정 시각'),
+                  ],
+                ),
+                // 관리 — #853 시스템 자산 전환 + 삭제 통합 메뉴
                 Align(
                   alignment: Alignment.centerRight,
-                  child: IconButton(
-                    icon: Icon(Icons.delete_outline, size: 18, color: Colors.red.shade300),
-                    tooltip: '삭제',
+                  child: PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert, size: 18, color: C.tx),
+                    tooltip: '관리',
                     padding: const EdgeInsets.all(4),
-                    constraints: const BoxConstraints(),
-                    onPressed: () async {
-                      final confirm = await showDialog<bool>(
-                        context: ctx,
-                        builder: (dctx) => AlertDialog(
-                          title: const Text('템플릿 삭제'),
-                          content: Text('[$name] 템플릿을 삭제하시겠습니까?'),
-                          actions: [
-                            TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text('취소')),
-                            TextButton(onPressed: () => Navigator.pop(dctx, true), child: Text('삭제', style: TextStyle(color: Colors.red.shade400))),
-                          ],
-                        ),
-                      );
-                      if (confirm != true) return;
-                      if (!ctx.mounted) return;
-                      try {
-                        await runWithMoriLoadingDialog<void>(
-                          ctx,
-                          message: '삭제하는 중입니다.',
-                          subtitle: '잠시만 기다려 주세요.',
-                          task: () => doc.reference.delete(),
+                    onSelected: (value) async {
+                      if (value == 'transfer_system') {
+                        await _transferTemplateToSystem(
+                          ctx: ctx,
+                          doc: doc,
+                          name: name,
+                          ownerUid: ownerUid,
                         );
-                        if (ctx.mounted) showSavedSnackBar(ScaffoldMessenger.of(ctx), message: '삭제됐어요.');
-                      } catch (e) {
-                        if (ctx.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '$e');
+                      } else if (value == 'delete') {
+                        final confirm = await showDialog<bool>(
+                          context: ctx,
+                          builder: (dctx) => AlertDialog(
+                            title: const Text('템플릿 삭제'),
+                            content: Text('[$name] 템플릿을 삭제하시겠습니까?'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text('취소')),
+                              TextButton(onPressed: () => Navigator.pop(dctx, true), child: Text('삭제', style: TextStyle(color: C.og))),
+                            ],
+                          ),
+                        );
+                        if (confirm != true) return;
+                        if (!ctx.mounted) return;
+                        try {
+                          await runWithMoriLoadingDialog<void>(
+                            ctx,
+                            message: '삭제하는 중입니다.',
+                            subtitle: '잠시만 기다려 주세요.',
+                            task: () => doc.reference.delete(),
+                          );
+                          if (ctx.mounted) showSavedSnackBar(ScaffoldMessenger.of(ctx), message: '삭제됐어요.');
+                        } catch (e) {
+                          if (ctx.mounted) showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '$e');
+                        }
                       }
+                    },
+                    itemBuilder: (_) {
+                      final isAlreadySystem = ownerUid == SystemUsers.moriknitUid;
+                      return [
+                        PopupMenuItem<String>(
+                          value: 'transfer_system',
+                          enabled: !isAlreadySystem,
+                          child: Row(
+                            children: [
+                              Icon(Icons.public_rounded, size: 16, color: isAlreadySystem ? C.mu : C.lvD),
+                              const SizedBox(width: 8),
+                              Text(
+                                isAlreadySystem ? '이미 시스템 자산' : '시스템 자산으로 전환',
+                                style: T.body,
+                              ),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem<String>(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_outline, size: 16, color: C.og),
+                              const SizedBox(width: 8),
+                              Text('삭제', style: T.body.copyWith(color: C.og)),
+                            ],
+                          ),
+                        ),
+                      ];
                     },
                   ),
                 ),
@@ -8746,6 +10025,86 @@ class _AdminTemplatesTabState extends ConsumerState<_AdminTemplatesTab> {
         );
       },
     );
+  }
+
+  /// #853 — 템플릿을 시스템 자산으로 전환.
+  ///
+  /// 흐름:
+  ///   1) 확인 다이얼로그
+  ///   2) users/{owner}/templates/{id} → users/moriknit_system/templates/{id} 이동 (copy + delete)
+  ///   3) 같은 ID 의 step_blueprints 도큐먼트가 있으면 ownerUid 도 갱신
+  Future<void> _transferTemplateToSystem({
+    required BuildContext ctx,
+    required QueryDocumentSnapshot<Map<String, dynamic>> doc,
+    required String name,
+    required String ownerUid,
+  }) async {
+    if (ownerUid == SystemUsers.moriknitUid) return;
+    final confirm = await showDialog<bool>(
+      context: ctx,
+      builder: (dctx) => AlertDialog(
+        title: const Text('시스템 자산으로 전환'),
+        content: Text(
+          '[$name] 템플릿을 모리니트 공식(시스템) 자산으로 전환할까요?\n\n'
+          '- 원 소유자(UID: ${ownerUid.isEmpty ? "-" : ownerUid}) 라이브러리에서 사라집니다.\n'
+          '- 사용자 측 "모리니트 공식" 섹션에서 누구나 볼 수 있게 됩니다.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text('취소')),
+          TextButton(
+            onPressed: () => Navigator.pop(dctx, true),
+            child: Text('전환', style: T.bodyBold.copyWith(color: C.lvD)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    if (!ctx.mounted) return;
+
+    try {
+      await runWithMoriLoadingDialog<void>(
+        ctx,
+        message: '시스템 자산으로 전환하는 중입니다.',
+        subtitle: '잠시만 기다려 주세요.',
+        task: () async {
+          final db = FirebaseFirestore.instance;
+          final srcData = doc.data();
+          final newRef = db
+              .collection('users')
+              .doc(SystemUsers.moriknitUid)
+              .collection('templates')
+              .doc(doc.id);
+          final batch = db.batch();
+          batch.set(newRef, {
+            ...srcData,
+            'ownerUid': SystemUsers.moriknitUid,
+            'sourceOwnerUid': ownerUid,
+            'transferredAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: false));
+          batch.delete(doc.reference);
+          await batch.commit();
+
+          // step_blueprints 동기화 (있을 때만).
+          try {
+            await ref
+                .read(stepBlueprintRepositoryProvider)
+                .transferToSystemOwner(doc.id);
+          } catch (_) {
+            // step_blueprint 매핑이 없을 수 있음 — skip.
+          }
+        },
+      );
+      if (ctx.mounted) {
+        showSavedSnackBar(
+          ScaffoldMessenger.of(ctx),
+          message: '시스템 자산으로 전환됐어요.',
+        );
+      }
+    } catch (e) {
+      if (ctx.mounted) {
+        showSaveErrorSnackBar(ScaffoldMessenger.of(ctx), message: '$e');
+      }
+    }
   }
 }
 
@@ -8789,7 +10148,7 @@ class _ServiceControlCardState extends ConsumerState<_ServiceControlCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('서비스 제어', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFF8FAFC), height: 1.3)),
+                const Text('서비스 제어', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1E293B), height: 1.3)),
                 const SizedBox(height: 8),
                 SwitchListTile(
                   value: _communityEnabled,
@@ -8887,22 +10246,25 @@ class _UserStatsAdminTabState extends ConsumerState<_UserStatsAdminTab> {
             ),
           ),
         ),
-        // 헤더 행
+        // 헤더 행 (라이트 톤)
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          color: const Color(0xFF1E293B),
+          decoration: const BoxDecoration(
+            color: Color(0xFFF3F4F6),
+            border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1)),
+          ),
           child: Row(
             children: [
               const SizedBox(width: 44),
-              const Expanded(flex: 3, child: Text('이름 / 이메일', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF94A3B8)))),
+              const Expanded(flex: 3, child: Text('이름 / 이메일', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF475569)))),
               const SizedBox(width: 8),
-              const SizedBox(width: 80, child: Text('플랜', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF94A3B8)))),
+              const SizedBox(width: 80, child: Text('플랜', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF475569)))),
               const SizedBox(width: 8),
-              const SizedBox(width: 60, child: Text('프로젝트', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF94A3B8)), textAlign: TextAlign.center)),
+              const SizedBox(width: 60, child: Text('프로젝트', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF475569)), textAlign: TextAlign.center)),
               const SizedBox(width: 8),
-              const SizedBox(width: 60, child: Text('스와치', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF94A3B8)), textAlign: TextAlign.center)),
+              const SizedBox(width: 60, child: Text('스와치', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF475569)), textAlign: TextAlign.center)),
               const SizedBox(width: 8),
-              const SizedBox(width: 90, child: Text('가입일', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF94A3B8)))),
+              const SizedBox(width: 90, child: Text('가입일', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF475569)))),
             ],
           ),
         ),
@@ -9168,11 +10530,11 @@ class _MockupImagesAdminTabState extends ConsumerState<_MockupImagesAdminTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('목업 이미지 관리', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
+          const Text('목업 이미지 관리', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
           const SizedBox(height: 6),
-          Text(
+          const Text(
             '기능 상세페이지 및 홈 캐러셀에 표시되는 스크린샷 이미지를 관리합니다.\n이미지가 없으면 코드 렌더링 화면이 표시됩니다.',
-            style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.6), height: 1.5),
+            style: TextStyle(fontSize: 13, color: Color(0xFF6B7280), height: 1.5),
           ),
           const SizedBox(height: 32),
           _buildSectionHeader('기능 상세페이지 목업', icon: Icons.web_asset_rounded),
@@ -9209,9 +10571,9 @@ class _MockupImagesAdminTabState extends ConsumerState<_MockupImagesAdminTab> {
   Widget _buildSectionHeader(String title, {required IconData icon}) {
     return Row(
       children: [
-        Icon(icon, color: const Color(0xFF6EE7B7), size: 18),
+        Icon(icon, color: const Color(0xFF16A34A), size: 18),
         const SizedBox(width: 8),
-        Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+        Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
       ],
     );
   }
@@ -9239,12 +10601,12 @@ class _MockupImageCard extends StatelessWidget {
     return Container(
       width: 200,
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: imageUrl.isNotEmpty
-              ? const Color(0xFF6EE7B7).withValues(alpha: 0.4)
-              : Colors.white.withValues(alpha: 0.08),
+              ? const Color(0xFF6EE7B7).withValues(alpha: 0.6)
+              : const Color(0xFFE5E7EB),
         ),
       ),
       child: Column(
@@ -9266,9 +10628,9 @@ class _MockupImageCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF1E293B)), maxLines: 1, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 2),
-                Text(mockupKey, style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.4)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(mockupKey, style: const TextStyle(fontSize: 10, color: Color(0xFF6B7280)), maxLines: 1, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 10),
                 Row(
                   children: [
@@ -9317,9 +10679,9 @@ class _MockupPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFF0F172A),
+      color: const Color(0xFFF3F4F6),
       child: Center(
-        child: Icon(Icons.smartphone_rounded, color: Colors.white.withValues(alpha: 0.15), size: 36),
+        child: Icon(Icons.smartphone_rounded, color: const Color(0xFF94A3B8).withValues(alpha: 0.6), size: 36),
       ),
     );
   }

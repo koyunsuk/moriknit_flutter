@@ -225,11 +225,16 @@ class ProjectStepRepository {
     await _updateProgressCounts(projectId);
   }
 
-  /// 이슈 #627 (B-1) — 단계 미러링 + 각 단계 대응 카운터 자동 생성.
+  /// 이슈 #627 (B-1) + #821 — 단계 미러링 + 도안당 카운터 1개 자동 생성.
   /// `addPatternSectionSteps`의 확장판. 도안 라이브러리 핵심 흐름.
   ///
-  /// 각 step 생성 후 같은 이름 + sourceStepId 연결된 카운터를 즉시 생성.
-  /// targetRowCount는 섹션 텍스트에서 "N단"/"Row N" 패턴으로 추정.
+  /// 정책 (#821, 2026-05-19 확정):
+  /// - 섹션별 ProjectStep 생성은 유지 (단계 미러링)
+  /// - **카운터는 도안 1개당 1개만 자동 생성** (첫 단계에 앵커)
+  /// - 단계 전환은 카운터의 `currentStepIndex` 필드로 추적
+  /// - 더 세분화된 카운터는 사용자가 단계 화면 [추가 카운터]로 수동 생성
+  ///
+  /// targetRowCount는 첫 단계 섹션 텍스트에서 "N단"/"Row N" 패턴으로 추정.
   Future<void> addPatternSectionStepsWithCounters(
     String projectId,
     PatternChart chart,
@@ -244,6 +249,12 @@ class ProjectStepRepository {
     if (uid.isEmpty) return;
 
     final blocks = chart.narrativeBlocks;
+
+    // #821 — 첫 단계 step의 ID, 이름, 예상 단수를 보관해 도안당 카운터 1개 생성에 사용.
+    String? firstStepId;
+    String? firstStepName;
+    int? firstStepEstimatedRows;
+
     int order = 0;
     for (final sec in sections) {
       final title = isKorean ? (sec.titleKo ?? sec.title) : sec.title;
@@ -286,20 +297,34 @@ class ProjectStepRepository {
         'sourcePatternChartId': chart.id,
       }).withServerTimeout(op: 'add_section_step_with_counter');
 
-      // 카운터 자동 생성
-      final counter = CounterModel(
-        id: '',
-        uid: uid,
-        name: stepName,
-        projectId: projectId,
-        projectStepId: stepDocRef.id,
-        patternChartId: chart.id,
-        targetRowCount: estimatedRows ?? 0,
-      );
-      await counterRepo.createCounter(counter);
+      // #821 — 첫 단계만 카운터 앵커로 기억. 카운터는 루프 종료 후 1개만 생성.
+      if (firstStepId == null) {
+        firstStepId = stepDocRef.id;
+        firstStepName = stepName;
+        firstStepEstimatedRows = estimatedRows;
+      }
 
       order++;
     }
+
+    // #821 — 도안 1개당 카운터 1개 자동 생성 (첫 단계에 앵커, currentStepIndex=0).
+    if (firstStepId != null) {
+      final patternName = chart.title;
+      final counterName =
+          (patternName.trim().isNotEmpty ? patternName : (firstStepName ?? ''));
+      final counter = CounterModel(
+        id: '',
+        uid: uid,
+        name: counterName,
+        projectId: projectId,
+        projectStepId: firstStepId,
+        patternChartId: chart.id,
+        targetRowCount: firstStepEstimatedRows ?? 0,
+        currentStepIndex: 0,
+      );
+      await counterRepo.createCounter(counter);
+    }
+
     await _updateProgressCounts(projectId);
   }
 

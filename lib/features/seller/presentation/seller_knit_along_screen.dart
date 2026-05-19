@@ -143,8 +143,9 @@ class _KnitAlongRow extends StatelessWidget {
     return InkWell(
       onTap: () {
         // 기존 #791 화면 재사용 — 참여자 목록·진행률.
-        Navigator.of(context).push(
-          MaterialPageRoute(
+        // #818 — rootNavigator:true 명시 (ShellRoute GlobalKey 충돌 방지).
+        Navigator.of(context, rootNavigator: true).push(
+          MaterialPageRoute<void>(
             builder: (_) =>
                 KnitAlongGroupScreen(originBlueprintId: pattern.id),
           ),

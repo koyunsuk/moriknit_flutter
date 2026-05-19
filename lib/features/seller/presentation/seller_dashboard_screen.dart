@@ -7,6 +7,8 @@
 //  3: 함께뜨기 (SellerKnitAlongScreen)
 //  4: 마케팅 (SellerMarketingScreen)
 //
+// 셀러 마이/설정 페이지(SellerShopScreen)는 헤더 우측 아바타 아이콘 → push 진입 (다음 작업).
+//
 // Phase 2 폴리시:
 //   - 모바일유저 앱 UI 시스템 베이스 적용 (BgOrbs + MoriPageHeaderShell + MoriWideHeader)
 //   - 셀러 정체성 액센트: 라임 #7CB342 (BottomNav selected + 헤더 강조)
@@ -15,7 +17,6 @@
 //
 // CLAUDE.md 토큰 의무 — C / T / MoriBlockShell / BgOrbs / MoriPageHeaderShell / MoriWideHeader.
 
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -24,6 +25,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/async_data_view.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../data/seller_metrics_provider.dart';
+import 'screens/seller_reviews_screen.dart';
+import 'screens/seller_sales_dashboard_screen.dart';
 import 'seller_knit_along_screen.dart';
 import 'seller_marketing_screen.dart';
 import 'seller_pattern_management_screen.dart';
@@ -90,30 +93,17 @@ class _SellerDashboardScreenState extends ConsumerState<SellerDashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: C.bg,
-      body: Stack(
-        children: [
-          const BgOrbs(),
-          SafeArea(
-            child: Column(
-              children: [
-                MoriPageHeaderShell(
-                  child: MoriWideHeader(
-                    title: '모리니트 셀러',
-                    subtitle: _currentSubtitle,
-                    trailing: [
-                      IconButton(
-                        icon: Icon(Icons.logout_rounded, color: kSellerAccent),
-                        tooltip: '로그아웃',
-                        onPressed: () => FirebaseAuth.instance.signOut(),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(child: _buildBody()),
-              ],
+      body: SafeArea(
+        child: Column(
+          children: [
+            // #816 후속 — 라임 그라데이션 헤더 (정돈된 느낌, 어드민과 동일 패턴)
+            _SellerHeader(
+              title: '모리니트 셀러',
+              subtitle: _currentSubtitle,
             ),
-          ),
-        ],
+            Expanded(child: _buildBody()),
+          ],
+        ),
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
@@ -158,12 +148,20 @@ class _SellerHomeTab extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
       children: [
-        // 1. 매출 요약 (오늘/이번주/이번달) — Phase 3 데이터 연결 대기
-        MoriBlockShell(
-          label: '매출 요약',
-          icon: Icons.payments_rounded,
-          accent: kSellerAccent,
-          child: _SalesSummary(),
+        // 1. 매출 요약 — Phase 3 실데이터 연결. 탭하면 상세 매출 대시보드.
+        InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const SellerSalesDashboardScreen(),
+            ),
+          ),
+          child: MoriBlockShell(
+            label: '매출 요약',
+            icon: Icons.payments_rounded,
+            accent: kSellerAccent,
+            child: _SalesSummary(),
+          ),
         ),
         const SizedBox(height: 12),
 
@@ -228,17 +226,25 @@ class _SellerHomeTab extends ConsumerWidget {
         ),
         const SizedBox(height: 12),
 
-        // 6. 리뷰 — Phase 3 데이터 연결 대기
-        MoriBlockShell(
-          label: '리뷰',
-          icon: Icons.star_rounded,
-          accent: C.lm,
-          child: _MetricRow(
-            primary: '—',
-            primaryLabel: '신규 리뷰',
-            secondary: '—',
-            secondaryLabel: '평균 별점',
-            note: '데이터 수집 중 — 리뷰 응답은 Phase 3에서 지원돼요.',
+        // 6. 리뷰 — Phase 3 실데이터. 탭하면 본인 도안 리뷰 모음 + 응답 화면.
+        InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const SellerReviewsScreen(),
+            ),
+          ),
+          child: MoriBlockShell(
+            label: '리뷰',
+            icon: Icons.star_rounded,
+            accent: C.lm,
+            child: _MetricRow(
+              primary: '—',
+              primaryLabel: '신규 리뷰',
+              secondary: '—',
+              secondaryLabel: '평균 별점',
+              note: '탭하여 본인 도안 리뷰를 확인하고 응답을 남길 수 있어요.',
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -291,6 +297,223 @@ class _SalesSummary extends StatelessWidget {
           style: T.caption.copyWith(color: C.mu),
         ),
       ],
+    );
+  }
+}
+
+/// 셀러 라임 그라데이션 헤더 — 정돈된 느낌, 어드민 패턴과 통일.
+class _SellerHeader extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  const _SellerHeader({required this.title, required this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            kSellerAccent,
+            kSellerAccent.withValues(alpha: 0.82),
+          ],
+        ),
+        border: Border(
+          bottom: BorderSide(
+            color: kSellerAccent.withValues(alpha: 0.6),
+            width: 1,
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: kSellerAccent.withValues(alpha: 0.18),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.22),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
+            ),
+            child: const Icon(
+              Icons.storefront_rounded,
+              color: Colors.white,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: T.h3.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: T.caption.copyWith(
+                    color: Colors.white.withValues(alpha: 0.92),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 셀러 와이어프레임 placeholder 페이지로 push.
+///
+/// 미구현 셀러 기능 진입 시 사용. "어떤 기능이 들어올 화면인지" 보여주는 와이어프레임.
+/// 다른 셀러 탭 파일에서도 import 후 사용.
+void openSellerPlaceholder(
+  BuildContext context, {
+  required String title,
+  required String subtitle,
+  required IconData icon,
+  required List<String> features,
+  String? note,
+}) {
+  Navigator.of(context, rootNavigator: true).push(
+    MaterialPageRoute<void>(
+      builder: (_) => SellerPlaceholderPage(
+        title: title,
+        subtitle: subtitle,
+        icon: icon,
+        features: features,
+        note: note,
+      ),
+    ),
+  );
+}
+
+/// 셀러 와이어프레임 페이지 — 라임 액센트 + 정돈된 모리 디자인.
+class SellerPlaceholderPage extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final List<String> features;
+  final String? note;
+
+  const SellerPlaceholderPage({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.features,
+    this.note,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: C.bg,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: IconThemeData(color: C.tx),
+        title: Text(title, style: T.h3.copyWith(color: C.tx)),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, size: 20),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+        children: [
+          MoriBlockShell(
+            label: title,
+            icon: icon,
+            accent: kSellerAccent,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(subtitle, style: T.body.copyWith(color: C.tx2)),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: kSellerAccent.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: kSellerAccent.withValues(alpha: 0.30),
+                    ),
+                  ),
+                  child: Text(
+                    '와이어프레임 (Phase 2 placeholder)',
+                    style: T.caption.copyWith(
+                      color: kSellerAccent,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          MoriBlockShell(
+            label: '들어올 항목',
+            icon: Icons.checklist_rounded,
+            accent: C.lv,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: features
+                  .map(
+                    (f) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 5),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.radio_button_unchecked,
+                            size: 16,
+                            color: C.mu,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              f,
+                              style: T.body.copyWith(color: C.tx),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          MoriBlockShell(
+            label: '안내',
+            icon: Icons.info_outline_rounded,
+            accent: C.mu,
+            child: Text(
+              note ??
+                  '본 화면은 와이어프레임 단계입니다. 실제 데이터·액션은 단계별로 구현됩니다.',
+              style: T.body.copyWith(color: C.tx2),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

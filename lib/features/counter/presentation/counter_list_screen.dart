@@ -62,12 +62,11 @@ class CounterListScreen extends ConsumerWidget {
                     }
                   }
 
-                  // 표시할 프로젝트 = 카운터가 있는 프로젝트 + 사용자의 활성 프로젝트
-                  // (카운터가 없는 프로젝트도 카드로 보여서 추가 동선 제공)
+                  // 표시할 프로젝트 = 카운터가 있는 프로젝트만 (사용자 요청).
+                  //   (이전: 활성 프로젝트 모두 표시했으나 카운터 없는 프로젝트 노출이 흐름과 맞지 않음)
                   final projectMap = {for (final p in projects) p.id: p};
                   final allProjectIds = <String>{
                     ...byProject.keys,
-                    ...projects.map((p) => p.id),
                   };
 
                   // 정렬: 카운터 많은 순 → 최근 업데이트 순

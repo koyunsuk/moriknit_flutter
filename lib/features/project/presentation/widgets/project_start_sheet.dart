@@ -8,7 +8,8 @@ import '../../../../core/router/routes.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/common_widgets.dart';
-import '../../../../providers/parsed_pattern_provider.dart';
+import '../../../../features/pattern/data/pattern_repository.dart';
+import '../../../../features/pattern/domain/pattern_chart.dart';
 import '../../../../providers/project_provider.dart';
 import '../../../../providers/template_provider.dart';
 import '../../domain/builtin_template.dart';
@@ -154,12 +155,14 @@ class _ProjectStartSheetContent extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 10),
-                // 이슈 #627 — ③ AI 도안에서 시작 (섹션 있는 AI 변환 도안만)
+                // 이슈 #863 — ③ 도안 라이브러리에서 시작 (AI도안/일반도안 모두 노출)
+                //   기존 'AI 도안에서 시작' (섹션 있는 AI 변환 도안만) → 모든 도안 노출로 확장.
+                //   일반도안 선택 시 빈 단계로그 + AI 처리 시 자동 sync (Cloud Function 트리거).
                 GlassCard(
                   onTap: () {
                     final korean = isKorean;
                     Navigator.pop(context);
-                    _showAiPatternSheet(outerContext, korean);
+                    _showPatternLibrarySheet(outerContext, korean);
                   },
                   child: Row(
                     children: [
@@ -170,7 +173,7 @@ class _ProjectStartSheetContent extends ConsumerWidget {
                           color: C.pk.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        child: Icon(Icons.auto_awesome_rounded, color: C.pkD),
+                        child: Icon(Icons.menu_book_rounded, color: C.pkD),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -179,14 +182,14 @@ class _ProjectStartSheetContent extends ConsumerWidget {
                         children: [
                           Text(
                               isKorean
-                                  ? 'AI 도안에서 시작'
-                                  : 'Start from AI Pattern',
+                                  ? '도안 라이브러리에서 시작'
+                                  : 'Start from pattern library',
                               style: T.bodyBold),
                           const SizedBox(height: 4),
                           Text(
                               isKorean
-                                  ? '도안 섹션이 단계로그로 자동 생성돼요'
-                                  : 'Pattern sections become step logs',
+                                  ? 'AI도안은 단계로그 자동 생성, 일반도안도 선택 가능해요'
+                                  : 'AI patterns auto-create step logs; regular patterns are also supported',
                               style: T.caption.copyWith(color: C.mu)),
                         ],
                       )),
@@ -330,8 +333,11 @@ class _ProjectStartSheetContent extends ConsumerWidget {
   }
 }
 
-/// 이슈 #627 — AI 변환 도안 중 섹션이 있는 것만 보여주고, 선택 시 프로젝트 생성 흐름으로 이동.
-void _showAiPatternSheet(BuildContext context, bool isKorean) {
+/// 이슈 #863 — 도안 라이브러리 시트. AI도안/일반도안 모두 노출.
+///   - 모든 도안(patternListProvider) 노출, isComplete 필터 제거.
+///   - AI도안(isComplete) : 선택 즉시 단계로그 자동 미러링 (pattern_detail 흐름과 동일).
+///   - 일반도안 : 빈 단계로그로 프로젝트 생성, 추후 AI 처리 완료 시 Cloud Function 트리거로 자동 sync.
+void _showPatternLibrarySheet(BuildContext context, bool isKorean) {
   showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -346,7 +352,7 @@ void _showAiPatternSheet(BuildContext context, bool isKorean) {
       minChildSize: 0.4,
       builder: (_, scrollCtrl) => Consumer(
         builder: (ctx2, ref, _) {
-          final async = ref.watch(aiPatternsProvider);
+          final async = ref.watch(patternListProvider);
           return Column(
             children: [
               const SizedBox(height: 12),
@@ -360,7 +366,7 @@ void _showAiPatternSheet(BuildContext context, bool isKorean) {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Text(
-                  isKorean ? 'AI 도안 선택' : 'Select AI Pattern',
+                  isKorean ? '도안 라이브러리에서 선택' : 'Select from pattern library',
                   style: T.h3,
                 ),
               ),
@@ -369,8 +375,8 @@ void _showAiPatternSheet(BuildContext context, bool isKorean) {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Text(
                   isKorean
-                      ? '섹션이 나눠진 도안만 표시돼요. 선택하면 섹션이 프로젝트 단계로그로 자동 생성됩니다.'
-                      : 'Only patterns with sections are shown. Selecting one mirrors sections into project step logs.',
+                      ? 'AI도안은 단계로그가 자동 생성돼요. 일반도안은 빈 단계로그로 시작하고, AI 처리되면 자동으로 채워집니다.'
+                      : 'AI patterns auto-create step logs. Regular patterns start blank — they auto-sync once AI processed.',
                   style: T.caption.copyWith(color: C.mu, height: 1.4),
                 ),
               ),
@@ -385,22 +391,19 @@ void _showAiPatternSheet(BuildContext context, bool isKorean) {
                     ),
                   ),
                   data: (all) {
-                    // 이슈 #626 — complete 도안만 프로젝트 연결 허용
-                    final withSections =
-                        all.where((p) => p.isComplete).toList();
-                    if (withSections.isEmpty) {
+                    if (all.isEmpty) {
                       return Padding(
                         padding: const EdgeInsets.all(24),
                         child: Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.description_outlined, size: 40, color: C.mu),
+                              Icon(Icons.menu_book_outlined, size: 40, color: C.mu),
                               const SizedBox(height: 12),
                               Text(
                                 isKorean
-                                    ? '섹션이 있는 AI 도안이 없어요.\n도안에디터에서 섹션을 먼저 나눠 주세요.'
-                                    : 'No AI patterns with sections yet.\nAdd sections in the pattern editor first.',
+                                    ? '저장된 도안이 없어요.\n도안 등록 또는 에디터에서 먼저 만들어 주세요.'
+                                    : 'No saved patterns yet.\nRegister or create one in the editor first.',
                                 style: T.caption.copyWith(color: C.mu, height: 1.5),
                                 textAlign: TextAlign.center,
                               ),
@@ -409,12 +412,20 @@ void _showAiPatternSheet(BuildContext context, bool isKorean) {
                         ),
                       );
                     }
+                    // AI도안 먼저, 그 다음 일반도안 (가독성). updatedAt 기준 정렬은 repo 에서 이미 보장.
+                    // ignore: deprecated_member_use
+                    final aiCharts = all.where((p) => p.isComplete).toList();
+                    // ignore: deprecated_member_use
+                    final regularCharts = all.where((p) => !p.isComplete).toList();
+                    final merged = <PatternChart>[...aiCharts, ...regularCharts];
                     return ListView.builder(
                       controller: scrollCtrl,
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-                      itemCount: withSections.length,
+                      itemCount: merged.length,
                       itemBuilder: (_, i) {
-                        final chart = withSections[i];
+                        final chart = merged[i];
+                        // ignore: deprecated_member_use
+                        final isAi = chart.isComplete;
                         final sectionCount = chart.aiSections?.length ?? 0;
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 10),
@@ -436,24 +447,61 @@ void _showAiPatternSheet(BuildContext context, bool isKorean) {
                                   width: 48,
                                   height: 48,
                                   decoration: BoxDecoration(
-                                    color: C.pk.withValues(alpha: 0.12),
+                                    color: (isAi ? C.pk : C.lv)
+                                        .withValues(alpha: 0.12),
                                     borderRadius: BorderRadius.circular(14),
                                   ),
-                                  child: Icon(Icons.auto_awesome_rounded, color: C.pkD),
+                                  child: Icon(
+                                    isAi
+                                        ? Icons.auto_awesome_rounded
+                                        : Icons.description_outlined,
+                                    color: isAi ? C.pkD : C.lvD,
+                                  ),
                                 ),
                                 const SizedBox(width: 14),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(chart.title, style: T.bodyBold,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis),
+                                      Row(
+                                        children: [
+                                          Flexible(
+                                            child: Text(chart.title,
+                                                style: T.bodyBold,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: (isAi ? C.pk : C.mu)
+                                                  .withValues(alpha: 0.12),
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              isAi
+                                                  ? (isKorean ? 'AI' : 'AI')
+                                                  : (isKorean ? '일반' : 'Reg'),
+                                              style: T.caption.copyWith(
+                                                color: isAi ? C.pkD : C.mu,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        isKorean
-                                            ? '$sectionCount개 섹션'
-                                            : '$sectionCount sections',
+                                        isAi
+                                            ? (isKorean
+                                                ? '$sectionCount개 섹션 · 단계로그 자동 생성'
+                                                : '$sectionCount sections · auto step logs')
+                                            : (isKorean
+                                                ? '빈 단계로그로 시작 · AI 처리 시 자동 sync'
+                                                : 'Starts blank · auto-syncs after AI'),
                                         style: T.caption.copyWith(color: C.mu),
                                       ),
                                     ],

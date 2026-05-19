@@ -47,7 +47,13 @@ mixin _$UserModel {
 // handles/{handle} 컬렉션에 reservation 문서로 중복 방지.
   String get handle =>
       throw _privateConstructorUsedError; // 이슈 #771 — 핸들 마지막 변경 시각. 30일 변경 제한 기준.
-  DateTime? get handleUpdatedAt => throw _privateConstructorUsedError;
+  DateTime? get handleUpdatedAt =>
+      throw _privateConstructorUsedError; // 이슈 #831 — 외부 도안 이메일 인입 키 (4자 영숫자, 소문자).
+// 형식: ^[a-z0-9]{4,8}$. 인입 주소 = `{handle}_{key}@pattern.moriknit.com`.
+// 미발급(빈 문자열) 시 마이페이지 카드에서 1회 발급 버튼 노출.
+  String get inboundEmailKey =>
+      throw _privateConstructorUsedError; // 이슈 #831 — 인입 키 마지막 갱신 시각 (스팸 누출 재발급 추적).
+  DateTime? get inboundEmailUpdatedAt => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -77,7 +83,9 @@ abstract class $UserModelCopyWith<$Res> {
       bool phoneVerified,
       String? phoneNumber,
       String handle,
-      DateTime? handleUpdatedAt});
+      DateTime? handleUpdatedAt,
+      String inboundEmailKey,
+      DateTime? inboundEmailUpdatedAt});
 
   $UserSubscriptionCopyWith<$Res> get subscription;
   $UserUsageCopyWith<$Res> get usage;
@@ -113,6 +121,8 @@ class _$UserModelCopyWithImpl<$Res, $Val extends UserModel>
     Object? phoneNumber = freezed,
     Object? handle = null,
     Object? handleUpdatedAt = freezed,
+    Object? inboundEmailKey = null,
+    Object? inboundEmailUpdatedAt = freezed,
   }) {
     return _then(_value.copyWith(
       uid: null == uid
@@ -183,6 +193,14 @@ class _$UserModelCopyWithImpl<$Res, $Val extends UserModel>
           ? _value.handleUpdatedAt
           : handleUpdatedAt // ignore: cast_nullable_to_non_nullable
               as DateTime?,
+      inboundEmailKey: null == inboundEmailKey
+          ? _value.inboundEmailKey
+          : inboundEmailKey // ignore: cast_nullable_to_non_nullable
+              as String,
+      inboundEmailUpdatedAt: freezed == inboundEmailUpdatedAt
+          ? _value.inboundEmailUpdatedAt
+          : inboundEmailUpdatedAt // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
     ) as $Val);
   }
 
@@ -228,7 +246,9 @@ abstract class _$$UserModelImplCopyWith<$Res>
       bool phoneVerified,
       String? phoneNumber,
       String handle,
-      DateTime? handleUpdatedAt});
+      DateTime? handleUpdatedAt,
+      String inboundEmailKey,
+      DateTime? inboundEmailUpdatedAt});
 
   @override
   $UserSubscriptionCopyWith<$Res> get subscription;
@@ -264,6 +284,8 @@ class __$$UserModelImplCopyWithImpl<$Res>
     Object? phoneNumber = freezed,
     Object? handle = null,
     Object? handleUpdatedAt = freezed,
+    Object? inboundEmailKey = null,
+    Object? inboundEmailUpdatedAt = freezed,
   }) {
     return _then(_$UserModelImpl(
       uid: null == uid
@@ -334,6 +356,14 @@ class __$$UserModelImplCopyWithImpl<$Res>
           ? _value.handleUpdatedAt
           : handleUpdatedAt // ignore: cast_nullable_to_non_nullable
               as DateTime?,
+      inboundEmailKey: null == inboundEmailKey
+          ? _value.inboundEmailKey
+          : inboundEmailKey // ignore: cast_nullable_to_non_nullable
+              as String,
+      inboundEmailUpdatedAt: freezed == inboundEmailUpdatedAt
+          ? _value.inboundEmailUpdatedAt
+          : inboundEmailUpdatedAt // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
     ));
   }
 }
@@ -358,7 +388,9 @@ class _$UserModelImpl implements _UserModel {
       this.phoneVerified = false,
       this.phoneNumber,
       this.handle = '',
-      this.handleUpdatedAt})
+      this.handleUpdatedAt,
+      this.inboundEmailKey = '',
+      this.inboundEmailUpdatedAt})
       : _socialLinks = socialLinks;
 
   factory _$UserModelImpl.fromJson(Map<String, dynamic> json) =>
@@ -428,10 +460,19 @@ class _$UserModelImpl implements _UserModel {
 // 이슈 #771 — 핸들 마지막 변경 시각. 30일 변경 제한 기준.
   @override
   final DateTime? handleUpdatedAt;
+// 이슈 #831 — 외부 도안 이메일 인입 키 (4자 영숫자, 소문자).
+// 형식: ^[a-z0-9]{4,8}$. 인입 주소 = `{handle}_{key}@pattern.moriknit.com`.
+// 미발급(빈 문자열) 시 마이페이지 카드에서 1회 발급 버튼 노출.
+  @override
+  @JsonKey()
+  final String inboundEmailKey;
+// 이슈 #831 — 인입 키 마지막 갱신 시각 (스팸 누출 재발급 추적).
+  @override
+  final DateTime? inboundEmailUpdatedAt;
 
   @override
   String toString() {
-    return 'UserModel(uid: $uid, email: $email, displayName: $displayName, photoURL: $photoURL, bio: $bio, subscription: $subscription, usage: $usage, locale: $locale, createdAt: $createdAt, lastActiveAt: $lastActiveAt, moriBalance: $moriBalance, points: $points, socialLinks: $socialLinks, phoneVerified: $phoneVerified, phoneNumber: $phoneNumber, handle: $handle, handleUpdatedAt: $handleUpdatedAt)';
+    return 'UserModel(uid: $uid, email: $email, displayName: $displayName, photoURL: $photoURL, bio: $bio, subscription: $subscription, usage: $usage, locale: $locale, createdAt: $createdAt, lastActiveAt: $lastActiveAt, moriBalance: $moriBalance, points: $points, socialLinks: $socialLinks, phoneVerified: $phoneVerified, phoneNumber: $phoneNumber, handle: $handle, handleUpdatedAt: $handleUpdatedAt, inboundEmailKey: $inboundEmailKey, inboundEmailUpdatedAt: $inboundEmailUpdatedAt)';
   }
 
   @override
@@ -465,30 +506,37 @@ class _$UserModelImpl implements _UserModel {
                 other.phoneNumber == phoneNumber) &&
             (identical(other.handle, handle) || other.handle == handle) &&
             (identical(other.handleUpdatedAt, handleUpdatedAt) ||
-                other.handleUpdatedAt == handleUpdatedAt));
+                other.handleUpdatedAt == handleUpdatedAt) &&
+            (identical(other.inboundEmailKey, inboundEmailKey) ||
+                other.inboundEmailKey == inboundEmailKey) &&
+            (identical(other.inboundEmailUpdatedAt, inboundEmailUpdatedAt) ||
+                other.inboundEmailUpdatedAt == inboundEmailUpdatedAt));
   }
 
   @JsonKey(ignore: true)
   @override
-  int get hashCode => Object.hash(
-      runtimeType,
-      uid,
-      email,
-      displayName,
-      photoURL,
-      bio,
-      subscription,
-      usage,
-      locale,
-      createdAt,
-      lastActiveAt,
-      moriBalance,
-      points,
-      const DeepCollectionEquality().hash(_socialLinks),
-      phoneVerified,
-      phoneNumber,
-      handle,
-      handleUpdatedAt);
+  int get hashCode => Object.hashAll([
+        runtimeType,
+        uid,
+        email,
+        displayName,
+        photoURL,
+        bio,
+        subscription,
+        usage,
+        locale,
+        createdAt,
+        lastActiveAt,
+        moriBalance,
+        points,
+        const DeepCollectionEquality().hash(_socialLinks),
+        phoneVerified,
+        phoneNumber,
+        handle,
+        handleUpdatedAt,
+        inboundEmailKey,
+        inboundEmailUpdatedAt
+      ]);
 
   @JsonKey(ignore: true)
   @override
@@ -522,7 +570,9 @@ abstract class _UserModel implements UserModel {
       final bool phoneVerified,
       final String? phoneNumber,
       final String handle,
-      final DateTime? handleUpdatedAt}) = _$UserModelImpl;
+      final DateTime? handleUpdatedAt,
+      final String inboundEmailKey,
+      final DateTime? inboundEmailUpdatedAt}) = _$UserModelImpl;
 
   factory _UserModel.fromJson(Map<String, dynamic> json) =
       _$UserModelImpl.fromJson;
@@ -566,6 +616,12 @@ abstract class _UserModel implements UserModel {
   String get handle;
   @override // 이슈 #771 — 핸들 마지막 변경 시각. 30일 변경 제한 기준.
   DateTime? get handleUpdatedAt;
+  @override // 이슈 #831 — 외부 도안 이메일 인입 키 (4자 영숫자, 소문자).
+// 형식: ^[a-z0-9]{4,8}$. 인입 주소 = `{handle}_{key}@pattern.moriknit.com`.
+// 미발급(빈 문자열) 시 마이페이지 카드에서 1회 발급 버튼 노출.
+  String get inboundEmailKey;
+  @override // 이슈 #831 — 인입 키 마지막 갱신 시각 (스팸 누출 재발급 추적).
+  DateTime? get inboundEmailUpdatedAt;
   @override
   @JsonKey(ignore: true)
   _$$UserModelImplCopyWith<_$UserModelImpl> get copyWith =>

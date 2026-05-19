@@ -31,15 +31,22 @@ final adminRouterProvider = Provider<GoRouter>((ref) {
       // 비로그인이면 무조건 /login
       if (!isLoggedIn) return location == '/login' ? null : '/login';
 
-      // Custom Claims 로딩 중 대기
+      // Custom Claims/admins 컬렉션 stream 로딩 중 대기.
+      // 첫 로그인 직후 valueOrNull 이 null 이면 admins 컬렉션 read 아직 미완료 →
+      // 섣불리 no-permission 리다이렉트 금지. 다른 계정 재로그인 후 정상 동작하던 이유.
       if (isAdminState.isLoading) return null;
+      final isAdminValue = isAdminState.valueOrNull;
+      if (isAdminValue == null) return null; // 첫 emit 아직 안 됨 → 대기
 
-      // 어드민 권한 체크
-      final isAdmin = isAdminState.valueOrNull ?? false;
-      if (!isAdmin) return '/no-permission';
+      if (!isAdminValue) {
+        // /no-permission 에 이미 있으면 무한 루프 방지
+        return location == '/no-permission' ? null : '/no-permission';
+      }
 
-      // 어드민이면서 /login 진입 시 → /admin
-      if (location == '/login') return '/admin';
+      // (#840) 어드민일 때 /login 또는 /no-permission 진입 시 → /admin 자동 이동.
+      //   isAdmin Stream 이 false → true 로 바뀌면 listener 가 refresh 호출 →
+      //   redirect 재평가되어 사용자가 /no-permission 에서 자동 탈출.
+      if (location == '/login' || location == '/no-permission') return '/admin';
       return null;
     },
     routes: [

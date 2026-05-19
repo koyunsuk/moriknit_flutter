@@ -8,10 +8,10 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/bug_report_provider.dart';
 import '../../auth/domain/user_model.dart';
 import '../data/bug_metadata_collector.dart';
+import '../data/bug_report_repository.dart';
 import '../domain/bug_report.dart';
 
 Future<void> showBugReportSheet(
@@ -67,81 +67,187 @@ class _BugReportSheetState extends ConsumerState<_BugReportSheet> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    final isKorean = ref.read(appLanguageProvider).isKorean;
-
-    // 메타데이터 수집 (#778) — 시트가 살아있는 시점에 context 사용
-    final meta = await collectBugMetadata(context, ref);
-
-    if (!mounted) return;
-
-    int? issueNumber;
-    try {
-      issueNumber = await runWithMoriLoadingDialog<int?>(
-        context,
-        message: isKorean ? '제출하는 중입니다.' : 'Submitting...',
-        subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.',
-        task: () async {
-          // 이미지 업로드
-          final repo = ref.read(bugReportRepositoryProvider);
-          final imageUrls = _images.isNotEmpty
-              ? await repo.uploadImages(widget.user.uid, _images.map((e) => e.$2).toList())
-              : <String>[];
-
-          final report = BugReport(
-            title: _titleCtrl.text.trim(),
-            description: _descCtrl.text.trim(),
-            category: _category,
-            steps: _stepsCtrl.text.trim(),
-            deviceInfo: meta.deviceInfo,
-            osVersion: meta.osVersion,
-            appVersion: meta.appVersion,
-            platform: meta.platform,
-            screenSize: meta.screenSize,
-            currentRoute: meta.currentRoute,
-            currentScreenName: meta.currentScreenName,
-            localeName: meta.localeName,
-            isOnline: meta.isOnline,
-            viewportInsets: meta.viewportInsets,
-            uid: widget.user.uid,
-            userEmail: widget.user.email,
-            userName: widget.user.displayName,
-            imageUrls: imageUrls,
-            wantsReply: _wantsReply,
-            userTier: widget.user.subscription.planId,
-            createdAt: DateTime.now(),
-          );
-
-          return ref.read(bugReportProvider.notifier).submit(report);
-        },
-      );
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(isKorean ? '제출 중 오류가 발생했습니다.' : 'An error occurred. Please try again.'),
-          backgroundColor: C.og,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ));
-      }
+    debugPrint('🔍 #822 _submit() entered');
+    if (!_formKey.currentState!.validate()) {
+      debugPrint('🔍 #822 validate fail → return');
       return;
     }
+    debugPrint('🔍 #822 validate OK');
+    final isKorean = ref.read(appLanguageProvider).isKorean;
 
-    if (!mounted) return;
+    // #822 (재수정) — sheet 안에서 platform channel(DeviceInfo/PackageInfo) await 시 cold start
+    //   1-3초 메인스레드 점유 → ANR (Input dispatching timed out). 분리:
+    //   - sync 정보만 sheet 닫기 전 즉시 캡처 (MediaQuery/Route/Locale — platform channel X)
+    //   - async platform channel 호출은 sheet 닫은 후 백그라운드에서
+
+    // 1) 입력값 캡처 (sheet dispose 후에도 안전)
+    final user = widget.user;
+    final title = _titleCtrl.text.trim();
+    final description = _descCtrl.text.trim();
+    final category = _category;
+    final steps = _stepsCtrl.text.trim();
+    final wantsReply = _wantsReply;
+    final imageBytes = _images.map((e) => e.$2).toList();
+
+    // 2) (재진단) — collectBugMetadataSync 호출이 ANR 원인. 완전 제거.
+    //    sync인데도 _getCurrentRoute(GoRouter.routerDelegate.currentConfiguration)
+    //    또는 ref.read(networkStatusServiceProvider) 가 메인스레드 점유.
+    //    메타데이터는 모두 빈 값으로 진행 — 이슈 등록은 차단 안 함.
+    debugPrint('🔍 #822 sync 메타 수집 SKIP (ANR 원인 확정)');
+
+    // 3) main scaffold messenger 캡처
+    final messenger = ScaffoldMessenger.of(context);
+
+    // 3-1) ref 의존 인스턴스 미리 캡처 (sheet dispose 후 ref 사용 불가).
+    //   #822 후속 — "Bad state: Cannot use ref after the widget was disposed" 방지.
+    final repo = ref.read(bugReportRepositoryProvider);
+    final notifier = ref.read(bugReportProvider.notifier);
+
+    // 4) sheet 즉시 닫음 → 메인스레드 부담 해제 (이제 사용자 인터랙션 가능)
+    debugPrint('🔍 #822 Navigator.pop 시작');
     Navigator.of(context).pop();
+    debugPrint('🔍 #822 Navigator.pop 완료');
 
-    final msg = issueNumber != null
-        ? (isKorean ? '이슈 #$issueNumber 로 등록되었습니다.' : 'Submitted as issue #$issueNumber.')
-        : (isKorean ? '제출되었습니다. 검토 후 처리됩니다.' : 'Submitted. We\'ll review it shortly.');
+    // 빈 syncMeta
+    const syncMeta = (
+      screenSize: '',
+      viewportInsets: '',
+      currentRoute: '',
+      currentScreenName: '',
+      localeName: '',
+      isOnline: '',
+    );
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: T.body.copyWith(color: Colors.white)),
+    // 5) 백그라운드 submit (platform channel + 이미지 업로드 + Firestore 모두 백그라운드)
+    _submitInBackground(
+      messenger: messenger,
+      repo: repo,
+      notifier: notifier,
+      isKorean: isKorean,
+      user: user,
+      title: title,
+      description: description,
+      category: category,
+      steps: steps,
+      wantsReply: wantsReply,
+      imageBytes: imageBytes,
+      syncMeta: syncMeta,
+    );
+  }
+
+  /// 시트 닫힌 후 백그라운드에서 진행. ref/widget context 의존 없이 동작.
+  /// platform channel (DeviceInfo/PackageInfo) 호출도 백그라운드에서 (ANR 방지).
+  /// repo/notifier는 sheet 닫기 전 미리 캡처해서 전달 (ref 사용 불가 회피).
+  Future<void> _submitInBackground({
+    required ScaffoldMessengerState messenger,
+    required BugReportRepository repo,
+    required BugReportNotifier notifier,
+    required bool isKorean,
+    required UserModel user,
+    required String title,
+    required String description,
+    required String category,
+    required String steps,
+    required bool wantsReply,
+    required List<Uint8List> imageBytes,
+    required ({String screenSize, String viewportInsets, String currentRoute, String currentScreenName, String localeName, String isOnline}) syncMeta,
+  }) async {
+    // 진행 SnackBar (배경에서 작업 중임을 알림)
+    messenger.showSnackBar(SnackBar(
+      content: Row(
+        children: [
+          const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            isKorean ? '버그리포트 전송 중...' : 'Submitting bug report...',
+            style: T.body.copyWith(color: Colors.white),
+          ),
+        ],
+      ),
+      duration: const Duration(seconds: 30),
       backgroundColor: C.lvD,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ));
 
-    ref.read(bugReportProvider.notifier).reset();
+    try {
+      // 1) 백그라운드에서 platform channel 호출 (DeviceInfo / PackageInfo).
+      //    sheet 닫힌 상태이므로 메인스레드 부담 무관 → ANR 안전.
+      String deviceInfo = '';
+      String osVersion = '';
+      String platform = '';
+      String appVersion = '';
+      try {
+        final asyncMeta = await collectBugMetadataAsync();
+        deviceInfo = asyncMeta.deviceInfo;
+        osVersion = asyncMeta.osVersion;
+        platform = asyncMeta.platform;
+        appVersion = asyncMeta.appVersion;
+      } catch (_) {}
+
+      // 2) 이미지 업로드 (캡처된 repo 사용 — ref.read 호출 X)
+      final imageUrls = imageBytes.isNotEmpty
+          ? await repo.uploadImages(user.uid, imageBytes)
+          : <String>[];
+
+      // 3) BugReport 구성 — sync 정보(sheet 시점 캡처) + async 정보(백그라운드 수집)
+      final report = BugReport(
+        title: title,
+        description: description,
+        category: category,
+        steps: steps,
+        deviceInfo: deviceInfo,
+        osVersion: osVersion,
+        appVersion: appVersion,
+        platform: platform,
+        screenSize: syncMeta.screenSize,
+        currentRoute: syncMeta.currentRoute,
+        currentScreenName: syncMeta.currentScreenName,
+        localeName: syncMeta.localeName,
+        isOnline: syncMeta.isOnline,
+        viewportInsets: syncMeta.viewportInsets,
+        uid: user.uid,
+        userEmail: user.email,
+        userName: user.displayName,
+        imageUrls: imageUrls,
+        wantsReply: wantsReply,
+        userTier: user.subscription.planId,
+        createdAt: DateTime.now(),
+      );
+
+      // 캡처된 notifier 사용 (ref 호출 X — sheet dispose 후 안전)
+      final issueNumber = await notifier.submit(report);
+
+      messenger.hideCurrentSnackBar();
+      final msg = issueNumber != null
+          ? (isKorean ? '이슈 #$issueNumber 로 등록되었습니다.' : 'Submitted as issue #$issueNumber.')
+          : (isKorean ? '제출되었습니다. 검토 후 처리됩니다.' : "Submitted. We'll review it shortly.");
+      messenger.showSnackBar(SnackBar(
+        content: Text(msg, style: T.body.copyWith(color: Colors.white)),
+        backgroundColor: C.lvD,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ));
+      notifier.reset();
+    } catch (e) {
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(SnackBar(
+        content: Text(
+          isKorean ? '제출 중 오류: $e' : 'Submit failed: $e',
+          style: T.body.copyWith(color: Colors.white),
+        ),
+        backgroundColor: C.og,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ));
+    }
   }
 
   @override
@@ -371,7 +477,15 @@ class _BugReportSheetState extends ConsumerState<_BugReportSheet> {
                         width: double.infinity,
                         height: 52,
                         child: ElevatedButton(
-                          onPressed: _submit,
+                          // #822 (재진단) — onPressed에서 즉시 return + postFrame에 _submit 호출.
+                          //   메인 스레드 즉시 반환 → ANR 차단 시도.
+                          onPressed: () {
+                            debugPrint('🔍 #822 button tapped');
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              debugPrint('🔍 #822 postFrame: _submit 시작');
+                              _submit();
+                            });
+                          },
                           style: ElevatedButton.styleFrom(backgroundColor: C.lv, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                           child: Text(isKorean ? '제출하기' : 'Submit', style: T.bodyBold.copyWith(color: Colors.white)),
                         ),

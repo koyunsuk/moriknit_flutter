@@ -19,6 +19,7 @@ import '../../../core/widgets/async_data_view.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/auth_provider.dart';
 import '../../tester_feedback/domain/tester_feedback.dart';
+import 'seller_dashboard_screen.dart' show openSellerPlaceholder;
 
 /// 통합 피드백 항목 — 도안 메타 + 피드백 본문.
 ///
@@ -193,17 +194,22 @@ class _SellerFeedbackEmptyPlaceholder extends StatelessWidget {
               SizedBox(
                 height: 44,
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          '테스터 모집 화면은 Phase 3 에서 지원돼요.',
-                          style: T.body.copyWith(color: Colors.white),
-                        ),
-                        backgroundColor: C.lvD,
-                      ),
-                    );
-                  },
+                  onPressed: () => openSellerPlaceholder(
+                    context,
+                    title: '테스터 모집하기',
+                    subtitle: 'Pro 셀러 본인 도안의 베타 테스터를 모집·관리',
+                    icon: Icons.person_add_alt_1_rounded,
+                    features: [
+                      '테스터 모집 글 작성 (도안 미리보기 포함)',
+                      '지원자 자격 조건 (게이지/경력/지역)',
+                      '지원자 목록 + 승인/거절',
+                      '비공개 도안 임시 공유 링크 발급',
+                      '진행률 추적 (단계별 완료율)',
+                      '피드백 응답 + 별점',
+                      '모집 종료 + 정산 (포인트/할인 쿠폰)',
+                    ],
+                    note: '본인 도안을 정식 출시 전 검증하는 핵심 셀러 도구. Phase 3 구현 예정.',
+                  ),
                   icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
                   label: Text(
                     '테스터 모집하기',

@@ -128,6 +128,17 @@ service firebase.storage {
       allow write: if isAdmin();
     }
 
+    // ── 팝업 배경 이미지 (어드민) — 이슈 #835 ──────────────────────────────
+    match /app_config_popup_bg/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    // ── 팝업 본문 이미지 (어드민) — 이슈 #835 (Quill embed) ──────────────────
+    match /app_config_popup_body/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // ── 목업 이미지 (어드민) ──────────────────────────────────────────────
     match /mockup_images/{allPaths=**} {
       allow read: if true;

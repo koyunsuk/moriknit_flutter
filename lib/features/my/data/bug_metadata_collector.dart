@@ -39,10 +39,71 @@ class BugMetadata {
   });
 }
 
+/// context 의존 sync 정보만 즉시 수집. platform channel 호출 없음.
+///
+/// #822 — sheet 닫기 전 동기 호출용. ANR 방지 (메인스레드 점유 없음).
+({String screenSize, String viewportInsets, String currentRoute, String currentScreenName, String localeName, String isOnline})
+    collectBugMetadataSync(BuildContext context, WidgetRef ref) {
+  String screenSize = '';
+  String viewportInsets = '';
+  try {
+    final media = MediaQuery.of(context);
+    screenSize = '${media.size.width.round()}x${media.size.height.round()}';
+    viewportInsets = 'top:${media.padding.top.round()} bottom:${media.padding.bottom.round()}';
+  } catch (_) {}
+
+  final route = _getCurrentRoute(context);
+  final screenName = _routeToScreenName(route);
+  final localeName = _getLocaleName(context, ref);
+
+  String isOnline = '';
+  try {
+    final svc = ref.read(networkStatusServiceProvider);
+    switch (svc.current) {
+      case NetworkStatus.online:
+        isOnline = 'true';
+        break;
+      case NetworkStatus.offline:
+        isOnline = 'false';
+        break;
+      case NetworkStatus.unknown:
+        isOnline = '';
+        break;
+    }
+  } catch (_) {}
+
+  return (
+    screenSize: screenSize,
+    viewportInsets: viewportInsets,
+    currentRoute: route,
+    currentScreenName: screenName,
+    localeName: localeName,
+    isOnline: isOnline,
+  );
+}
+
+/// platform channel 의존 정보만 비동기 수집. sheet 닫힌 후 백그라운드 호출용.
+///
+/// #822 — DeviceInfoPlugin / PackageInfo 호출. cold start 1-3초 가능 → 메인스레드 무관해야 함.
+Future<({String deviceInfo, String osVersion, String platform, String appVersion})>
+    collectBugMetadataAsync() async {
+  final sys = await _getSystemInfo();
+  final appVersion = await _getAppVersion();
+  return (
+    deviceInfo: sys.deviceInfo,
+    osVersion: sys.osVersion,
+    platform: sys.platform,
+    appVersion: appVersion,
+  );
+}
+
 /// 시트 열린 시점의 모든 메타데이터를 수집해 [BugMetadata]로 반환.
 ///
 /// BuildContext 의존 정보는 async 진입 전에 모두 캡처하여
 /// async gap 동안 context 무효화 위험을 회피한다.
+///
+/// ⚠️ 이 함수는 platform channel 호출 (DeviceInfoPlugin/PackageInfo) 을 포함하므로
+/// 메인스레드에서 await 시 ANR 위험. 가급적 sync/async 분리 함수 사용 권장.
 Future<BugMetadata> collectBugMetadata(
   BuildContext context,
   WidgetRef ref,

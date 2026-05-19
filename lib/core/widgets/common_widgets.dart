@@ -6,6 +6,8 @@ export 'save_feedback.dart';
 import 'package:hive/hive.dart';
 import 'package:go_router/go_router.dart';
 
+import 'offline_pattern_thumbnail.dart';
+
 import '../../providers/avatar_provider.dart';
 import '../localization/app_strings.dart';
 import '../localization/strings/app_strings_en.dart';
@@ -1137,12 +1139,18 @@ class MoriOptionChips<V> extends StatelessWidget {
 }
 
 /// 라이브러리 공통 카드 — Ravelry 스타일 기준 (도안/실 목록에 사용)
+///
+/// #838 — `patternId` 가 주어지면 OfflinePatternThumbnail 로 오프라인 캐시
+///   (영구 캐시된 도안의 썸네일) 우선 표시. 없으면 CachedNetworkImage 폴백.
 class MoriLibraryCard extends StatelessWidget {
   final String title;
   final String? subtitle1;
   final String? subtitle2;
   final Color? subtitle2Color;
   final String? thumbnailUrl;
+  // #838 — 모리니트 자체 도안일 때만 채움. 오프라인 영구 캐시 검사용 키.
+  // null/빈 값이면 네트워크 캐시(CachedNetworkImage)만 사용.
+  final String? patternId;
   final IconData? fallbackIcon;
   final Color fallbackIconBg;
   final Color fallbackIconColor;
@@ -1156,6 +1164,7 @@ class MoriLibraryCard extends StatelessWidget {
     this.subtitle2,
     this.subtitle2Color,
     this.thumbnailUrl,
+    this.patternId,
     this.fallbackIcon,
     this.fallbackIconBg = const Color(0xFFEDE9FF),
     this.fallbackIconColor = const Color(0xFF7C5CBF),
@@ -1165,6 +1174,18 @@ class MoriLibraryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasThumb = thumbnailUrl != null && thumbnailUrl!.isNotEmpty;
+    final fallbackTile = Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: fallbackIconBg,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: fallbackIcon != null
+          ? Icon(fallbackIcon, color: fallbackIconColor, size: 22)
+          : null,
+    );
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -1177,20 +1198,19 @@ class MoriLibraryCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: fallbackIconBg,
-                borderRadius: BorderRadius.circular(10),
-                image: thumbnailUrl != null
-                    ? DecorationImage(image: NetworkImage(thumbnailUrl!), fit: BoxFit.cover)
-                    : null,
-              ),
-              child: (thumbnailUrl == null && fallbackIcon != null)
-                  ? Icon(fallbackIcon, color: fallbackIconColor, size: 22)
-                  : null,
-            ),
+            hasThumb
+                ? OfflinePatternThumbnail(
+                    imageUrl: thumbnailUrl!,
+                    patternId: patternId,
+                    width: 44,
+                    height: 44,
+                    fit: BoxFit.cover,
+                    borderRadius: BorderRadius.circular(10),
+                    fallback: fallbackTile,
+                    placeholderIcon:
+                        fallbackIcon ?? Icons.menu_book_rounded,
+                  )
+                : fallbackTile,
             const SizedBox(width: 12),
             Expanded(
               child: Column(

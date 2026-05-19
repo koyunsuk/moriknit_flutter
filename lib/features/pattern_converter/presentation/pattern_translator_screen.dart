@@ -17,10 +17,11 @@ import '../../dropbox/data/dropbox_auth_provider.dart';
 import '../../dropbox/domain/dropbox_file_entry.dart';
 import '../../../providers/dropbox_provider.dart';
 import '../../../providers/parsed_pattern_provider.dart';
-import '../../blueprint/presentation/step_log_screen.dart';
 import '../data/ai_error_mapper.dart';
 import '../data/pattern_converter_repository.dart';
 import 'ai_pattern_edit_screen.dart';
+import 'my_pattern_library_picker_sheet.dart';
+import 'widgets/import_option_tile.dart';
 
 class PatternTranslatorScreen extends ConsumerStatefulWidget {
   final Uint8List? preloadedBytes;
@@ -79,70 +80,190 @@ class _PatternTranslatorScreenState
     super.dispose();
   }
 
-  // 소스 선택 bottom sheet
+  // 소스 선택 bottom sheet — #869 변환기와 동일 옵션 + 외부 클라우드 그룹화.
   Future<void> _showSourceSheet() async {
     final isKorean = ref.read(appLanguageProvider).isKorean;
+    // #869 — 외부 클라우드 4종(Dropbox/Drive/iCloud/OneDrive) ExpansionTile 펼침 상태.
+    bool cloudExpanded = false;
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: C.bg,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: C.bd, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                isKorean ? '파일 불러오기' : 'Import File',
-                style: T.h3,
-              ),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: Container(
-                width: 44, height: 44,
-                decoration: BoxDecoration(color: C.lvL, borderRadius: BorderRadius.circular(12)),
-                child: Icon(kIsWeb ? Icons.computer_rounded : Icons.smartphone_rounded, color: C.lvD, size: 22),
-              ),
-              title: Text(kIsWeb ? (isKorean ? '내 PC' : 'My PC') : (isKorean ? '내 핸드폰' : 'My Device'), style: T.bodyBold),
-              subtitle: Text('PDF, JPG, PNG', style: T.caption.copyWith(color: C.mu)),
-              trailing: Icon(Icons.chevron_right_rounded, color: C.mu),
-              onTap: () async {
-                Navigator.pop(context);
-                await Future.microtask(() {});
-                _pickFromPhone();
-              },
-            ),
-            ListTile(
-              leading: Builder(builder: (ctx) {
-                final dt = DropboxTheme.of(ctx);
-                return Container(
-                  width: 44, height: 44,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setSheetState) => SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 40,
+                  height: 4,
                   decoration: BoxDecoration(
-                    color: dt.brandColor.withValues(alpha: dt.iconBoxBgAlpha),
-                    borderRadius: BorderRadius.circular(dt.iconBoxRadius),
+                    color: C.bd,
+                    borderRadius: BorderRadius.circular(2),
                   ),
-                  child: Icon(dt.icon, color: dt.brandColor, size: 22),
-                );
-              }),
-              title: Text('Dropbox', style: T.bodyBold),
-              subtitle: Text(isKorean ? '드롭박스에서 파일 선택' : 'Pick from Dropbox', style: T.caption.copyWith(color: C.mu)),
-              trailing: Icon(Icons.chevron_right_rounded, color: C.mu),
-              onTap: () async {
-                Navigator.pop(context);
-                await Future.microtask(() {});
-                _pickFromDropbox();
-              },
+                ),
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    isKorean ? '파일 불러오기' : 'Import File',
+                    style: T.h3,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // ① 파일 (내 기기) — #869 공통 위젯 적용
+                ImportOptionTile(
+                  icon: kIsWeb
+                      ? Icons.computer_rounded
+                      : Icons.smartphone_rounded,
+                  title: kIsWeb
+                      ? (isKorean ? '내 PC' : 'My PC')
+                      : (isKorean ? '내 핸드폰' : 'My Device'),
+                  subtitle: 'PDF, JPG, PNG',
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await Future.microtask(() {});
+                    _pickFromPhone();
+                  },
+                ),
+                // ①-2 내 도안 라이브러리 (이슈 #860) — #869 라벤더 톤으로 통일
+                ImportOptionTile(
+                  icon: Icons.bookmark_rounded,
+                  title: isKorean ? '내 도안 라이브러리' : 'My Pattern Library',
+                  subtitle: isKorean
+                      ? '내 도안에 저장된 PDF/이미지에서 가져오기'
+                      : 'Import from saved PDF/image patterns',
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await Future.microtask(() {});
+                    _pickFromMyLibrary();
+                  },
+                ),
+                // ② 외부 클라우드 — 4종 그룹화 (이슈 #800, #869)
+                // Dropbox(활성) + Google Drive/iCloud/OneDrive(준비 중)을 ExpansionTile로 묶음.
+                Theme(
+                  data: Theme.of(context).copyWith(
+                    dividerColor: Colors.transparent,
+                    splashColor: Colors.transparent,
+                    highlightColor: Colors.transparent,
+                  ),
+                  child: ExpansionTile(
+                    initiallyExpanded: cloudExpanded,
+                    onExpansionChanged: (v) =>
+                        setSheetState(() => cloudExpanded = v),
+                    tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+                    childrenPadding: EdgeInsets.zero,
+                    leading: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: C.lvL,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(Icons.cloud_rounded, color: C.lvD, size: 22),
+                    ),
+                    title: Text(
+                      isKorean ? '외부 클라우드' : 'External Cloud',
+                      style: T.bodyBold,
+                    ),
+                    subtitle: Text(
+                      isKorean
+                          ? '4개 서비스 · 탭하여 펼치기'
+                          : '4 services · tap to expand',
+                      style: T.caption.copyWith(color: C.mu),
+                    ),
+                    children: [
+                      // ②-1 Dropbox (활성) — Dropbox 브랜드 톤 유지
+                      ImportOptionTile(
+                        leftPadding: 16,
+                        icon: DropboxTheme.of(context).icon,
+                        iconColor: DropboxTheme.of(context).brandColor,
+                        iconBackground: DropboxTheme.of(context)
+                            .brandColor
+                            .withValues(
+                              alpha:
+                                  DropboxTheme.of(context).iconBoxBgAlpha,
+                            ),
+                        title: 'Dropbox',
+                        subtitle: isKorean
+                            ? '드롭박스에서 파일 선택'
+                            : 'Pick from Dropbox',
+                        onTap: () async {
+                          Navigator.pop(context);
+                          await Future.microtask(() {});
+                          _pickFromDropbox();
+                        },
+                      ),
+                      // ②-2 Google Drive (준비 중)
+                      _buildComingSoonCloud(
+                        context,
+                        isKorean: isKorean,
+                        label: 'Google Drive',
+                        icon: Icons.cloud_rounded,
+                      ),
+                      // ②-3 iCloud (준비 중)
+                      _buildComingSoonCloud(
+                        context,
+                        isKorean: isKorean,
+                        label: 'iCloud',
+                        icon: Icons.cloud_rounded,
+                      ),
+                      // ②-4 OneDrive (준비 중)
+                      _buildComingSoonCloud(
+                        context,
+                        isKorean: isKorean,
+                        label: 'OneDrive',
+                        icon: Icons.cloud_rounded,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
             ),
-            const SizedBox(height: 12),
-          ],
+          ),
         ),
       ),
+    );
+  }
+
+  /// 이슈 #631 / #869 — 외부 클라우드 준비 중 카드 (탭 시 안내 SnackBar만).
+  Widget _buildComingSoonCloud(
+    BuildContext context, {
+    required bool isKorean,
+    required String label,
+    required IconData icon,
+  }) {
+    return ImportOptionTile(
+      leftPadding: 16,
+      icon: icon,
+      iconColor: C.lv.withValues(alpha: 0.6),
+      iconBackground: C.lv.withValues(alpha: 0.1),
+      title: label,
+      titleColor: C.mu,
+      trailingBadge: ComingSoonBadge(isKorean: isKorean),
+      showChevron: false,
+      subtitle: isKorean
+          ? '지원 예정 · 지금은 Dropbox를 이용해 주세요'
+          : 'Planned · use Dropbox for now',
+      onTap: () {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isKorean
+                  ? '$label 연동은 곧 지원될 예정이에요.'
+                  : '$label integration is coming soon.',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      },
     );
   }
 
@@ -162,6 +283,24 @@ class _PatternTranslatorScreenState
     if (bytes == null) return;
 
     await _runTranslate(bytes: bytes, fileName: picked.name, messenger: messenger, isKorean: isKorean);
+  }
+
+  /// 이슈 #860 — 내 도안 라이브러리에서 PDF/이미지 가져오기.
+  /// 공통 시트 [showMyPatternLibraryPickerSheet] 호출 → 다운로드 후 번역기로 전달.
+  Future<void> _pickFromMyLibrary() async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final messenger = ScaffoldMessenger.of(context);
+    final picked = await showMyPatternLibraryPickerSheet(
+      context,
+      isKorean: isKorean,
+    );
+    if (picked == null || !mounted) return;
+    await _runTranslate(
+      bytes: picked.bytes,
+      fileName: picked.fileName,
+      messenger: messenger,
+      isKorean: isKorean,
+    );
   }
 
   Future<void> _pickFromDropbox() async {
@@ -679,10 +818,10 @@ class _InlineTranslatedList extends ConsumerWidget {
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 child: InkWell(
-                  // Phase D1 (#687): 저장된 도안 진입 → 단계로그 통일 화면
-                  onTap: () => Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => StepLogScreen(blueprintId: p.id),
-                  )),
+                  // #825 — 변환 결과 진입 통일: universal_pattern_viewer 사용
+                  //   (이전 StepLogScreen 직접 push → 다른 컬렉션 fetch 실패 시 "인터넷 연결 없음" 에러)
+                  //   도안 라이브러리와 같은 진입 경로 → 같은 동작 보장.
+                  onTap: () => context.push('/pattern-view/${p.id}'),
                   child: Row(
                     children: [
                       Container(

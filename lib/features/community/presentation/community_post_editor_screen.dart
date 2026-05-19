@@ -98,7 +98,8 @@ class _CommunityPostEditorScreenState
 
   // ----- 사진/파일/유튜브 -----
 
-  /// #780 — '사진 추가' 탭: 갤러리 직접 (카메라는 첨부 슬롯의 별도 아이콘으로 노출).
+  /// #780 (3차 재수정) — 옵션 시트 제거. '사진' 버튼은 갤러리 직접 진입.
+  /// 카메라는 별도 '촬영' 버튼으로 1줄에 분리 표시.
   Future<void> _addImages(bool isKorean) async {
     if (_images.length >= 4) return;
     final picker = ImagePicker();
@@ -113,18 +114,17 @@ class _CommunityPostEditorScreenState
     if (mounted) setState(() {});
   }
 
-  /// #780 — 카메라 즉시 촬영 (첨부 슬롯의 카메라 아이콘에서 호출).
+  /// #780 — 카메라 즉시 촬영 (1줄 '촬영' 버튼에서 호출).
   Future<void> _captureImageFromCamera() async {
     if (_images.length >= 4) return;
     final picker = ImagePicker();
-    final shot = await picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 80,
-    );
+    final shot = await picker.pickImage(source: ImageSource.camera, imageQuality: 80);
     if (shot == null) return;
     _images.add(await shot.readAsBytes());
     if (mounted) setState(() {});
   }
+
+  // #780 (재수정) — _captureImageFromCamera 제거. 카메라는 _addImages 안 옵션 시트로 통합.
 
   Future<void> _addFiles() async {
     final result = await FilePicker.platform.pickFiles(
@@ -479,12 +479,12 @@ class _CommunityPostEditorScreenState
                   ),
                   const SizedBox(height: 18),
 
-                  // #780 — 첨부 액션 1줄 컴팩트 (사진 / 파일 / 유튜브).
+                  // #780 (3차) — 첨부 액션 1줄: 사진(갤러리) / 촬영(카메라) / 파일 / 유튜브
                   Row(
                     children: [
                       Expanded(
                         child: _CompactAttachButton(
-                          icon: Icons.add_photo_alternate_rounded,
+                          icon: Icons.photo_library_rounded,
                           label: _images.isEmpty
                               ? (isKorean ? '사진' : 'Photo')
                               : '${isKorean ? '사진' : 'Photo'} +${_images.length}',
@@ -495,12 +495,21 @@ class _CommunityPostEditorScreenState
                       const SizedBox(width: 6),
                       Expanded(
                         child: _CompactAttachButton(
+                          icon: Icons.photo_camera_rounded,
+                          label: isKorean ? '촬영' : 'Camera',
+                          onTap: _images.length >= 4 ? null : _captureImageFromCamera,
+                          color: C.lvD,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: _CompactAttachButton(
                           icon: Icons.attach_file_rounded,
                           label: _files.isEmpty
                               ? (isKorean ? '파일' : 'File')
                               : '${isKorean ? '파일' : 'File'} ${_files.length}',
                           onTap: _addFiles,
-                          color: C.lvD,
+                          color: C.mu,
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -515,27 +524,13 @@ class _CommunityPostEditorScreenState
                     ],
                   ),
 
-                  // #780 — 첨부 사진 그리드. 첫 슬롯은 카메라 즉시 촬영 버튼.
-                  const SizedBox(height: 12),
-                  Wrap(
+                  // #780 (재수정) — 별도 카메라 슬롯 제거. 카메라는 '사진' 버튼 → 옵션 시트로 진입.
+                  // 사진 첨부된 경우에만 그리드 표시 (CLAUDE.md "사진 첨부 표준" 준수).
+                  if (_images.isNotEmpty) const SizedBox(height: 12),
+                  if (_images.isNotEmpty) Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      // #780 (재수정) — 카메라 즉시 촬영 슬롯: 아이콘만 (텍스트 제거)
-                      if (_images.length < 4)
-                        GestureDetector(
-                          onTap: _captureImageFromCamera,
-                          child: Container(
-                            width: 88,
-                            height: 88,
-                            decoration: BoxDecoration(
-                              color: C.lvL,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: C.lv.withValues(alpha: 0.35)),
-                            ),
-                            child: Icon(Icons.photo_camera_rounded, color: C.lvD, size: 36),
-                          ),
-                        ),
                       // 첨부된 사진들
                       for (int index = 0; index < _images.length; index++)
                         Stack(

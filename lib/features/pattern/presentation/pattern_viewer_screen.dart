@@ -866,6 +866,10 @@ class _PatternViewerScreenState extends ConsumerState<PatternViewerScreen> {
                   ? widget.chart.pdfUrl
                   : widget.chart.imageUrl,
               kind: widget.chart.type == PatternType.pdf ? 'pdf' : 'image',
+              // #838 — 썸네일(=imageUrl) 함께 영구 캐시.
+              thumbnailUrl: widget.chart.imageUrl.isNotEmpty
+                  ? widget.chart.imageUrl
+                  : null,
               isKorean: isKorean,
             ),
           // 트래킹 호 토글

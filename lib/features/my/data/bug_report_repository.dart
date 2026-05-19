@@ -5,36 +5,68 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../../../core/errors/firestore_timeout_extension.dart';
 import '../domain/bug_report.dart';
+
+/// 카테고리 코드 → 한글 라벨 + 대괄호 감싸기. CLAUDE.md 형식 적용용.
+String _categoryLabel(String category) {
+  switch (category) {
+    case 'ui':
+      return '[UI버그]';
+    case 'crash':
+      return '[크래시]';
+    case 'feature':
+      return '[기능요청]';
+    case 'other':
+      return '[기타]';
+    default:
+      return '[$category]';
+  }
+}
 
 class BugReportRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
   /// 이미지 바이트 리스트를 Storage에 업로드하고 URL 목록을 반환합니다.
+  ///
+  /// #822 (재수정) — 병렬 업로드 + 짧은 timeout. sequential + 긴 timeout 시 누적 시간으로
+  /// GitHub API 호출 시점 도달 전 전체 fail. 병렬 + 15s/8s timeout으로 최대 15초 이내 종료.
   Future<List<String>> uploadImages(String uid, List<Uint8List> images) async {
-    final urls = <String>[];
-    for (var i = 0; i < images.length; i++) {
-      try {
-        final ts = DateTime.now().millisecondsSinceEpoch;
-        final ref = _storage.ref('bug_reports/$uid/${ts}_$i.jpg');
-        await ref.putData(images[i], SettableMetadata(contentType: 'image/jpeg'));
-        urls.add(await ref.getDownloadURL());
-      } catch (e) {
-        debugPrint('[BugReport] 이미지 업로드 실패 $i: $e');
-      }
-    }
-    return urls;
+    if (images.isEmpty) return const [];
+    final results = await Future.wait(
+      List.generate(images.length, (i) async {
+        try {
+          final ts = DateTime.now().millisecondsSinceEpoch;
+          final ref = _storage.ref('bug_reports/$uid/${ts}_$i.jpg');
+          await ref
+              .putData(images[i], SettableMetadata(contentType: 'image/jpeg'))
+              .timeout(const Duration(seconds: 15));
+          return await ref.getDownloadURL().timeout(const Duration(seconds: 8));
+        } catch (e) {
+          debugPrint('[BugReport] 이미지 업로드 실패 $i: $e');
+          return null;
+        }
+      }),
+    );
+    return results.whereType<String>().toList();
   }
 
   Future<int?> submitBugReport(BugReport report) async {
-    // 1. Firestore에 저장
-    final docRef = await _firestore.collection('bug_reports').add(report.toJson());
+    // 1. Firestore에 저장 (#822 — withServerTimeout 적용, 무한 대기 차단)
+    final docRef = await _firestore
+        .collection('bug_reports')
+        .add(report.toJson())
+        .withServerTimeout(op: 'bug_report_create');
 
     // 2. GitHub PAT 읽기
     String? pat;
     try {
-      final configSnap = await _firestore.collection('app_config').doc('github_config').get();
+      final configSnap = await _firestore
+          .collection('app_config')
+          .doc('github_config')
+          .get()
+          .withServerTimeout(op: 'bug_report_pat_read');
       pat = configSnap.data()?['pat'] as String?;
     } catch (e) {
       debugPrint('[BugReport] app_config 읽기 실패: $e');
@@ -47,8 +79,11 @@ class BugReportRepository {
 
     // 3. GitHub 이슈 생성
     try {
+      // #822 (재수정) — Firebase Storage URL 너무 길어 GitHub markdown 파싱 깨질 가능성.
+      //   이미지 markdown 임시 제외 + 어드민 화면에서 Firestore imageUrls로 직접 표시.
+      //   사용자 보고: 사진 첨부 시 GitHub 이슈 등록 fail, 사진 없이는 정상.
       final imageSection = report.imageUrls.isNotEmpty
-          ? '\n\n**첨부 이미지**\n${report.imageUrls.map((u) => '![]($u)').join('\n')}'
+          ? '\n\n**첨부 이미지:** ${report.imageUrls.length}장 (어드민에서 확인)'
           : '';
 
       final tierLabel = report.userTier == 'premium' ? '⭐ 유료회원 (우선처리)' : '무료회원';
@@ -88,6 +123,7 @@ ${report.description}
 **재현 단계**
 ${report.steps.isEmpty ? '없음' : report.steps}$imageSection''';
 
+      // #822 — http.post 에 15초 timeout (네트워크 느리면 무한 대기 → ANR 방지)
       final response = await http.post(
         Uri.parse('https://api.github.com/repos/koyunsuk/moriknit_flutter/issues'),
         headers: {
@@ -96,19 +132,15 @@ ${report.steps.isEmpty ? '없음' : report.steps}$imageSection''';
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
-          'title': [
-            '[사용자]',
-            if (report.userTier == 'premium') '[유료회원]',
-            if (report.wantsReply) '[답변요청]',
-            report.title,
-          ].join(' '),
+          // POST 시 임시 제목 — 직후 PATCH에서 최종 형식으로 update.
+          'title': '[사용자보고] ${report.title}',
           'body': body,
           'labels': [
             'user-report',
             if (report.userTier == 'premium') 'priority: high',
           ],
         }),
-      );
+      ).timeout(const Duration(seconds: 15));
 
       debugPrint('[BugReport] GitHub API 응답: ${response.statusCode}');
 
@@ -120,7 +152,25 @@ ${report.steps.isEmpty ? '없음' : report.steps}$imageSection''';
         await docRef.update({
           'githubIssueNumber': issueNumber,
           'githubIssueUrl': issueUrl,
-        });
+        }).withServerTimeout(op: 'bug_report_github_link');
+
+        // CLAUDE.md 형식 — 사용자 보고는 무조건 🩷 + [사용자보고] prefix로 개발자 등록 이슈와 구분.
+        try {
+          final categoryKor = _categoryLabel(report.category);
+          final tierTag = report.userTier == 'premium' ? '⭐ ' : '';
+          final newTitle = '🩷 $tierTag#$issueNumber [사용자보고]$categoryKor ${report.title}';
+          await http.patch(
+            Uri.parse('https://api.github.com/repos/koyunsuk/moriknit_flutter/issues/$issueNumber'),
+            headers: {
+              'Authorization': 'Bearer $pat',
+              'Accept': 'application/vnd.github+json',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({'title': newTitle}),
+          ).timeout(const Duration(seconds: 10));
+        } catch (e) {
+          debugPrint('[BugReport] GitHub title PATCH 실패: $e');
+        }
 
         debugPrint('[BugReport] GitHub 이슈 생성 완료: #$issueNumber');
         return issueNumber;

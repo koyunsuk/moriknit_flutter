@@ -390,11 +390,17 @@ class PatternRepository {
         .snapshots()
         .map((snap) {
       final list = snap.docs.map((d) {
-        final data = Map<String, dynamic>.from(d.data() as Map<String, dynamic>);
-        // id 필드가 없는 구버전 문서는 doc.id로 보완
-        if ((data['id'] as String?)?.isEmpty != false) data['id'] = d.id;
-        return PatternChart.fromJson(data);
-      }).toList();
+        try {
+          final data = Map<String, dynamic>.from(d.data() as Map<String, dynamic>);
+          // id 필드가 없는 구버전 문서는 doc.id로 보완
+          if ((data['id'] as String?)?.isEmpty != false) data['id'] = d.id;
+          return PatternChart.fromJson(data);
+        } catch (e) {
+          // 마이그레이션·복구 등으로 불완전한 도큐먼트는 skip + 나머지 목록은 정상 표시.
+          debugPrint('[PatternRepository] skip invalid pattern ${d.id}: $e');
+          return null;
+        }
+      }).whereType<PatternChart>().toList();
       // #704 Phase A-A — 서버 응답 도착 시 캐시 전체 갱신 (fire-and-forget).
       //   다음 콜드 스타트/오프라인 진입 시 즉시 표시 가능하도록 항상 캐시한다.
       _cache.writeAll(list);

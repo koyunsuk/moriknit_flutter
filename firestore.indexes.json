@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "bug_reports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "uid", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "encyclopedia",
       "queryScope": "COLLECTION",
       "fields": [
@@ -197,6 +205,20 @@
         {
           "fieldPath": "createdAt",
           "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "handle",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "inboundEmailKey",
+          "order": "ASCENDING"
         }
       ]
     }

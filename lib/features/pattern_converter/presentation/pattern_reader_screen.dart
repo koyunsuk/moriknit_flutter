@@ -10,6 +10,7 @@ import '../../../core/widgets/common_widgets.dart';
 import '../../../features/pattern/domain/ai_pattern_section.dart';
 import '../../../features/pattern/domain/pattern_chart.dart';
 import '../../../providers/parsed_pattern_provider.dart';
+import 'pattern_text_tracker_screen.dart';
 
 class PatternReaderScreen extends ConsumerWidget {
   final String patternId;
@@ -88,7 +89,15 @@ class _PatternReaderView extends StatelessWidget {
           icon: const Icon(Icons.menu_book_rounded, size: 22),
           color: C.lv,
           tooltip: isKorean ? '텍스트 뷰어' : 'Text Viewer',
-          onPressed: () => context.push('/tools/my-parsed-patterns/${pattern.id}/text'),
+          // #824 — context.push GlobalKey 충돌 회피. unique settings name + Navigator.push.
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              settings: RouteSettings(
+                name: 'pattern-text-${pattern.id}-${DateTime.now().microsecondsSinceEpoch}',
+              ),
+              builder: (_) => PatternTextTrackerScreen(patternId: pattern.id),
+            ),
+          ),
         ),
       ],
       body: CustomScrollView(

@@ -8,6 +8,7 @@
 // 모든 어드민 목록은 이 쉘을 사용. 색상/크기/간격은 AdminTableTheme 토큰 참조.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../core/theme/admin_table_theme.dart';
 import '../../../../core/widgets/common_widgets.dart';
@@ -43,11 +44,16 @@ class AdminRow {
   /// 선택 상태(하이라이트).
   final bool selected;
 
+  /// row 높이 override (null이면 AdminTableTheme.rowHeight 사용).
+  /// 디버그 셀처럼 다중 라인이 필요한 경우 행마다 키 높이 확장. (#852)
+  final double? heightOverride;
+
   const AdminRow({
     required this.cells,
     this.accent,
     this.onTap,
     this.selected = false,
+    this.heightOverride,
   });
 }
 
@@ -537,6 +543,7 @@ class _AdminListRowViewState extends State<AdminListRowView> {
     final bg = isHighlighted
         ? theme.rowSelectedBg
         : (_hovered ? theme.rowHoverBg : theme.rowBg);
+    final rowHeight = r.heightOverride ?? theme.rowHeight;
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
@@ -545,14 +552,14 @@ class _AdminListRowViewState extends State<AdminListRowView> {
         onTap: r.onTap,
         behavior: HitTestBehavior.opaque,
         child: Container(
-          height: theme.rowHeight,
+          height: rowHeight,
           color: bg,
           child: Row(
             children: [
               // 좌측 accent bar
               Container(
                 width: 3,
-                height: theme.rowHeight,
+                height: rowHeight,
                 color: r.accent ?? Colors.transparent,
               ),
               Expanded(
@@ -751,4 +758,130 @@ class AdminBadge extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 클립보드 복사 가능한 짧은 값 셀 (좌측: 라벨, 우측: 복사 아이콘).
+/// uid / id / URL 등 긴 문자열을 점검용으로 노출할 때 사용.
+class AdminCopyableValue extends StatelessWidget {
+  final String label;
+  final String value;
+  final String? emptyPlaceholder;
+  final double? fontSize;
+
+  /// 복사 후 스낵바에 표시할 값 종류 라벨 (예: 'UID', 'ID').
+  final String copyKind;
+
+  const AdminCopyableValue({
+    super.key,
+    required this.label,
+    required this.value,
+    this.copyKind = '값',
+    this.emptyPlaceholder = '-',
+    this.fontSize,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AdminTableTheme.of(context);
+    final hasValue = value.isNotEmpty;
+    final shown = hasValue ? value : (emptyPlaceholder ?? '-');
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          '$label:',
+          style: TextStyle(
+            fontSize: fontSize ?? 10.5,
+            color: theme.cellMuted,
+            fontWeight: FontWeight.w600,
+            height: 1.2,
+          ),
+        ),
+        const SizedBox(width: 4),
+        Flexible(
+          child: SelectableText(
+            shown,
+            maxLines: 1,
+            minLines: 1,
+            style: TextStyle(
+              fontSize: fontSize ?? 10.5,
+              color: hasValue ? theme.cellText : theme.cellMuted,
+              fontFamily: 'monospace',
+              height: 1.2,
+            ),
+          ),
+        ),
+        if (hasValue) ...[
+          const SizedBox(width: 2),
+          InkWell(
+            onTap: () async {
+              await Clipboard.setData(ClipboardData(text: value));
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('$copyKind 복사됨'),
+                  duration: const Duration(milliseconds: 1200),
+                ),
+              );
+            },
+            borderRadius: BorderRadius.circular(4),
+            child: Padding(
+              padding: const EdgeInsets.all(2),
+              child: Icon(
+                Icons.copy_rounded,
+                size: 12,
+                color: theme.cellMuted,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// 어드민 점검용 메타 정보 셀 (#852).
+/// uid / contentId / docPath / imageUrl / storage path / createdAt / updatedAt 등
+/// 데이터 손실·오류 추적에 필요한 디버그 필드를 한 셀에 모아 표시.
+///
+/// 각 항목은 [AdminCopyableValue] 로 SelectableText + 복사 아이콘 제공.
+class AdminDebugMetaCell extends StatelessWidget {
+  /// 표시할 항목들. (라벨, 값, copyKind) 튜플 리스트.
+  /// 값이 빈 문자열이면 "-" 표시 + 복사 아이콘 숨김.
+  final List<AdminDebugMetaEntry> entries;
+
+  const AdminDebugMetaCell({super.key, required this.entries});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < entries.length; i++) ...[
+          if (i > 0) const SizedBox(height: 2),
+          AdminCopyableValue(
+            label: entries[i].label,
+            value: entries[i].value,
+            copyKind: entries[i].copyKind ?? entries[i].label,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// [AdminDebugMetaCell] 항목 정의.
+class AdminDebugMetaEntry {
+  final String label;
+  final String value;
+  final String? copyKind;
+
+  const AdminDebugMetaEntry({
+    required this.label,
+    required this.value,
+    this.copyKind,
+  });
 }

@@ -43,11 +43,16 @@ final adminMobileRouterProvider = Provider<GoRouter>((ref) {
       if (isAdminState.isLoading) return null;
 
       // 어드민 권한 체크
-      final isAdmin = isAdminState.valueOrNull ?? false;
-      if (!isAdmin) return '/no-permission';
+      // (#840) Stream 첫 emit 전 valueOrNull == null 일 때는 redirect 보류 →
+      //   섣불리 /no-permission 으로 보내고 거기 갇히는 회귀 방지.
+      final isAdminValue = isAdminState.valueOrNull;
+      if (isAdminValue == null) return null;
+      if (!isAdminValue) {
+        return location == '/no-permission' ? null : '/no-permission';
+      }
 
-      // 어드민이면서 /login 진입 시 → /admin
-      if (location == '/login') return '/admin';
+      // (#840) 어드민일 때 /login 또는 /no-permission 진입 시 → /admin 자동 이동.
+      if (location == '/login' || location == '/no-permission') return '/admin';
       return null;
     },
     routes: [

@@ -746,9 +746,11 @@ class _SwatchDetailScreenState extends ConsumerState<SwatchDetailScreen> {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
     final initialProject = ProjectModel.empty(uid: user.uid).copyWith(swatchId: swatch.id);
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => ProjectInputScreen(initialProject: initialProject)),
+    // #818 — rootNavigator:true 명시. ShellRoute 내부 Navigator의 HeroController 충돌 방지.
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ProjectInputScreen(initialProject: initialProject),
+      ),
     );
   }
 
@@ -1064,7 +1066,13 @@ class _PhotoHeader extends StatelessWidget {
     final url = hasBefore ? beforePhotoUrl : afterPhotoUrl;
     final heroTag = hasBefore ? 'swatch_before_$swatchId' : 'swatch_after_$swatchId';
     return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(fullscreenDialog: true, builder: (_) => _FullScreenImageViewer(imageUrl: url, heroTag: heroTag))),
+      // #818 — rootNavigator:true 명시. ShellRoute 내부 Navigator의 HeroController 충돌 방지.
+      onTap: () => Navigator.of(context, rootNavigator: true).push(
+        MaterialPageRoute<void>(
+          fullscreenDialog: true,
+          builder: (_) => _FullScreenImageViewer(imageUrl: url, heroTag: heroTag),
+        ),
+      ),
       child: Hero(
         tag: heroTag,
         child: ClipRRect(
@@ -1086,7 +1094,13 @@ class _PhotoThumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(fullscreenDialog: true, builder: (_) => _FullScreenImageViewer(imageUrl: photoUrl, heroTag: heroTag))),
+      // #818 — rootNavigator:true 명시. ShellRoute 내부 Navigator의 HeroController 충돌 방지.
+      onTap: () => Navigator.of(context, rootNavigator: true).push(
+        MaterialPageRoute<void>(
+          fullscreenDialog: true,
+          builder: (_) => _FullScreenImageViewer(imageUrl: photoUrl, heroTag: heroTag),
+        ),
+      ),
       child: Column(
         children: [
           Hero(

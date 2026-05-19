@@ -1,6 +1,8 @@
 ﻿import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_quill/flutter_quill.dart' as fq;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -8,6 +10,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/subscription_constants.dart';
+import '../../../core/widgets/popup_image_embed.dart';
 
 import '../../../core/localization/app_language.dart';
 import '../../../core/localization/app_strings.dart';
@@ -125,7 +128,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ? appConfig.popupTitle
           : (isKorean ? '공지사항' : 'Notice');
       final message = appConfig.popupMessage;
+      final bodyDelta = appConfig.popupBodyDelta;
       final linkUrl = appConfig.popupLinkUrl;
+      final backgroundImageUrl = appConfig.backgroundImageUrl;
       if (!mounted) return;
       final dontShowAgain = await showDialog<bool>(
         context: context,
@@ -133,7 +138,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         builder: (ctx) => _MoriAnnouncementDialog(
           title: title,
           message: message,
+          bodyDelta: bodyDelta,
           linkUrl: linkUrl,
+          backgroundImageUrl: backgroundImageUrl,
           isKorean: isKorean,
         ),
       );
@@ -210,6 +217,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             if (showBanner)
               _MaintenanceBanner(
                 message: appConfig!.maintenanceNotice,
+                backgroundImageUrl: appConfig.backgroundImageUrl,
                 onDismiss: () => setState(() => _bannerDismissed = true),
               ),
             // 홈/즐겨찾기 2탭 (이슈 #723 Phase B — 즐겨찾기 시스템)
@@ -590,34 +598,59 @@ class _FavoriteCard extends ConsumerWidget {
 /// 운영지원 긴급공지 배너 (maintenanceNotice + noticeType == 'banner')
 class _MaintenanceBanner extends StatelessWidget {
   final String message;
+  /// 이슈 #835 — 배너 배경 이미지 (선택). 비어 있으면 기존 오렌지 톤 유지.
+  final String backgroundImageUrl;
   final VoidCallback onDismiss;
 
-  const _MaintenanceBanner({required this.message, required this.onDismiss});
+  const _MaintenanceBanner({
+    required this.message,
+    this.backgroundImageUrl = '',
+    required this.onDismiss,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final hasBg = backgroundImageUrl.isNotEmpty;
+    // 배경 이미지가 있을 때 텍스트/아이콘은 흰색, 어두운 오버레이로 가독성 확보.
+    final fg = hasBg ? Colors.white : C.og;
+    final bgRow = Container(
       width: double.infinity,
-      color: C.og.withValues(alpha: 0.12),
+      color: hasBg ? Colors.transparent : C.og.withValues(alpha: 0.12),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
-          Icon(Icons.campaign_rounded, size: 18, color: C.og),
+          Icon(Icons.campaign_rounded, size: 18, color: fg),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
-              style: T.sm.copyWith(color: C.og, fontWeight: FontWeight.w600),
+              style: T.sm.copyWith(color: fg, fontWeight: FontWeight.w600),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
           ),
           GestureDetector(
             onTap: onDismiss,
-            child: Icon(Icons.close_rounded, size: 18, color: C.og),
+            child: Icon(Icons.close_rounded, size: 18, color: fg),
           ),
         ],
       ),
+    );
+    if (!hasBg) return bgRow;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: CachedNetworkImage(
+            imageUrl: backgroundImageUrl,
+            fit: BoxFit.cover,
+            errorWidget: (ctx, _, _) => ColoredBox(color: C.og.withValues(alpha: 0.12)),
+          ),
+        ),
+        Positioned.fill(
+          child: ColoredBox(color: Colors.black.withValues(alpha: 0.45)),
+        ),
+        bgRow,
+      ],
     );
   }
 }
@@ -2750,14 +2783,22 @@ class _MyKnitAlongEmptyState extends StatelessWidget {
 class _MoriAnnouncementDialog extends StatefulWidget {
   final String title;
   final String message;
+  /// 이슈 #817 — 팝업 리치 텍스트 본문 (flutter_quill Delta JSON).
+  /// 비어 있으면 message(plain text) fallback.
+  final String bodyDelta;
   final String linkUrl;
+  /// 이슈 #835 — 팝업 배경 이미지 URL (선택).
+  /// 비어 있으면 기본 그라데이션 헤더 유지.
+  final String backgroundImageUrl;
   final bool isKorean;
   final bool showDontShowAgain;
 
   const _MoriAnnouncementDialog({
     required this.title,
     required this.message,
+    this.bodyDelta = '',
     required this.linkUrl,
+    this.backgroundImageUrl = '',
     required this.isKorean,
     this.showDontShowAgain = true,
   });
@@ -2768,37 +2809,107 @@ class _MoriAnnouncementDialog extends StatefulWidget {
 
 class _MoriAnnouncementDialogState extends State<_MoriAnnouncementDialog> {
   bool _dontShowAgain = false;
+  fq.QuillController? _quillCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _initQuillIfRich();
+  }
+
+  void _initQuillIfRich() {
+    if (widget.bodyDelta.isEmpty) return;
+    try {
+      final decoded = jsonDecode(widget.bodyDelta);
+      if (decoded is List) {
+        final doc = fq.Document.fromJson(decoded);
+        // plain text 만 있는 빈 도큐먼트(\n 한 줄)는 fallback 처리.
+        if (doc.toPlainText().trim().isEmpty) return;
+        _quillCtrl = fq.QuillController(
+          document: doc,
+          selection: const TextSelection.collapsed(offset: 0),
+          readOnly: true,
+        );
+      }
+    } catch (_) {
+      // 잘못된 JSON → null 유지 → plain text fallback.
+    }
+  }
+
+  @override
+  void dispose() {
+    _quillCtrl?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final hasBg = widget.backgroundImageUrl.isNotEmpty;
+    // 이슈 #835 — 배경 이미지가 있으면 본문 위에 어두운 오버레이를 깔아 가독성 확보.
+    // 본문/헤더는 모두 투명 배경을 사용 → 배경 이미지가 카드 전체에 보이도록.
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 60),
-      child: Container(
-        decoration: BoxDecoration(
-          color: C.bg,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.16),
-              blurRadius: 32,
-              offset: const Offset(0, 12),
-            ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Stack(
+          children: [
+            if (hasBg)
+              Positioned.fill(
+                child: CachedNetworkImage(
+                  imageUrl: widget.backgroundImageUrl,
+                  fit: BoxFit.cover,
+                  errorWidget: (ctx, _, _) => ColoredBox(color: C.bg),
+                ),
+              ),
+            if (hasBg)
+              // 어두운 오버레이 — 본문 텍스트 가독성 확보용 (alpha 0.45).
+              Positioned.fill(
+                child: ColoredBox(color: Colors.black.withValues(alpha: 0.45)),
+              ),
+            _buildDialogCard(context, hasBg: hasBg),
           ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // ── 그라데이션 헤더 ──────────────────────────────────────────────────
+      ),
+    );
+  }
+
+  Widget _buildDialogCard(BuildContext context, {required bool hasBg}) {
+    // 배경 이미지가 있을 때는 카드 내부 컬러는 투명, 텍스트는 흰색으로 전환.
+    final cardColor = hasBg ? Colors.transparent : C.bg;
+    final titleColor = hasBg ? Colors.white : C.tx;
+    final bodyColor = hasBg ? Colors.white.withValues(alpha: 0.92) : C.tx2;
+    return Container(
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: hasBg
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.16),
+                  blurRadius: 32,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+            // ── 헤더 ─────────────────────────────────────────────────────────────
+            // 배경 이미지가 있으면 그라데이션을 생략하고 투명 헤더로 처리
+            // (배경 이미지가 카드 전체에 노출되도록).
             Container(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [C.lv, C.pk],
-                ),
+                gradient: hasBg
+                    ? null
+                    : LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [C.lv, C.pk],
+                      ),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               ),
               child: Row(
@@ -2836,13 +2947,41 @@ class _MoriAnnouncementDialogState extends State<_MoriAnnouncementDialog> {
                   children: [
                     Text(
                       widget.title,
-                      style: T.h3.copyWith(color: C.tx, height: 1.3),
+                      style: T.h3.copyWith(color: titleColor, height: 1.3),
                     ),
-                    if (widget.message.isNotEmpty) ...[
+                    if (_quillCtrl != null) ...[
+                      const SizedBox(height: 12),
+                      // 리치 텍스트 본문 (read-only Quill). 이슈 #835 — image embed 렌더링.
+                      // 배경 이미지가 있으면 본문 텍스트는 흰색으로 표시.
+                      DefaultTextStyle.merge(
+                        style: TextStyle(color: bodyColor),
+                        child: fq.QuillEditor.basic(
+                          controller: _quillCtrl!,
+                          config: fq.QuillEditorConfig(
+                            showCursor: false,
+                            autoFocus: false,
+                            expands: false,
+                            padding: EdgeInsets.zero,
+                            embedBuilders: popupQuillEmbedBuilders,
+                            customStyles: hasBg
+                                ? fq.DefaultStyles(
+                                    paragraph: fq.DefaultTextBlockStyle(
+                                      TextStyle(color: bodyColor, fontSize: 14, height: 1.55),
+                                      fq.HorizontalSpacing.zero,
+                                      fq.VerticalSpacing.zero,
+                                      fq.VerticalSpacing.zero,
+                                      null,
+                                    ),
+                                  )
+                                : null,
+                          ),
+                        ),
+                      ),
+                    ] else if (widget.message.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       Text(
                         widget.message,
-                        style: T.body.copyWith(color: C.tx2, height: 1.55),
+                        style: T.body.copyWith(color: bodyColor, height: 1.55),
                       ),
                     ],
                   ],
@@ -2874,7 +3013,7 @@ class _MoriAnnouncementDialogState extends State<_MoriAnnouncementDialog> {
                         const SizedBox(width: 10),
                         Text(
                           widget.isKorean ? '다시 보지 않기' : "Don't show again",
-                          style: T.caption.copyWith(color: C.tx2, fontWeight: FontWeight.w500),
+                          style: T.caption.copyWith(color: bodyColor, fontWeight: FontWeight.w500),
                         ),
                       ],
                     ),
@@ -2920,8 +3059,7 @@ class _MoriAnnouncementDialogState extends State<_MoriAnnouncementDialog> {
                 ],
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }

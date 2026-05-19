@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -26,6 +27,7 @@ import 'firebase_options.dart';
 import 'features/ravelry/data/ravelry_auth_provider.dart';
 import 'providers/font_provider.dart';
 import 'providers/theme_provider.dart';
+import 'services/fcm_service.dart';
 
 
 void main() async {
@@ -65,6 +67,12 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
+  // #817 — FCM 백그라운드 메시지 핸들러는 Firebase init 직후, runApp 이전 등록 필수.
+  // (top-level 함수만 가능 — services/fcm_service.dart에 선언됨)
+  if (!kIsWeb) {
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  }
+
   // #685 — Firestore 영속 캐시 (모바일 SQLite / 웹 IndexedDB 자동).
   // v6 SDK: settings로 통합. enablePersistence 별도 호출 불필요.
   FirebaseFirestore.instance.settings = const Settings(
@@ -96,8 +104,10 @@ class MoriKnitApp extends ConsumerWidget {
     final appFont = ref.watch(fontProvider);
     C.apply(themeMode);
 
+    // #818/#822 — ValueKey 제거: MaterialApp 강제 재빌드 시 NavigatorState GlobalKey 'root' 충돌
+    // (HeroControllerScope에 같은 root key 2회 instantiate). 또한 메인스레드 부담으로 ANR 유발.
+    // theme/font 변경은 theme/textTheme 인자만 바뀌어도 자동 반영되므로 ValueKey 불필요.
     return MaterialApp.router(
-      key: ValueKey('$themeMode-${appFont.storageKey}'),
       title: 'MoriKnit',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightWithFont(appFont),
@@ -116,6 +126,12 @@ class MoriKnitApp extends ConsumerWidget {
       },
       builder: (context, child) {
         if (child == null) return const SizedBox.shrink();
+        // #817 — FCM 라우터 attach: 백그라운드 알림 탭 → 딥링크 navigation 용.
+        // #834 — overlay context attach: 포그라운드 알림 floating banner 표시용.
+        if (!kIsWeb) {
+          FcmService.instance.attachRouter(router);
+          FcmService.instance.attachOverlayContext(context);
+        }
         return _OAuthLinkListener(child: child);
       },
     );
@@ -142,6 +158,10 @@ class _OAuthLinkListenerState extends ConsumerState<_OAuthLinkListener>
   DateTime? _pausedAt;
   static const Duration _guestBackgroundTtl = Duration(minutes: 5);
 
+  // #817 — FCM auth 구독 (중복 init 방지용 캐시 uid)
+  StreamSubscription<User?>? _fcmAuthSub;
+  String? _fcmInitForUid;
+
   @override
   void initState() {
     super.initState();
@@ -155,6 +175,21 @@ class _OAuthLinkListenerState extends ConsumerState<_OAuthLinkListener>
       _channel.setMethodCallHandler(_handleMethodCall);
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         await _handleInitialUri();
+      });
+      // #817 — FCM messenger attach (포그라운드 SnackBar 용) + 로그인 후 토큰 등록.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        FcmService.instance.attachMessenger(ScaffoldMessenger.of(context));
+      });
+      _fcmAuthSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+        if (user == null) {
+          // 로그아웃 시 토큰 정리는 너무 공격적일 수 있어 보류 (재로그인 시 동일 토큰 재사용).
+          _fcmInitForUid = null;
+          return;
+        }
+        if (_fcmInitForUid == user.uid) return;
+        _fcmInitForUid = user.uid;
+        FcmService.instance.initializeAfterLogin(user.uid);
       });
     }
     // 이슈 #704 Phase 2 — 앱 시작 시 첫 sync 시도 (활성화)
@@ -238,6 +273,7 @@ class _OAuthLinkListenerState extends ConsumerState<_OAuthLinkListener>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _channel.setMethodCallHandler(null);
+    _fcmAuthSub?.cancel();
     super.dispose();
   }
 

@@ -37,13 +37,42 @@ class UserModel with _$UserModel {
     @Default('') String handle,
     // 이슈 #771 — 핸들 마지막 변경 시각. 30일 변경 제한 기준.
     DateTime? handleUpdatedAt,
+    // 이슈 #831 — 외부 도안 이메일 인입 키 (4자 영숫자, 소문자).
+    // 형식: ^[a-z0-9]{4,8}$. 인입 주소 = `{handle}_{key}@in.moriknit.com`.
+    // 미발급(빈 문자열) 시 마이페이지 카드에서 1회 발급 버튼 노출.
+    @Default('') String inboundEmailKey,
+    // 이슈 #831 — 인입 키 마지막 갱신 시각 (스팸 누출 재발급 추적).
+    DateTime? inboundEmailUpdatedAt,
   }) = _UserModel;
 
   factory UserModel.fromJson(Map<String, dynamic> json) => _$UserModelFromJson(json);
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    return UserModel.fromJson(normalizeFirestoreMap({...data, 'uid': doc.id}));
+    final raw = (doc.data() as Map<String, dynamic>?) ?? <String, dynamic>{};
+    // 일부 사용자 도큐먼트에 email/nested 필드 누락 시 fromJson 의 required String 캐스트
+    // 에러로 어드민 회원 목록 화면 전체가 깨지는 회귀 방지.
+    final data = <String, dynamic>{
+      ...raw,
+      'uid': doc.id,
+      'email': (raw['email'] ?? '').toString(),
+      'displayName': (raw['displayName'] ?? '').toString(),
+      'photoURL': (raw['photoURL'] ?? '').toString(),
+      'bio': (raw['bio'] ?? '').toString(),
+      'handle': (raw['handle'] ?? '').toString(),
+      'inboundEmailKey': (raw['inboundEmailKey'] ?? '').toString(),
+    };
+    try {
+      return UserModel.fromJson(normalizeFirestoreMap(data));
+    } catch (_) {
+      // 깨진 도큐먼트 (nested subscription/usage 등 null) 도 어드민 목록에 표시 가능하도록 최소 모델 fallback.
+      return UserModel(
+        uid: doc.id,
+        email: (raw['email'] ?? '').toString(),
+        displayName: (raw['displayName'] ?? '').toString(),
+        photoURL: (raw['photoURL'] ?? '').toString(),
+        handle: (raw['handle'] ?? '').toString(),
+      );
+    }
   }
 
   factory UserModel.initial({

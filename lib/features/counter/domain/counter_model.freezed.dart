@@ -232,6 +232,7 @@ mixin _$CounterModel {
   String get photoUrl => throw _privateConstructorUsedError;
   String get patternChartId => throw _privateConstructorUsedError;
   String get patternFileId => throw _privateConstructorUsedError;
+  int get currentStepIndex => throw _privateConstructorUsedError;
   DateTime? get createdAt => throw _privateConstructorUsedError;
   DateTime? get updatedAt => throw _privateConstructorUsedError;
   bool get isDirty => throw _privateConstructorUsedError;
@@ -262,6 +263,7 @@ abstract class $CounterModelCopyWith<$Res> {
       String photoUrl,
       String patternChartId,
       String patternFileId,
+      int currentStepIndex,
       DateTime? createdAt,
       DateTime? updatedAt,
       bool isDirty});
@@ -293,6 +295,7 @@ class _$CounterModelCopyWithImpl<$Res, $Val extends CounterModel>
     Object? photoUrl = null,
     Object? patternChartId = null,
     Object? patternFileId = null,
+    Object? currentStepIndex = null,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
     Object? isDirty = null,
@@ -350,6 +353,10 @@ class _$CounterModelCopyWithImpl<$Res, $Val extends CounterModel>
           ? _value.patternFileId
           : patternFileId // ignore: cast_nullable_to_non_nullable
               as String,
+      currentStepIndex: null == currentStepIndex
+          ? _value.currentStepIndex
+          : currentStepIndex // ignore: cast_nullable_to_non_nullable
+              as int,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -388,6 +395,7 @@ abstract class _$$CounterModelImplCopyWith<$Res>
       String photoUrl,
       String patternChartId,
       String patternFileId,
+      int currentStepIndex,
       DateTime? createdAt,
       DateTime? updatedAt,
       bool isDirty});
@@ -417,6 +425,7 @@ class __$$CounterModelImplCopyWithImpl<$Res>
     Object? photoUrl = null,
     Object? patternChartId = null,
     Object? patternFileId = null,
+    Object? currentStepIndex = null,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
     Object? isDirty = null,
@@ -474,6 +483,10 @@ class __$$CounterModelImplCopyWithImpl<$Res>
           ? _value.patternFileId
           : patternFileId // ignore: cast_nullable_to_non_nullable
               as String,
+      currentStepIndex: null == currentStepIndex
+          ? _value.currentStepIndex
+          : currentStepIndex // ignore: cast_nullable_to_non_nullable
+              as int,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -507,6 +520,7 @@ class _$CounterModelImpl implements _CounterModel {
       this.photoUrl = '',
       this.patternChartId = '',
       this.patternFileId = '',
+      this.currentStepIndex = 0,
       this.createdAt,
       this.updatedAt,
       this.isDirty = false})
@@ -558,6 +572,9 @@ class _$CounterModelImpl implements _CounterModel {
   @JsonKey()
   final String patternFileId;
   @override
+  @JsonKey()
+  final int currentStepIndex;
+  @override
   final DateTime? createdAt;
   @override
   final DateTime? updatedAt;
@@ -567,7 +584,7 @@ class _$CounterModelImpl implements _CounterModel {
 
   @override
   String toString() {
-    return 'CounterModel(id: $id, uid: $uid, name: $name, projectId: $projectId, projectStepId: $projectStepId, stitchCount: $stitchCount, rowCount: $rowCount, targetStitchCount: $targetStitchCount, targetRowCount: $targetRowCount, marks: $marks, photoUrl: $photoUrl, patternChartId: $patternChartId, patternFileId: $patternFileId, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty)';
+    return 'CounterModel(id: $id, uid: $uid, name: $name, projectId: $projectId, projectStepId: $projectStepId, stitchCount: $stitchCount, rowCount: $rowCount, targetStitchCount: $targetStitchCount, targetRowCount: $targetRowCount, marks: $marks, photoUrl: $photoUrl, patternChartId: $patternChartId, patternFileId: $patternFileId, currentStepIndex: $currentStepIndex, createdAt: $createdAt, updatedAt: $updatedAt, isDirty: $isDirty)';
   }
 
   @override
@@ -597,6 +614,8 @@ class _$CounterModelImpl implements _CounterModel {
                 other.patternChartId == patternChartId) &&
             (identical(other.patternFileId, patternFileId) ||
                 other.patternFileId == patternFileId) &&
+            (identical(other.currentStepIndex, currentStepIndex) ||
+                other.currentStepIndex == currentStepIndex) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
@@ -621,6 +640,7 @@ class _$CounterModelImpl implements _CounterModel {
       photoUrl,
       patternChartId,
       patternFileId,
+      currentStepIndex,
       createdAt,
       updatedAt,
       isDirty);
@@ -654,6 +674,7 @@ abstract class _CounterModel implements CounterModel {
       final String photoUrl,
       final String patternChartId,
       final String patternFileId,
+      final int currentStepIndex,
       final DateTime? createdAt,
       final DateTime? updatedAt,
       final bool isDirty}) = _$CounterModelImpl;
@@ -687,6 +708,8 @@ abstract class _CounterModel implements CounterModel {
   String get patternChartId;
   @override
   String get patternFileId;
+  @override
+  int get currentStepIndex;
   @override
   DateTime? get createdAt;
   @override

@@ -7,6 +7,7 @@
 //
 // admin_screen.dart 와의 통합은 메인 세션에서 처리. 본 위젯은 순수 표현·콜백 기반.
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -69,6 +70,9 @@ class AdminAIFixPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // 첨부 이미지 갤러리 — 사용자가 버그리포트와 함께 보낸 화면 캡처
+          _AttachmentGallery(imageUrls: report.imageUrls),
+          const SizedBox(height: 14),
           // 진행률 바 — 작업 중일 때만 노출 (pending/done/failed/rejected 는 숨김)
           if (_isWorking(report.aiFixStatus)) ...[
             _ProgressBar(status: report.aiFixStatus),
@@ -183,6 +187,149 @@ class _StatusBadge extends StatelessWidget {
 }
 
 // ──────────────────────────────────────────────────────────────────────
+// 첨부 이미지 갤러리 (사용자 화면 캡처)
+
+class _AttachmentGallery extends StatelessWidget {
+  final List<String> imageUrls;
+  const _AttachmentGallery({required this.imageUrls});
+
+  @override
+  Widget build(BuildContext context) {
+    if (imageUrls.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: C.gx,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: C.bd),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.image_not_supported_outlined, size: 16, color: C.mu),
+            const SizedBox(width: 8),
+            Text(
+              '첨부 이미지 없음',
+              style: T.caption.copyWith(color: C.mu),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.photo_library_outlined, size: 14, color: C.lvD),
+            const SizedBox(width: 6),
+            Text(
+              '첨부 화면 캡처 (${imageUrls.length})',
+              style: T.captionBold.copyWith(color: C.lvD, fontSize: 12),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 80,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: imageUrls.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (_, i) {
+              final url = imageUrls[i];
+              return GestureDetector(
+                onTap: () => _openFullScreen(context, url),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: CachedNetworkImage(
+                    imageUrl: url,
+                    width: 80,
+                    height: 80,
+                    fit: BoxFit.cover,
+                    placeholder: (_, _) => Container(
+                      width: 80,
+                      height: 80,
+                      color: C.bd2,
+                      child: Center(
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(C.lv),
+                          ),
+                        ),
+                      ),
+                    ),
+                    errorWidget: (_, _, _) => Container(
+                      width: 80,
+                      height: 80,
+                      color: C.bd2,
+                      child: Icon(Icons.broken_image, size: 24, color: C.mu),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _openFullScreen(BuildContext context, String url) {
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.85),
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(12),
+        child: Stack(
+          children: [
+            InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: Center(
+                child: CachedNetworkImage(
+                  imageUrl: url,
+                  fit: BoxFit.contain,
+                  placeholder: (_, _) => Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(C.lv),
+                    ),
+                  ),
+                  errorWidget: (_, _, _) => Center(
+                    child: Icon(
+                      Icons.broken_image,
+                      size: 48,
+                      color: C.mu,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Material(
+                color: Colors.black.withValues(alpha: 0.5),
+                shape: const CircleBorder(),
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.of(ctx).pop(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────
 // 진행률 바
 
 class _ProgressBar extends StatelessWidget {
@@ -272,11 +419,18 @@ class _StepChecklist extends StatelessWidget {
         final stepName = _kFixSteps[i];
         final completedAt = completedMap[stepName];
 
+        // #813 — 'analyzed' 같은 종착 상태는 현재 단계로 표시하면 spinner 도는 것처럼 보임.
+        //   _isWorking (진행 중 상태) 이 아니면 isCurrent X → 체크박스로 표시.
+        //   isCompleted: 진행 중인 status면 i<=currentIdx 모두 완료 (현재 단계 제외),
+        //   진행 중 아니면(예: analyzed) i<=currentIdx 모두 완료 (현재 단계 포함).
+        final bool isWorking = _isWorking(report.aiFixStatus);
         final bool isCompleted = completedAt != null ||
-            (!isAbnormal && !isWaiting && currentIdx >= 0 && i < currentIdx);
+            (!isAbnormal && !isWaiting && currentIdx >= 0 &&
+                (isWorking ? i < currentIdx : i <= currentIdx));
         // pending 상태에선 현재 단계 표시 안 함 (혼란 방지)
-        final bool isCurrent =
-            !isAbnormal && !isWaiting && currentIdx >= 0 && i == currentIdx && !isCompleted;
+        // 또한 진행 중 상태일 때만 isCurrent spinner 표시.
+        final bool isCurrent = !isAbnormal && !isWaiting && isWorking &&
+            currentIdx >= 0 && i == currentIdx && !isCompleted;
 
         return _StepRow(
           label: _kStepLabels[stepName] ?? stepName,
@@ -574,6 +728,9 @@ class _ActionButtons extends StatelessWidget {
     final canRelease = status == 'done' && apkInstalled;
     // 거부는 종결 단계가 아닌 동안 항상 활성
     final canReject = status != 'rejected' && status != 'done';
+    // 재분석/초기화는 pending이 아닐 때 (이미 분석 시작했거나 결과 나온 상태)
+    final canReanalyze = status != 'pending' && status != 'fixing'
+        && status != 'building' && status != 'installing';
 
     return Wrap(
       spacing: 8,
@@ -598,12 +755,49 @@ class _ActionButtons extends StatelessWidget {
           onPressed: onReleaseApprove,
         ),
         _ActionButton(
+          label: '🔄 재분석',
+          color: C.mu,
+          enabled: canReanalyze,
+          onPressed: () => _confirmReanalyze(context),
+        ),
+        _ActionButton(
           label: '거부',
           color: C.og,
           enabled: canReject,
           onPressed: onReject,
         ),
       ],
+    );
+  }
+
+  /// 재분석/초기화 — aiFixStatus → pending 으로 reset, fixPlan/fixDiff 등 클리어.
+  /// 워커가 다시 [AI 분석 시작] 트리거 받을 수 있도록.
+  void _confirmReanalyze(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('재분석'),
+        content: const Text(
+          '현재 분석 결과를 초기화하고 다시 [AI 분석 시작]을 누를 수 있게 합니다.\n'
+          'fixPlan / fixDiff / 단계 로그가 모두 삭제됩니다.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: C.mu),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              onAnalysisStart(); // 임시 — 실제 reset 로직은 호출처에서 onAnalysisStart 재사용
+              // 실제 호출처(_BugReportDetail)에서 status='pending'으로 reset 처리 필요.
+              // 본 패널은 콜백만 트리거.
+            },
+            child: const Text('초기화 + 재분석'),
+          ),
+        ],
+      ),
     );
   }
 }

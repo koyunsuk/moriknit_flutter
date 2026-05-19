@@ -5,6 +5,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/constants/system_users.dart';
 import '../features/blueprint/data/step_blueprint_repository.dart';
 import '../features/blueprint/domain/step_blueprint.dart';
 import '../features/blueprint/domain/step_blueprint_unit.dart';
@@ -36,6 +37,17 @@ final myBlueprintsProvider = StreamProvider<List<StepBlueprint>>((ref) {
   return ref
       .watch(stepBlueprintRepositoryProvider)
       .watchByOwner(user.uid);
+});
+
+/// #853 — 모리니트 공식 청사진 (ownerUid == moriknit_system).
+///
+/// 어드민 콘솔에서 "시스템 자산으로 전환"한 도안/템플릿이 표시됨.
+/// 사용자 라이브러리의 "모리니트 공식" 섹션에서 사용.
+final moriknitOfficialBlueprintsProvider =
+    StreamProvider<List<StepBlueprint>>((ref) {
+  return ref
+      .watch(stepBlueprintRepositoryProvider)
+      .watchByOwner(SystemUsers.moriknitUid);
 });
 
 /// 마켓플레이스 노출 청사진.

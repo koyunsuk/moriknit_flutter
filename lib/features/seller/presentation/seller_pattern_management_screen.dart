@@ -25,6 +25,8 @@ import '../../../core/widgets/async_data_view.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/blueprint_provider.dart';
 import '../../blueprint/domain/step_blueprint.dart';
+import '../../blueprint/presentation/tester_group_screen.dart';
+import 'seller_dashboard_screen.dart' show openSellerPlaceholder;
 
 /// Phase 2 폴리시:
 ///   - SellerDashboardScreen 컨테이너 안에서 호출되므로 자체 Scaffold/BgOrbs/SafeArea 제거.
@@ -67,25 +69,23 @@ class SellerPatternManagementScreen extends ConsumerWidget {
     );
   }
 
-  /// 도안 등록 — 셀러 앱 라우트 미정 시 snackbar fallback.
+  /// 도안 등록 — 셀러 앱 라우트 미등록 → 와이어프레임 페이지 진입.
   void _openNewPattern(BuildContext context) {
-    final router = GoRouter.maybeOf(context);
-    if (router != null) {
-      try {
-        context.push('/pattern/new');
-        return;
-      } catch (_) {
-        // 라우트 미등록 시 fallback.
-      }
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '도안 등록 라우트 등록 예정',
-          style: T.body.copyWith(color: Colors.white),
-        ),
-        backgroundColor: C.lvD,
-      ),
+    openSellerPlaceholder(
+      context,
+      title: '신규 도안 등록',
+      subtitle: 'Pro 셀러 본인 도안 등록·검수·발행',
+      icon: Icons.add_circle_outline_rounded,
+      features: [
+        '도안 파일 업로드 (PDF / 이미지 / JSON)',
+        'AI 자동 변환 (PDF → 차트 + 서술형)',
+        '도안 메타 입력 (제목 / 카테고리 / 게이지 / 실 / 바늘)',
+        '미리보기 + 단계별 섹션 분할',
+        '가격 책정 (무료 / 유료)',
+        '검수 대기 큐로 제출',
+        '본인 테스터 모집 연동',
+      ],
+      note: 'Pro 셀러 핵심 워크플로우. 검수 통과 시 마켓 출시.',
     );
   }
 }
@@ -250,6 +250,18 @@ class _MyPatternCard extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+            // #792 후속 — 셀러앱 진입점. 도안 작성자(셀러)가 본인 도안의 테스터 그룹을 직접 관리.
+            IconButton(
+              tooltip: '테스터 그룹 관리',
+              icon: Icon(Icons.group_rounded, color: C.lvD, size: 20),
+              onPressed: () {
+                Navigator.of(context, rootNavigator: true).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => TesterGroupScreen(blueprintId: pattern.id),
+                  ),
+                );
+              },
             ),
             Icon(Icons.chevron_right_rounded, color: C.mu, size: 20),
           ],

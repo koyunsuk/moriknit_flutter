@@ -156,6 +156,11 @@ firebase deploy --only hosting                             # ❌ (스크립트 �
 - 알림 형식: "🔄 {단계명} 완료 ({N}/{총N})" — Node.js pushover_notify.sh 사용.
 - 세션 내 주요 완료 시점(빌드 완료, 배포 완료, 구현 완료 등)마다 보고.
 
+## #813 119 워커 재시작 자동 진행 (승인 불필요)
+- `d:\Projects\moriknit_ai_worker\` 워커 코드 수정 시 사용자 승인 없이 즉시 재시작.
+- PowerShell 자동 실행: PID 파일 종료 → 잔여 python 프로세스 정리 → `pythonw.exe -u worker.py` 백그라운드 재기동.
+- 재시작 직후 worker.log 마지막 5줄 확인하여 'Listening for bug_reports trigger...' 정상 기동 보고.
+
 ## APK 빌드·설치 자동 진행 (승인 불필요)
 - 모바일(Flutter) 코드 수정 완료 후 사용자 승인 없이 즉시 아래 순서 자동 실행:
   1. `flutter build apk --debug`
@@ -531,3 +536,17 @@ adb shell dumpsys package com.moriknit.admin_mobile | grep -E "versionName|lastU
 ### 퀵버튼 뒤로가기 (main_shell.dart)
 - ✅ `Navigator.maybePop` → `context.canPop() ? context.pop() : 없음` 으로 변경 완료
 - ⛔ `Navigator.maybePop(context)` 로 되돌리지 말 것
+
+### 도안 뷰어 라우팅 (#851) — 절대 준수
+- ✅ **모든 도안 진입은 반드시 `UniversalPatternViewerScreen` 경유**.
+- ⛔ `PdfViewerScreen` / `PatternDetailScreen` / `PatternEditorScreen` / `NarrativePatternViewerScreen` / `ImagePatternViewerScreen` 직접 라우팅 **절대 금지**.
+- 진입 경로: 도안 라이브러리, 최근작업, 검색 결과, 홈, 카운터 연결 도안, 마켓, 커뮤니티 등 **모든** 화면 동일.
+- 유니버설 뷰어가 `sourceType`/PDF/이미지/차트별로 적절한 화면으로 dispatch.
+- 이유: PDF 일반 뷰어로 직행 시 모리니트 고유 기능(카운터/타이머/메모/단계로그 연동) 사용 불가.
+- 호출 예:
+  ```dart
+  Navigator.push(context, MaterialPageRoute(
+    settings: RouteSettings(name: 'pattern-universal/${id}-${ts}'),
+    builder: (_) => UniversalPatternViewerScreen(patternId: id),
+  ));
+  ```

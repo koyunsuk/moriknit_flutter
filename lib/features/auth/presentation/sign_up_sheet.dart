@@ -126,15 +126,15 @@ void showSignUpSheet(BuildContext context, WidgetRef ref, bool isMounted) {
                             final nav = Navigator.of(ctx);
                             final messenger = ScaffoldMessenger.of(ctx);
                             final referrerInput = referrerCtrl.text.trim();
-                            // #771 — 핸들 검증 통과해야 가입 진행 (빈 핸들 허용).
+                            // #847 — 핸들 필수. 빈 값 또는 미통과 시 차단.
                             final handleInput =
                                 HandleValidator.normalize(handleCtrl.text);
-                            if (handleInput.isNotEmpty &&
+                            if (handleInput.isEmpty ||
                                 handleStatus != _HandleStatus.available) {
                               setSheetState(() {
                                 sheetError = isKorean
-                                    ? '핸들을 확인해 주세요. (형식 또는 중복)'
-                                    : 'Please check the handle (format or duplicate).';
+                                    ? '핸들을 입력해 주세요. (영문/숫자 3~20자, 중복 불가)'
+                                    : 'Please enter a valid handle (3-20 alphanumeric, unique).';
                               });
                               return;
                             }

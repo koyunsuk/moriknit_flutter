@@ -562,8 +562,25 @@ class _CounterScreenState extends ConsumerState<CounterScreen> {
             style: ElevatedButton.styleFrom(backgroundColor: C.og),
             onPressed: () async {
               Navigator.pop(ctx);
-              await ref.read(counterRepositoryProvider).deleteCounter(widget.counterId);
-              if (mounted) Navigator.pop(context);
+              // #821 — silent fail 차단: transaction 실패 시 에러 SnackBar 표시.
+              //   이전 코드는 await throw 무시 → 사용자에게 "삭제됨" UI 표시 but 실제 Firestore 안 지워짐.
+              try {
+                await ref.read(counterRepositoryProvider).deleteCounter(widget.counterId);
+                if (!mounted) return;
+                Navigator.pop(context);
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(
+                    isKorean ? '삭제 실패: $e' : 'Delete failed: $e',
+                    style: T.body.copyWith(color: Colors.white),
+                  ),
+                  backgroundColor: C.og,
+                  behavior: SnackBarBehavior.floating,
+                  duration: const Duration(seconds: 6),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ));
+              }
             },
             child: Text(isKorean ? '삭제' : 'Delete'),
           ),

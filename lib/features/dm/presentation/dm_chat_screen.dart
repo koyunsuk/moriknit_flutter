@@ -5,9 +5,11 @@ import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../core/widgets/rich_broadcast_card.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/dm_provider.dart';
 import '../domain/dm_model.dart';
+import 'widgets/dm_attachment_chip.dart';
 
 class DmChatScreen extends ConsumerStatefulWidget {
   final String roomId;
@@ -191,6 +193,8 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
     final otherHandle = room?.otherHandle(myUid) ?? '';
     // 채팅 버블 아바타용 — room 스냅샷에 저장된 photoURL.
     final otherPhoto = room?.otherPhoto(myUid) ?? '';
+    // 이슈 #834 — @moriknit 공식 채널 여부
+    final isSystemChannel = room?.isSystemChannel ?? false;
     final myProfile = ref.watch(currentUserProvider).valueOrNull;
     final myPhoto = myProfile?.photoURL ?? '';
     final myDisplayName = (myProfile?.displayName.isNotEmpty == true)
@@ -234,6 +238,25 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
                 ),
               ),
             ],
+            // 이슈 #834 — @moriknit 공식 채널 배지
+            if (isSystemChannel) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: C.lv.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  isKorean ? '공식' : 'Official',
+                  style: T.caption.copyWith(
+                    color: C.lvD,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 10,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -248,6 +271,17 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
                   error: (e, _) => Center(child: Text('$e')),
                   data: (messages) {
                     if (messages.isNotEmpty) _scrollToBottom();
+                    // 이슈 #834 — 어드민 브로드캐스트 메시지 읽음 마킹 (build 외부 호출).
+                    if (user != null && messages.isNotEmpty) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        ref.read(dmRepositoryProvider).markBroadcastMessagesRead(
+                              roomId: widget.roomId,
+                              uid: user.uid,
+                              messages: messages,
+                            );
+                      });
+                    }
                     if (messages.isEmpty) {
                       return Center(
                         child: Text(
@@ -277,6 +311,7 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
                             photoUrl: isMe ? myPhoto : otherPhoto,
                             displayName: isMe ? myDisplayName : otherName,
                             showAvatar: isLastInGroup,
+                            isKorean: isKorean,
                           ),
                         );
                       },
@@ -345,12 +380,15 @@ class _MessageBubble extends StatelessWidget {
   /// 같은 발신자 메시지 묶음의 마지막일 때만 true → 아바타 표시.
   /// 위쪽 묶음은 빈 자리(SizedBox)로 정렬만 유지.
   final bool showAvatar;
+  /// 이슈 #848 — 리치 카드 버튼 라벨 등 로케일 분기.
+  final bool isKorean;
   const _MessageBubble({
     required this.message,
     required this.isMe,
     required this.photoUrl,
     required this.displayName,
     required this.showAvatar,
+    required this.isKorean,
   });
 
   @override
@@ -362,28 +400,63 @@ class _MessageBubble extends StatelessWidget {
       style: T.caption.copyWith(color: C.mu, fontSize: 10),
     );
 
-    final bubble = Flexible(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: isMe ? C.lv : C.gx,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: isMe ? const Radius.circular(16) : const Radius.circular(4),
-            bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(16),
-          ),
-          border: isMe ? null : Border.all(color: C.bd),
-        ),
-        child: Text(
-          message.text,
-          style: T.body.copyWith(
-            color: isMe ? Colors.white : C.tx,
-            height: 1.5,
-          ),
-        ),
-      ),
-    );
+    // 이슈 #848 — 어드민 브로드캐스트 풍부한 카드 메시지는 별도 위젯으로 렌더링.
+    final Widget bubble = message.isRichBroadcast
+        ? Flexible(
+            child: RichBroadcastCard(
+              text: message.text,
+              imageUrl: message.imageUrl,
+              bodyDelta: message.bodyDelta,
+              linkUrl: message.linkUrl,
+              isKorean: isKorean,
+              // 일반 텍스트 버블 톤과 자연스럽게 어울리도록 회색 배경 사용.
+              useAccentBackground: false,
+              maxWidth: 260,
+            ),
+          )
+        : Flexible(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: isMe ? C.lv : C.gx,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(16),
+                  topRight: const Radius.circular(16),
+                  bottomLeft:
+                      isMe ? const Radius.circular(16) : const Radius.circular(4),
+                  bottomRight:
+                      isMe ? const Radius.circular(4) : const Radius.circular(16),
+                ),
+                border: isMe ? null : Border.all(color: C.bd),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (message.text.isNotEmpty)
+                    Text(
+                      message.text,
+                      style: T.body.copyWith(
+                        color: isMe ? Colors.white : C.tx,
+                        height: 1.5,
+                      ),
+                    ),
+                  // 이슈 #845 — 비이미지 첨부(PDF 등) 칩.
+                  if (message.hasAttachment) ...[
+                    if (message.text.isNotEmpty) const SizedBox(height: 8),
+                    DmAttachmentChip(
+                      url: message.attachmentUrl,
+                      name: message.attachmentName,
+                      // 상대방(어드민) 측에서 보낸 첨부는 라벤더 톤(isAdminSide=false→
+                      // C.lvL 칩), 내 첨부는 라벤더 배경 위 흰색 톤.
+                      isAdminSide: isMe,
+                      isKorean: isKorean,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
 
     return Padding(
       padding: EdgeInsets.only(bottom: showAvatar ? 10 : 2),

@@ -174,6 +174,21 @@ service cloud.firestore {
       match /migration_meta/{docId} {
         allow read, write: if isOwner(uid) || isAdmin();
       }
+      // 이슈 #817 — FCM 토큰 (디바이스별 1 문서)
+      //   docId = FCM 토큰 문자열
+      //   data: { token, platform, createdAt, lastSeenAt }
+      //   read/write: 본인 + admin (어드민 발송 시 collectionGroup 으로 일괄 조회)
+      match /fcm_tokens/{token} {
+        allow read, write: if isOwner(uid) || isAdmin();
+      }
+
+      // 이슈 #870 — 비공개 시크릿 (Dropbox 토큰 / 백업 폴더 등)
+      //   users/{uid}/private/dropbox: { accessToken, refreshToken, expiresAt, uploadFolder, updatedAt }
+      //   본인만 read/write. 어드민도 접근 불가 (개인 OAuth 토큰 보호).
+      //   Cloud Function 은 Firebase Admin SDK 로 우회.
+      match /private/{document=**} {
+        allow read, write: if isOwner(uid);
+      }
     }
 
     // ── 마켓 아이템 (공개 읽기, 로그인 후 생성/수정) ────────────────────────────
@@ -321,6 +336,36 @@ service cloud.firestore {
     match /{path=**}/market_purchases/{docId} {
       allow read: if isAdmin();
     }
+    // 이슈 #817 — FCM 토큰 collectionGroup (어드민 발송 시 전체 토큰 조회)
+    match /{path=**}/fcm_tokens/{token} {
+      allow read: if isAdmin();
+    }
+
+    // 이슈 #817 — 푸시 발송 이력 (어드민만 read/write, Cloud Function이 주로 쓰기)
+    match /notifications/{notificationId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // 이슈 #836 — 어드민 팝업/배너/푸시 발송 이력 (재사용 UI 용도)
+    //   data: { type, title, bodyDelta, bodyText, backgroundImageUrl?, linkUrl?,
+    //           targetUid?, sentAt, sentByUid, recipientCount, readCount }
+    //   어드민만 read/write (관리 화면에서 클라이언트가 직접 쓰기).
+    match /admin_broadcasts/{broadcastId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ── 어드민 활동 로그 (audit log) — 어드민만 read/write ────────────────────────
+    // 모바일어드민 사용자 관리 액션(차단/해제/등급변경 등) 자동 기록.
+    // 보관 정책: 영구 (필요 시 어드민이 수동 삭제). docId = autoId.
+    // data: { actorUid, actorEmail, action, targetUid, targetEmail, metadata, createdAt }
+    match /admin_action_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+                   && request.resource.data.actorUid == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
 
     // ── 뉴스레터 구독 (비로그인 쓰기 허용) ──────────────────────────────────────
     match /landing_subscriptions/{docId} {
@@ -329,11 +374,14 @@ service cloud.firestore {
     }
 
     // ── 버그 신고 (로그인 후 쓰기) ────────────────────────────────────────────
-    // 이슈 #807/#813 — 어드민만 list/read/update/delete (일반 사용자 조회 UI 없음).
+    // 이슈 #807/#813 — 어드민 list/read/update/delete + 본인 작성분 read.
+    // 이슈 #855 — 마이페이지 "나의 버그/의견" 블록이 본인 uid 매칭 list query 사용.
+    // 이슈 #857 — 모바일어드민 isAdmin 평가 정상화 (rule 변경 안 됨, idToken refresh 필요).
     // AI 워커는 Firebase Admin SDK로 우회.
     match /bug_reports/{docId} {
       allow create: if isLoggedIn();
-      allow read: if isAdmin();
+      allow read: if isAdmin() ||
+                     (isLoggedIn() && resource.data.uid == request.auth.uid);
       allow update, delete: if isAdmin();
     }
 
@@ -346,12 +394,22 @@ service cloud.firestore {
     }
 
     // ── DM 채팅 (참여자만) ────────────────────────────────────────────────────
+    // 이슈 #834 — @moriknit 시스템 봇과의 룸은 Cloud Function (Admin SDK) 이 생성/쓰기.
+    //   클라이언트는 자기 uid 가 participants 에 포함된 룸만 read/update.
+    //   메시지 readBy 마킹은 본인이 participant 인 룸의 메시지에만 허용.
     match /dm_rooms/{roomId} {
-      allow read, write: if isLoggedIn()
+      allow read: if isLoggedIn()
+        && (resource == null || request.auth.uid in resource.data.participants || isAdmin());
+      allow write: if isLoggedIn()
         && (resource == null || request.auth.uid in resource.data.participants);
 
       match /messages/{messageId} {
-        allow read, write: if isLoggedIn();
+        allow read, write: if isLoggedIn()
+          && (
+            !exists(/databases/$(database)/documents/dm_rooms/$(roomId))
+            || request.auth.uid in get(/databases/$(database)/documents/dm_rooms/$(roomId)).data.participants
+            || isAdmin()
+          );
       }
     }
 
@@ -442,6 +500,15 @@ service cloud.firestore {
     }
     match /{path=**}/progress/{unitId} {
       allow read: if isAdmin();
+    }
+
+    // ── 이슈 #873 — 자동 AI 분석 작업 큐 ────────────────────────────────────────
+    // pending_ai_jobs/{jobId}: { uid, storagePath, mimeType, status, ... }
+    //   - 모든 read/write 는 클라이언트 차단.
+    //   - inboundEmailHandler / onAiJobCreated (Cloud Function, Admin SDK) 만 우회 접근.
+    //   - 어드민도 클라이언트 SDK 로 접근 불가 (디버깅은 어드민 Cloud Function 추가 시 별도 구현).
+    match /pending_ai_jobs/{jobId} {
+      allow read, write: if false;
     }
 
     // ── #806 — 랜딩 사이트 CMS 페이지 (어드민 편집, 모두 읽기) ────────────────

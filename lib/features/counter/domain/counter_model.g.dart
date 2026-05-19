@@ -40,6 +40,7 @@ _$CounterModelImpl _$$CounterModelImplFromJson(Map<String, dynamic> json) =>
       photoUrl: json['photoUrl'] as String? ?? '',
       patternChartId: json['patternChartId'] as String? ?? '',
       patternFileId: json['patternFileId'] as String? ?? '',
+      currentStepIndex: (json['currentStepIndex'] as num?)?.toInt() ?? 0,
       createdAt: json['createdAt'] == null
           ? null
           : DateTime.parse(json['createdAt'] as String),
@@ -64,6 +65,7 @@ Map<String, dynamic> _$$CounterModelImplToJson(_$CounterModelImpl instance) =>
       'photoUrl': instance.photoUrl,
       'patternChartId': instance.patternChartId,
       'patternFileId': instance.patternFileId,
+      'currentStepIndex': instance.currentStepIndex,
       'createdAt': instance.createdAt?.toIso8601String(),
       'updatedAt': instance.updatedAt?.toIso8601String(),
       'isDirty': instance.isDirty,

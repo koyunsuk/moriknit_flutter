@@ -2,6 +2,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/router/routes.dart';
 
 import '../../../core/localization/app_language.dart';
 import '../../../core/theme/app_colors.dart';
@@ -454,11 +457,14 @@ class _TemplateListScreenState extends ConsumerState<TemplateListScreen>
           SectionTitle(title: isKorean ? '🛍️ 구매한 템플릿' : '🛍️ Purchased Templates'),
           const SizedBox(height: 8),
           GlassCard(
+            // 이슈 #859 — 템플릿 없을 때 "마켓 가기" 버튼 추가 (다른 블록과 UI 일관, MoriEmptyState 공통 위젯 사용)
             child: MoriEmptyState(
               icon: Icons.shopping_bag_outlined,
               iconColor: C.mu,
               title: isKorean ? '구매한 템플릿이 없어요' : 'No purchased templates',
               subtitle: isKorean ? '마켓에서 프리미엄 템플릿을 구매해보세요' : 'Browse premium templates in the market',
+              buttonLabel: isKorean ? '+ 템플릿 구경하기' : '+ Browse templates',
+              onAction: () => context.push(Routes.market),
             ),
           ),
         ],

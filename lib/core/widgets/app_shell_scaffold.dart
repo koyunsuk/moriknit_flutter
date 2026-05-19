@@ -202,13 +202,16 @@ class _AppShellScaffoldState extends ConsumerState<AppShellScaffold> {
                 ),
             ],
           ),
-        if (aboveBody != null) aboveBody,
+        ?aboveBody,
         Expanded(child: body),
       ],
     );
 
     return Scaffold(
-      backgroundColor: showBgOrbs ? Colors.transparent : C.bg,
+      // 이슈 #833 — MaterialPageRoute로 push된 화면에서 Scaffold가 transparent면
+      // 라우트 아래 검은 캔버스가 비쳐서 까만 배경 발생.
+      // BgOrbs는 투명 painter라 backgroundColor를 항상 C.bg로 두어도 시각 변화 없음.
+      backgroundColor: C.bg,
       bottomNavigationBar: bottom,
       floatingActionButton: floatingActionButton,
       body: Stack(

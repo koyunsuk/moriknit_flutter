@@ -21,7 +21,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'core/localization/app_language.dart';
-import 'core/router/admin_router.dart';
+import 'core/router/admin_mobile_router.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
 import 'firebase_options.dart';
@@ -47,16 +47,18 @@ class MoriKnitAdminMobileApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final router = ref.watch(adminRouterProvider);
+    final router = ref.watch(adminMobileRouterProvider);
     final locale = resolveSupportedLocale(ref.watch(appLocaleProvider));
     final themeMode = ref.watch(appThemeProvider);
     C.apply(themeMode);
 
+    // #818/#822 — ValueKey 제거 (GlobalKey 'root' 충돌 + ANR 원인)
     return MaterialApp.router(
-      key: ValueKey(themeMode),
       title: 'MoriKnit Admin',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.adminLight,
+      // #815 후속 — 어드민 모바일은 모리유저 라이트 톤 그대로 사용
+      // (이전 AppTheme.adminLight는 다크 테마 → 라이트 카드 위 글씨 안 보임 문제)
+      theme: AppTheme.light,
       routerConfig: router,
       locale: locale,
       supportedLocales: supportedAppLocales,

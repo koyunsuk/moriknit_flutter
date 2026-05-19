@@ -23,6 +23,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:hive/hive.dart';
 
 import '../../../core/constants/subscription_constants.dart';
+import '../../../core/constants/system_users.dart';
 import '../../../core/errors/firestore_timeout_extension.dart';
 import '../../../core/errors/network_errors.dart';
 import '../../pattern/data/pattern_repository.dart';
@@ -255,6 +256,24 @@ class StepBlueprintRepository {
         debugPrint('StepBlueprintRepository.update: cache merge failed - $e');
       }
     }
+  }
+
+  /// #853 — 청사진 소유권을 시스템 가상 사용자(`moriknit_system`)로 전환.
+  ///
+  /// 어드민 콘솔에서 마스터 자산화할 때 사용. ownerUid 필드만 갱신하면
+  /// 본인 사용자 라이브러리(watchByOwner(self) 기반)에서 자동으로 사라지고,
+  /// 사용자 측 "모리니트 공식" 섹션(watchByOwner(moriknit_system))에 노출됨.
+  ///
+  /// Hive 캐시도 함께 갱신해 오프라인 일관성 유지.
+  Future<void> transferToSystemOwner(String blueprintId) async {
+    if (blueprintId.isEmpty) {
+      throw ArgumentError('blueprintId is empty');
+    }
+    await update(blueprintId, {
+      'ownerUid': SystemUsers.moriknitUid,
+      'provider': BlueprintProvider.official.name,
+      'moriknitVerified': true,
+    });
   }
 
   /// 전체 덮어쓰기 저장.
@@ -972,19 +991,20 @@ class StepBlueprintRepository {
   /// 본 메서드는 ServerUnavailableException 을 호출자에게 노출하지 않고, 폴백 실패 시에만
   /// null 반환한다. 호출부는 null → 친화 안내 표시.
   Future<StepBlueprint?> ensureBuiltinBlueprint(String blueprintId) async {
-    // 1) Firestore + Hive 우선.
+    // 1) Firestore + Hive 우선. (#788 — ServerUnavailableException 외 권한/네트워크 등
+    //    모든 exception 도 폴백 분기 타도록 광범위 catch.)
     try {
       final existing = await get(blueprintId);
       if (existing != null) return existing;
-    } on ServerUnavailableException {
-      // 폴백 흐름으로 진행.
+    } catch (_) {
+      // 어떤 exception 이든 폴백으로 진행.
     }
 
     // 2) 빌트인 id 가 아니면 폴백 없음.
     final srcId = _builtinSourceId(blueprintId);
     if (srcId == null) return null;
 
-    // 3) builtin_templates/{srcId} 조회 — 짧은 timeout.
+    // 3) builtin_templates/{srcId} 조회 — 짧은 timeout + 광범위 catch.
     try {
       final snap = await _db
           .collection('builtin_templates')
@@ -999,8 +1019,8 @@ class StepBlueprintRepository {
       await _cacheBlueprint(result.blueprint);
       await _cacheUnits(blueprintId, result.units);
       return result.blueprint;
-    } on ServerUnavailableException {
-      // 빌트인 원본도 못 가져옴 — 진짜 오프라인.
+    } catch (_) {
+      // 빌트인 원본도 못 가져옴 — 진짜 오프라인 또는 권한 거부.
       return null;
     }
   }

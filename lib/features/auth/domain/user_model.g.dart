@@ -39,6 +39,10 @@ _$UserModelImpl _$$UserModelImplFromJson(Map<String, dynamic> json) =>
       handleUpdatedAt: json['handleUpdatedAt'] == null
           ? null
           : DateTime.parse(json['handleUpdatedAt'] as String),
+      inboundEmailKey: json['inboundEmailKey'] as String? ?? '',
+      inboundEmailUpdatedAt: json['inboundEmailUpdatedAt'] == null
+          ? null
+          : DateTime.parse(json['inboundEmailUpdatedAt'] as String),
     );
 
 Map<String, dynamic> _$$UserModelImplToJson(_$UserModelImpl instance) =>
@@ -60,6 +64,9 @@ Map<String, dynamic> _$$UserModelImplToJson(_$UserModelImpl instance) =>
       'phoneNumber': instance.phoneNumber,
       'handle': instance.handle,
       'handleUpdatedAt': instance.handleUpdatedAt?.toIso8601String(),
+      'inboundEmailKey': instance.inboundEmailKey,
+      'inboundEmailUpdatedAt':
+          instance.inboundEmailUpdatedAt?.toIso8601String(),
     };
 
 _$UserSubscriptionImpl _$$UserSubscriptionImplFromJson(

@@ -31,20 +31,46 @@ class _DmListScreenState extends ConsumerState<DmListScreen> {
   @override
   void initState() {
     super.initState();
+    // #839 — 검색창 focus 시 빈 쿼리에도 회원 목록 표시 (@moriknit 최상단).
+    _searchFocus.addListener(_handleFocusChange);
   }
 
   @override
   void dispose() {
+    _searchFocus.removeListener(_handleFocusChange);
     _searchCtrl.dispose();
     _searchFocus.dispose();
     super.dispose();
+  }
+
+  /// #839 — focus 진입 시 + 검색어 비어있을 때 회원 목록 자동 로드.
+  void _handleFocusChange() {
+    // #842 — focus 진입·이탈 모두 X 버튼 표시 갱신 위해 rebuild.
+    if (mounted) setState(() {});
+    if (!_searchFocus.hasFocus) return;
+    if (_searchCtrl.text.trim().isNotEmpty) return;
+    final myUid = ref.read(authStateProvider).valueOrNull?.uid;
+    if (myUid == null) return;
+    _loadRecentUsers(myUid);
+  }
+
+  Future<void> _loadRecentUsers(String myUid) async {
+    setState(() { _searching = true; _searchLoading = true; });
+    final repo = ref.read(dmRepositoryProvider);
+    final results = await repo.listRecentUsers(excludeUid: myUid);
+    if (mounted) setState(() { _searchResults = results; _searchLoading = false; });
   }
 
   Future<void> _onSearchChanged(String q, String myUid) async {
     // @ 접두사 제거 (UI prefix 위젯이 있어 사용자가 @를 직접 입력할 수 있음)
     final cleanQ = q.replaceAll(RegExp(r'^@+'), '').trim();
     if (cleanQ.isEmpty) {
-      setState(() { _searchResults = []; _searching = false; });
+      // #839 — 빈 쿼리 시 검색 닫지 말고 최근 회원 목록 유지.
+      if (_searchFocus.hasFocus) {
+        await _loadRecentUsers(myUid);
+      } else {
+        setState(() { _searchResults = []; _searching = false; });
+      }
       return;
     }
     setState(() { _searching = true; _searchLoading = true; });
@@ -230,12 +256,17 @@ class _DmListScreenState extends ConsumerState<DmListScreen> {
     }
 
     final roomsAsync = ref.watch(dmRoomsProvider(user.uid));
-    final myName = (user.displayName?.isNotEmpty == true)
-        ? user.displayName!
-        : (user.email?.split('@').first ?? '');
     // 이슈 #771 — 내 핸들 (DM 방 생성 시 스냅샷 저장)
     final myProfile = ref.watch(currentUserProvider).valueOrNull;
     final myHandle = myProfile?.handle ?? '';
+    // 이슈 #843 — myName 계산은 Firestore users/{uid}.displayName (모리니트 프로필) 우선.
+    //   Firebase auth.user.displayName 은 회원가입 시 미설정인 경우가 많아
+    //   '(이름 없음)' 으로 어드민 인박스에 표시되는 회귀 원인.
+    final myName = (myProfile?.displayName.isNotEmpty == true)
+        ? myProfile!.displayName
+        : ((user.displayName?.isNotEmpty == true)
+            ? user.displayName!
+            : (user.email?.split('@').first ?? ''));
 
     return AppShellScaffold(
       title: isKorean ? '모리톡' : 'MoriTalk',
@@ -249,7 +280,9 @@ class _DmListScreenState extends ConsumerState<DmListScreen> {
           decoration: InputDecoration(
             hintText: isKorean ? '닉네임/핸들 검색' : 'Search nickname/handle',
             prefix: Text('@', style: TextStyle(color: C.mu, fontWeight: FontWeight.w500)),
-            suffixIcon: _searchCtrl.text.isNotEmpty
+            // #842 — 검색 모드(focus 또는 텍스트 입력)일 때 항상 X 버튼 표시.
+            //   focus만 한 상태(빈 텍스트)에서도 검색 모드 종료 가능해야 채팅방 목록 복귀 가능.
+            suffixIcon: (_searchCtrl.text.isNotEmpty || _searching || _searchFocus.hasFocus)
                 ? GestureDetector(
                     onTap: () {
                       _searchCtrl.clear();
@@ -293,6 +326,8 @@ class _DmListScreenState extends ConsumerState<DmListScreen> {
             final name = u['displayName'] ?? '';
             // 이슈 #771 — 핸들 표시
             final handle = u['handle'] ?? '';
+            // 이슈 #846 — 프로필 썸네일 표시 (photoURL 있으면 backgroundImage 사용)
+            final photo = u['photoURL'] ?? '';
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: GlassCard(
@@ -302,29 +337,27 @@ class _DmListScreenState extends ConsumerState<DmListScreen> {
                     CircleAvatar(
                       radius: 22,
                       backgroundColor: C.lvL,
-                      child: Text(
-                        name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?',
-                        style: TextStyle(color: C.lvD, fontWeight: FontWeight.w700, fontSize: 15),
-                      ),
+                      backgroundImage: photo.isNotEmpty ? NetworkImage(photo) : null,
+                      child: photo.isEmpty
+                          ? Text(
+                              name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?',
+                              style: TextStyle(color: C.lvD, fontWeight: FontWeight.w700, fontSize: 15),
+                            )
+                          : null,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      // #841 — 개인정보 보호: 이메일 노출 제거. 핸들 + 표시명만.
+                      child: Row(
                         children: [
-                          Row(
-                            children: [
-                              Flexible(child: Text(name, style: T.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                              if (handle.isNotEmpty) ...[
-                                const SizedBox(width: 6),
-                                Text('@$handle',
-                                    style: T.caption.copyWith(color: C.lvD, fontWeight: FontWeight.w600),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis),
-                              ],
-                            ],
-                          ),
-                          Text(u['email'] ?? '', style: T.caption.copyWith(color: C.mu)),
+                          Flexible(child: Text(name, style: T.bodyBold, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          if (handle.isNotEmpty) ...[
+                            const SizedBox(width: 6),
+                            Text('@$handle',
+                                style: T.caption.copyWith(color: C.lvD, fontWeight: FontWeight.w600),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                          ],
                         ],
                       ),
                     ),
@@ -388,22 +421,42 @@ class _DmListScreenState extends ConsumerState<DmListScreen> {
             // 이슈 #771 — 상대방 핸들 표시
             final otherHandle = room.otherHandle(uid);
             final unread = room.unreadFor(uid);
+            // 이슈 #834 — @moriknit 공식 채널은 라벤더 액센트 + 공식 배지로 차별화.
+            final isSystem = room.isSystemChannel;
             return GestureDetector(
               onLongPress: () => _showRoomOptions(room.id, isKorean),
               child: GlassCard(
                 onTap: () => context.push('/dm/${room.id}'),
+                borderColor: isSystem ? C.lv.withValues(alpha: 0.45) : null,
                 child: Row(
                   children: [
-                    CircleAvatar(
-                      radius: 22,
-                      backgroundColor: C.lvL,
-                      backgroundImage: otherPhoto.isNotEmpty ? NetworkImage(otherPhoto) : null,
-                      child: otherPhoto.isEmpty
-                          ? Text(
-                              otherName.isNotEmpty ? otherName.substring(0, 1).toUpperCase() : '?',
-                              style: TextStyle(color: C.lvD, fontWeight: FontWeight.w700, fontSize: 15),
+                    Container(
+                      decoration: isSystem
+                          ? BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: C.lv, width: 2),
                             )
                           : null,
+                      padding: isSystem ? const EdgeInsets.all(2) : EdgeInsets.zero,
+                      child: CircleAvatar(
+                        radius: 22,
+                        backgroundColor: isSystem ? C.lv : C.lvL,
+                        backgroundImage: otherPhoto.isNotEmpty ? NetworkImage(otherPhoto) : null,
+                        child: otherPhoto.isEmpty
+                            ? (isSystem
+                                ? const Icon(Icons.chat_bubble_rounded,
+                                    color: Colors.white, size: 18)
+                                : Text(
+                                    otherName.isNotEmpty
+                                        ? otherName.substring(0, 1).toUpperCase()
+                                        : '?',
+                                    style: TextStyle(
+                                        color: C.lvD,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 15),
+                                  ))
+                            : null,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -432,6 +485,26 @@ class _DmListScreenState extends ConsumerState<DmListScreen> {
                                   ),
                                 ),
                               ],
+                              // 이슈 #834 — '공식' 배지
+                              if (isSystem) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: C.lv.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    isKorean ? '공식' : 'Official',
+                                    style: T.caption.copyWith(
+                                      color: C.lvD,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ),
+                              ],
                               const Spacer(),
                               Text(room.timeAgo, style: T.caption.copyWith(color: C.mu)),
                             ],
@@ -452,7 +525,8 @@ class _DmListScreenState extends ConsumerState<DmListScreen> {
                                   margin: const EdgeInsets.only(left: 8),
                                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: C.pk,
+                                    // dock 뱃지와 색상 통일 — common_widgets MoriTabBar
+                                    color: const Color(0xFFDC2626),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Text(

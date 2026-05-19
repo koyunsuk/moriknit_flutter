@@ -39,13 +39,27 @@ final isAnonymousUserProvider = Provider<bool>((ref) {
   return user?.isAnonymous ?? false;
 });
 
+/// 슈퍼 어드민 이메일 — firestore.rules 의 isAdmin() 함수와 동일.
+/// admins/{uid} 컬렉션 등록 여부와 무관하게 항상 어드민 권한 부여.
+/// (#840) admins 컬렉션 부트스트랩 누락 / 신규 디바이스 동기화 지연으로 인한
+/// "권한 없음" 오판정을 방지하기 위한 fallback.
+const String _superAdminEmail = 'koyunsuk@gmail.com';
+
 /// admins/{uid} Firestore 컬렉션 기반으로 isAdmin을 실시간 확인합니다.
 /// 회원 관리 모달의 "관리자" 토글은 admins/{uid} 문서를 set/delete하므로
 /// Custom Claims 대신 컬렉션 존재 여부로 판정하면 즉시 반영됩니다.
 /// (Cloud Function으로 Custom Claims sync는 별도 작업 — 향후 #813 워커에 통합 가능)
+///
+/// (#840) 슈퍼 어드민(koyunsuk@gmail.com)은 admins 컬렉션 조회 없이 즉시 true.
+/// firestore.rules 의 isAdmin() 함수가 이메일을 기준으로 판정하므로 이와 일치시킴.
 final isAdminProvider = StreamProvider<bool>((ref) {
   return FirebaseAuth.instance.authStateChanges().asyncExpand((user) {
     if (user == null) return Stream.value(false);
+    // 슈퍼 어드민 이메일은 admins 컬렉션 조회 건너뛰고 즉시 true.
+    final email = user.email?.toLowerCase().trim();
+    if (email == _superAdminEmail) {
+      return Stream.value(true);
+    }
     return FirebaseFirestore.instance
         .collection('admins')
         .doc(user.uid)

@@ -38,11 +38,13 @@ class MoriKnitAdminApp extends ConsumerWidget {
     final themeMode = ref.watch(appThemeProvider);
     C.apply(themeMode);
 
+    // #815 후속 — 웹 어드민도 라이트 톤으로 통일 (모바일 어드민·사용자앱과 같은 톤앤매너).
+    // 어드민 정체성은 헤더/액센트 컬러 (오렌지)로만 표현.
+    // ValueKey 제거: GlobalKey 'root' 충돌 + ANR 원인 (#818/#822 사용자앱과 동일 패턴).
     return MaterialApp.router(
-      key: ValueKey(themeMode),
       title: 'MoriKnit Admin',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.adminLight,
+      theme: AppTheme.light,
       routerConfig: router,
       locale: locale,
       supportedLocales: supportedAppLocales,

@@ -21,6 +21,8 @@ class OfflineDownloadButton extends ConsumerStatefulWidget {
   final String patternId;
   final String sourceUrl;
   final String kind; // 'pdf' | 'image'
+  // #838 — 함께 캐시할 썸네일 URL (선택).
+  final String? thumbnailUrl;
   final bool isKorean;
 
   const OfflineDownloadButton({
@@ -29,6 +31,7 @@ class OfflineDownloadButton extends ConsumerStatefulWidget {
     required this.sourceUrl,
     required this.kind,
     required this.isKorean,
+    this.thumbnailUrl,
   });
 
   @override
@@ -42,6 +45,17 @@ class _OfflineDownloadButtonState extends ConsumerState<OfflineDownloadButton> {
 
   Future<void> _download() async {
     if (_downloading) return;
+    // #832 fix — 이미 다운로드된 상태에서 중복 클릭 시 재다운로드 차단 (안전망).
+    final existing = await ref
+        .read(patternOfflineRepositoryProvider)
+        .get(widget.patternId);
+    if (existing != null) {
+      if (mounted) {
+        ref.invalidate(patternOfflineEntryProvider(widget.patternId));
+      }
+      return;
+    }
+    if (!mounted) return;
     setState(() {
       _downloading = true;
       _progress = -1.0;
@@ -58,6 +72,8 @@ class _OfflineDownloadButtonState extends ConsumerState<OfflineDownloadButton> {
                 patternId: widget.patternId,
                 url: widget.sourceUrl,
                 kind: widget.kind,
+                // #838 — 썸네일 함께 영구 캐시.
+                thumbnailUrl: widget.thumbnailUrl,
                 onProgress: (p) {
                   if (mounted) setState(() => _progress = p);
                 },

@@ -17,6 +17,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'common_widgets.dart';
 import 'offline_listener.dart';
+import '../../features/auth/presentation/handle_register_screen.dart';
 import '../../features/favorites/data/favorites_provider.dart';
 import '../../features/project/presentation/widgets/project_start_sheet.dart';
 
@@ -119,6 +120,17 @@ class _MainShellState extends ConsumerState<MainShell> with TickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
+    // 이슈 #847 — 핸들 없는 가입자(소셜 로그인 + 기존 사용자)는 메인 진입 차단.
+    //   currentUserProvider 가 users 문서 stream 이므로 핸들 등록 직후 자동 갱신 → 가드 통과.
+    //   익명(게스트) 사용자는 핸들 미요구 → 통과.
+    final handleGateIsAnonymous = ref.watch(isAnonymousUserProvider);
+    final handleGateProfile = ref.watch(currentUserProvider).valueOrNull;
+    if (!handleGateIsAnonymous &&
+        handleGateProfile != null &&
+        handleGateProfile.handle.isEmpty) {
+      return const HandleRegisterScreen();
+    }
+
     final screenWidth = MediaQuery.of(context).size.width;
     final isWide = kIsWeb || screenWidth >= 900;
 

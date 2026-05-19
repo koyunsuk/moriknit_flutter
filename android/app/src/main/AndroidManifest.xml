@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- 이슈 #817 — FCM Phase 1: Android 13(API 33)+ POST_NOTIFICATIONS 런타임 권한 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
         android:label="@string/app_name"
@@ -52,6 +54,18 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- 이슈 #817 — FCM Phase 1: 기본 알림 채널 (없으면 Android 8+에서 알림 무시됨) -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="default" />
+        <!-- 이슈 #834 — 푸시 알림 아이콘 silhouette (모리톡 채팅 풍선). 흰색/투명 vector. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_message_filled" />
+        <!-- 이슈 #834 — 알림 아이콘 틴트 색상 (모리니트 라벤더). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_color" />
     </application>
 
     <queries>
