@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -228,6 +229,34 @@ class _PatternConverterScreenState
                 _pickFromMyLibrary();
               },
             ),
+            // ①-3 유튜브 동영상 (이슈 #878) — 영상 자막을 AI로 분석해 단계로그 생성.
+            //   PDF/이미지 분석과 동일한 흐름, 입력만 URL 텍스트.
+            ImportOptionTile(
+              icon: Icons.smart_display_rounded,
+              iconColor: const Color(0xFFFF0000),
+              iconBackground: const Color(0xFFFF0000).withValues(alpha: 0.08),
+              title: isKorean ? '유튜브 동영상' : 'YouTube Video',
+              subtitle: isKorean
+                  ? '영상 링크로 단계로그 자동 생성 (자막 필요)'
+                  : 'Generate step-log from video link (captions required)',
+              onTap: () async {
+                if (!aiAnalysis) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(isKorean
+                          ? 'AI 분석이 꺼져 있어요. 토글을 켜주세요.'
+                          : 'AI analysis is off. Please enable it.'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                  return;
+                }
+                Navigator.pop(context);
+                await Future.microtask(() {});
+                if (!mounted) return;
+                await _promptYoutubeUrlAndAnalyze();
+              },
+            ),
             // ② 외부 클라우드 — 4종 그룹화 (이슈 #800)
             // Dropbox(활성) + Google Drive/iCloud/OneDrive(준비 중)을 ExpansionTile로 묶음.
             // 펼침 시 기존 4개 옵션 동일 UI 유지.
@@ -387,6 +416,89 @@ class _PatternConverterScreenState
       fileName: picked.fileName,
       mimeType: mimeType,
     );
+  }
+
+  /// 이슈 #878 — 유튜브 URL 입력 → analyzeVideoUrl Cloud Function 호출.
+  /// 자막을 가져와 Claude 분석 → 단계로그 자동 생성 후 라이브러리에 등록.
+  Future<void> _promptYoutubeUrlAndAnalyze() async {
+    final isKorean = ref.read(appLanguageProvider).isKorean;
+    final messenger = ScaffoldMessenger.of(context);
+    final controller = TextEditingController();
+
+    final url = await showDialog<String>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(isKorean ? '유튜브 영상으로 도안 만들기' : 'Create from YouTube'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isKorean
+                  ? '유튜브 영상 URL을 붙여넣어 주세요.\n자막이 있는 뜨개 강좌 영상이 가장 정확합니다.'
+                  : 'Paste a YouTube video URL.\nKnitting tutorials with captions work best.',
+              style: T.caption.copyWith(color: C.mu, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.url,
+              decoration: InputDecoration(
+                hintText: 'https://www.youtube.com/watch?v=...',
+                filled: true,
+                fillColor: C.gx,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(),
+            child: Text(isKorean ? '취소' : 'Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(controller.text.trim()),
+            child: Text(isKorean ? '분석 시작' : 'Analyze'),
+          ),
+        ],
+      ),
+    );
+    if (url == null || url.isEmpty || !mounted) return;
+
+    try {
+      final result = await runWithMoriLoadingDialog<Map<String, dynamic>>(
+        context,
+        message: isKorean ? 'AI가 영상을 분석하는 중입니다.' : 'Analyzing video with AI...',
+        subtitle: isKorean
+            ? '자막 수집 + Claude 분석 — 영상 길이에 따라 30초~3분 소요됩니다.'
+            : 'Captions + Claude analysis — 30s to 3min depending on length.',
+        task: () async {
+          final callable = FirebaseFunctions.instance.httpsCallable(
+            'analyzeVideoUrl',
+            options: HttpsCallableOptions(timeout: const Duration(seconds: 540)),
+          );
+          final res = await callable.call(<String, dynamic>{'url': url});
+          final data = res.data;
+          if (data is Map) return Map<String, dynamic>.from(data);
+          return <String, dynamic>{};
+        },
+      );
+
+      if (!mounted) return;
+      final title = (result['title'] ?? '').toString();
+      final stepCount = result['stepCount'] ?? 0;
+      showSavedSnackBar(
+        messenger,
+        message: isKorean
+            ? '도안이 생성됐어요. "$title" ($stepCount 단계)'
+            : 'Pattern created: "$title" ($stepCount steps)',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showAiErrorFeedback(messenger, e, isKorean: isKorean);
+    }
   }
 
   /// 이슈 #631 — 외부 클라우드 준비 중 카드 (탭 시 안내만).

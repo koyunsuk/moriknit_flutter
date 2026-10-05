@@ -3179,3 +3179,645 @@ exports.onAiJobCreated = onDocumentCreated(
     return null;
   },
 );
+
+// ─── #875 단계로그 Excel/Word 내보내기 (웹어드민) ─────────────────────────────
+//
+// 입력: { source: 'user' | 'builtin', ownerUid?: string, chartId: string }
+// 출력: { downloadUrl, fileName }
+//
+// 권한: 어드민(koyunsuk@gmail.com)만.
+// 저장: gs://<bucket>/exports/{chartId}/{timestamp}.{xlsx|docx}
+// signed URL 1시간 유효.
+
+const ExcelJS = require('exceljs');
+const docxLib = require('docx');
+
+function _requireAdmin(request) {
+  const email = request.auth && request.auth.token && request.auth.token.email;
+  if (email !== 'koyunsuk@gmail.com') {
+    throw new HttpsError('permission-denied', '어드민 권한이 필요합니다.');
+  }
+}
+
+async function _fetchExportPayload({ source, ownerUid, chartId }) {
+  if (!chartId) {
+    throw new HttpsError('invalid-argument', 'chartId가 필요합니다.');
+  }
+
+  if (source === 'builtin') {
+    const snap = await db.collection('builtin_templates').doc(chartId).get();
+    if (!snap.exists) {
+      throw new HttpsError('not-found', '템플릿을 찾을 수 없습니다.');
+    }
+    const data = snap.data() || {};
+    const stepsKo = Array.isArray(data.stepsKo) ? data.stepsKo : [];
+    const stepsEn = Array.isArray(data.stepsEn) ? data.stepsEn : [];
+    const stepNotesKo = Array.isArray(data.stepNotesKo) ? data.stepNotesKo : [];
+    const stepTargetRows = Array.isArray(data.stepTargetRows) ? data.stepTargetRows : [];
+    const units = stepsKo.length > 0
+      ? stepsKo.map((s, i) => ({
+          order: i + 1,
+          group: '단계',
+          title: s || `단계 ${i + 1}`,
+          instruction: stepNotesKo[i] || stepsEn[i] || '',
+          targetRows: stepTargetRows[i] || 0,
+        }))
+      : [];
+    return {
+      title: data.titleKo || data.titleEn || data.name || '(이름 없음)',
+      description: data.descKo || data.descEn || '',
+      imageUrl: data.imageUrl || '',
+      gauge: '',
+      sizes: '',
+      groups: units.length > 0
+        ? [{ title: '단계', units }]
+        : [],
+    };
+  }
+
+  // source === 'user'
+  if (!ownerUid) {
+    throw new HttpsError('invalid-argument', 'ownerUid가 필요합니다.');
+  }
+  const chartRef = db.collection('users').doc(ownerUid).collection('pattern_charts').doc(chartId);
+  const chartSnap = await chartRef.get();
+  if (!chartSnap.exists) {
+    throw new HttpsError('not-found', '도안을 찾을 수 없습니다.');
+  }
+  const chartData = chartSnap.data() || {};
+  const title = chartData.title || '(제목 없음)';
+  const imageUrl = chartData.imageUrl || (Array.isArray(chartData.coverUrls) && chartData.coverUrls[0]) || '';
+
+  // step_blueprints 동일 id 도큐먼트 + units subcollection
+  const bpSnap = await db.collection('step_blueprints').doc(chartId).get();
+  const bpData = bpSnap.exists ? (bpSnap.data() || {}) : {};
+  const bpGroups = Array.isArray(bpData.groups) ? bpData.groups : [];
+
+  const unitsSnap = await db.collection('step_blueprints').doc(chartId).collection('units').get();
+  const unitsById = new Map();
+  unitsSnap.forEach((d) => {
+    const u = d.data() || {};
+    unitsById.set(d.id, {
+      id: d.id,
+      order: u.order || 0,
+      title: u.titleKo || u.title || '',
+      instruction: u.instructionKo || u.instruction || '',
+      targetRows: u.targetRows || 0,
+    });
+  });
+
+  let groups = [];
+  if (bpGroups.length > 0) {
+    groups = bpGroups
+      .slice()
+      .sort((a, b) => (a.order || 0) - (b.order || 0))
+      .map((g) => {
+        const unitIds = Array.isArray(g.unitIds) ? g.unitIds : [];
+        const units = unitIds
+          .map((uid) => unitsById.get(uid))
+          .filter((u) => !!u)
+          .sort((a, b) => a.order - b.order)
+          .map((u, idx) => ({ ...u, order: idx + 1, group: g.titleKo || g.title || '섹션' }));
+        return { title: g.titleKo || g.title || '섹션', units };
+      });
+  } else if (Array.isArray(chartData.aiSections) && chartData.aiSections.length > 0) {
+    // aiSections 폴백
+    groups = chartData.aiSections.map((sec) => ({
+      title: sec.titleKo || sec.title || '섹션',
+      units: (Array.isArray(sec.steps) ? sec.steps : []).map((step, idx) => ({
+        order: idx + 1,
+        group: sec.titleKo || sec.title || '섹션',
+        title: `단계 ${idx + 1}`,
+        instruction: step.instructionKo || step.instruction || '',
+        targetRows: 0,
+      })),
+    }));
+  } else if (unitsById.size > 0) {
+    // 그룹 메타 없으면 단일 그룹으로
+    const units = Array.from(unitsById.values())
+      .sort((a, b) => a.order - b.order)
+      .map((u, idx) => ({ ...u, order: idx + 1, group: '단계' }));
+    groups = [{ title: '단계', units }];
+  }
+
+  const gaugeJson = bpData.gaugeJson || chartData.gauge || null;
+  let gaugeStr = '';
+  if (gaugeJson && typeof gaugeJson === 'object') {
+    const parts = [];
+    if (gaugeJson.stitches != null) parts.push(`코 ${gaugeJson.stitches}`);
+    if (gaugeJson.rows != null) parts.push(`단 ${gaugeJson.rows}`);
+    if (gaugeJson.size != null) parts.push(`${gaugeJson.size}cm`);
+    gaugeStr = parts.join(' · ');
+  } else if (typeof gaugeJson === 'string') {
+    gaugeStr = gaugeJson;
+  }
+
+  return {
+    title,
+    description: chartData.description || bpData.description || '',
+    imageUrl,
+    gauge: gaugeStr,
+    sizes: chartData.sizes || '',
+    groups,
+  };
+}
+
+async function _downloadImageBuffer(url) {
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const contentType = res.headers.get('content-type') || '';
+    const ab = await res.arrayBuffer();
+    return { buffer: Buffer.from(ab), contentType };
+  } catch (e) {
+    console.warn('[export] image download failed:', e.message);
+    return null;
+  }
+}
+
+function _imageExtensionFor(contentType) {
+  if (!contentType) return 'png';
+  if (contentType.includes('jpeg') || contentType.includes('jpg')) return 'jpeg';
+  if (contentType.includes('gif')) return 'gif';
+  return 'png';
+}
+
+async function _uploadAndSign({ buffer, chartId, ext, contentType }) {
+  const bucket = admin.storage().bucket();
+  const ts = Date.now();
+  const path = `exports/${chartId}/${ts}.${ext}`;
+  const file = bucket.file(path);
+  await file.save(buffer, { contentType, resumable: false });
+  const [signedUrl] = await file.getSignedUrl({
+    action: 'read',
+    expires: Date.now() + 60 * 60 * 1000, // 1시간
+  });
+  return { downloadUrl: signedUrl, fileName: `${chartId}-${ts}.${ext}` };
+}
+
+exports.exportStepLogToExcel = onCall(
+  { region: REGION, timeoutSeconds: 180, memory: '512MiB' },
+  async (request) => {
+    _requireAdmin(request);
+    const { source, ownerUid, chartId } = request.data || {};
+    const payload = await _fetchExportPayload({ source, ownerUid, chartId });
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'MoriKnit Admin';
+    wb.created = new Date();
+
+    // Sheet 1: 표지
+    const coverSheet = wb.addWorksheet('표지');
+    coverSheet.columns = [
+      { header: '', key: 'label', width: 16 },
+      { header: '', key: 'value', width: 60 },
+    ];
+
+    coverSheet.addRow({ label: '제목', value: payload.title });
+    coverSheet.addRow({ label: '설명', value: payload.description });
+    coverSheet.addRow({ label: '게이지', value: payload.gauge });
+    coverSheet.addRow({ label: '사이즈', value: payload.sizes });
+    coverSheet.addRow({ label: '생성일', value: new Date().toISOString().slice(0, 19).replace('T', ' ') });
+    coverSheet.getColumn('label').font = { bold: true };
+    coverSheet.getRow(1).alignment = { vertical: 'middle' };
+
+    // 이미지 embed (썸네일)
+    const img = await _downloadImageBuffer(payload.imageUrl);
+    if (img) {
+      const extension = _imageExtensionFor(img.contentType);
+      const imageId = wb.addImage({
+        buffer: img.buffer,
+        extension,
+      });
+      coverSheet.addImage(imageId, {
+        tl: { col: 0, row: 7 },
+        ext: { width: 480, height: 320 },
+      });
+    }
+
+    // Sheet 2: 단계로그
+    const stepSheet = wb.addWorksheet('단계로그');
+    stepSheet.columns = [
+      { header: '단계번호', key: 'order', width: 10 },
+      { header: '그룹', key: 'group', width: 18 },
+      { header: '제목', key: 'title', width: 24 },
+      { header: '서술', key: 'instruction', width: 60 },
+      { header: '목표 단', key: 'targetRows', width: 10 },
+    ];
+    stepSheet.getRow(1).font = { bold: true };
+    let globalOrder = 1;
+    for (const g of payload.groups) {
+      for (const u of g.units) {
+        stepSheet.addRow({
+          order: globalOrder++,
+          group: g.title,
+          title: u.title,
+          instruction: u.instruction,
+          targetRows: u.targetRows,
+        });
+      }
+    }
+    stepSheet.getColumn('instruction').alignment = { wrapText: true, vertical: 'top' };
+
+    const buffer = Buffer.from(await wb.xlsx.writeBuffer());
+    return _uploadAndSign({
+      buffer,
+      chartId,
+      ext: 'xlsx',
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+  },
+);
+
+exports.exportStepLogToWord = onCall(
+  { region: REGION, timeoutSeconds: 180, memory: '512MiB' },
+  async (request) => {
+    _requireAdmin(request);
+    const { source, ownerUid, chartId } = request.data || {};
+    const payload = await _fetchExportPayload({ source, ownerUid, chartId });
+
+    const {
+      Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
+      Table, TableRow, TableCell, WidthType, ImageRun, PageBreak, BorderStyle,
+    } = docxLib;
+
+    const coverChildren = [
+      new Paragraph({
+        heading: HeadingLevel.TITLE,
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: payload.title, bold: true, size: 56 })],
+      }),
+      new Paragraph({ text: '' }),
+    ];
+
+    const img = await _downloadImageBuffer(payload.imageUrl);
+    if (img) {
+      coverChildren.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [
+          new ImageRun({
+            data: img.buffer,
+            transformation: { width: 400, height: 280 },
+          }),
+        ],
+      }));
+      coverChildren.push(new Paragraph({ text: '' }));
+    }
+
+    // 메타 표
+    const metaRows = [
+      ['설명', payload.description || '-'],
+      ['게이지', payload.gauge || '-'],
+      ['사이즈', payload.sizes || '-'],
+      ['생성일', new Date().toISOString().slice(0, 19).replace('T', ' ')],
+    ];
+    const metaTable = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: metaRows.map(([k, v]) => new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 25, type: WidthType.PERCENTAGE },
+            children: [new Paragraph({ children: [new TextRun({ text: k, bold: true })] })],
+          }),
+          new TableCell({
+            width: { size: 75, type: WidthType.PERCENTAGE },
+            children: [new Paragraph({ children: [new TextRun({ text: String(v) })] })],
+          }),
+        ],
+      })),
+    });
+    coverChildren.push(metaTable);
+    coverChildren.push(new Paragraph({ children: [new PageBreak()] }));
+
+    // 그룹별 본문
+    const bodyChildren = [];
+    for (const g of payload.groups) {
+      bodyChildren.push(new Paragraph({
+        heading: HeadingLevel.HEADING_1,
+        children: [new TextRun({ text: g.title, bold: true })],
+      }));
+
+      const headerRow = new TableRow({
+        children: ['단계', '제목', '서술', '목표 단'].map((h) => new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text: h, bold: true })] })],
+        })),
+      });
+      const dataRows = g.units.map((u) => new TableRow({
+        children: [
+          new TableCell({ children: [new Paragraph({ text: String(u.order) })] }),
+          new TableCell({ children: [new Paragraph({ text: u.title || '' })] }),
+          new TableCell({ children: [new Paragraph({ text: u.instruction || '' })] }),
+          new TableCell({ children: [new Paragraph({ text: String(u.targetRows || 0) })] }),
+        ],
+      }));
+      bodyChildren.push(new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: [headerRow, ...dataRows],
+      }));
+      bodyChildren.push(new Paragraph({ text: '' }));
+    }
+
+    if (payload.groups.length === 0) {
+      bodyChildren.push(new Paragraph({ text: '단계로그가 비어 있습니다.' }));
+    }
+
+    const doc = new Document({
+      creator: 'MoriKnit Admin',
+      title: payload.title,
+      sections: [{ children: [...coverChildren, ...bodyChildren] }],
+    });
+
+    const buffer = await Packer.toBuffer(doc);
+    return _uploadAndSign({
+      buffer,
+      chartId,
+      ext: 'docx',
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+  },
+);
+
+// ─── #878 AI 동영상 분석기 (모바일유저/웹앱) ────────────────────────────────────
+//
+// 입력: { url: string }  (유튜브 영상 URL)
+// 출력: { chartId, title, sectionCount, stepCount }
+//
+// 흐름: URL → 비디오 ID 추출 → youtube-transcript 자막 → Claude 분석 → 단계로그 저장.
+// 자막 없는 영상은 invalid-argument 로 종료 (사용자에게 친절한 메시지 노출).
+
+const { YoutubeTranscript } = require('youtube-transcript');
+
+function _extractYoutubeId(url) {
+  if (!url || typeof url !== 'string') return null;
+  // 다양한 형태 지원: youtu.be/{id}, youtube.com/watch?v={id}, /shorts/{id}, /embed/{id}
+  const patterns = [
+    /[?&]v=([A-Za-z0-9_-]{11})/,
+    /youtu\.be\/([A-Za-z0-9_-]{11})/,
+    /youtube\.com\/(?:shorts|embed|v)\/([A-Za-z0-9_-]{11})/,
+  ];
+  for (const re of patterns) {
+    const m = url.match(re);
+    if (m) return m[1];
+  }
+  // raw ID 가 들어온 경우
+  if (/^[A-Za-z0-9_-]{11}$/.test(url.trim())) return url.trim();
+  return null;
+}
+
+async function _fetchYoutubeTranscript(videoId) {
+  // youtube-transcript 패키지: 한국어 우선, 실패 시 영어, 그래도 실패 시 첫 자막.
+  const candidates = [
+    { lang: 'ko' },
+    { lang: 'en' },
+    { lang: undefined },
+  ];
+  let lastErr;
+  for (const opt of candidates) {
+    try {
+      const items = await YoutubeTranscript.fetchTranscript(videoId, opt);
+      if (items && items.length > 0) {
+        const text = items.map((x) => x.text).join(' ');
+        return { text, lang: opt.lang || 'auto', segmentCount: items.length };
+      }
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  const e = new Error('자막을 가져올 수 없는 영상입니다. (자막이 비활성화되었거나 비공개 영상)');
+  e.kind = 'no_transcript';
+  throw e;
+}
+
+async function _runAiPatternAnalysisFromText({ text, sourceTitle }) {
+  const client = new Anthropic({ apiKey: anthropicApiKey.value().trim() });
+  const systemPrompt = `You are a knitting/crochet pattern parser.
+The user will provide a YouTube tutorial transcript (Korean or English).
+Extract step-by-step instructions and output ONLY valid JSON (no markdown).
+
+JSON structure:
+{
+  "title": "추출한 도안 제목 (영상 제목 참고 + 내용 기반)",
+  "summary": "한 줄 요약 (어떤 도안인지)",
+  "materials": "사용 재료 (실, 바늘 등) - 영상에서 언급된 것만",
+  "gauge": "게이지 정보가 있으면",
+  "sections": [
+    {
+      "id": "section_1",
+      "title": "Section name in English",
+      "titleKo": "섹션 이름 한국어",
+      "steps": [
+        {"id": "step_1_1", "instruction": "Step instruction", "instructionKo": "단계 한국어"}
+      ]
+    }
+  ]
+}
+
+Important rules:
+- Output Korean (instructionKo) MUST be natural Korean knitting terminology
+- One step = ONE actionable instruction
+- Ignore intro/outro chatter, focus on technique
+- If transcript is too vague, still try to extract structure (segments by topic)
+- section IDs: section_1, section_2, ...
+- step IDs: step_{sectionIndex}_{stepIndex} (1-based)`;
+
+  const userMsg = `영상 제목: ${sourceTitle || '(unknown)'}
+자막 (full transcript):
+
+${text.slice(0, 30000)}
+
+위 자막을 분석해 위에서 정의한 JSON 구조로 단계로그를 추출해 주세요.`;
+
+  let message;
+  try {
+    message = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 4000,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMsg }],
+    });
+  } catch (err) {
+    console.error('[analyzeVideoUrl] Claude API error:', err?.status, err?.message);
+    const e = new Error(`AI 분석 중 오류가 발생했습니다: ${err?.message || err}`);
+    e.kind = 'api_error';
+    throw e;
+  }
+
+  if (message?.usage) {
+    console.log('[analyzeVideoUrl] usage', {
+      input_tokens: message.usage.input_tokens,
+      output_tokens: message.usage.output_tokens,
+    });
+  }
+
+  const rawText = message.content[0]?.text ?? '';
+  let parsed;
+  try { parsed = JSON.parse(rawText); } catch (_) {}
+  if (!parsed) {
+    const m = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (m) {
+      try { parsed = JSON.parse(m[1]); } catch (_) {}
+    }
+  }
+  if (!parsed) {
+    const m = rawText.match(/\{[\s\S]*\}/);
+    if (m) {
+      try { parsed = JSON.parse(m[0]); } catch (_) {}
+    }
+  }
+  if (!parsed) {
+    console.error('[analyzeVideoUrl] JSON 파싱 실패. 앞 200자:', rawText.slice(0, 200));
+    const e = new Error('AI 응답을 해석할 수 없습니다. 다른 영상으로 다시 시도해 주세요.');
+    e.kind = 'parse_error';
+    throw e;
+  }
+  return parsed;
+}
+
+exports.analyzeVideoUrl = onCall(
+  {
+    region: REGION,
+    timeoutSeconds: 540,
+    memory: '512MiB',
+    secrets: [anthropicApiKey],
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', '로그인이 필요합니다.');
+    }
+    const uid = request.auth.uid;
+    const url = (request.data && request.data.url) || '';
+    const videoId = _extractYoutubeId(url);
+    if (!videoId) {
+      throw new HttpsError('invalid-argument', '유효한 유튜브 URL이 아닙니다.');
+    }
+
+    console.log('[analyzeVideoUrl] start', { uid, videoId });
+
+    // 1) 자막 가져오기
+    let transcript;
+    try {
+      transcript = await _fetchYoutubeTranscript(videoId);
+    } catch (err) {
+      if (err.kind === 'no_transcript') {
+        throw new HttpsError('failed-precondition', err.message);
+      }
+      console.error('[analyzeVideoUrl] transcript error:', err.message);
+      throw new HttpsError('internal', '자막 수집 중 오류가 발생했습니다.');
+    }
+    console.log('[analyzeVideoUrl] transcript ok', {
+      videoId, lang: transcript.lang, segs: transcript.segmentCount,
+      textLen: transcript.text.length,
+    });
+
+    // 2) AI 분석
+    let parsed;
+    try {
+      parsed = await _runAiPatternAnalysisFromText({
+        text: transcript.text,
+        sourceTitle: `https://youtu.be/${videoId}`,
+      });
+    } catch (err) {
+      console.error('[analyzeVideoUrl] analysis failed:', err.message);
+      throw new HttpsError('internal', err.message || 'AI 분석 실패');
+    }
+
+    const rawSections = Array.isArray(parsed?.sections) ? parsed.sections : [];
+    const aiSections = rawSections.map((s, gi) => ({
+      id: s.id || `section_${gi + 1}`,
+      title: s.title || `Section ${gi + 1}`,
+      titleKo: s.titleKo || '',
+      steps: (Array.isArray(s.steps) ? s.steps : []).map((step, si) => ({
+        id: step.id || `step_${gi + 1}_${si + 1}`,
+        instruction: step.instruction || '',
+        instructionKo: step.instructionKo || '',
+        isCompleted: false,
+      })),
+    }));
+
+    // 3) pattern_chart 저장
+    const chartRef = db.collection('users').doc(uid)
+      .collection('pattern_charts').doc();
+    const chartId = chartRef.id;
+    const title = (parsed?.title || `유튜브 도안 ${videoId}`).toString().slice(0, 200);
+    const sourceUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+    await chartRef.set({
+      id: chartId,
+      title,
+      rows: 0,
+      cols: 0,
+      mode: 'symbol',
+      grid: [],
+      narrativeText: parsed?.summary || '',
+      type: 'video',
+      sourceType: 'aiConverted',
+      sourceUrl,
+      pdfUrl: '',
+      imageUrl: '',
+      aiSections: [],
+      status: 'complete',
+      videoOrigin: 'youtube',
+      videoId,
+      materials: parsed?.materials || '',
+      gauge: parsed?.gauge || '',
+      sizes: parsed?.sizes || '',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // 4) step_blueprint + units
+    try {
+      const blueprintRef = db.collection('step_blueprints').doc(chartId);
+      await blueprintRef.set({
+        id: chartId,
+        ownerUid: uid,
+        title,
+        visibility: 'draft',
+        forkable: false,
+        memberCount: 0,
+        members: {},
+        forkCount: 0,
+        groups: aiSections.map((sec, gi) => ({
+          id: sec.id,
+          title: sec.titleKo || sec.title,
+          order: gi,
+        })),
+        sourceVideoUrl: sourceUrl,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      const unitsCol = blueprintRef.collection('units');
+      const batch = db.batch();
+      let order = 0;
+      for (const sec of aiSections) {
+        for (const step of sec.steps) {
+          batch.set(unitsCol.doc(step.id), {
+            id: step.id,
+            blueprintId: chartId,
+            order: order++,
+            title: '',
+            instruction: step.instruction,
+            instructionKo: step.instructionKo,
+            groupId: sec.id,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+      }
+      await batch.commit();
+    } catch (err) {
+      console.warn('[analyzeVideoUrl] blueprint mirror failed:', err.message);
+    }
+
+    const totalSteps = aiSections.reduce((a, s) => a + s.steps.length, 0);
+    console.log('[analyzeVideoUrl] done', { uid, chartId, sections: aiSections.length, steps: totalSteps });
+
+    return {
+      chartId,
+      title,
+      sectionCount: aiSections.length,
+      stepCount: totalSteps,
+    };
+  },
+);
