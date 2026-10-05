@@ -44,6 +44,8 @@ import '../../pattern/data/pattern_session_repository.dart';
 import '../../pattern/domain/pattern_chart.dart';
 import '../../pattern/presentation/pattern_detail_screen.dart';
 import '../../blueprint/presentation/step_log_view.dart';
+import '../../label/domain/label_template.dart';
+import '../../label/presentation/label_preview_screen.dart';
 import 'widgets/project_progress_section.dart';
 import 'widgets/project_share_card.dart';
 import 'widgets/project_time_summary_card.dart';
@@ -670,6 +672,10 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
                                           await _publishToGallery(context, ref, project);
                                         } else if (value == 'sell_pattern') {
                                           await _showPatternSellSheet(context, ref, project);
+                                        } else if (value == 'label') {
+                                          Navigator.push(context, MaterialPageRoute(
+                                            builder: (_) => LabelPreviewScreen(labelData: LabelData.fromProject(project)),
+                                          ));
                                         } else if (value == 'delete') {
                                           _confirmDelete(context, ref, project.id);
                                         }
@@ -697,6 +703,7 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
                                             menuItem('publish', Icons.public_rounded, C.lv, isKorean ? '갤러리에 공개' : 'Publish to gallery'),
                                           if (project.isFinished && project.originProjectId.isEmpty)
                                             menuItem('sell_pattern', Icons.sell_rounded, C.lmD, isKorean ? '패턴 판매 등록' : 'Sell pattern'),
+                                          menuItem('label', Icons.label_outline, C.lv, isKorean ? '라벨 인쇄' : 'Print label'),
                                           menuItem('delete', Icons.delete_rounded, C.og, isKorean ? '삭제' : 'Delete', textStyle: TextStyle(color: C.og)),
                                         ];
                                       },

@@ -21,6 +21,8 @@ import '../../../providers/yarn_provider.dart';
 import '../../my/domain/needle_model.dart';
 import '../../project/domain/project_model.dart';
 import '../../project/presentation/project_input_screen.dart';
+import '../../label/domain/label_template.dart';
+import '../../label/presentation/label_preview_screen.dart';
 import '../data/swatch_timer_repository.dart';
 import '../domain/swatch_model.dart';
 import 'brand_search_sheet.dart';
@@ -372,6 +374,11 @@ class _SwatchDetailScreenState extends ConsumerState<SwatchDetailScreen> {
                                                 '/swatch/${swatch.id}/timer?name=${Uri.encodeQueryComponent(swatch.swatchName)}',
                                               );
                                             }
+                                            if (v == 'label') {
+                                              Navigator.push(context, MaterialPageRoute(
+                                                builder: (_) => LabelPreviewScreen(labelData: LabelData.fromSwatch(swatch)),
+                                              ));
+                                            }
                                             if (v == 'delete') _confirmDelete(context, ref, swatch);
                                           },
                                           itemBuilder: (_) => [
@@ -412,6 +419,16 @@ class _SwatchDetailScreenState extends ConsumerState<SwatchDetailScreen> {
                                                   Icon(Icons.timer_rounded, size: 18, color: C.lv),
                                                   const SizedBox(width: 8),
                                                   Text(isKorean ? '작업 타이머' : 'Work Timer'),
+                                                ],
+                                              ),
+                                            ),
+                                            PopupMenuItem(
+                                              value: 'label',
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.label_outline, size: 18, color: C.lv),
+                                                  const SizedBox(width: 8),
+                                                  Text(isKorean ? '라벨 인쇄' : 'Print label'),
                                                 ],
                                               ),
                                             ),

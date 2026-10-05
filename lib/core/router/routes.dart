@@ -51,7 +51,7 @@ class Routes {
   static const dropboxExplorer = '/tools/dropbox/explorer';
   // 이슈 #703 — 외부 클라우드 확장 (Google Drive·iCloud·OneDrive)
   static const googleDrive = '/tools/google-drive';
-  static const iCloud = '/tools/icloud';
+
   static const oneDrive = '/tools/onedrive';
   // 외부 연결 UI 단계 정리 — 클라우드 통합 허브
   static const cloudHub = '/tools/cloud-hub';
@@ -81,4 +81,10 @@ class Routes {
   static const boardWrite = '/board/:type/write';
   static const boardDetail = '/board/:type/:postId';
   static const knitAlongGroup = '/knit-along/:originId';
+  // 이슈 #883 — 뜨개 캘린더
+  static const toolsKnittingCalendar = '/tools/knitting-calendar';
+  // 이슈 #884 — 뜨개 가계부
+  static const toolsExpense = '/tools/expense';
+  // 이슈 #886 — 라벨 미리보기·인쇄
+  static const labelPreview = '/label/preview';
 }

@@ -13,6 +13,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/needle_provider.dart';
 import '../../../providers/project_provider.dart';
+import '../../label/domain/label_template.dart';
+import '../../label/presentation/label_preview_screen.dart';
 import '../../swatch/presentation/brand_search_sheet.dart';
 import '../domain/needle_model.dart';
 
@@ -305,6 +307,11 @@ class _NeedleDetailScreenState extends ConsumerState<NeedleDetailScreen> {
                                         if (v == 'edit') _enterEditMode(needle);
                                         if (v == 'copy') _duplicateNeedle(needle, isKorean);
                                         if (v == 'link_project') _linkToProject(context, needle.id, isKorean);
+                                        if (v == 'label') {
+                                          Navigator.push(context, MaterialPageRoute(
+                                            builder: (_) => LabelPreviewScreen(labelData: LabelData.fromNeedle(needle)),
+                                          ));
+                                        }
                                         if (v == 'delete') _confirmDelete(needle, isKorean);
                                       },
                                       itemBuilder: (_) => [
@@ -330,6 +337,14 @@ class _NeedleDetailScreenState extends ConsumerState<NeedleDetailScreen> {
                                             Icon(Icons.folder_outlined, size: 18, color: C.lv),
                                             const SizedBox(width: 8),
                                             Text(isKorean ? '프로젝트 연결' : 'Link to project'),
+                                          ]),
+                                        ),
+                                        PopupMenuItem(
+                                          value: 'label',
+                                          child: Row(children: [
+                                            Icon(Icons.label_outline, size: 18, color: C.lv),
+                                            const SizedBox(width: 8),
+                                            Text(isKorean ? '라벨 인쇄' : 'Print label'),
                                           ]),
                                         ),
                                         PopupMenuItem(

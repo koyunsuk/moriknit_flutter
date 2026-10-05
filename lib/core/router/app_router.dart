@@ -70,7 +70,7 @@ import 'package:moriknit_flutter/features/dropbox/presentation/dropbox_screen.da
 import 'package:moriknit_flutter/features/dropbox/presentation/dropbox_explorer_screen.dart';
 import 'package:moriknit_flutter/features/cloud_integrations/presentation/cloud_hub_screen.dart';
 import 'package:moriknit_flutter/features/cloud_integrations/presentation/google_drive_screen.dart';
-import 'package:moriknit_flutter/features/cloud_integrations/presentation/icloud_screen.dart';
+
 import 'package:moriknit_flutter/features/cloud_integrations/presentation/onedrive_screen.dart';
 import 'package:moriknit_flutter/features/landing/presentation/landing_feature_page.dart';
 import 'package:moriknit_flutter/features/landing/presentation/landing_classes_screen.dart';
@@ -87,6 +87,10 @@ import 'package:moriknit_flutter/features/pattern_converter/presentation/pattern
 import 'package:moriknit_flutter/features/pattern_converter/presentation/my_patterns_screen.dart';
 import 'package:moriknit_flutter/features/pattern_converter/presentation/pattern_reader_screen.dart';
 import 'package:moriknit_flutter/providers/auth_provider.dart';
+import 'package:moriknit_flutter/features/calendar/presentation/knitting_calendar_screen.dart';
+import 'package:moriknit_flutter/features/expense/presentation/expense_screen.dart';
+import 'package:moriknit_flutter/features/label/domain/label_template.dart';
+import 'package:moriknit_flutter/features/label/presentation/label_preview_screen.dart';
 
 export 'routes.dart';
 import 'routes.dart';
@@ -259,10 +263,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: 'google-drive',
                 pageBuilder: (_, _) => _fadePage(const GoogleDriveScreen()),
               ),
-              GoRoute(
-                path: 'icloud',
-                pageBuilder: (_, _) => _fadePage(const ICloudScreen()),
-              ),
+
               GoRoute(
                 path: 'onedrive',
                 pageBuilder: (_, _) => _fadePage(const OneDriveScreen()),
@@ -436,6 +437,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (_, state) => _fadePage(
           KnitAlongGroupScreen(originBlueprintId: state.pathParameters['originId']!),
         ),
+      ),
+      // 이슈 #883 — 뜨개 캘린더
+      GoRoute(
+        path: Routes.toolsKnittingCalendar,
+        pageBuilder: (_, _) => _fadePage(const KnittingCalendarScreen()),
+      ),
+      // 이슈 #884 — 뜨개 가계부
+      GoRoute(
+        path: Routes.toolsExpense,
+        pageBuilder: (_, _) => _fadePage(const ExpenseScreen()),
+      ),
+      // 이슈 #886 — 라벨 미리보기·인쇄
+      GoRoute(
+        path: Routes.labelPreview,
+        pageBuilder: (_, state) {
+          final extra = state.extra as LabelData?;
+          return _fadePage(LabelPreviewScreen(labelData: extra ?? LabelData.empty()));
+        },
       ),
       GoRoute(path: '/features/:featureId', pageBuilder: (_, state) => _fadePage(LandingGenericFeaturePage(featureId: state.pathParameters['featureId']!))),
       GoRoute(path: '/classes', pageBuilder: (_, _) => _fadePage(const LandingClassesScreen())),
