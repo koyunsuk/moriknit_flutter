@@ -26,7 +26,7 @@ android {
         // 기본 applicationId — flavor 미지정 시 사용자 앱으로 동작
         applicationId = "com.moriknit.moriknit_flutter"
         minSdk = flutter.minSdkVersion
-        targetSdk = 34
+        targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         manifestPlaceholders["appAuthRedirectScheme"] = "com.moriknit.app"
