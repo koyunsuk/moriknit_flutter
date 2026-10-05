@@ -784,6 +784,34 @@ exports.kakaoCustomToken = onRequest(
 // parseKnittingPattern — PDF/이미지 도안을 Claude AI로 파싱하여 단계로그 구조로 반환
 // ──────────────────────────────────────────────────────────────────────────────
 
+// #876 — AI RLE 차트 데이터를 Firestore PatternChart grid 포맷으로 변환
+// RLE 입력: [[['k', 8], ['p', 4]], ...] (rows 배열, 각 행은 [symbolId, count] pairs)
+// 출력: [{cells: [{symbolId: 'k'}, ...]}, ...] (PatternChart.fromJson 호환)
+function _decodeChartRLEForFirestore(gridRLE, rows, cols) {
+  if (!Array.isArray(gridRLE) || gridRLE.length === 0 || rows <= 0 || cols <= 0) return [];
+  const result = [];
+  for (const rawRow of gridRLE) {
+    const cells = [];
+    if (Array.isArray(rawRow)) {
+      for (const pair of rawRow) {
+        if (Array.isArray(pair) && pair.length >= 2) {
+          const symbolId = String(pair[0] || 'k');
+          const count = Math.max(1, parseInt(pair[1], 10) || 1);
+          for (let i = 0; i < count; i++) {
+            cells.push(symbolId === 'empty' ? {} : { symbolId });
+          }
+        }
+      }
+    }
+    while (cells.length < cols) cells.push({});
+    result.push({ cells: cells.slice(0, cols) });
+  }
+  while (result.length < rows) {
+    result.push({ cells: Array.from({ length: cols }, () => ({})) });
+  }
+  return result.slice(0, rows);
+}
+
 // 이슈 #873 — 인입 메일 자동 AI 분석 트리거(onAiJobCreated)와 공유하는 내부 헬퍼.
 //   parseKnittingPattern 내부 분석 로직을 함수로 분리해
 //   onAiJobCreated 에서도 재사용한다. 동작/응답 schema 변경 없음.
@@ -816,6 +844,20 @@ JSON structure (with Korean translation):
         {"id": "step_1_2", "instruction": "Next step", "instructionKo": "다음 단계 한국어 번역"}
       ]
     }
+  ],
+  "charts": [
+    {
+      "id": "chart_1",
+      "title": "Chart title (e.g., Main Chart, Sleeve Chart)",
+      "titleKo": "차트 제목 한국어 (예: 메인 차트, 소매 차트)",
+      "rows": 12,
+      "cols": 16,
+      "gridRLE": [
+        [["k", 8], ["p", 8]],
+        [["p", 4], ["yo", 1], ["k2tog", 1], ["k", 6]]
+      ],
+      "symbolsUsed": ["k", "p", "yo", "k2tog"]
+    }
   ]
 }
 
@@ -825,7 +867,22 @@ Important rules:
 - titleKo and instructionKo: must be natural Korean translation
 - Translate all knitting terms accurately (e.g., "cast on" → "코 잡기", "knit" → "겉뜨기", "purl" → "안뜨기", "bind off" → "코 막음")
 - section IDs: section_1, section_2, ...
-- step IDs: step_{sectionIndex}_{stepIndex} (1-based)`;
+- step IDs: step_{sectionIndex}_{stepIndex} (1-based)
+
+Chart extraction rules (CRITICAL — read carefully):
+- ONLY include "charts" if the document contains a VISIBLE GRID CHART (stitch chart with cells/symbols). Do NOT invent charts from text-only patterns.
+- gridRLE: array of rows (row index 0 = visually top row). Each row = array of [symbolId, count] pairs. Example: [["k",4],["yo",1],["k2tog",1],["k",4]] means 4 knit, 1 yarn over, 1 k2tog, 4 knit.
+- Use ONLY symbol IDs from this whitelist (72 symbols):
+  basic: k p empty yo sl_k sl_p k_tbl p_tbl k_thru dyo no_st edge
+  decrease: k2tog ssk cdd k3tog sssk skp sl1k2togpsso k2tog_tbl p2tog p2tog_tbl p3tog cdd_p
+  increase: m1l m1r kfb pfb m1p kfbf cast_on lift_l lift_r m1 dbl_inc
+  cable: c2f c2b t2f t2b c3f c3b c4f c4b c6f c6b t3f t3b
+  special: bobble nupp popcorn bullion smocking bead drop elongated gathered wrapped twisted embroidery
+  lace: yo2 yo3 cyof cyob dyo_dec chain_yo lace_hole fan shell picot butterfly lace_edge
+- If a chart symbol is unrecognized, map to the closest standard symbol. Plain knit cells = "k", purl cells = "p".
+- If no grid chart is visible in the document, omit the "charts" key entirely (do not include empty array).
+- cols must equal the total stitch count per row (sum of all counts in each gridRLE row).
+- rows must equal the total number of rows in gridRLE array.`;
 
   const systemPromptDefault = `${systemPromptBase}
 
@@ -844,6 +901,19 @@ JSON structure:
         {"id": "step_1_2", "instruction": "Next step"}
       ]
     }
+  ],
+  "charts": [
+    {
+      "id": "chart_1",
+      "title": "Chart title",
+      "rows": 12,
+      "cols": 16,
+      "gridRLE": [
+        [["k", 8], ["p", 8]],
+        [["p", 4], ["yo", 1], ["k2tog", 1], ["k", 6]]
+      ],
+      "symbolsUsed": ["k", "p", "yo", "k2tog"]
+    }
   ]
 }
 
@@ -852,7 +922,14 @@ Important rules:
 - Use the original language of the pattern for instructions
 - If Korean, keep Korean. If English, keep English.
 - section IDs: section_1, section_2, ...
-- step IDs: step_{sectionIndex}_{stepIndex} (1-based)`;
+- step IDs: step_{sectionIndex}_{stepIndex} (1-based)
+
+Chart extraction rules (CRITICAL — read carefully):
+- ONLY include "charts" if the document contains a VISIBLE GRID CHART. Do NOT invent charts from text-only patterns.
+- gridRLE: array of rows (row index 0 = top row). Each row = array of [symbolId, count] pairs.
+- Use ONLY symbol IDs from this whitelist: k p empty yo sl_k sl_p k_tbl p_tbl k_thru dyo no_st edge k2tog ssk cdd k3tog sssk skp sl1k2togpsso k2tog_tbl p2tog p2tog_tbl p3tog cdd_p m1l m1r kfb pfb m1p kfbf cast_on lift_l lift_r m1 dbl_inc c2f c2b t2f t2b c3f c3b c4f c4b c6f c6b t3f t3b bobble nupp popcorn bullion smocking bead drop elongated gathered wrapped twisted embroidery yo2 yo3 cyof cyob dyo_dec chain_yo lace_hole fan shell picot butterfly lace_edge
+- If no grid chart is visible, omit "charts" entirely.
+- cols must equal the total stitch count per row.`;
 
   const systemPrompt = needsKorean ? systemPromptKo : systemPromptDefault;
 
@@ -3025,7 +3102,7 @@ exports.onAiJobCreated = onDocumentCreated(
         fileBuffer,
         mimeType,
         needsKorean: true,
-        model: 'claude-3-haiku-20240307',
+        model: 'claude-sonnet-4-6',
       });
     } catch (err) {
       console.error('[onAiJobCreated] analysis failed:', err.message);
@@ -3057,14 +3134,20 @@ exports.onAiJobCreated = onDocumentCreated(
     const chartId = chartRef.id;
     const title = (parsed?.title || filename || 'Untitled').toString().slice(0, 200);
 
+    // #876 — AI 격자 차트 추출 디코딩 (RLE → Firestore grid 포맷)
+    const firstChart = Array.isArray(parsed?.charts) && parsed.charts.length > 0 ? parsed.charts[0] : null;
+    const aiChartRows = firstChart ? (firstChart.rows || 0) : 0;
+    const aiChartCols = firstChart ? (firstChart.cols || 0) : 0;
+    const aiChartGrid = firstChart ? _decodeChartRLEForFirestore(firstChart.gridRLE || [], aiChartRows, aiChartCols) : [];
+
     try {
       await chartRef.set({
         id: chartId,
         title,
-        rows: 0,
-        cols: 0,
+        rows: aiChartRows,
+        cols: aiChartCols,
         mode: 'symbol',
-        grid: [],
+        grid: aiChartGrid,
         narrativeText: '',
         type: 'pdf',
         sourceType: 'aiConverted',

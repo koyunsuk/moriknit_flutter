@@ -87,4 +87,6 @@ class Routes {
   static const toolsExpense = '/tools/expense';
   // 이슈 #886 — 라벨 미리보기·인쇄
   static const labelPreview = '/label/preview';
+  // 이슈 #885 — 외부 캘린더 연동 설정
+  static const calendarSyncSettings = '/tools/calendar-sync';
 }

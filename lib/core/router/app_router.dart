@@ -87,6 +87,7 @@ import 'package:moriknit_flutter/features/pattern_converter/presentation/pattern
 import 'package:moriknit_flutter/features/pattern_converter/presentation/my_patterns_screen.dart';
 import 'package:moriknit_flutter/features/pattern_converter/presentation/pattern_reader_screen.dart';
 import 'package:moriknit_flutter/providers/auth_provider.dart';
+import 'package:moriknit_flutter/features/calendar/presentation/calendar_sync_settings_screen.dart';
 import 'package:moriknit_flutter/features/calendar/presentation/knitting_calendar_screen.dart';
 import 'package:moriknit_flutter/features/expense/presentation/expense_screen.dart';
 import 'package:moriknit_flutter/features/label/domain/label_template.dart';
@@ -447,6 +448,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.toolsExpense,
         pageBuilder: (_, _) => _fadePage(const ExpenseScreen()),
+      ),
+      // 이슈 #885 — 외부 캘린더 연동 설정
+      GoRoute(
+        path: Routes.calendarSyncSettings,
+        pageBuilder: (_, _) => _fadePage(const CalendarSyncSettingsScreen()),
       ),
       // 이슈 #886 — 라벨 미리보기·인쇄
       GoRoute(

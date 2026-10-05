@@ -161,6 +161,22 @@ class PatternConverterRepository {
         .map((s) => AiSection.fromMap(Map<String, dynamic>.from(s as Map)))
         .toList();
 
+    // #876 — AI 격자 차트 추출 (RLE 디코딩)
+    final rawCharts = (data['charts'] as List?) ?? [];
+    int aiRows = 0;
+    int aiCols = 0;
+    List<List<CellData>> aiGrid = const [];
+    if (rawCharts.isNotEmpty) {
+      final firstChart = rawCharts[0] as Map<String, dynamic>;
+      aiRows = (firstChart['rows'] as num?)?.toInt() ?? 0;
+      aiCols = (firstChart['cols'] as num?)?.toInt() ?? 0;
+      final rawRLE = (firstChart['gridRLE'] as List?) ?? [];
+      if (aiRows > 0 && aiCols > 0 && rawRLE.isNotEmpty) {
+        aiGrid = _decodeGridRLE(rawRLE, aiRows, aiCols);
+      }
+      if (aiGrid.isEmpty) { aiRows = 0; aiCols = 0; }
+    }
+
     // 4. PatternChart 생성 (저장 없이 반환 — 저장은 AiPatternEditScreen에서 수행)
     final patternType = mimeType.startsWith('image/') ? PatternType.image : PatternType.pdf;
     String patternImageUrl = '';
@@ -178,10 +194,10 @@ class PatternConverterRepository {
     final chart = PatternChart(
       id: '',
       title: data['title'] as String? ?? fileName,
-      rows: 0,
-      cols: 0,
+      rows: aiRows,
+      cols: aiCols,
       mode: ChartMode.symbol,
-      grid: const [],
+      grid: aiGrid,
       narrativeText: '',
       type: patternType,
       sourceType: PatternSourceType.aiConverted,
@@ -193,6 +209,59 @@ class PatternConverterRepository {
 
     onProgress?.call(1.0);
     return chart;
+  }
+
+  /// #876 — AI 격자 차트 재분석. 기존 저장된 pdfUrl(=storagePath)로 parseKnittingPattern 재호출.
+  /// 성공 시 Firestore rows/cols/grid 업데이트 후 갱신된 PatternChart 반환.
+  Future<PatternChart> reAnalyzeChartGrid(String patternId) async {
+    final doc = await _chartsCol.doc(patternId).get();
+    if (!doc.exists) throw Exception('Pattern not found: $patternId');
+    final data = Map<String, dynamic>.from(doc.data()!);
+    if ((data['id'] as String?)?.isEmpty != false) data['id'] = doc.id;
+    final chart = PatternChart.fromJson(data);
+
+    if (chart.pdfUrl.isEmpty) {
+      throw Exception('도식 재분석은 PDF 도안에서만 지원해요.');
+    }
+
+    final callable = _functions.httpsCallable(
+      'parseKnittingPattern',
+      options: HttpsCallableOptions(timeout: const Duration(seconds: 280)),
+    );
+    final result = await callable.call({
+      'storagePath': chart.pdfUrl,
+      'mimeType': 'application/pdf',
+      'fileName': chart.title,
+    });
+    unawaited(_incrementAiConversionUsage());
+
+    final resultData = Map<String, dynamic>.from(result.data['result'] as Map);
+    final rawCharts = (resultData['charts'] as List?) ?? [];
+    int aiRows = 0;
+    int aiCols = 0;
+    List<List<CellData>> aiGrid = const [];
+    if (rawCharts.isNotEmpty) {
+      final firstChart = rawCharts[0] as Map<String, dynamic>;
+      aiRows = (firstChart['rows'] as num?)?.toInt() ?? 0;
+      aiCols = (firstChart['cols'] as num?)?.toInt() ?? 0;
+      final rawRLE = (firstChart['gridRLE'] as List?) ?? [];
+      if (aiRows > 0 && aiCols > 0 && rawRLE.isNotEmpty) {
+        aiGrid = _decodeGridRLE(rawRLE, aiRows, aiCols);
+      }
+      if (aiGrid.isEmpty) { aiRows = 0; aiCols = 0; }
+    }
+
+    final encodedGrid = aiGrid
+        .map((row) => <String, dynamic>{'cells': row.map((c) => c.toJson()).toList()})
+        .toList();
+    await _chartsCol.doc(patternId).update({
+      'rows': aiRows,
+      'cols': aiCols,
+      'grid': encodedGrid,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    return chart.copyWith(rows: aiRows, cols: aiCols, grid: aiGrid);
   }
 
   /// AI 변환 도안 목록 스트림 (pattern_charts 컬렉션에서 aiConverted 타입만)
@@ -351,6 +420,40 @@ class PatternConverterRepository {
       } catch (_) {}
     }
     await _chartsCol.doc(patternId).delete().withServerTimeout(op: 'delete_pattern_chart');
+  }
+
+  // ─── #876 — AI RLE 차트 디코더 ────────────────────────────────────
+
+  /// #876 — AI RLE 차트 데이터를 PatternChart.grid 형식으로 변환
+  /// RLE 입력: `[['k', 8], ['p', 4]]` 형식 (각 행은 [symbolId, count] 쌍 배열)
+  /// 출력: `List<List<CellData>>` (rows × cols)
+  static List<List<CellData>> _decodeGridRLE(
+    List<dynamic> gridRLE,
+    int rows,
+    int cols,
+  ) {
+    if (gridRLE.isEmpty || rows <= 0 || cols <= 0) return const [];
+    final grid = <List<CellData>>[];
+    for (final rawRow in gridRLE) {
+      final row = <CellData>[];
+      if (rawRow is List) {
+        for (final pair in rawRow) {
+          if (pair is List && pair.length >= 2) {
+            final symbolId = pair[0] as String? ?? 'k';
+            final count = (pair[1] as num?)?.toInt() ?? 1;
+            for (int i = 0; i < count; i++) {
+              row.add(CellData(symbolId: symbolId == 'empty' ? null : symbolId));
+            }
+          }
+        }
+      }
+      while (row.length < cols) { row.add(const CellData()); }
+      grid.add(row.take(cols).toList());
+    }
+    while (grid.length < rows) {
+      grid.add(List.generate(cols, (_) => const CellData()));
+    }
+    return grid.take(rows).toList();
   }
 
   // ─── 구버전 parsed_patterns 호환 메서드 (레거시 지원) ──────────────

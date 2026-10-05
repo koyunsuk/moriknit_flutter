@@ -22,6 +22,8 @@ import '../data/pattern_offline_repository.dart';
 import '../../blueprint/presentation/step_blueprint_editor_screen.dart';
 import '../../blueprint/presentation/tester_group_screen.dart';
 import '../../pattern_converter/presentation/pattern_reader_screen.dart';
+import 'pattern_editor_screen.dart';
+import '../../pattern_converter/data/pattern_converter_repository.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/blueprint_provider.dart';
 import 'pattern_viewer_screen.dart';
@@ -69,6 +71,9 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
   final _memoCtrl = TextEditingController();
   bool _memoLoading = false;
   String? _uid;
+
+  bool _reAnalyzing = false;
+  PatternChart? _reanalyzedChart;
 
   bool _isEditing = false;
   bool _isSaving = false;
@@ -212,6 +217,35 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
   }
 
   void _cancelEdit() => setState(() => _isEditing = false);
+
+  Future<void> _reAnalyzeChart(bool isKorean) async {
+    if (_reAnalyzing) return;
+    setState(() => _reAnalyzing = true);
+    try {
+      await runWithMoriLoadingDialog<void>(
+        context,
+        message: isKorean ? '도식 분석 중입니다.' : 'Analyzing chart...',
+        subtitle: isKorean ? '최대 3분이 소요될 수 있어요.' : 'May take up to 3 minutes.',
+        task: () async {
+          final updated = await PatternConverterRepository()
+              .reAnalyzeChartGrid(widget.chart.id);
+          _reanalyzedChart = updated;
+        },
+      );
+      if (!mounted) return;
+      setState(() => _reAnalyzing = false);
+      final found = (_reanalyzedChart?.rows ?? 0) > 0;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(found
+            ? (isKorean ? '도식이 발견됐어요!' : 'Chart found!')
+            : (isKorean ? '이 도안에서 도식을 발견하지 못했어요.' : 'No chart found.')),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _reAnalyzing = false);
+      showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
+    }
+  }
 
   Future<void> _saveEdit(bool isKorean) async {
     var newTitle = _editTitleCtrl.text.trim();
@@ -1688,6 +1722,16 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
                     _AiSectionsSummary(
                         chart: widget.chart, isKorean: isKorean),
                   ],
+                  // #876 — AI 격자 차트 섹션
+                  const SizedBox(height: 16),
+                  _AiChartSection(
+                    chart: _reanalyzedChart ?? widget.chart,
+                    isKorean: isKorean,
+                    onReanalyze: widget.chart.pdfUrl.isNotEmpty
+                        ? () => _reAnalyzeChart(isKorean)
+                        : null,
+                    reanalyzing: _reAnalyzing,
+                  ),
                 ],
                 // PDF export button (chart type only)
                 if (widget.chart.type == PatternType.chart) ...[
@@ -1839,6 +1883,117 @@ class _PatternDetailScreenState extends ConsumerState<PatternDetailScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// #876 — AI 격자 차트 섹션
+// ============================================================================
+class _AiChartSection extends StatelessWidget {
+  final PatternChart chart;
+  final bool isKorean;
+  final VoidCallback? onReanalyze;
+  final bool reanalyzing;
+
+  const _AiChartSection({
+    required this.chart,
+    required this.isKorean,
+    this.onReanalyze,
+    this.reanalyzing = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasChart = chart.rows > 0 && chart.cols > 0;
+
+    if (hasChart) {
+      return MoriBlockShell(
+        label: isKorean ? '격자 도식' : 'Chart Grid',
+        icon: Icons.grid_on_rounded,
+        accent: C.lv,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isKorean
+                  ? 'AI가 ${chart.rows}단 × ${chart.cols}코 격자 도식을 추출했어요.'
+                  : 'AI extracted a ${chart.rows}×${chart.cols} chart grid.',
+              style: T.body,
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      settings: RouteSettings(
+                        name: 'pattern-editor-readonly-${chart.id}-${DateTime.now().microsecondsSinceEpoch}',
+                      ),
+                      builder: (_) => PatternEditorScreen(
+                        patternId: chart.id,
+                        readOnly: true,
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.grid_on_rounded, size: 18),
+                label: Text(isKorean ? '격자 도식 보기' : 'View Grid Chart'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: C.lv,
+                  side: BorderSide(color: C.lv),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 차트 없음 — 안내 + 재분석 버튼
+    return MoriBlockShell(
+      label: isKorean ? '격자 도식 없음' : 'No Chart Found',
+      icon: Icons.grid_off_rounded,
+      accent: C.mu,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            isKorean
+                ? '이 도안에서 격자 도식을 발견하지 못했어요.\n뜨개 기호가 포함된 도식이 있는 경우 다시 분석할 수 있어요.'
+                : 'No chart grid was found in this pattern.\nYou can re-analyze if it contains a knitting chart.',
+            style: T.body.copyWith(color: C.mu),
+          ),
+          if (onReanalyze != null) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: OutlinedButton.icon(
+                onPressed: reanalyzing ? null : onReanalyze,
+                icon: reanalyzing
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.autorenew_rounded, size: 18),
+                label: Text(isKorean ? '도식 다시 분석' : 'Re-analyze Chart'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: C.lvD,
+                  side: BorderSide(color: C.lvD),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
