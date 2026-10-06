@@ -53,6 +53,11 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- #892 — Impeller 비활성화: Vulkan+OpenGLES 이중 초기화 → 메모리 낭비 + OOM.
+             Skia 렌더러 사용. 향후 기기 안정성 확인 후 재활성화 검토. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
         <!-- 이슈 #817 — FCM Phase 1: 기본 알림 채널 (없으면 Android 8+에서 알림 무시됨) -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"

@@ -22,7 +22,6 @@ import 'core/router/app_router.dart';
 import 'core/sync/sync_orchestrator.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
-import 'features/pattern/data/symbol_svg_repository.dart';
 import 'firebase_options.dart';
 import 'features/ravelry/data/ravelry_auth_provider.dart';
 import 'providers/font_provider.dart';
@@ -37,35 +36,40 @@ void main() async {
   // 폰트 선택 기능을 위해 런타임 페치 허용 (첫 사용 시 다운로드 → 캐시).
   // 오프라인 첫 진입 시 페치 실패 → fontFamilyFallback(Noto Sans CJK KR 등)으로 자동 폴백.
   GoogleFonts.config.allowRuntimeFetching = true;
+
+  // #892 — 시동 지연 개선: Hive init + Firebase init 병렬 실행.
+  // 기존: Hive(14 boxes) 완료 → Firebase init (순차, ~1-2초 낭비)
+  // 개선: 두 작업 동시 실행 → 더 긴 쪽 시간만 소요.
   if (!kIsWeb) {
     await Hive.initFlutter();
     await Future.wait([
-      Hive.openBox<Map>(SubscriptionConstants.boxSwatches),
-      Hive.openBox<Map>(SubscriptionConstants.boxProjects),
-      Hive.openBox<Map>(SubscriptionConstants.boxCounters),
-      Hive.openBox<Map>(SubscriptionConstants.boxNeedles),
-      Hive.openBox<Map>(SubscriptionConstants.boxSyncQueue),
-      Hive.openBox<Map>(SubscriptionConstants.boxUser),
-      Hive.openBox<dynamic>(SubscriptionConstants.boxViewerState),
-      // #685 — 영속 캐시 Box
-      Hive.openBox<Map>(SubscriptionConstants.boxCacheKnitSymbols),
-      Hive.openBox<Map>(SubscriptionConstants.boxCacheEncyclopedia),
-      Hive.openBox<Map>(SubscriptionConstants.boxCachePatternCharts),
-      // #704 Phase A-B — PatternSession 오프라인 폴백 캐시
-      Hive.openBox<Map>(SubscriptionConstants.boxPatternSessionHiveCache),
-      // #704 Phase 2 — StepBlueprint + units 오프라인 폴백 캐시
-      Hive.openBox<Map>(SubscriptionConstants.boxStepBlueprintsHiveCache),
-      Hive.openBox<Map>(SubscriptionConstants.boxStepBlueprintUnitsHiveCache),
-      // 심볼 SVG 본문 영속 캐시 — 오프라인에서 도안에디터 동작 보장
-      Hive.openBox<Map>(SubscriptionConstants.boxKnitSymbolSvgCache),
-      // 홈 즐겨찾기 — 사용자가 별표한 화면 카드 목록
-      Hive.openBox<Map>(SubscriptionConstants.boxFavorites),
+      Future.wait([
+        Hive.openBox<Map>(SubscriptionConstants.boxSwatches),
+        Hive.openBox<Map>(SubscriptionConstants.boxProjects),
+        Hive.openBox<Map>(SubscriptionConstants.boxCounters),
+        Hive.openBox<Map>(SubscriptionConstants.boxNeedles),
+        Hive.openBox<Map>(SubscriptionConstants.boxSyncQueue),
+        Hive.openBox<Map>(SubscriptionConstants.boxUser),
+        Hive.openBox<dynamic>(SubscriptionConstants.boxViewerState),
+        // #685 — 영속 캐시 Box
+        Hive.openBox<Map>(SubscriptionConstants.boxCacheKnitSymbols),
+        Hive.openBox<Map>(SubscriptionConstants.boxCacheEncyclopedia),
+        Hive.openBox<Map>(SubscriptionConstants.boxCachePatternCharts),
+        // #704 Phase A-B — PatternSession 오프라인 폴백 캐시
+        Hive.openBox<Map>(SubscriptionConstants.boxPatternSessionHiveCache),
+        // #704 Phase 2 — StepBlueprint + units 오프라인 폴백 캐시
+        Hive.openBox<Map>(SubscriptionConstants.boxStepBlueprintsHiveCache),
+        Hive.openBox<Map>(SubscriptionConstants.boxStepBlueprintUnitsHiveCache),
+        // 심볼 SVG 본문 영속 캐시 — 오프라인에서 도안에디터 동작 보장
+        Hive.openBox<Map>(SubscriptionConstants.boxKnitSymbolSvgCache),
+        // 홈 즐겨찾기 — 사용자가 별표한 화면 카드 목록
+        Hive.openBox<Map>(SubscriptionConstants.boxFavorites),
+      ]),
+      Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform),
     ]);
+  } else {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   }
-
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
 
   // #817 — FCM 백그라운드 메시지 핸들러는 Firebase init 직후, runApp 이전 등록 필수.
   // (top-level 함수만 가능 — services/fcm_service.dart에 선언됨)
@@ -75,9 +79,10 @@ void main() async {
 
   // #685 — Firestore 영속 캐시 (모바일 SQLite / 웹 IndexedDB 자동).
   // v6 SDK: settings로 통합. enablePersistence 별도 호출 불필요.
+  // #892 — SQLite 캐시 40MB 제한. CACHE_SIZE_UNLIMITED 시 파일 무제한 증가 → 시동 지연.
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
-    cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+    cacheSizeBytes: 40 * 1024 * 1024,
   );
 
   // #784 — 카카오 SDK init: 모바일은 nativeAppKey, 웹은 javaScriptAppKey 사용.
@@ -166,11 +171,8 @@ class _OAuthLinkListenerState extends ConsumerState<_OAuthLinkListener>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // 심볼 SVG 본문 백그라운드 prefetch — 오프라인 도안에디터 보장.
-    // 사용자 체감 0 (PostFrame, fire-and-forget).
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(symbolSvgRepositoryProvider).prefetchAll();
-    });
+    // #892 — prefetchAll() 시동 시 제거: 심볼 수만큼 HTTP 동시 다운로드 → Dart 힙 OOM.
+    // SVG는 도안에디터 첫 진입 시 lazy load로 충분 (오프라인 폴백: kKnitSymbolSvgData 인라인).
     if (!kIsWeb) {
       _channel.setMethodCallHandler(_handleMethodCall);
       WidgetsBinding.instance.addPostFrameCallback((_) async {

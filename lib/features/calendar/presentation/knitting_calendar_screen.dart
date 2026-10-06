@@ -9,6 +9,7 @@ import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../../providers/auth_provider.dart';
 import '../data/calendar_event_aggregator.dart';
 import '../data/knitting_event_repository.dart';
 import '../domain/knitting_event.dart';
@@ -189,33 +190,27 @@ class _KnittingCalendarScreenState
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20),
-          color: C.tx,
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-        title: Text(
-          isKorean ? '뜨개 캘린더' : 'Knitting Calendar',
-          style: T.h3,
-        ),
-        centerTitle: false,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.sync_rounded, color: C.tx),
-            tooltip: isKorean ? '캘린더 연동 설정' : 'Calendar Sync',
-            onPressed: () => context.push(Routes.calendarSyncSettings),
-          ),
-        ],
-      ),
       body: Stack(
         children: [
           const BgOrbs(),
           SafeArea(
             child: Column(
               children: [
+                MoriPageHeaderShell(
+                  child: MoriWideHeader(
+                    title: isKorean ? '뜨개 캘린더' : 'Knitting Calendar',
+                    subtitle: isKorean ? '나의 뜨개 일정' : 'My Knitting Schedule',
+                    trailing: [
+                      IconButton(
+                        icon: Icon(Icons.sync_rounded, color: C.tx),
+                        tooltip:
+                            isKorean ? '캘린더 연동 설정' : 'Calendar Sync',
+                        onPressed: () =>
+                            context.push(Routes.calendarSyncSettings),
+                      ),
+                    ],
+                  ),
+                ),
                 // 캘린더 블록
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
@@ -515,8 +510,7 @@ class _AddEventSheetState extends ConsumerState<_AddEventSheet> {
       return;
     }
     setState(() => _saving = true);
-    final uid =
-        ref.read(knittingEventRepositoryProvider).runtimeType.toString();
+    final uid = ref.read(authStateProvider).valueOrNull?.uid ?? '';
     final event = KnittingEvent(
       id: const Uuid().v4(),
       userId: uid,
@@ -534,19 +528,21 @@ class _AddEventSheetState extends ConsumerState<_AddEventSheet> {
   @override
   Widget build(BuildContext context) {
     final isKorean = widget.isKorean;
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
-        margin: EdgeInsets.only(bottom: bottomInset),
+        // 키보드 높이만큼 padding — margin이 아닌 padding이어야 overflow 없음.
+        // margin은 위젯 밖에 공간 추가 → overflow 발생. padding은 안쪽 축소.
+        padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom),
         decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: SafeArea(
           top: false,
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
             child: Column(
               mainAxisSize: MainAxisSize.min,

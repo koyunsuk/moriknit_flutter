@@ -775,10 +775,11 @@ class LoginPanel extends ConsumerWidget {
     final t = ref.watch(appStringsProvider);
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
       child: Column(
         children: [
-          if (!showOverlayIntro)
+          // 웹에서만 홈으로 버튼 표시 — 모바일에서 '/'는 스플래시 화면으로 이동해 의미없음
+          if (!showOverlayIntro && kIsWeb)
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
@@ -1042,7 +1043,7 @@ class LoginPanel extends ConsumerWidget {
               textAlign: TextAlign.center,
             ),
           ],
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -1059,6 +1060,7 @@ class LoginPanel extends ConsumerWidget {
               ),
             ],
           ),
+          const SizedBox(height: 16),
         ],
       ),
     );
