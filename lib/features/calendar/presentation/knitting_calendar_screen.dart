@@ -224,7 +224,9 @@ class _KnittingCalendarScreenState
                     icon: Icons.calendar_month_rounded,
                     accent: C.lv,
                     bodyPadding: EdgeInsets.zero,
-                    child: TableCalendar<KnittingEvent>(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 360),
+                      child: TableCalendar<KnittingEvent>(
                       firstDay: DateTime(2020, 1, 1),
                       lastDay: DateTime(2030, 12, 31),
                       focusedDay: _focusedDay,
@@ -296,6 +298,7 @@ class _KnittingCalendarScreenState
                       ),
                     ),
                   ),
+                ),
                 ),
                 const SizedBox(height: 12),
                 // 선택된 날짜 이벤트 리스트

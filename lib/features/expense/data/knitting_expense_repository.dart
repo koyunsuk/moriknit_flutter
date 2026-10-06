@@ -1,10 +1,10 @@
 // lib/features/expense/data/knitting_expense_repository.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../providers/auth_provider.dart';
 import '../domain/knitting_expense.dart';
 
 class KnittingExpenseRepository {
@@ -59,7 +59,7 @@ class KnittingExpenseRepository {
 
 final knittingExpenseRepositoryProvider =
     Provider<KnittingExpenseRepository>((ref) {
-  final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+  final uid = ref.watch(authStateProvider).valueOrNull?.uid ?? '';
   return KnittingExpenseRepository(uid);
 });
 
