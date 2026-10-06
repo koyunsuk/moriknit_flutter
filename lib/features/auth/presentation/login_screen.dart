@@ -534,6 +534,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         message: isKorean ? '게스트로 시작하는 중입니다.' : 'Starting as guest...',
         subtitle: isKorean ? '잠시만 기다려 주세요.' : 'Please wait.',
         task: () async {
+          // #896 — 이전 계정 세션 완전 정리 후 익명 로그인
+          await ref.read(authRepositoryProvider).signOut();
           await ref.read(authRepositoryProvider).signInAnonymously();
         },
       );
