@@ -712,10 +712,14 @@ exports.kakaoCustomToken = onRequest(
       const displayName = profile.nickname ?? '';
       const photoURL = profile.profile_image_url ?? '';
 
-      // 1) 익명 사용자 업그레이드 분기 — 익명 uid 보존
+      // 1) 기존 카카오 계정 존재 여부 먼저 확인 — 있으면 anonymous 업그레이드 건너뜀
+      const existingKakaoRef = db.collection('users').doc(`kakao_${kakaoId}`);
+      const existingKakaoDoc = await existingKakaoRef.get();
+
       let uid;
       let isUpgrade = false;
-      if (anonymousIdToken) {
+      if (anonymousIdToken && !existingKakaoDoc.exists) {
+        // 기존 카카오 계정 없음 → 새 Kakao 사용자가 게스트에서 업그레이드
         try {
           const decoded = await admin.auth().verifyIdToken(anonymousIdToken);
           if (decoded.firebase?.sign_in_provider === 'anonymous') {
@@ -727,7 +731,7 @@ exports.kakaoCustomToken = onRequest(
         }
       }
 
-      // 2) 일반 흐름 — kakao_{id} uid
+      // 2) 일반 흐름 — kakao_{id} uid (기존 카카오 계정이 있거나 anonymousIdToken 없을 때)
       if (!uid) {
         uid = `kakao_${kakaoId}`;
       }
@@ -1722,7 +1726,7 @@ function extractEmailAddress(rawTo) {
 function parseInboundEmailAddress(addr) {
   if (!addr) return null;
   const lower = addr.toLowerCase();
-  const expectedDomain = (process.env.INBOUND_EMAIL_DOMAIN || 'pattern.moriknit.com').toLowerCase();
+  const expectedDomain = (process.env.INBOUND_EMAIL_DOMAIN || 'in.moriknit.com').toLowerCase();
   const atIdx = lower.indexOf('@');
   if (atIdx <= 0) return null;
   const local = lower.slice(0, atIdx);
@@ -2242,7 +2246,7 @@ exports.regenerateInboundEmailKey = onCall(
       inboundEmailUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    const domain = process.env.INBOUND_EMAIL_DOMAIN || 'pattern.moriknit.com';
+    const domain = process.env.INBOUND_EMAIL_DOMAIN || 'in.moriknit.com';
     return {
       handle,
       inboundEmailKey: nextKey,

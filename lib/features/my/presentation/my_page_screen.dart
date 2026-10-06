@@ -19,7 +19,6 @@ import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_colors.dart';
-import '../../../core/widgets/account_upgrade_dialog.dart';
 import '../../../core/widgets/async_data_view.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../providers/app_config_provider.dart';
@@ -81,23 +80,6 @@ class _MyPageBody extends ConsumerStatefulWidget {
 
 class _MyPageBodyState extends ConsumerState<_MyPageBody> {
   UserModel get user => widget.user;
-
-  @override
-  void initState() {
-    super.initState();
-    // 익명 사용자에게 데이터 양 기반 회원가입 권유 (주 1회 제한 — 다이얼로그 내부 조건 검사)
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final patternCount = user.usage.editorSaveCount;
-      final counterTaps = user.usage.counterCount * 20; // 누적 추정치
-      maybeShowAccountUpgradeDialog(
-        context,
-        ref,
-        patternCount: patternCount,
-        counterTotalTaps: counterTaps,
-      );
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -418,7 +400,6 @@ class _BasicInfoSectionState extends ConsumerState<_BasicInfoSection> {
     final t = ref.watch(appStringsProvider);
     final language = ref.watch(appLanguageProvider);
     final isKorean = language.isKorean;
-    final isAnonymous = ref.watch(isAnonymousUserProvider);
     final isBusiness = ref.watch(featureGatesProvider).isBusiness;
     final isPro = ref.watch(isProProvider);
     final name = user.displayName.isNotEmpty ? user.displayName : (user.email.isNotEmpty ? user.email.split('@').first : 'Maker');
@@ -436,14 +417,6 @@ class _BasicInfoSectionState extends ConsumerState<_BasicInfoSection> {
                             ? '내 프로필과 구독 정보'
                             : 'Your profile and subscription',
                       ),
-
-                      // ── 0. 게스트 프로필 히어로 (익명 사용자만 — 큰 프로필) ─────────
-                      if (isAnonymous) ...[
-                        _GuestProfileHero(isKorean: isKorean),
-                        const SizedBox(height: 16),
-                        _GuestModeBanner(isKorean: isKorean),
-                        const SizedBox(height: 16),
-                      ],
 
                       // ── 1. 기본정보 ─────────────────────────────────
                       // #770 (재재수정) — 뱃지를 MoriBlockShell trailing 슬롯으로 이동 (블록 우측 헤더, 중앙 정렬)
@@ -695,8 +668,6 @@ class _BasicInfoSectionState extends ConsumerState<_BasicInfoSection> {
                       const SizedBox(height: 16),
 
                       // ── 1-h. 내 인입 이메일 (#831 Phase 3) ───────────
-                      //   - 외부에서 이 주소로 도안을 보내면 라이브러리에 자동 등록.
-                      //   - 핸들 미설정 시 안내만 표시, 발급 후 복사 + 재발급 가능.
                       MoriBlockShell(
                         label: isKorean ? '내 인입 이메일' : 'My Inbound Email',
                         icon: Icons.alternate_email_rounded,
@@ -943,7 +914,6 @@ class _MoriKnitSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = ref.watch(appStringsProvider);
     final isKorean = ref.watch(appLanguageProvider).isKorean;
-    final isAnonymous = ref.watch(isAnonymousUserProvider);
     final social = ref.watch(socialIntegrationsProvider).valueOrNull;
     final youtubeUrl = social?.youtubeUrl ?? 'https://www.youtube.com/@moriknit';
     final instagramUrl = social?.instagramUrl ?? 'https://instagram.com/moriknit_official';
@@ -1052,45 +1022,11 @@ class _MoriKnitSection extends ConsumerWidget {
               const SizedBox(height: 10),
               GlassCard(
                 child: Column(children: [
-                  // 익명(게스트)은 '게스트 모드 나가기', 정식 회원은 '로그아웃'으로 노출 (#738)
                   ListTile(
                     leading: Icon(Icons.logout, color: C.og),
-                    title: Text(isAnonymous
-                        ? (isKorean ? '게스트 모드 나가기' : 'Exit Guest Mode')
-                        : t.logout),
-                    subtitle: Text(isAnonymous
-                        ? (isKorean
-                            ? '저장하지 않은 게스트 데이터는 사라집니다.'
-                            : 'Unsaved guest data will be discarded.')
-                        : t.logoutDescription),
+                    title: Text(t.logout),
+                    subtitle: Text(t.logoutDescription),
                     onTap: () async {
-                      if (isAnonymous) {
-                        final confirmed = await showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                            title: Text(isKorean ? '게스트 모드 나가기' : 'Exit Guest Mode', style: T.h3),
-                            content: Text(
-                              isKorean
-                                  ? '게스트 모드를 나가면 저장하지 않은 데이터는 모두 사라집니다.\n계속할까요?'
-                                  : 'Leaving guest mode will discard all unsaved data.\nContinue?',
-                              style: T.body,
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx, false),
-                                child: Text(isKorean ? '취소' : 'Cancel'),
-                              ),
-                              ElevatedButton(
-                                onPressed: () => Navigator.pop(ctx, true),
-                                style: ElevatedButton.styleFrom(backgroundColor: C.og, foregroundColor: Colors.white),
-                                child: Text(isKorean ? '나가기' : 'Exit'),
-                              ),
-                            ],
-                          ),
-                        );
-                        if (confirmed != true) return;
-                      }
                       await ref.read(authRepositoryProvider).signOut();
                       if (context.mounted) context.go('/login');
                     },
@@ -1664,11 +1600,6 @@ class _SubscriptionCard extends ConsumerWidget {
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: () {
-                // 익명(게스트) 사용자는 Pro 결제 차단 — 회원가입 권유 다이얼로그로 유도
-                if (ref.read(isAnonymousUserProvider)) {
-                  showProUpgradeBlockedDialog(context, ref);
-                  return;
-                }
                 // 이슈 #750 — Pro 업그레이드(Free → Pro)는 휴대폰 인증 필수.
                 // 이미 Pro/Business 인 사용자는 관리 화면 진입 허용.
                 if (!isPro && !user.phoneVerified) {
@@ -2023,116 +1954,6 @@ class _ProBookmarkPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// ── 게스트 프로필 히어로 (익명 사용자 — 큰 프로필 + 모리니트 아이콘) ──
-class _GuestProfileHero extends StatelessWidget {
-  final bool isKorean;
-  const _GuestProfileHero({required this.isKorean});
-
-  @override
-  Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final size = (width * 0.7).clamp(180.0, 320.0);
-    return Center(
-      child: Column(
-        children: [
-          Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [C.lvL, C.pkL],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              border: Border.all(color: C.lv.withValues(alpha: 0.25), width: 2),
-            ),
-            child: ClipOval(
-              child: Padding(
-                padding: EdgeInsets.all(size * 0.12),
-                child: Image.asset(
-                  'assets/login_logo.png',
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            isKorean ? '게스트 모드' : 'Guest Mode',
-            style: T.h3.copyWith(color: C.tx2),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── 게스트 모드 배너 (익명 사용자) ─────────────────────────────────
-class _GuestModeBanner extends StatelessWidget {
-  final bool isKorean;
-  const _GuestModeBanner({required this.isKorean});
-
-  @override
-  Widget build(BuildContext context) {
-    return GlassCard(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      radius: 20,
-      borderColor: C.og.withValues(alpha: 0.22),
-      color: Color.alphaBlend(
-          C.og.withValues(alpha: 0.06), Colors.white.withValues(alpha: 0.92)),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: C.og.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.shield_outlined, color: C.og, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isKorean ? '지금은 게스트 모드예요' : 'You are in guest mode',
-                  style: T.bodyBold,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  isKorean
-                      ? '계정을 만들면 기기 변경 시에도 데이터가 안전하게 보존돼요.'
-                      : 'Create an account to keep your data safe across devices.',
-                  style: T.caption.copyWith(color: C.tx2, height: 1.35),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: () => context.push('/login'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: C.og,
-              foregroundColor: Colors.white,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-            ),
-            child: Text(
-              isKorean ? '계정 만들기' : 'Sign up',
-              style: const TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _PlanBadgeRow extends StatelessWidget {
   final List<(String, bool)> badges;
