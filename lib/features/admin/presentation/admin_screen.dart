@@ -7732,35 +7732,8 @@ class _BuiltinTemplateAdminTab extends ConsumerWidget {
                             onSelected: (value) {
                               if (value == 'edit') _showEditDialog(context, ref, tmpl);
                               if (value == 'delete') _confirmDelete(context, ref, tmpl);
-                              if (value == 'export_excel' || value == 'export_word') {
-                                _exportStepLog(
-                                  context: context,
-                                  kind: value == 'export_word' ? 'word' : 'excel',
-                                  source: 'builtin',
-                                  chartId: tmpl.id,
-                                  displayTitle: tmpl.titleKo,
-                                );
-                              }
                             },
                             itemBuilder: (_) => [
-                              // #875 — 단계로그 Excel/Word 내보내기
-                              PopupMenuItem(
-                                value: 'export_excel',
-                                child: Row(children: [
-                                  Icon(Icons.grid_on_rounded, size: 16, color: C.lvD),
-                                  const SizedBox(width: 8),
-                                  const Text('Excel 내보내기'),
-                                ]),
-                              ),
-                              PopupMenuItem(
-                                value: 'export_word',
-                                child: Row(children: [
-                                  Icon(Icons.description_rounded, size: 16, color: C.lvD),
-                                  const SizedBox(width: 8),
-                                  const Text('Word 내보내기'),
-                                ]),
-                              ),
-                              const PopupMenuDivider(),
                               PopupMenuItem(
                                 value: 'edit',
                                 child: Row(children: [
@@ -9481,66 +9454,6 @@ class _BoardPostListState extends State<_BoardPostList> {
   }
 }
 
-// ─── #875 단계로그 Excel/Word 내보내기 헬퍼 (웹어드민) ───────────────────────
-//
-// Cloud Function 호출 → signed URL 받아서 새 탭 다운로드.
-// runWithMoriLoadingDialog 표준 패턴 사용. 에러/성공 스낵바 통일.
-//
-// kind: 'excel' | 'word'
-// source: 'user' | 'builtin'
-Future<void> _exportStepLog({
-  required BuildContext context,
-  required String kind,
-  required String source,
-  String? ownerUid,
-  required String chartId,
-  required String displayTitle,
-}) async {
-  final funcName = kind == 'word' ? 'exportStepLogToWord' : 'exportStepLogToExcel';
-  final loadingMsg = kind == 'word'
-      ? 'Word 문서를 만드는 중입니다.'
-      : 'Excel 파일을 만드는 중입니다.';
-  try {
-    final result = await runWithMoriLoadingDialog<Map<String, dynamic>?>(
-      context,
-      message: loadingMsg,
-      subtitle: '잠시만 기다려 주세요.',
-      task: () async {
-        final callable = FirebaseFunctions.instance.httpsCallable(
-          funcName,
-          options: HttpsCallableOptions(timeout: const Duration(seconds: 180)),
-        );
-        final res = await callable.call(<String, dynamic>{
-          'source': source,
-          if (ownerUid != null && ownerUid.isNotEmpty) 'ownerUid': ownerUid,
-          'chartId': chartId,
-        });
-        final data = res.data;
-        if (data is Map) return Map<String, dynamic>.from(data);
-        return null;
-      },
-    );
-    if (!context.mounted) return;
-    final downloadUrl = result?['downloadUrl'] as String?;
-    if (downloadUrl == null || downloadUrl.isEmpty) {
-      showSaveErrorSnackBar(
-        ScaffoldMessenger.of(context),
-        message: '다운로드 URL을 받지 못했습니다.',
-      );
-      return;
-    }
-    await launchUrl(Uri.parse(downloadUrl), mode: LaunchMode.externalApplication);
-    if (!context.mounted) return;
-    showSavedSnackBar(
-      ScaffoldMessenger.of(context),
-      message: '[$displayTitle] 문서가 다운로드됐어요.',
-    );
-  } catch (e) {
-    if (!context.mounted) return;
-    showSaveErrorSnackBar(ScaffoldMessenger.of(context), message: '$e');
-  }
-}
-
 // ─── 어드민 도안 탭 ───────────────────────────────────────────────────────────
 
 class _AdminPatternsTab extends ConsumerStatefulWidget {
@@ -9768,16 +9681,7 @@ class _AdminPatternsTabState extends ConsumerState<_AdminPatternsTab> {
                     tooltip: '관리',
                     padding: const EdgeInsets.all(4),
                     onSelected: (value) async {
-                      if (value == 'export_excel' || value == 'export_word') {
-                        await _exportStepLog(
-                          context: ctx,
-                          kind: value == 'export_word' ? 'word' : 'excel',
-                          source: 'user',
-                          ownerUid: ownerUid,
-                          chartId: docId,
-                          displayTitle: title,
-                        );
-                      } else if (value == 'transfer_system') {
+                      if (value == 'transfer_system') {
                         await _transferPatternToSystem(
                           ctx: ctx,
                           doc: doc,
@@ -9816,28 +9720,6 @@ class _AdminPatternsTabState extends ConsumerState<_AdminPatternsTab> {
                     itemBuilder: (_) {
                       final isAlreadySystem = ownerUid == SystemUsers.moriknitUid;
                       return [
-                        // #875 — 단계로그 Excel/Word 내보내기
-                        PopupMenuItem<String>(
-                          value: 'export_excel',
-                          child: Row(
-                            children: [
-                              Icon(Icons.grid_on_rounded, size: 16, color: C.lvD),
-                              const SizedBox(width: 8),
-                              Text('Excel 내보내기', style: T.body),
-                            ],
-                          ),
-                        ),
-                        PopupMenuItem<String>(
-                          value: 'export_word',
-                          child: Row(
-                            children: [
-                              Icon(Icons.description_rounded, size: 16, color: C.lvD),
-                              const SizedBox(width: 8),
-                              Text('Word 내보내기', style: T.body),
-                            ],
-                          ),
-                        ),
-                        const PopupMenuDivider(),
                         PopupMenuItem<String>(
                           value: 'transfer_system',
                           enabled: !isAlreadySystem,
@@ -10072,16 +9954,7 @@ class _AdminTemplatesTabState extends ConsumerState<_AdminTemplatesTab> {
                     tooltip: '관리',
                     padding: const EdgeInsets.all(4),
                     onSelected: (value) async {
-                      if (value == 'export_excel' || value == 'export_word') {
-                        await _exportStepLog(
-                          context: ctx,
-                          kind: value == 'export_word' ? 'word' : 'excel',
-                          source: 'user',
-                          ownerUid: ownerUid,
-                          chartId: docId,
-                          displayTitle: name,
-                        );
-                      } else if (value == 'transfer_system') {
+                      if (value == 'transfer_system') {
                         await _transferTemplateToSystem(
                           ctx: ctx,
                           doc: doc,
@@ -10118,28 +9991,6 @@ class _AdminTemplatesTabState extends ConsumerState<_AdminTemplatesTab> {
                     itemBuilder: (_) {
                       final isAlreadySystem = ownerUid == SystemUsers.moriknitUid;
                       return [
-                        // #875 — 단계로그 Excel/Word 내보내기
-                        PopupMenuItem<String>(
-                          value: 'export_excel',
-                          child: Row(
-                            children: [
-                              Icon(Icons.grid_on_rounded, size: 16, color: C.lvD),
-                              const SizedBox(width: 8),
-                              Text('Excel 내보내기', style: T.body),
-                            ],
-                          ),
-                        ),
-                        PopupMenuItem<String>(
-                          value: 'export_word',
-                          child: Row(
-                            children: [
-                              Icon(Icons.description_rounded, size: 16, color: C.lvD),
-                              const SizedBox(width: 8),
-                              Text('Word 내보내기', style: T.body),
-                            ],
-                          ),
-                        ),
-                        const PopupMenuDivider(),
                         PopupMenuItem<String>(
                           value: 'transfer_system',
                           enabled: !isAlreadySystem,
