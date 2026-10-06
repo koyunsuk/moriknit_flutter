@@ -25,7 +25,7 @@ import '../../etsy/data/etsy_auth_provider.dart';
 import '../../dropbox/data/dropbox_auth_provider.dart';
 // 이슈 #703 — 외부 클라우드 확장 (Google Drive·iCloud·OneDrive)
 import '../../cloud_integrations/data/google_drive_auth_provider.dart';
-import '../../cloud_integrations/data/icloud_auth_provider.dart';
+
 import '../../cloud_integrations/data/onedrive_auth_provider.dart';
 import '../../../providers/yarn_provider.dart';
 import '../../../providers/needle_provider.dart';
@@ -567,6 +567,24 @@ class _ToolboxTab extends ConsumerWidget {
                   description: isKorean ? '격자·각도·원·실바늘 두께를 화면으로 측정' : 'Measure grid, angle, circle & yarn/needle',
                   onTap: () => context.push(Routes.toolsMeasure),
                 ),
+                const SizedBox(height: 10),
+                // 이슈 #883 — 뜨개 캘린더
+                _ToolCard(
+                  icon: Icons.calendar_month_rounded,
+                  color: C.lv,
+                  title: isKorean ? '뜨개 캘린더' : 'Knitting Calendar',
+                  description: isKorean ? '프로젝트 일정·함뜨·구입 이벤트 기록' : 'Projects, KAL & purchase event log',
+                  onTap: () => context.push(Routes.toolsKnittingCalendar),
+                ),
+                const SizedBox(height: 10),
+                // 이슈 #884 — 뜨개 가계부
+                _ToolCard(
+                  icon: Icons.account_balance_wallet_rounded,
+                  color: C.pkD,
+                  title: isKorean ? '뜨개 가계부' : 'Knitting Expense',
+                  description: isKorean ? '바늘·실·도안·도구 구입 가계부' : 'Track needle, yarn, pattern purchases',
+                  onTap: () => context.push(Routes.toolsExpense),
+                ),
               ],
             ),
           ),
@@ -912,9 +930,8 @@ class _CloudHubCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final dropbox = ref.watch(dropboxAuthProvider);
     final gdrive = ref.watch(googleDriveAuthProvider);
-    final icloud = ref.watch(iCloudAuthProvider);
     final onedrive = ref.watch(oneDriveAuthProvider);
-    final connectedCount = [dropbox.isLoggedIn, gdrive.isLoggedIn, icloud.isLoggedIn, onedrive.isLoggedIn]
+    final connectedCount = [dropbox.isLoggedIn, gdrive.isLoggedIn, onedrive.isLoggedIn]
         .where((c) => c)
         .length;
     return GlassCard(
@@ -939,8 +956,8 @@ class _CloudHubCard extends ConsumerWidget {
                 const SizedBox(height: 4),
                 Text(
                   isKorean
-                      ? 'Dropbox · Google Drive · iCloud · OneDrive'
-                      : 'Dropbox · Google Drive · iCloud · OneDrive',
+                      ? 'Dropbox · Google Drive · OneDrive'
+                      : 'Dropbox · Google Drive · OneDrive',
                   style: T.caption.copyWith(color: C.mu),
                 ),
               ],

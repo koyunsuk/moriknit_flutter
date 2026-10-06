@@ -1398,8 +1398,8 @@ class _PatternListScreenState extends ConsumerState<PatternListScreen> {
                         const SizedBox(height: 4),
                         Text(
                           isKorean
-                              ? 'Dropbox · Google Drive · iCloud · OneDrive 에서 가져오기'
-                              : 'Import from Dropbox · Google Drive · iCloud · OneDrive',
+                              ? 'Dropbox · Google Drive · OneDrive 에서 가져오기'
+                              : 'Import from Dropbox · Google Drive · OneDrive',
                           style: T.caption.copyWith(color: C.mu),
                         ),
                       ],

@@ -268,39 +268,34 @@ class AuthRepository {
 
   Future<UserModel?> signInWithKakao() async {
     try {
-      // #733 — 이전 카카오 세션을 완전 초기화하여 동의 화면을 항상 표시.
-      // logout()만으로는 디바이스에 캐시된 토큰이 남아 동의 화면이 스킵되는 사례가 있어 unlink()까지 호출.
-      // logout: 로컬 세션 토큰 삭제
-      // unlink: 앱-사용자 연결 해제 → 다음 로그인 시 카카오가 동의 화면을 무조건 표시
-      try {
-        await kakao.UserApi.instance.logout();
-      } catch (_) {
-        // 이미 로그아웃 상태인 경우 무시
-      }
-      try {
-        await kakao.UserApi.instance.unlink();
-      } catch (_) {
-        // unlink 실패(미로그인 등)는 무시 — 다음 단계에서 새로 로그인
-      }
-
-      // prompts: [Prompt.login] → 카카오 계정 재로그인 강제 (자동로그인 무시).
-      // 위 unlink() 로 앱-사용자 연결이 해제됐기 때문에 카카오 서버에서 동의 화면을 자동으로 다시 표시.
-      // 동의 항목(닉네임/프로필/이메일) 자체는 Kakao Developers 콘솔에서 활성화 필요.
-      // SDK는 -402 에러 발생 시 누락된 동의 항목을 자동으로 추가 요청한다.
       kakao.OAuthToken token;
-      if (await kakao.isKakaoTalkInstalled()) {
+
+      if (kIsWeb) {
+        // 웹: logout/unlink/Prompt.login 모두 생략 — JS SDK 팝업 직접 호출.
+        // logout/unlink는 웹 SDK에서 부분 지원이며 Prompt.login은 웹 미지원으로 오류 유발.
+        token = await kakao.UserApi.instance.loginWithKakaoAccount();
+      } else {
+        // 모바일: #733 — 이전 세션 완전 초기화 + 동의 화면 강제 표시.
         try {
-          token = await kakao.UserApi.instance.loginWithKakaoTalk();
-        } catch (_) {
-          // 카카오톡 설치돼 있어도 사용자가 카카오톡 로그인을 취소하면 계정 로그인 폴백
+          await kakao.UserApi.instance.logout();
+        } catch (_) {}
+        try {
+          await kakao.UserApi.instance.unlink();
+        } catch (_) {}
+
+        if (await kakao.isKakaoTalkInstalled()) {
+          try {
+            token = await kakao.UserApi.instance.loginWithKakaoTalk();
+          } catch (_) {
+            token = await kakao.UserApi.instance.loginWithKakaoAccount(
+              prompts: [kakao.Prompt.login],
+            );
+          }
+        } else {
           token = await kakao.UserApi.instance.loginWithKakaoAccount(
             prompts: [kakao.Prompt.login],
           );
         }
-      } else {
-        token = await kakao.UserApi.instance.loginWithKakaoAccount(
-          prompts: [kakao.Prompt.login],
-        );
       }
 
       // 2. 현재 익명 사용자이면 ID 토큰을 함께 전달해 uid를 유지한 채 업그레이드

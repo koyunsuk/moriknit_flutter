@@ -4,7 +4,9 @@
 // 사용:
 //   main_shell.dart 진입 시 `currentUserProvider.handle` 가 비어있고
 //   익명(`isAnonymousUserProvider == false`) 이면 본 화면을 강제 표시.
+// #893 — handles 컬렉션에 기존 핸들 있으면 자동 복구 후 게이트 통과.
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -30,8 +32,44 @@ class _HandleRegisterScreenState extends ConsumerState<HandleRegisterScreen> {
   _HandleStatus _status = _HandleStatus.idle;
   String? _error;
   bool _saving = false;
+  bool _recovering = false;
 
   final _validator = HandleValidator();
+
+  @override
+  void initState() {
+    super.initState();
+    // #893 — handles 컬렉션에 기존 핸들 있으면 users/{uid}.handle 자동 복구
+    WidgetsBinding.instance.addPostFrameCallback((_) => _tryRecoverHandle());
+  }
+
+  Future<void> _tryRecoverHandle() async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
+    setState(() => _recovering = true);
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('handles')
+          .where('userId', isEqualTo: user.uid)
+          .limit(1)
+          .get();
+      if (!mounted) return;
+      if (snap.docs.isNotEmpty) {
+        final handle = snap.docs.first.data()['displayHandle'] as String? ?? '';
+        if (handle.isNotEmpty) {
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+            {'handle': handle, 'handleUpdatedAt': FieldValue.serverTimestamp()},
+            SetOptions(merge: true),
+          );
+          // currentUserProvider 스트림이 업데이트되면 main_shell 게이트 자동 통과
+        }
+      }
+    } catch (_) {
+      // 복구 실패 시 일반 등록 화면 표시
+    } finally {
+      if (mounted) setState(() => _recovering = false);
+    }
+  }
 
   Future<void> _check(String raw) async {
     final input = HandleValidator.normalize(raw);
@@ -119,6 +157,12 @@ class _HandleRegisterScreenState extends ConsumerState<HandleRegisterScreen> {
       _HandleStatus.idle => Colors.transparent,
       _ => C.og,
     };
+
+    if (_recovering) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return Scaffold(
       body: SafeArea(

@@ -1,65 +1,59 @@
-// Android: AndroidManifest.xml에 BLUETOOTH_SCAN, BLUETOOTH_CONNECT 권한 필요
-//   <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
-//   <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-// iOS: Info.plist에 NSBluetoothAlwaysUsageDescription 필요
-//   <key>NSBluetoothAlwaysUsageDescription</key>
-//   <string>Niimbot 라벨 프린터 연결에 블루투스가 필요합니다.</string>
+// #892 — flutter_blue_plus OOM 수정으로 BLE 임시 비활성화.
+// flutter_blue_plus 제거 후 스텁 처리. 향후 메모리 최적화 후 재활성화 예정.
 
-import 'package:flutter/foundation.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'dart:typed_data';
+
+/// D11 라벨 사이즈 (203dpi 기준 픽셀)
+enum NiimbotLabelSize {
+  s40x12, // 40×12mm → 320×96px
+  s40x15, // 40×15mm → 320×120px
+  s40x30, // 40×30mm → 320×240px
+}
+
+extension NiimbotLabelSizeExt on NiimbotLabelSize {
+  int get widthPx => 320;
+  int get heightPx {
+    switch (this) {
+      case NiimbotLabelSize.s40x12: return 96;
+      case NiimbotLabelSize.s40x15: return 120;
+      case NiimbotLabelSize.s40x30: return 240;
+    }
+  }
+  String get label {
+    switch (this) {
+      case NiimbotLabelSize.s40x12: return '40×12mm';
+      case NiimbotLabelSize.s40x15: return '40×15mm';
+      case NiimbotLabelSize.s40x30: return '40×30mm';
+    }
+  }
+}
+
+/// BLE 스캔 결과 스텁
+class NiimbotScanResult {
+  final String deviceName;
+  final String deviceId;
+  final int rssi;
+  const NiimbotScanResult({
+    required this.deviceName,
+    required this.deviceId,
+    required this.rssi,
+  });
+}
 
 class NiimbotBleService {
-  static const _niimbotPrefixes = ['D11', 'B21', 'D110', 'B3S', 'B1'];
-
-  /// 근처 Niimbot 기기 스캔 (이름 접두사로 필터링)
-  static Future<List<ScanResult>> scanNiimbotDevices({
+  /// 항상 빈 목록 반환 (BLE 임시 비활성화)
+  static Future<List<NiimbotScanResult>> scanNiimbotDevices({
     Duration timeout = const Duration(seconds: 5),
   }) async {
-    await FlutterBluePlus.startScan(timeout: timeout);
-    await Future.delayed(timeout);
-    final results = await FlutterBluePlus.scanResults.first;
-    return results.where((r) {
-      final name = r.device.platformName.toUpperCase();
-      return _niimbotPrefixes.any((p) => name.startsWith(p));
-    }).toList();
+    return [];
   }
 
-  /// 이미지 바이트를 Niimbot BLE 프로토콜로 전송
-  /// [device]: 연결할 BluetoothDevice
-  /// [imageBytes]: 출력할 이미지 raw bytes (PNG/BMP 등)
+  /// 항상 예외 (BLE 임시 비활성화)
   static Future<void> printLabel(
-    BluetoothDevice device,
-    Uint8List imageBytes,
-  ) async {
-    await device.connect(timeout: const Duration(seconds: 10));
-
-    try {
-      final services = await device.discoverServices();
-
-      // Niimbot BLE service UUID: 0000ff01-0000-1000-8000-00805f9b34fb (D11 기준)
-      final targetService = services.firstWhere(
-        (s) => s.serviceUuid.toString().toLowerCase().contains('ff01'),
-        orElse: () => services.first,
-      );
-
-      final characteristic = targetService.characteristics.firstWhere(
-        (c) => c.properties.write || c.properties.writeWithoutResponse,
-      );
-
-      // 이미지를 청크로 분할 전송
-      const chunkSize = 200;
-      for (var i = 0; i < imageBytes.length; i += chunkSize) {
-        final end = (i + chunkSize < imageBytes.length)
-            ? i + chunkSize
-            : imageBytes.length;
-        await characteristic.write(
-          imageBytes.sublist(i, end),
-          withoutResponse: true,
-        );
-        await Future.delayed(const Duration(milliseconds: 10));
-      }
-    } finally {
-      await device.disconnect();
-    }
+    String deviceId,
+    Uint8List pdfBytes, {
+    NiimbotLabelSize size = NiimbotLabelSize.s40x30,
+  }) async {
+    throw Exception('BLE 프린터 기능이 일시 비활성화됐습니다.');
   }
 }

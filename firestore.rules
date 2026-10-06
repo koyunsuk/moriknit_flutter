@@ -189,6 +189,14 @@ service cloud.firestore {
       match /private/{document=**} {
         allow read, write: if isOwner(uid);
       }
+      // 이슈 #884 — 뜨개 가계부
+      match /knitting_expenses/{docId} {
+        allow read, write: if isOwner(uid) || isAdmin();
+      }
+      // 이슈 #883 — 뜨개 캘린더 이벤트
+      match /knitting_events/{docId} {
+        allow read, write: if isOwner(uid) || isAdmin();
+      }
     }
 
     // ── 마켓 아이템 (공개 읽기, 로그인 후 생성/수정) ────────────────────────────

@@ -11,7 +11,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/pattern/data/pattern_session_repository.dart';
 import '../../features/sync/presentation/conflict_inbox_screen.dart'
     show ConflictItem, conflictInboxProvider;
+import '../../providers/counter_provider.dart';
+import '../../providers/needle_provider.dart';
+import '../../providers/project_provider.dart';
 import '../../providers/swatch_provider.dart';
+import '../../providers/yarn_provider.dart';
 import 'network_status.dart';
 import 'sync_queue.dart';
 
@@ -35,9 +39,8 @@ class SyncOrchestrator {
   ///
   /// 흐름:
   /// 1. 네트워크 확인 → offline 이면 즉시 return
-  /// 2. SyncQueue.pending() 가져옴
-  /// 3. 각 op 를 _applyOp 로 dispatch
-  /// 4. 성공 시 markDone, 실패 시 다음 사이클 재시도 (bumpRetry)
+  /// 2. SyncQueue.pending() 가져옴 → swatch/pattern_session op dispatch
+  /// 3. #879 Risk 3 — Hive isDirty 방식 (needle, yarn) dirty 항목 Firestore 동기화
   Future<void> syncAll() async {
     if (_running) {
       debugPrint('[SyncOrchestrator] syncAll already running, skip');
@@ -50,20 +53,50 @@ class SyncOrchestrator {
         debugPrint('[SyncOrchestrator] offline, skip sync');
         return;
       }
+
+      // 1) SyncQueue 방식 (swatch, pattern_session)
       final pending = await _queue.pending();
-      if (pending.isEmpty) return;
-      debugPrint('[SyncOrchestrator] syncing ${pending.length} ops');
-      for (final op in pending) {
-        try {
-          await _applyOp(op);
-          await _queue.markDone(op.id);
-        } catch (e) {
-          debugPrint('[SyncOrchestrator] op ${op.id} (${op.entity}/${op.op}) failed: $e');
-          await _queue.bumpRetry(op.id);
+      if (pending.isNotEmpty) {
+        debugPrint('[SyncOrchestrator] syncing ${pending.length} ops');
+        for (final op in pending) {
+          try {
+            await _applyOp(op);
+            await _queue.markDone(op.id);
+          } catch (e) {
+            debugPrint('[SyncOrchestrator] op ${op.id} (${op.entity}/${op.op}) failed: $e');
+            await _queue.bumpRetry(op.id);
+          }
         }
       }
+
+      // 2) Hive isDirty 방식 (needle, yarn) — #879 Risk 3
+      await _syncDirtyHiveItems();
     } finally {
       _running = false;
+    }
+  }
+
+  /// Hive isDirty=true 항목을 Firestore로 동기화 (project, counter, needle, yarn).
+  Future<void> _syncDirtyHiveItems() async {
+    try {
+      await _ref.read(projectRepositoryProvider).syncDirtyProjects();
+    } catch (e) {
+      debugPrint('[SyncOrchestrator] syncDirtyProjects failed: $e');
+    }
+    try {
+      await _ref.read(counterRepositoryProvider).syncDirtyCounters();
+    } catch (e) {
+      debugPrint('[SyncOrchestrator] syncDirtyCounters failed: $e');
+    }
+    try {
+      await _ref.read(needleRepositoryProvider).syncDirtyNeedles();
+    } catch (e) {
+      debugPrint('[SyncOrchestrator] syncDirtyNeedles failed: $e');
+    }
+    try {
+      await _ref.read(yarnRepositoryProvider).syncDirtyYarns();
+    } catch (e) {
+      debugPrint('[SyncOrchestrator] syncDirtyYarns failed: $e');
     }
   }
 

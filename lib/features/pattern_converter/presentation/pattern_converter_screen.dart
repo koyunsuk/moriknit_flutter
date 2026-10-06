@@ -322,14 +322,7 @@ class _PatternConverterScreenState
                     label: 'Google Drive',
                     icon: Icons.cloud_rounded,
                   ),
-                  // ②-3 iCloud (준비 중)
-                  _buildComingSoonCloud(
-                    context,
-                    isKorean: isKorean,
-                    label: 'iCloud',
-                    icon: Icons.cloud_rounded,
-                  ),
-                  // ②-4 OneDrive (준비 중)
+                  // ②-3 OneDrive (준비 중)
                   _buildComingSoonCloud(
                     context,
                     isKorean: isKorean,

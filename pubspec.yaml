@@ -73,6 +73,9 @@ dependencies:
   # 이슈 #747 — 커뮤니티 글쓰기 리치텍스트 에디터.
   flutter_quill: ^11.0.0
 
+  # 이슈 #883/#884 — 뜨개 캘린더 + 가계부
+  table_calendar: ^3.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

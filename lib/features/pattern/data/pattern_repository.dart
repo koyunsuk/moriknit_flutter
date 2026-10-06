@@ -76,8 +76,10 @@ class PatternRepository {
     //    저장하지 않는다. toJson에서 이미 제외되지만, merge:true 모드에서
     //    기존 문서에 남아 있던 aiSections 잔재를 비우기 위해 빈 배열로 명시.
     //    #720 — 무한로딩 방지: 15초 timeout. 실패 시 친화 메시지로 fallthrow.
+    // #879 Risk 1 — ownerUid를 pattern_charts 문서에 기록 (컬렉션 그룹 쿼리·마이그레이션 추적용).
     await docRef.set({
       ...saved.toJson(),
+      'ownerUid': _uid,
       'aiSections': const <Map<String, dynamic>>[],
       'updatedAt': FieldValue.serverTimestamp(),
       if (isNew) 'createdAt': FieldValue.serverTimestamp(),
@@ -90,10 +92,14 @@ class PatternRepository {
     //    동일 id로 짝 — 호출자는 PatternChart.id로 양쪽 모두 조회 가능.
     //    #720 — 청사진 미러링 실패가 도안 저장 자체를 막지 않도록 try/catch.
     //    pattern_charts 는 이미 저장 완료 — 청사진은 다음 진입 시 어댑터로 폴백.
+    //    #879 Risk 2 — 미러 실패 시 _blueprintPending: true 마킹 (SyncOrchestrator 재시도용).
     try {
       await _mirrorToBlueprint(saved).timeout(const Duration(seconds: 15));
+      // 미러 성공: 이전에 pending 마킹됐다면 해제
+      await docRef.update({'_blueprintPending': false}).catchError((_) {});
     } catch (e) {
       debugPrint('[PatternRepository.save] mirror to blueprint failed: $e');
+      await docRef.update({'_blueprintPending': true}).catchError((_) {});
     }
 
     // 3) #704 Phase A-A — write-through 캐시 (오프라인 폴백용).

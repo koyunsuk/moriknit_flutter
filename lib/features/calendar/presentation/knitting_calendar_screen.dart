@@ -332,7 +332,6 @@ class _KnittingCalendarScreenState
                     ),
                   ),
                 ),
-                const SizedBox(height: 100),
               ],
             ),
           ),

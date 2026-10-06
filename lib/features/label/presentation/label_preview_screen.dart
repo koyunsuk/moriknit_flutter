@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:printing/printing.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -21,6 +20,21 @@ class LabelPreviewScreen extends StatefulWidget {
 class _LabelPreviewScreenState extends State<LabelPreviewScreen> {
   late LabelData _data;
   final TextEditingController _noteCtrl = TextEditingController();
+  // #889 — 사이즈 선택 + QR 토글
+  LabelSize _labelSize = LabelSize.s40x30;
+  bool _showQr = true;
+
+  String? get _deepLink {
+    // LabelData에 id가 있으면 딥링크 생성 (없으면 null)
+    final id = _data.fields['id'] ?? _data.fields['patternId'] ?? _data.fields['swatchId'] ?? '';
+    if (id.isEmpty) return null;
+    final type = _data.typeName.toLowerCase().contains('swatch')
+        ? 'swatch'
+        : _data.typeName.toLowerCase().contains('pattern')
+            ? 'pattern'
+            : 'item';
+    return 'moriknit://open?type=$type&id=$id';
+  }
 
   @override
   void initState() {
@@ -54,12 +68,12 @@ class _LabelPreviewScreenState extends State<LabelPreviewScreen> {
 
   Future<void> _print() async {
     await Printing.layoutPdf(
-      onLayout: (_) => LabelPdfGenerator.generate(_data),
+      onLayout: (_) => LabelPdfGenerator.generate(_data, size: _labelSize, showQr: _showQr, deepLink: _deepLink),
     );
   }
 
   Future<void> _savePdf() async {
-    final bytes = await LabelPdfGenerator.generate(_data);
+    final bytes = await LabelPdfGenerator.generate(_data, size: _labelSize, showQr: _showQr, deepLink: _deepLink);
     await Printing.sharePdf(bytes: bytes, filename: 'moriknit_label.pdf');
   }
 
@@ -70,7 +84,7 @@ class _LabelPreviewScreenState extends State<LabelPreviewScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => _NiimbotSheet(labelData: _data),
+      builder: (_) => _NiimbotSheet(labelData: _data, labelSize: _labelSize, showQr: _showQr, deepLink: _deepLink),
     );
   }
 
@@ -92,13 +106,64 @@ class _LabelPreviewScreenState extends State<LabelPreviewScreen> {
           ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
             children: [
+              // ── #889 사이즈 선택 칩 ───────────────────────────────
+              SizedBox(
+                height: 36,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: LabelSize.values.map((s) {
+                    final selected = _labelSize == s;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: GestureDetector(
+                        onTap: () => setState(() => _labelSize = s),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: selected ? C.lv : C.lvL,
+                            border: Border.all(
+                              color: selected ? C.lv : C.lv.withValues(alpha: 0.20),
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            s.label,
+                            style: TextStyle(
+                              color: selected ? Colors.white : C.lvD,
+                              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              // ── QR 토글 ──────────────────────────────────────────
+              Row(
+                children: [
+                  Icon(Icons.qr_code_rounded, size: 18, color: C.mu),
+                  const SizedBox(width: 8),
+                  Text('QR코드', style: T.body),
+                  const Spacer(),
+                  Switch(
+                    value: _showQr,
+                    onChanged: (v) => setState(() => _showQr = v),
+                    activeThumbColor: C.lv,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
               // ── PDF 미리보기 ───────────────────────────────────────
               ClipRRect(
                 borderRadius: BorderRadius.circular(14),
                 child: SizedBox(
                   height: 240,
                   child: PdfPreview(
-                    build: (_) => LabelPdfGenerator.generate(_data),
+                    key: ValueKey('$_labelSize-$_showQr'),
+                    build: (_) => LabelPdfGenerator.generate(_data, size: _labelSize, showQr: _showQr, deepLink: _deepLink),
                     allowPrinting: false,
                     allowSharing: false,
                     canChangePageFormat: false,
@@ -233,15 +298,23 @@ class _LabelPreviewScreenState extends State<LabelPreviewScreen> {
 // ─── Niimbot BLE 인쇄 시트 ────────────────────────────────────────────────────
 class _NiimbotSheet extends StatefulWidget {
   final LabelData labelData;
+  final LabelSize labelSize;
+  final bool showQr;
+  final String? deepLink;
 
-  const _NiimbotSheet({required this.labelData});
+  const _NiimbotSheet({
+    required this.labelData,
+    this.labelSize = LabelSize.s40x30,
+    this.showQr = true,
+    this.deepLink,
+  });
 
   @override
   State<_NiimbotSheet> createState() => _NiimbotSheetState();
 }
 
 class _NiimbotSheetState extends State<_NiimbotSheet> {
-  List<ScanResult> _devices = [];
+  List<NiimbotScanResult> _devices = [];
   bool _isScanning = false;
   bool _isPrinting = false;
   String? _statusMessage;
@@ -267,14 +340,27 @@ class _NiimbotSheetState extends State<_NiimbotSheet> {
     }
   }
 
-  Future<void> _printTo(BluetoothDevice device) async {
+  NiimbotLabelSize _niimbotSizeFrom(LabelSize s) {
+    switch (s) {
+      case LabelSize.s40x12: return NiimbotLabelSize.s40x12;
+      case LabelSize.s40x15: return NiimbotLabelSize.s40x15;
+      case LabelSize.s40x30: return NiimbotLabelSize.s40x30;
+    }
+  }
+
+  Future<void> _printTo(NiimbotScanResult device) async {
     setState(() {
       _isPrinting = true;
       _statusMessage = '인쇄 중...';
     });
     try {
-      final pdfBytes = await LabelPdfGenerator.generate(widget.labelData);
-      await NiimbotBleService.printLabel(device, pdfBytes);
+      final pdfBytes = await LabelPdfGenerator.generate(
+        widget.labelData,
+        size: widget.labelSize,
+        showQr: widget.showQr,
+        deepLink: widget.deepLink,
+      );
+      await NiimbotBleService.printLabel(device.deviceId, pdfBytes, size: _niimbotSizeFrom(widget.labelSize));
       if (mounted) setState(() => _statusMessage = '인쇄 완료!');
     } catch (e) {
       if (mounted) setState(() => _statusMessage = '인쇄 실패: $e');
@@ -319,9 +405,7 @@ class _NiimbotSheetState extends State<_NiimbotSheet> {
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(Icons.print_rounded, color: C.lv),
                     title: Text(
-                      r.device.platformName.isNotEmpty
-                          ? r.device.platformName
-                          : r.device.remoteId.toString(),
+                      r.deviceName.isNotEmpty ? r.deviceName : r.deviceId,
                       style: T.body,
                     ),
                     subtitle: Text('RSSI: ${r.rssi}',
@@ -333,7 +417,7 @@ class _NiimbotSheetState extends State<_NiimbotSheet> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : TextButton(
-                            onPressed: () => _printTo(r.device),
+                            onPressed: () => _printTo(r),
                             child: const Text('인쇄'),
                           ),
                   )),

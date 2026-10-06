@@ -17,7 +17,7 @@ import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../dropbox/data/dropbox_auth_provider.dart';
 import '../data/google_drive_auth_provider.dart';
-import '../data/icloud_auth_provider.dart';
+
 import '../data/onedrive_auth_provider.dart';
 import 'widgets/cloud_brand_icon.dart';
 
@@ -42,8 +42,6 @@ class CloudHubScreen extends ConsumerWidget {
             _DropboxCard(isKorean: isKorean),
             const SizedBox(height: 10),
             _GoogleDriveCard(isKorean: isKorean),
-            const SizedBox(height: 10),
-            _ICloudCard(isKorean: isKorean),
             const SizedBox(height: 10),
             _OneDriveCard(isKorean: isKorean),
           ],
@@ -137,55 +135,6 @@ class _GoogleDriveCard extends ConsumerWidget {
                   auth.isLoggedIn
                       ? (isKorean ? '${auth.email ?? ''} 연결됨' : 'Connected as ${auth.email ?? ''}')
                       : (isKorean ? 'Google 드라이브 도안 파일을 앱에서 탐색해요' : 'Browse your Google Drive pattern files'),
-                  style: T.caption.copyWith(color: auth.isLoggedIn ? color : C.mu),
-                ),
-              ],
-            ),
-          ),
-          if (auth.isLoggedIn)
-            const Icon(Icons.check_circle_rounded, color: color, size: 18)
-          else
-            Icon(Icons.chevron_right_rounded, color: C.mu),
-        ],
-      ),
-    );
-  }
-}
-
-class _ICloudCard extends ConsumerWidget {
-  const _ICloudCard({required this.isKorean});
-  final bool isKorean;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final auth = ref.watch(iCloudAuthProvider);
-    const color = Color(0xFF1D1D1F);
-    return GlassCard(
-      onTap: () => context.push(Routes.iCloud),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Center(
-              child: CloudBrandIcon.iCloud(size: 28),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('iCloud Drive', style: TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 4),
-                Text(
-                  auth.isLoggedIn
-                      ? (isKorean ? '${auth.email ?? ''} 연결됨' : 'Connected as ${auth.email ?? ''}')
-                      : (isKorean ? 'iCloud 도안 파일을 앱에서 탐색해요 (iOS 전용)' : 'Browse iCloud pattern files (iOS only)'),
                   style: T.caption.copyWith(color: auth.isLoggedIn ? color : C.mu),
                 ),
               ],
