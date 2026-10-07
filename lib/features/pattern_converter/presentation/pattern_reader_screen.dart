@@ -7,8 +7,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
-import '../../../features/pattern/domain/ai_pattern_section.dart';
+import '../../../features/blueprint/domain/step_blueprint_unit.dart';
 import '../../../features/pattern/domain/pattern_chart.dart';
+import '../../../providers/blueprint_provider.dart';
 import '../../../providers/parsed_pattern_provider.dart';
 import 'pattern_text_tracker_screen.dart';
 
@@ -50,35 +51,66 @@ class PatternReaderScreen extends ConsumerWidget {
           );
         }
         return _PatternReaderView(
-            pattern: pattern, ref: ref, isKorean: isKorean);
+            pattern: pattern, isKorean: isKorean);
       },
     );
   }
 }
 
-class _PatternReaderView extends StatelessWidget {
+// #905 — Phase E1 이후 aiSections은 pattern_charts에 항상 빈 배열.
+// 실제 단계 데이터는 step_blueprints/{id}/units 에 있으므로
+// blueprintUnitsProvider로 읽어서 표시한다.
+class _PatternReaderView extends ConsumerWidget {
   final PatternChart pattern;
-  final WidgetRef ref;
   final bool isKorean;
   const _PatternReaderView(
-      {required this.pattern, required this.ref, required this.isKorean});
+      {required this.pattern, required this.isKorean});
 
-  List<AiSection> get _sections => pattern.aiSections ?? [];
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final unitsAsync = ref.watch(blueprintUnitsProvider(pattern.id));
 
-  int get _totalSteps =>
-      _sections.fold<int>(0, (acc, sec) => acc + sec.steps.length);
+    return unitsAsync.when(
+      loading: () => Scaffold(
+        backgroundColor: C.bg,
+        body: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => Scaffold(
+        backgroundColor: C.bg,
+        body: Center(child: Text(isKorean ? '단계를 불러오지 못했어요.' : 'Failed to load steps.')),
+      ),
+      data: (rawUnits) {
+        final units = [...rawUnits]..sort((a, b) => a.order.compareTo(b.order));
+        return _PatternStepsBody(
+          pattern: pattern,
+          units: units,
+          isKorean: isKorean,
+          ref: ref,
+        );
+      },
+    );
+  }
+}
 
-  int get _completedSteps => _sections.fold<int>(
-        0,
-        (acc, sec) => acc + sec.steps.where((s) => s.isCompleted).length,
-      );
-
-  double get _progress =>
-      _totalSteps == 0 ? 0.0 : _completedSteps / _totalSteps;
+class _PatternStepsBody extends StatelessWidget {
+  final PatternChart pattern;
+  final List<StepBlueprintUnit> units;
+  final bool isKorean;
+  final WidgetRef ref;
+  const _PatternStepsBody({
+    required this.pattern,
+    required this.units,
+    required this.isKorean,
+    required this.ref,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final pct = (_progress * 100).toInt();
+    final total = units.length;
+    // 완료 상태는 blueprintUnit 자체에 없으므로 진행률은 0으로 시작
+    // (StepLogView의 인스턴스 모드가 체크 상태 관리 — 여기선 미지원)
+    const progress = 0.0;
+    final pct = (progress * 100).toInt();
 
     return AppShellScaffold(
       title: pattern.title,
@@ -89,7 +121,6 @@ class _PatternReaderView extends StatelessWidget {
           icon: const Icon(Icons.menu_book_rounded, size: 22),
           color: C.lv,
           tooltip: isKorean ? '텍스트 뷰어' : 'Text Viewer',
-          // #824 — context.push GlobalKey 충돌 회피. unique settings name + Navigator.push.
           onPressed: () => Navigator.of(context).push(
             MaterialPageRoute<void>(
               settings: RouteSettings(
@@ -100,86 +131,82 @@ class _PatternReaderView extends StatelessWidget {
           ),
         ),
       ],
-      body: CustomScrollView(
-        slivers: [
-          // 진행률 헤더
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: LinearProgressIndicator(
-                          value: _progress,
-                          backgroundColor:
-                              C.lv.withValues(alpha: 0.15),
-                          color: C.lv,
-                          borderRadius: BorderRadius.circular(4),
-                          minHeight: 6,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        '$pct%',
-                        style: T.caption.copyWith(
-                            color: C.lv,
-                            fontWeight: FontWeight.w700),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    isKorean
-                        ? '$_completedSteps/$_totalSteps단계 완료'
-                        : '$_completedSteps/$_totalSteps steps done',
-                    style: T.caption.copyWith(color: C.tx2),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // 섹션별 단계 목록
-          for (final section in _sections) ...[
-            SliverToBoxAdapter(
+      body: units.isEmpty
+          ? Center(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-                child: Text(
-                  section.title,
-                  style: T.h3.copyWith(color: C.lv),
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.layers_outlined, size: 48, color: C.tx2),
+                    const SizedBox(height: 12),
+                    Text(
+                      isKorean ? '단계가 없어요.\nAI 변환 후 저장하면 단계가 표시됩니다.' : 'No steps yet.\nSave after AI conversion to see steps.',
+                      textAlign: TextAlign.center,
+                      style: T.body.copyWith(color: C.tx2),
+                    ),
+                  ],
                 ),
               ),
-            ),
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (ctx, i) {
-                  final step = section.steps[i];
-                  return _StepTile(
-                    stepId: step.id,
-                    index: i + 1,
-                    instruction: step.instruction,
-                    isCompleted: step.isCompleted,
-                    onToggle: (val) => ref
-                        .read(patternConverterRepositoryProvider)
-                        .toggleStep(
-                          patternId: pattern.id,
-                          sectionId: section.id,
-                          stepId: step.id,
-                          isCompleted: val,
+            )
+          : CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: LinearProgressIndicator(
+                                value: progress,
+                                backgroundColor: C.lv.withValues(alpha: 0.15),
+                                color: C.lv,
+                                borderRadius: BorderRadius.circular(4),
+                                minHeight: 6,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              '$pct%',
+                              style: T.caption.copyWith(
+                                  color: C.lv,
+                                  fontWeight: FontWeight.w700),
+                            ),
+                          ],
                         ),
-                  );
-                },
-                childCount: section.steps.length,
-              ),
+                        const SizedBox(height: 6),
+                        Text(
+                          isKorean ? '0/$total단계 완료' : '0/$total steps done',
+                          style: T.caption.copyWith(color: C.tx2),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (ctx, i) {
+                      final unit = units[i];
+                      final text = unit.instructionKo?.isNotEmpty == true
+                          ? unit.instructionKo!
+                          : unit.instruction;
+                      return _StepTile(
+                        stepId: unit.id,
+                        index: i + 1,
+                        instruction: text,
+                        isCompleted: false,
+                        onToggle: (_) {},
+                      );
+                    },
+                    childCount: units.length,
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 40)),
+              ],
             ),
-          ],
-
-          const SliverToBoxAdapter(child: SizedBox(height: 40)),
-        ],
-      ),
     );
   }
 }

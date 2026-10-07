@@ -13,6 +13,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_shell_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../blueprint/data/step_blueprint_repository.dart';
 import '../../pattern/data/pattern_repository.dart';
 import '../../pattern/domain/ai_pattern_section.dart';
 import '../../pattern/domain/pattern_chart.dart';
@@ -119,8 +120,36 @@ class _AiPatternEditScreenState extends ConsumerState<AiPatternEditScreen> {
       final chart = await repo.watchAiPattern(widget.patternId!).first;
       if (chart != null) {
         _titleCtrl.text = chart.title;
-        _sections = chart.aiSections ?? [];
         _coverImageUrl = chart.imageUrl.isNotEmpty ? chart.imageUrl : null;
+
+        // #905 — Phase E1 이후 aiSections은 pattern_charts에 저장하지 않음.
+        // step_blueprints/units에서 복원하여 편집 가능하도록 재구성.
+        final aiSections = chart.aiSections ?? [];
+        if (aiSections.isNotEmpty) {
+          _sections = aiSections;
+        } else {
+          final blueprintRepo = StepBlueprintRepository();
+          final units = await blueprintRepo.watchUnits(widget.patternId!).first;
+          if (units.isNotEmpty) {
+            final sorted = [...units]..sort((a, b) => a.order.compareTo(b.order));
+            // sourceSectionId 기준으로 그룹핑 (없으면 단일 섹션)
+            final groups = <String, List<AiStep>>{};
+            for (final u in sorted) {
+              final key = u.sourceSectionId ?? '__all__';
+              groups.putIfAbsent(key, () => []).add(AiStep(
+                id: u.id,
+                instruction: u.instruction,
+                instructionKo: u.instructionKo,
+              ));
+            }
+            _sections = groups.entries.map((e) => AiSection(
+              id: e.key == '__all__' ? 'restored_${widget.patternId}' : e.key,
+              title: '단계',
+              titleKo: '단계',
+              steps: e.value,
+            )).toList();
+          }
+        }
         _buildControllers();
       }
       if (mounted) setState(() => _loading = false);

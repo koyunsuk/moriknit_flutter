@@ -135,9 +135,10 @@ class PatternRepository {
             id: step.id,
             blueprintId: blueprint.id,
             order: order++,
-            title: '',
+            title: section.titleKo ?? section.title,
             instruction: step.instruction,
             instructionKo: step.instructionKo,
+            sourceSectionId: section.id,
             createdAt: now,
           ));
         }
